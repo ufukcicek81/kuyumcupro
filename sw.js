@@ -1,4 +1,4 @@
-const CACHE_NAME = 'asil-kuyumcu-pro-v2-3-1';
+const CACHE_NAME = 'asil-kuyumcu-pro-v2-5-0';
 const APP_SHELL = [
   './',
   './index.html',
