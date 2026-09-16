@@ -1,0 +1,19 @@
+{
+  "name": "Asil Kuyumcu Pro",
+  "short_name": "Asil Kuyumcu",
+  "description": "Asil Kuyumcu Pro V2.3 - stok, barkod, cari, kasa ve finans prototipi",
+  "lang": "tr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0c0d0f",
+  "theme_color": "#101113",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
