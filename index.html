@@ -965,7 +965,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v4.5</small></div></div>
+        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v4.7</small></div></div>
         <div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off"></div><div class="nav">${navItems.map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div>
         <div class="sidebar-bottom">
           <div class="user-chip"><div class="avatar">${esc(session.name.split(' ').map(x=>x[0]).slice(0,2).join(''))}</div><div><strong>${esc(session.name)}</strong><div class="muted" style="font-size:12px">${esc(session.role)}</div></div></div>
@@ -1236,7 +1236,8 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
               <div class="labelled"><label>Barkodlu Stok</label><select id="saleStock" class="select"><option value="">Ürün seç</option>${activeStock().map(s=>`<option value="${s.id}">${esc(s.barcode||s.code)} — ${esc(s.name||s.type)} / ${qty(stockAmount(s))} GR</option>`).join('')}</select></div>
               <div class="labelled"><label>Adet</label><input id="saleQty" class="input" type="number" value="1" readonly></div>
               <div class="labelled"><label>Ayar</label><input id="saleKarat" class="input" value="" readonly></div>
-              <div class="labelled"><label>Satış Tutarı (TL)</label><input id="salePrice" class="input" type="number" step="0.01"></div>
+              <div class="labelled"><label>Birim Fiyat (TL)</label><input id="salePrice" class="input" type="number" step="0.01"></div>
+              <div class="labelled"><label>Ödenecek Tutar (TL)</label><input id="salePayable" class="input" type="number" step="0.01" readonly></div>
               <div class="labelled"><label>Not</label><input id="saleNote" class="input" placeholder="opsiyonel"></div>
               <button class="btn btn-primary" id="addSaleLine">Ekle</button>
             </div>
@@ -1245,11 +1246,12 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
               <div class="labelled"><label>Mal Tanımı</label><select id="saleOpenStock" class="select"><option value="">Açık stok seç</option>${(state.openStocks||[]).filter(x=>x.period===state.activePeriod&&Number(x.amount||0)>0).map(o=>`<option value="${o.id}">${esc(o.name)} — ${qty(o.amount)} ${esc(o.unit)}</option>`).join('')}</select></div>
               <div class="labelled"><label>Miktar</label><input id="saleOpenAmount" class="input" type="number" step="0.001" value="1"></div>
               <div class="labelled"><label>Birim</label><input id="saleOpenUnit" class="input" value="GR" readonly></div>
-              <div class="labelled"><label>Satış Tutarı (TL)</label><input id="saleOpenPrice" class="input" type="number" step="0.01"></div>
+              <div class="labelled"><label>Birim Fiyat (TL)</label><input id="saleOpenPrice" class="input" type="number" step="0.01"></div>
+              <div class="labelled"><label>Ödenecek Tutar (TL)</label><input id="saleOpenPayable" class="input" type="number" step="0.01" readonly></div>
               <div class="labelled"><label>Banko / Not</label><input id="saleOpenNote" class="input"></div>
               <button class="btn btn-primary" id="addOpenSaleLine">Ekle</button>
             </div>`}
-            ${saleDraft.lines.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Tip</th><th>Ürün</th><th>Ayar</th><th class="num">Gram / Adet</th><th class="num">Satış HAS</th><th class="num">Satış Tutarı</th><th>Maliyet</th><th></th></tr></thead><tbody>${saleDraft.lines.map((l,i)=>{const sh=Number(l.saleHas??((Number(l.total||0))/(Number(state.prices.has.sell||1))));const ch=Number(l.costHas||0);const ph=sh-ch;return `<tr><td><span class="badge ${l.sourceType==='open'?'gold':'blue'}">${l.sourceType==='open'?'BARKODSUZ':'BARKODLU'}</span></td><td>${esc(l.code)} — ${esc(l.name)}</td><td>${esc(l.karat||'')}</td><td class="num"><strong>${qty(l.displayAmount??l.weight??l.qty)}</strong> ${esc(l.unit||'GR')}</td><td class="num"><strong>${qty(sh)} HAS</strong></td><td class="num">${money(l.total)}</td><td>${state.currentUser?.permissions?.showCost===false?'—':`<div class="sale-cost-mini">Maliyet <strong>${qty(ch)} HAS</strong><br>Kâr <strong class="${ph>=0?'positive':'negative'}">${qty(ph)} HAS</strong></div>`}</td><td><button class="btn btn-danger" data-remove-line="${i}">Sil</button></td></tr>`}).join('')}</tbody></table></div>`:`<div class="empty-state"><strong>Satış fişi boş</strong>Barkod okutun veya açık stoktan ürün ekleyin.</div>`}
+            ${saleDraft.lines.length?`<div class="table-wrap"><table class="table" style="min-width:1120px"><thead><tr><th>Tip</th><th>Ürün Kodu / Ürün</th><th>Birim</th><th class="num">Gram / Adet</th><th>Ayar</th><th class="num">Birim Fiyat</th><th class="num">Ödenecek Tutar</th><th class="num">Satış HAS</th><th>Maliyet / Kâr</th><th></th></tr></thead><tbody>${saleDraft.lines.map((l,i)=>{const sh=Number(l.saleHas??((Number(l.total||0))/(Number(state.prices.has.sell||1))));const ch=Number(l.costHas||0);const ph=sh-ch;const display=Number(l.displayAmount??l.weight??l.qty??1);const unitPrice=Number(l.unitPrice??l.price??(display?Number(l.total||0)/display:Number(l.total||0)));const payable=Number(l.total??unitPrice*display);return `<tr><td><span class="badge ${l.sourceType==='open'?'gold':'blue'}">${l.sourceType==='open'?'BARKODSUZ':'BARKODLU'}</span></td><td><strong>${esc(l.code)}</strong><br><small>${esc(l.name)}</small></td><td>${esc(l.unit||'GR')}</td><td class="num"><strong>${qty(display)}</strong></td><td>${esc(l.karat||'')}</td><td class="num"><strong>${money(unitPrice)}</strong></td><td class="num"><strong>${money(payable)}</strong></td><td class="num"><strong>${qty(sh)} HAS</strong></td><td>${state.currentUser?.permissions?.showCost===false?'—':`<div class="sale-cost-mini">Maliyet <strong>${qty(ch)} HAS</strong><br>Kâr <strong class="${ph>=0?'positive':'negative'}">${qty(ph)} HAS</strong></div>`}</td><td><button class="btn btn-danger" data-remove-line="${i}">Sil</button></td></tr>`}).join('')}</tbody></table></div>`:`<div class="empty-state"><strong>Satış fişi boş</strong>Barkod okutun veya açık stoktan ürün ekleyin.</div>`}
           </div>
 
           <div class="card" style="margin-top:14px">
@@ -1443,7 +1445,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function pageStocks(){
     const rows=state.stocks.filter(x=>x.period===state.activePeriod && x.status!=='Satıldı');
     let body=stockSummaryView(); if(stockView==='list') body=stockListView(rows); if(stockView==='cards') body=stockCardsView(); if(stockView==='labels') body=labelsView(rows); if(stockView==='moves') body=movementsView();
-    return `<div class="page-title"><div><h1>Stok Yönetimi</h1><p>Pusula düzeni: açık stok + barkodlu stok + hurda + kasa/POS tek merkezde.</p></div><span class="badge gold">V4.5 · Bağlı Cari/Kasa · 1.691 Barkod · 82 Cari</span></div>${stockHeaderTabs()}${body}`;
+    return `<div class="page-title"><div><h1>Stok Yönetimi</h1><p>Pusula düzeni: açık stok + barkodlu stok + hurda + kasa/POS tek merkezde.</p></div><span class="badge gold">V4.7 · Enter = Sonraki Alan · 1.691 Barkod · 82 Cari</span></div>${stockHeaderTabs()}${body}`;
   }
 
   function customerCardsView(){
@@ -1548,12 +1550,37 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       <div class="card" style="margin-top:16px"><div class="section-head"><h3>İşlem Geçmişi</h3><span>Son ${Math.min(100,state.audits.length)} hareket</span></div><div class="table-wrap"><table class="table"><thead><tr><th>Tarih</th><th>Kullanıcı</th><th>Modül</th><th>İşlem</th></tr></thead><tbody>${state.audits.slice(0,100).map(a=>`<tr><td>${trDate(a.date)}</td><td>${esc(a.user)}</td><td><span class="badge">${esc(a.module)}</span></td><td>${esc(a.action)}</td></tr>`).join('')}</tbody></table></div></div>`;
   }
 
+  function bindEnterAsTab(scope){
+    const root=typeof scope==='string'?document.querySelector(scope):scope;
+    if(!root)return;
+    const skipIds=new Set(['barcodeSearch']);
+    const focusables=()=>Array.from(root.querySelectorAll('input, select, textarea, button')).filter(el=>{
+      if(el.disabled||el.hidden||el.type==='hidden'||el.tabIndex<0)return false;
+      if(el.matches('[readonly]'))return false;
+      if(el.closest('[style*="display:none"]'))return false;
+      return el.offsetParent!==null;
+    });
+    root.addEventListener('keydown',e=>{
+      if(e.key!=='Enter'||e.shiftKey||e.ctrlKey||e.altKey||e.metaKey)return;
+      const el=e.target;
+      if(!(el instanceof HTMLElement))return;
+      if(skipIds.has(el.id)||el.tagName==='TEXTAREA'||el.tagName==='BUTTON')return;
+      if(el.matches('input[type="checkbox"],input[type="radio"],input[type="file"],input[type="submit"],input[type="button"]'))return;
+      const list=focusables();
+      const i=list.indexOf(el);
+      if(i<0)return;
+      e.preventDefault();
+      const next=list[i+1];
+      if(next){next.focus();if(next instanceof HTMLInputElement&&['text','number','search','tel','email'].includes(next.type)){try{next.select();}catch(_){}}}
+    });
+  }
+
   function bindPage(r){
     document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{route=b.dataset.go;render();}));
     if(r==='dashboard'){
       const q=document.getElementById('quickSale'); if(q) q.addEventListener('click',()=>{route='sales';render();});
     }
-    if(r==='sales') bindSales();
+    if(r==='sales'){ bindSales(); bindEnterAsTab('.content'); }
     if(r==='purchases') bindPurchases();
     if(r==='stocks') bindStocks();
     if(r==='customers') bindCustomers();
@@ -1710,33 +1737,40 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       if(s){
         const saleHas=Number(s.saleHas||stockCounterHas(s)||0), costHas=Number(s.costHas||s.purchaseHas||0), profitHas=saleHas-costHas;
         document.getElementById('saleKarat').value=s.purity||s.karat||'';
-        document.getElementById('salePrice').value=(saleHas*state.prices.has.sell).toFixed(2);
+        const unitTl=saleHas*state.prices.has.sell;
+        document.getElementById('salePrice').value=unitTl.toFixed(2);
+        const payable=document.getElementById('salePayable'); if(payable)payable.value=unitTl.toFixed(2);
         if(preview){preview.style.display='grid';preview.innerHTML=`<div class="metric"><span>Gram</span><strong>${qty(stockAmount(s))} GR</strong></div><div class="metric"><span>Satış HAS (işçilik dahil)</span><strong>${qty(saleHas)} HAS</strong></div><div class="metric"><span>Ayar</span><strong>${esc(String(s.purity||s.karat||''))}</strong></div>${state.currentUser?.permissions?.showCost===false?'':`<div class="metric"><span>Maliyet / Kâr</span><strong>${qty(costHas)} / ${qty(profitHas)} HAS</strong></div>`}`;}
       }else if(preview){preview.style.display='none';preview.innerHTML='';}
     });
+    document.getElementById('salePrice')?.addEventListener('input',e=>{const q=Number(document.getElementById('saleQty')?.value||1);const payable=document.getElementById('salePayable');if(payable)payable.value=(Number(e.target.value||0)*q).toFixed(2);});
+
     document.getElementById('barcodeSearch')?.addEventListener('keydown',e=>{
       if(e.key!=='Enter') return; e.preventDefault(); const v=e.target.value.trim(); const s=findSaleStockByLookup(v);
       if(!s)return toast('Barkodlu stokta ürün bulunamadı. Örn: ALY 1335 veya ALY0001335','err'); if(stockSel){stockSel.value=s.id;stockSel.dispatchEvent(new Event('change'));document.getElementById('addSaleLine')?.click();}
     });
     document.getElementById('addSaleLine')?.addEventListener('click',()=>{
-      const s=state.stocks.find(x=>x.id===stockSel?.value); if(!s)return toast('Barkodlu ürün seçin','err'); const price=Number(document.getElementById('salePrice').value||0); if(price<=0)return toast('Satış tutarı girin','err');
+      const s=state.stocks.find(x=>x.id===stockSel?.value); if(!s)return toast('Barkodlu ürün seçin','err'); const unitPrice=Number(document.getElementById('salePrice').value||0), itemQty=Number(document.getElementById('saleQty')?.value||1), total=unitPrice*itemQty; if(unitPrice<=0)return toast('Birim fiyat girin','err');
       if(saleDraft.lines.some(l=>l.stockId===s.id))return toast('Bu barkod fişte zaten var','err');
-      saleDraft.lines.push({sourceType:'barcode',stockId:s.id,code:s.barcode||s.code,name:s.name||s.type,karat:String(s.purity||s.karat||''),weight:stockAmount(s),displayAmount:stockAmount(s),unit:'GR',qty:1,saleHas:Number(s.saleHas||stockCounterHas(s)||0),price,total:price,costHas:Number(s.costHas||0),cost:Number(s.costHas||0)*state.prices.has.buy,note:document.getElementById('saleNote')?.value||''}); render();
+      saleDraft.lines.push({sourceType:'barcode',stockId:s.id,code:s.barcode||s.code,name:s.name||s.type,karat:String(s.purity||s.karat||''),weight:stockAmount(s),displayAmount:stockAmount(s),unit:'GR',qty:itemQty,unitPrice,price:unitPrice,total,costHas:Number(s.costHas||0),saleHas:total/Number(state.prices.has.sell||1),cost:Number(s.costHas||0)*state.prices.has.buy,note:document.getElementById('saleNote')?.value||''}); render();
     });
 
     const openSel=document.getElementById('saleOpenStock');
     const refreshOpen=()=>{
       const o=(state.openStocks||[]).find(x=>x.id===openSel?.value); if(!o)return; const amtEl=document.getElementById('saleOpenAmount'),unitEl=document.getElementById('saleOpenUnit'),priceEl=document.getElementById('saleOpenPrice');
       if(unitEl)unitEl.value=o.unit||'GR'; if(amtEl){amtEl.step=o.unit==='ADET'?'1':'0.001';amtEl.value=o.unit==='ADET'?'1':Math.min(1,Number(o.amount||0)).toFixed(3);}
-      if(priceEl)priceEl.value=openStockSaleDefaultPrice(o,Number(amtEl?.value||1)).toFixed(2);
+      const unitPrice=openStockSaleDefaultPrice(o,1);
+      if(priceEl)priceEl.value=unitPrice.toFixed(2);
+      const payEl=document.getElementById('saleOpenPayable'); if(payEl)payEl.value=(unitPrice*Number(amtEl?.value||1)).toFixed(2);
     };
     openSel?.addEventListener('change',refreshOpen);
-    document.getElementById('saleOpenAmount')?.addEventListener('input',()=>{const o=(state.openStocks||[]).find(x=>x.id===openSel?.value),el=document.getElementById('saleOpenPrice');if(o&&el)el.value=openStockSaleDefaultPrice(o,Number(document.getElementById('saleOpenAmount').value||0)).toFixed(2);});
+    document.getElementById('saleOpenAmount')?.addEventListener('input',()=>{const amount=Number(document.getElementById('saleOpenAmount').value||0),unitPrice=Number(document.getElementById('saleOpenPrice')?.value||0),pay=document.getElementById('saleOpenPayable');if(pay)pay.value=(amount*unitPrice).toFixed(2);});
+    document.getElementById('saleOpenPrice')?.addEventListener('input',()=>{const amount=Number(document.getElementById('saleOpenAmount')?.value||0),unitPrice=Number(document.getElementById('saleOpenPrice')?.value||0),pay=document.getElementById('saleOpenPayable');if(pay)pay.value=(amount*unitPrice).toFixed(2);});
     document.getElementById('addOpenSaleLine')?.addEventListener('click',()=>{
-      const o=(state.openStocks||[]).find(x=>x.id===openSel?.value); if(!o)return toast('Açık stok seçin','err'); const amount=Number(document.getElementById('saleOpenAmount').value||0), price=Number(document.getElementById('saleOpenPrice').value||0);
-      if(amount<=0||amount>Number(o.amount||0)+0.0001)return toast('Açık stok miktarını kontrol edin','err'); if(price<=0)return toast('Satış tutarı girin','err');
+      const o=(state.openStocks||[]).find(x=>x.id===openSel?.value); if(!o)return toast('Açık stok seçin','err'); const amount=Number(document.getElementById('saleOpenAmount').value||0), unitPrice=Number(document.getElementById('saleOpenPrice').value||0), total=amount*unitPrice;
+      if(amount<=0||amount>Number(o.amount||0)+0.0001)return toast('Açık stok miktarını kontrol edin','err'); if(unitPrice<=0)return toast('Birim fiyat girin','err');
       const gram=o.unit==='ADET'?Number(o.zGram||0)*amount:amount, has=calcHas(gram,Number(o.purity||0));
-      saleDraft.lines.push({sourceType:'open',openStockId:o.id,code:o.pusulaCode||o.productCode,name:o.name,karat:String(o.purity||''),displayAmount:amount,unit:o.unit||'GR',weight:gram,hasWeight:has,qty:1,saleHas:price/Number(state.prices.has.sell||1),price,total:price,costHas:openInventoryCostHas(o,amount),cost:openInventoryCostHas(o,amount)*state.prices.has.buy,note:document.getElementById('saleOpenNote')?.value||''}); render();
+      saleDraft.lines.push({sourceType:'open',openStockId:o.id,code:o.pusulaCode||o.productCode,name:o.name,karat:String(o.purity||''),displayAmount:amount,unit:o.unit||'GR',weight:gram,hasWeight:has,qty:amount,unitPrice,price:unitPrice,total,saleHas:total/Number(state.prices.has.sell||1),costHas:openInventoryCostHas(o,amount),cost:openInventoryCostHas(o,amount)*state.prices.has.buy,note:document.getElementById('saleOpenNote')?.value||''}); render();
     });
 
     document.querySelectorAll('[data-remove-line]').forEach(b=>b.addEventListener('click',()=>{saleDraft.lines.splice(Number(b.dataset.removeLine),1);render();}));
