@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101113" />
-  <meta name="description" content="Asil Kuyumcu Pro V2.5 - gelişmiş ürün kartı, stok, barkod, sayım, cari, kasa ve finans prototipi" />
+  <meta name="description" content="Asil Kuyumcu Pro V2.6 - gelişmiş ürün kartı, stok, barkod, sayım, cari, kasa ve finans prototipi" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V2.5</title>
+  <title>Asil Kuyumcu Pro V2.6</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -310,7 +310,7 @@ body[data-theme="light"] .label-preview{background:#fff;color:#111}
 @media(max-width:900px){.filter-panel{grid-template-columns:1fr 1fr}.form-subgrid,.detail-grid{grid-template-columns:repeat(2,1fr)}.master-card-grid,.barcode-labels{grid-template-columns:repeat(2,1fr)}.count-scan{grid-template-columns:1fr 1fr}.compact-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:620px){.filter-panel,.form-subgrid,.detail-grid,.master-card-grid,.barcode-labels,.count-scan,.compact-grid{grid-template-columns:1fr}}
 
-/* === V2.5 PUSULA CARİ HAREKET / ALTIN GİRİŞ AKIŞI === */
+/* === V2.6 PUSULA CARİ HAREKET / ALTIN GİRİŞ AKIŞI === */
 .nav-search{padding:0 4px 10px}.nav-search input{width:100%;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:9px 10px;font-size:12px;outline:none}
 .doc-strip{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.doc-chip{border:1px solid var(--line);background:var(--panel-2);border-radius:12px;padding:10px 12px;font-size:12px}.doc-chip strong{display:block;margin-top:3px;font-size:15px}
 .purchase-layout{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(330px,.5fr);gap:16px}.purchase-summary{position:sticky;top:90px;height:max-content}
@@ -320,6 +320,21 @@ body[data-theme="light"] .label-preview{background:#fff;color:#111}
 body[data-theme="light"] .nav-search input{background:#f7f8fa;color:#18202a}body[data-theme="light"] .line-card,body[data-theme="light"] .workflow>div,body[data-theme="light"] .doc-chip{background:#f7f8fa}
 @media(max-width:1180px){.purchase-layout{grid-template-columns:1fr}.purchase-summary{position:static}.workflow{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:700px){.workflow{grid-template-columns:1fr 1fr}}
+
+/* === V2.6 SAYISAL ALAN / CARİ SİLME İYİLEŞTİRMELERİ === */
+.purchase-entry-grid{grid-template-columns:repeat(3,minmax(150px,1fr))}
+.purchase-entry-grid .input[type="number"]{font-size:17px;font-weight:750;text-align:right;font-variant-numeric:tabular-nums;min-height:48px;padding-left:12px;padding-right:12px}
+.purchase-entry-grid .select{min-height:48px}
+.purchase-entry-grid #purAmount,.purchase-entry-grid #purMilyem,.purchase-entry-grid #purMaterialHas,.purchase-entry-grid #purWorkValue,.purchase-entry-grid #purWorkTotal,.purchase-entry-grid #purCounterHas,.purchase-entry-grid #purCount{min-width:0}
+.purchase-number-pair{display:grid;grid-template-columns:minmax(110px,1fr) 68px;gap:7px}
+.purchase-number-pair .input{min-width:0}
+.purchase-entry-grid input[type=number]::-webkit-inner-spin-button,.purchase-entry-grid input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.purchase-entry-grid input[type=number]{-moz-appearance:textfield}
+.cari-delete{padding:7px 10px;font-size:12px}
+.cari-linked{font-size:11px;color:var(--muted);white-space:nowrap}
+.cari-cancelled td{opacity:.55;text-decoration:line-through}
+@media(max-width:1180px){.purchase-entry-grid{grid-template-columns:repeat(2,minmax(160px,1fr))}}
+@media(max-width:700px){.purchase-entry-grid{grid-template-columns:1fr}.purchase-entry-grid .span-2,.purchase-entry-grid .span-4{grid-column:auto}}
 
 </style>
 </head>
@@ -617,7 +632,7 @@ body[data-theme="light"] .nav-search input{background:#f7f8fa;color:#18202a}body
       x.warrantyMonths=Number(x.warrantyMonths||0);
     });
     if(state.stockMoves.length===0 && state.stocks.length){
-      state.stocks.forEach(x=>state.stockMoves.push({id:uid('SM'),period:x.period||state.activePeriod,date:x.entryDate||now(),stockId:x.id,code:x.code,type:'DEVİR / MEVCUT STOK',from:'',to:x.location||'Mağaza',description:'V2.5 geçişinde mevcut stok kaydı',user:'Sistem'}));
+      state.stocks.forEach(x=>state.stockMoves.push({id:uid('SM'),period:x.period||state.activePeriod,date:x.entryDate||now(),stockId:x.id,code:x.code,type:'DEVİR / MEVCUT STOK',from:'',to:x.location||'Mağaza',description:'V2.6 geçişinde mevcut stok kaydı',user:'Sistem'}));
     }
   }
 
@@ -718,7 +733,7 @@ body[data-theme="light"] .nav-search input{background:#f7f8fa;color:#18202a}body
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v2.5</small></div></div>
+        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v2.6</small></div></div>
         <div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off"></div><div class="nav">${navItems.map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div>
         <div class="sidebar-bottom">
           <div class="user-chip"><div class="avatar">${esc(session.name.split(' ').map(x=>x[0]).slice(0,2).join(''))}</div><div><strong>${esc(session.name)}</strong><div class="muted" style="font-size:12px">${esc(session.role)}</div></div></div>
@@ -863,13 +878,13 @@ body[data-theme="light"] .nav-search input{background:#f7f8fa;color:#18202a}body
         <div class="card" style="margin-top:16px"><div class="section-head"><h3>Altın Giriş Satırı</h3><span>Stok kartındaki sabit milyem otomatik gelir</span></div>
           <div class="form-grid">
             <div class="labelled span-2"><label>Mal Tanımı</label><select id="purCard" class="select"><option value="">— Seç —</option>${state.stockCardsMaster.filter(c=>c.productGroup==='ALTIN'||c.productType==='Altın Mamul'||c.ziynet).map(c=>`<option value="${c.id}">${esc(c.productDefinition||c.name)} · ${qty(c.fixedMilyem||c.purity)} milyem</option>`).join('')}</select></div>
-            <div class="labelled"><label>Miktar</label><div style="display:flex;gap:7px"><input id="purAmount" class="input" type="number" step="0.001" value="0"><input id="purUnit" class="input" value="GR" readonly style="max-width:72px;text-align:center"></div></div>
+            <div class="labelled"><label>Miktar</label><div class="purchase-number-pair"><input id="purAmount" class="input" type="number" step="0.001" value="0"><input id="purUnit" class="input" value="GR" readonly style="text-align:center"></div></div>
             <div class="labelled"><label>Ayar</label><input id="purMilyem" class="input" type="number" step="0.1" value="0" readonly></div>
             <div class="labelled"><label>HAS</label><input id="purMaterialHas" class="input" type="number" step="0.001" value="0" readonly></div>
             <div class="labelled"><label>İşçilik Giriş Şekli</label><select id="purWorkMode" class="select"><option>Birim İşçilik</option><option>Adet İşçilik</option></select></div>
             <div class="labelled"><label>Adet</label><input id="purCount" class="input" type="number" min="1" step="1" value="1"></div>
             <div class="labelled"><label id="purWorkValueLabel">Birim İşç. (HAS)</label><input id="purWorkValue" class="input" type="number" step="0.001" value="0"></div>
-            <div class="labelled"><label>Toplam İşçilik</label><div style="display:flex;gap:7px"><input id="purWorkTotal" class="input" type="number" step="0.001" value="0"><input class="input" value="HAS" readonly style="max-width:72px;text-align:center"></div></div>
+            <div class="labelled"><label>Toplam İşçilik</label><div class="purchase-number-pair"><input id="purWorkTotal" class="input" type="number" step="0.001" value="0"><input class="input" value="HAS" readonly style="text-align:center"></div></div>
             <div class="labelled"><label>Karşı Hesap</label><input id="purCounterHas" class="input" type="number" step="0.001" value="0" readonly></div>
             <div class="labelled span-2"><label>Açıklama</label><input id="purLineNote" class="input" placeholder="Ürün giriş açıklaması"></div>
             <div class="labelled"><label>Vitrin / Banko</label><select id="purShowcase" class="select"><option value=""></option>${state.definitions.showcases.map(x=>`<option>${esc(x)}</option>`).join('')}</select></div>
@@ -958,7 +973,7 @@ body[data-theme="light"] .nav-search input{background:#f7f8fa;color:#18202a}body
   function pageStocks(){
     const rows=state.stocks.filter(x=>x.period===state.activePeriod && x.status!=='Satıldı');
     let body=stockListView(rows); if(stockView==='cards') body=stockCardsView(); if(stockView==='labels') body=labelsView(rows); if(stockView==='moves') body=movementsView();
-    return `<div class="page-title"><div><h1>Stok Yönetimi</h1><p>Stok kartı → altın giriş → HAS/işçilik → stok hareketi → barkod ve sayım zinciri.</p></div><span class="badge gold">V2.5 Pusula Uyumlu Çekirdek</span></div>${stockHeaderTabs()}${body}`;
+    return `<div class="page-title"><div><h1>Stok Yönetimi</h1><p>Stok kartı → altın giriş → HAS/işçilik → stok hareketi → barkod ve sayım zinciri.</p></div><span class="badge gold">V2.6 Pusula Uyumlu Çekirdek</span></div>${stockHeaderTabs()}${body}`;
   }
 
   function pageCustomers(){
@@ -1109,7 +1124,7 @@ body[data-theme="light"] .nav-search input{background:#f7f8fa;color:#18202a}body
     saleDraft.payments.forEach(p=>{
       if(['Açık Hesap','Diğer'].includes(p.type))return; const a=accountByKey(p.accountKey); if(a.account){const accountAmount=a.account.currency==='HAS'?p.amount/Number(state.prices.has.buy||1):p.amount;a.account.balance=Number(a.account.balance||0)+accountAmount; state.financeMoves.unshift({id:uid('FIN'),period:state.activePeriod,date:now(),direction:'Giriş',type:p.type==='Havale'?'Havale / EFT Tahsilat':p.type==='Kredi Kartı'?'Kredi Kartı Tahsilat':p.type==='Nakit'?'Nakit Tahsilat':p.type,accountKind:a.kind,accountId:a.id,accountName:a.name,amount:p.amount,accountAmount,accountCurrency:a.account.currency||'TL',customer:customer?.name||'',description:docNo,user:session.name,sourceDocNo:docNo});}
     });
-    if(t.remain>0 && saleDraft.customerId!=='CASH'){customer.tlBalance=Number(customer.tlBalance||0)+t.remain;state.customerMoves.unshift({id:uid('CM'),customerId:customer.id,period:state.activePeriod,date:now(),type:'SATIŞ / AÇIK HESAP',unit:'TL',debit:t.remain,credit:0,description:`${docNo} satış bakiyesi`,user:session.name});}
+    if(t.remain>0 && saleDraft.customerId!=='CASH'){customer.tlBalance=Number(customer.tlBalance||0)+t.remain;state.customerMoves.unshift({id:uid('CM'),customerId:customer.id,period:state.activePeriod,date:now(),type:'SATIŞ / AÇIK HESAP',unit:'TL',debit:t.remain,credit:0,description:`${docNo} satış bakiyesi`,user:session.name,sourceType:'sale',sourceId:id,sourceDocNo:docNo});}
     audit(`${docNo} numaralı ${money(t.net)} satış tamamlandı`,'Satış'); saleDraft=newSaleDraft(); closeModal(); toast(`${docNo} satış tamamlandı`); save(); render();
   }
 
@@ -1164,12 +1179,12 @@ body[data-theme="light"] .nav-search input{background:#f7f8fa;color:#18202a}body
     purchaseDraft.lines.forEach((l,lineIndex)=>{
       const card=getStockCard(l.stockCardId); if(!card)return;
       let code=`${String(card.productCode||card.code||'ALT').replace(/\s+/g,'')}-${String(state.activePeriod).slice(-2)}-${String(Date.now()).slice(-5)}-${lineIndex+1}`;
-      const rec={id:uid('S'),stockCardId:card.id,pusulaCode:card.pusulaCode||card.productCode,productType:card.productType||'Altın Mamul',group:card.productGroup||'ALTIN',code,name:card.productDefinition||card.name,category:card.productDefinition||card.name,subCategory:'',supplier:supplier.name,producer:supplier.name,brand:'',model:'',collection:'',color:'',karat:String(l.milyem),purity:String(l.milyem),amount:Number(l.amount),grossWeight:Number(l.amount),netWeight:Number(l.amount),hasWeight:Number(l.materialHas),qty:Number(l.amount),count:Number(l.count||1),workmanshipMode:l.workmanshipMode,workmanshipEntryValue:Number(l.workmanshipEntryValue||0),workmanshipTotalHas:Number(l.workmanshipTotalHas||0),workmanshipType:'HAS',workmanshipValue:Number(l.workmanshipTotalHas||0),counterHas:Number(l.counterHas),purchaseHas:Number(l.counterHas),costHas:Number(l.counterHas),saleHas:0,showcase:l.showcase||'',banko:l.showcase||'',location:'Mağaza',rfid:'',barcode:generateBarcode(),status:'Stokta',notes:l.note||'',entryDate:now(),entryYear:state.activePeriod,partyId:purchaseDraft.partyId||docNo,period:state.activePeriod,saleTo:'',saleDate:'',purchaseDocNo:docNo};
+      const rec={id:uid('S'),stockCardId:card.id,pusulaCode:card.pusulaCode||card.productCode,productType:card.productType||'Altın Mamul',group:card.productGroup||'ALTIN',code,name:card.productDefinition||card.name,category:card.productDefinition||card.name,subCategory:'',supplier:supplier.name,producer:supplier.name,brand:'',model:'',collection:'',color:'',karat:String(l.milyem),purity:String(l.milyem),amount:Number(l.amount),hasWeight:Number(l.materialHas),qty:Number(l.amount),count:Number(l.count||1),workmanshipMode:l.workmanshipMode,workmanshipEntryValue:Number(l.workmanshipEntryValue||0),workmanshipTotalHas:Number(l.workmanshipTotalHas||0),workmanshipType:'HAS',workmanshipValue:Number(l.workmanshipTotalHas||0),counterHas:Number(l.counterHas),purchaseHas:Number(l.counterHas),costHas:Number(l.counterHas),saleHas:0,showcase:l.showcase||'',banko:l.showcase||'',location:'Mağaza',rfid:'',barcode:generateBarcode(),status:'Stokta',notes:l.note||'',entryDate:now(),entryYear:state.activePeriod,partyId:purchaseDraft.partyId||docNo,period:state.activePeriod,saleTo:'',saleDate:'',purchaseDocNo:docNo};
       state.stocks.push(rec); addStockMove(rec,'AG - ALTIN GİRİŞ',supplier.name,'Mağaza',`${docNo} · ${qty(l.amount)} GR · ${qty(l.milyem)} ayar · ${qty(l.counterHas)} HAS`); created.push(rec.id);
     });
     const rec={id:uid('PUR'),docNo,period:state.activePeriod,date:now(),supplierId:supplier.id,invoiceNo:purchaseDraft.invoiceNo||'',partyId:purchaseDraft.partyId||docNo,itemCount:created.length,totalAmount:t.totalAmount,materialHas:t.materialHas,workmanshipHas:t.workmanshipHas,totalHas:t.totalHas,tlEquivalent:t.tl,paymentType:purchaseDraft.paymentType,accountKey:purchaseDraft.accountKey||'',note:purchaseDraft.note||'',stockIds:created,user:session.name,status:'Tamamlandı',type:'AG - ALTIN GİRİŞ'}; state.purchases.unshift(rec);
     if(purchaseDraft.paymentType==='Cari'){
-      supplier.hasBalance=Number(supplier.hasBalance||0)-t.totalHas; state.customerMoves.unshift({id:uid('CM'),customerId:supplier.id,period:state.activePeriod,date:now(),type:'AG - ALTIN GİRİŞ',unit:'HAS',debit:0,credit:t.totalHas,description:`${docNo} · Karşı Hesap ${qty(t.totalHas)} HAS`,user:session.name});
+      supplier.hasBalance=Number(supplier.hasBalance||0)-t.totalHas; state.customerMoves.unshift({id:uid('CM'),customerId:supplier.id,period:state.activePeriod,date:now(),type:'AG - ALTIN GİRİŞ',unit:'HAS',debit:0,credit:t.totalHas,description:`${docNo} · Karşı Hesap ${qty(t.totalHas)} HAS`,user:session.name,sourceType:'purchase',sourceId:rec.id,sourceDocNo:docNo});
     }else{
       const a=accountByKey(purchaseDraft.accountKey); if(a.account)a.account.balance=Number(a.account.balance||0)-t.tl; state.financeMoves.unshift({id:uid('FIN'),period:state.activePeriod,date:now(),direction:'Çıkış',type:purchaseDraft.paymentType==='Nakit'?'Nakit Altın Giriş Ödemesi':'Havale / EFT Altın Giriş Ödemesi',accountKind:a.kind,accountId:a.id,accountName:a.name,amount:t.tl,customer:supplier.name,description:docNo,user:session.name,sourceDocNo:docNo});
     }
@@ -1324,7 +1339,28 @@ body[data-theme="light"] .nav-search input{background:#f7f8fa;color:#18202a}body
     };
     typeEl.addEventListener('change',sync); sync();
   }
-  function openCariDetail(id){const c=state.customers.find(x=>x.id===id);const rows=state.customerMoves.filter(x=>x.customerId===id).sort((a,b)=>b.date.localeCompare(a.date));modal(`Ekstre — ${c.name}`,`${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Tarih</th><th>İşlem</th><th>Birim</th><th class="num">Borç</th><th class="num">Alacak</th><th>Açıklama</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${trDate(x.date)}</td><td>${esc(x.type)}</td><td>${x.unit}</td><td class="num">${qty(x.debit)}</td><td class="num">${qty(x.credit)}</td><td>${esc(x.description)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty-state"><strong>Hareket yok</strong></div>'}`,null,'Kapat');}
+  function isLinkedCariMove(x){
+    if(x?.sourceType || x?.sourceDocNo) return true;
+    const d=String(x?.description||'');
+    return /^SAT-\d{4}-/i.test(d) || /^AG-\d{4}-/i.test(d);
+  }
+  function deleteCariMove(customerId, moveId){
+    const c=state.customers.find(x=>x.id===customerId), m=state.customerMoves.find(x=>x.id===moveId);
+    if(!c||!m)return;
+    if(isLinkedCariMove(m)) return toast('Bu hareket satış/altın giriş belgesine bağlı. Kaynak işlemden iptal edilmelidir.','err');
+    modal('Cari Hareketi Sil',`<div class="notice"><strong>${esc(m.type)}</strong><br>${trDate(m.date)} · ${esc(m.unit)} · Borç ${qty(m.debit)} / Alacak ${qty(m.credit)}</div><p class="muted" style="line-height:1.6">Bu kayıt silinince cari bakiyesi otomatik olarak geri alınacak. İşlem denetim kaydında saklanacaktır.</p>`,()=>{
+      applyCariBalance(c,m.unit,Number(m.credit||0),Number(m.debit||0));
+      state.customerMoves=state.customerMoves.filter(x=>x.id!==moveId);
+      audit(`${c.name} cari hareketi silindi: ${m.type} ${qty(Number(m.debit||0)-Number(m.credit||0))} ${m.unit}`,'Cari');
+      closeModal(); save(); render(); toast('Cari hareketi silindi, bakiye geri alındı');
+    },'SİL');
+  }
+  function openCariDetail(id){
+    const c=state.customers.find(x=>x.id===id); if(!c)return;
+    const rows=state.customerMoves.filter(x=>x.customerId===id).sort((a,b)=>b.date.localeCompare(a.date));
+    modal(`Ekstre — ${c.name}`,`${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Tarih</th><th>İşlem</th><th>Birim</th><th class="num">Borç</th><th class="num">Alacak</th><th>Açıklama</th><th>İşlem</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${trDate(x.date)}</td><td>${esc(x.type)}</td><td>${esc(x.unit)}</td><td class="num">${qty(x.debit)}</td><td class="num">${qty(x.credit)}</td><td>${esc(x.description)}</td><td>${isLinkedCariMove(x)?`<span class="cari-linked">🔒 Bağlı işlem</span>`:`<button class="btn btn-danger cari-delete" data-cari-delete="${x.id}">Sil</button>`}</td></tr>`).join('')}</tbody></table></div><div class="notice" style="margin-top:12px">Manuel cari hareketleri <b>Sil</b> ile kaldırılır ve bakiye otomatik geri alınır. Satış veya AG - ALTIN GİRİŞ'ten oluşan bağlı hareketler, veri bütünlüğü için doğrudan silinmez.</div>`:'<div class="empty-state"><strong>Hareket yok</strong></div>'}`,null,'Kapat');
+    document.querySelectorAll('[data-cari-delete]').forEach(b=>b.addEventListener('click',()=>deleteCariMove(id,b.dataset.cariDelete)));
+  }
 
 
   function bindFinance(){

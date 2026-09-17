@@ -1,56 +1,20 @@
-# Asil Kuyumcu Pro V2.5 — Pusula Cari Hareket + Altın Giriş
+# Asil Kuyumcu Pro V2.6
 
-GitHub Pages üzerinde doğrudan açılacak repo sürümüdür.
+GitHub Pages için repo köküne yüklemeye hazır sürüm.
 
-## V2.5 düzeltmeleri
-- Altın ürün giriş ekranında **Brüt Gram / Net Gram alanı yoktur**.
-- Altın girişinde yalnızca **Miktar (GR)** kullanılır.
-- Ayar / milyem stok kartındaki **Milyem Sabiti** değerinden otomatik gelir.
-- HAS = Miktar × Milyem / 1000.
-- Birim İşçilik / Adet İşçilik HAS olarak girilir.
-- Toplam İşçilik ve Karşı Hesap otomatik hesaplanır.
-- Sol üst sürüm etiketi artık **PRO v2.5** görünür; böylece GitHub'da hangi dosyanın açık olduğu anlaşılır.
+## V2.6 değişiklikleri
+- Altın girişindeki sayısal alanlar genişletildi ve rakam okunabilirliği artırıldı.
+- Miktar / GR ve Toplam İşçilik / HAS kutuları yeniden düzenlendi.
+- Sayısal alanlardaki tarayıcı okları gizlenerek kullanılabilir alan büyütüldü.
+- Cari ekstreye **Sil** işlemi eklendi.
+- Manuel cari hareketi silinince ilgili TL/HAS/diğer birim bakiyesi otomatik geri alınır.
+- Satış ve AG - ALTIN GİRİŞ gibi belgeye bağlı cari hareketler doğrudan silinmez; ekstrede **Bağlı işlem** olarak gösterilir.
+- Yeni satış ve altın giriş cari hareketlerine kaynak belge bağlantısı eklendi.
+- Altın girişinde yeni kayıtlar için brüt/net gram veri alanları kullanılmıyor; ana miktar alanı `Miktar (GR)` mantığındadır.
 
-## Pusula'dan eklenen Cari Hareket Kodları
-- AC - AÇIKLAMA
-- AG - ALTIN GİRİŞ
-- AL - ALACAKLANDIR
-- BR - BORÇLANDIR
-- CI - ÇIKAN İADE
-- CV - ÇEVİRME
-- HC - HURDA ÇIKIŞ
-- HG - HURDA GİRİŞ
-- MH - MAHSUP
-- NO - NAKİT ÖDEME
-- NT - NAKİT TAHSİLAT
-- OC - ÖZEL ÜRÜN ÇIKIŞ
-- OG - ÖZEL ÜRÜN ALIŞ
-- SI - SATIŞ İADESİ
-- TC - TAŞ ÇIKIŞ
-- TG - TAŞ GİRİŞ
-- TS - TAŞ SATIŞ
-- ZC - ZİYNET ÇIKIŞ
-- ZG - ZİYNET GİRİŞ
-
-AG seçildiğinde ayrı **Altın Giriş** ekranına yönlenir. Diğer hareketler cari ekstreye koduyla kaydedilir. Göndereceğiniz ek Pusula hareketleri aynı kataloğa eklenebilir.
-
-## Giriş
-- Kullanıcı: `Admin`
-- Şifre: `1234`
-
-## GitHub'a yükleme
-Repo ana dizinindeki şu dosyaları yükleyin:
-
-```text
-/
-├─ index.html
-├─ manifest.webmanifest
-├─ icon.svg
-├─ sw.js
-├─ .nojekyll
-└─ README.md
-```
-
-GitHub Pages: **Settings → Pages → Deploy from a branch → main → /(root)**.
-
-> Not: Eski V2.3/V2.4 açık kalırsa tarayıcı önbelleği nedeniyle eski ekran görülebilir. Yeni dosyaları yükledikten sonra `Ctrl + F5` ile zorla yenileyin. V2.5 doğru açıldığında sol üstte **PRO v2.5** yazar.
+## GitHub Pages
+1. ZIP'i bilgisayarda çıkarın.
+2. İçindeki dosyaların tamamını repo ana dizinine yükleyin.
+3. Commit edin.
+4. Settings > Pages > Deploy from a branch > main > /(root) seçin.
+5. Yeni sürüm için tarayıcıda Ctrl+F5 yapın.
