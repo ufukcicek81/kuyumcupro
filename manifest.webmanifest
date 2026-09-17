@@ -1,19 +1,14 @@
 {
   "name": "Asil Kuyumcu Pro",
   "short_name": "Asil Kuyumcu",
-  "description": "Asil Kuyumcu Pro V2.9 - canlı HAS/döviz, stok, barkod, cari, kasa ve finans",
+  "description": "Asil Kuyumcu Pro V4.0 - Pusula uyumlu satış, stok, barkod, cari, kasa/POS ve canlı fiyat",
   "lang": "tr",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#0c0d0f",
-  "theme_color": "#101113",
+  "theme_color": "#30363a",
   "icons": [
-    {
-      "src": "./icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    }
+    {"src":"./icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}
   ]
 }
