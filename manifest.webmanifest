@@ -1,7 +1,7 @@
 {
   "name": "Asil Kuyumcu Pro",
   "short_name": "Asil Kuyumcu",
-  "description": "Asil Kuyumcu Pro V2.6 - stok, barkod, cari, kasa ve finans prototipi",
+  "description": "Asil Kuyumcu Pro V2.9 - canlı HAS/döviz, stok, barkod, cari, kasa ve finans",
   "lang": "tr",
   "start_url": "./",
   "scope": "./",

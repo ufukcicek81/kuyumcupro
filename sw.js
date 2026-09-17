@@ -1,4 +1,4 @@
-const CACHE_NAME = 'asil-kuyumcu-pro-v2-6-0';
+const CACHE_NAME = 'asil-kuyumcu-pro-v2-9';
 const APP_SHELL = [
   './',
   './index.html',
@@ -20,6 +20,12 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
+  const url = new URL(event.request.url);
+  // Canlı fiyat / Firebase / döviz istekleri her zaman ağdan gelsin.
+  if (url.origin !== self.location.origin) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
   event.respondWith(
     fetch(event.request)
       .then(response => {
