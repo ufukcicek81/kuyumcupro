@@ -1,4 +1,4 @@
-# Asil Kuyumcu Pro V4.0 — Pusula Uyumlu Toplu Revizyon
+# Asil Kuyumcu Pro V4.1 — Pusula Uyumlu Toplu Revizyon
 
 GitHub Pages repo köküne doğrudan yüklenmeye hazır sürüm.
 
@@ -26,12 +26,20 @@ GitHub Pages repo köküne doğrudan yüklenmeye hazır sürüm.
 3. Commit edin.
 4. Settings > Pages > Deploy from a branch > `main` > `/(root)` seçin.
 5. Yayınlandıktan sonra `Ctrl + F5` yapın.
-6. Sol üstte **PRO v4.0** görünmelidir.
+6. Sol üstte **PRO v4.1** görünmelidir.
 
 ## Önemli veri notu
-Bu sürüm yeni localStorage anahtarı (`asil_kuyumcu_pro_v4_real`) kullanır. İlk açılışta deneme verileri yerine `data/pusula-initial.js` içindeki gerçek Pusula başlangıç verisi yüklenir. V4.0 üzerinde yaptığınız yeni hareketler tarayıcıda saklanır.
+Bu sürüm yeni localStorage anahtarı (`asil_kuyumcu_pro_v4_real`) kullanır. İlk açılışta deneme verileri yerine `data/pusula-initial.js` içindeki gerçek Pusula başlangıç verisi yüklenir. V4.1 üzerinde yaptığınız yeni hareketler tarayıcıda saklanır.
 
 ## Canlı fiyat
 - Worker: `altin-proxy.ufuk87900.workers.dev`
 - Firebase ayarları mevcut Asil Kuyumcu fiyat sistemiyle aynıdır.
 - Dış kaynak fiyat istekleri Service Worker cache'ine alınmaz.
+
+
+## V4.1 veri yükleme düzeltmesi
+- 1.691 barkodlu ürün ve 82 gerçek cari `index.html` içine gömülüdür; `data/` klasörü eksik yüklense bile açılır.
+- V4.0 ve önceki deneme localStorage kayıtları ilk açılışta otomatik sıfırlanır.
+- Gerçek Pusula açılış stok/cari/kasa verisi yeniden yazılır.
+- Deneme satış, hurda işlem, gider ve alış kayıtları temizdir.
+- Cari bakiyeleri için yalnız `DEVİR / AÇILIŞ` satırları oluşturulmuştur.
