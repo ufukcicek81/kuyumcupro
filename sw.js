@@ -1,4 +1,4 @@
-const CACHE_NAME = 'asil-kuyumcu-pro-v4-1-real-r2';
+const CACHE_NAME = 'asil-kuyumcu-pro-v4-3-has-kar-r1';
 const APP_SHELL = ['./','./index.html','./manifest.webmanifest','./icon.svg','./data/pusula-initial.js'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));
