@@ -1,19 +1,8 @@
 {
-  "name": "Asil Kuyumcu Pro V4.3",
-  "short_name": "Asil V4.3",
-  "description": "Asil Kuyumcu Pro V4.3 - Pusula uyumlu satış, stok, barkod, cari, kasa/POS ve canlı fiyat",
-  "lang": "tr",
-  "start_url": "./?v=4.3",
-  "scope": "./",
+  "name": "Asil Kuyumcu Pro V5",
+  "short_name": "Asil V5",
+  "start_url": "./",
   "display": "standalone",
-  "background_color": "#0c0d0f",
-  "theme_color": "#30363a",
-  "icons": [
-    {
-      "src": "./icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    }
-  ]
+  "background_color": "#111318",
+  "theme_color": "#111318"
 }

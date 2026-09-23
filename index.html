@@ -129,6 +129,16 @@ radial-gradient(circle at bottom left, rgba(98,168,255,.08), transparent 35%),va
 body[data-ui-mode="pc"] .content{max-width:1700px}
 body[data-ui-mode="pc"] .table th,body[data-ui-mode="pc"] .table td{padding-top:10px;padding-bottom:10px}
 
+body[data-ui-mode="pc"] .sale-line-editor .labelled:nth-child(4),
+body[data-ui-mode="pc"] .sale-line-editor .labelled:nth-child(5){
+  min-width:145px;
+}
+body[data-ui-mode="pc"] .sale-line-editor input[type="number"]{
+  text-align:right;
+  font-variant-numeric:tabular-nums;
+}
+
+
 body[data-ui-mode="tablet"]{--radius:18px}
 body[data-ui-mode="tablet"] .btn,body[data-ui-mode="tablet"] .input,body[data-ui-mode="tablet"] .select{min-height:44px}
 body[data-ui-mode="tablet"] .content{padding:18px;max-width:1280px}
@@ -147,6 +157,44 @@ body[data-ui-mode="tablet"] .metric .value{font-size:25px}
 body[data-ui-mode="tablet"] .payment-buttons{grid-template-columns:repeat(3,1fr)}
 body[data-ui-mode="tablet"] .toolbar{gap:8px}
 body[data-ui-mode="tablet"] .toolbar .input,body[data-ui-mode="tablet"] .toolbar .select{min-width:170px}
+
+body[data-ui-mode="tablet"] .sale-line-editor{
+  grid-template-columns:minmax(230px,1.45fr) minmax(110px,.65fr) minmax(90px,.5fr) minmax(185px,1fr) minmax(195px,1.05fr);
+  gap:10px;
+}
+body[data-ui-mode="tablet"] .sale-line-editor > .labelled:nth-child(6){
+  grid-column:1 / -1;
+}
+body[data-ui-mode="tablet"] .sale-line-editor .input,
+body[data-ui-mode="tablet"] .sale-line-editor .select{
+  font-size:16px;
+  min-height:50px;
+  padding:11px 12px;
+}
+body[data-ui-mode="tablet"] .sale-line-editor input[type="number"]{
+  text-align:right;
+  font-weight:800;
+  font-variant-numeric:tabular-nums;
+}
+body[data-ui-mode="tablet"] .sale-line-editor .labelled:nth-child(4),
+body[data-ui-mode="tablet"] .sale-line-editor .labelled:nth-child(5){
+  min-width:185px;
+}
+body[data-ui-mode="tablet"] .sale-line-editor .labelled:nth-child(4) input,
+body[data-ui-mode="tablet"] .sale-line-editor .labelled:nth-child(5) input{
+  font-size:17px;
+  letter-spacing:.1px;
+}
+@media (max-width:1080px){
+  body[data-ui-mode="tablet"] .sale-line-editor{
+    grid-template-columns:minmax(210px,1.4fr) minmax(100px,.7fr) minmax(90px,.6fr) minmax(175px,1fr);
+  }
+  body[data-ui-mode="tablet"] .sale-line-editor > .labelled:nth-child(5),
+  body[data-ui-mode="tablet"] .sale-line-editor > .labelled:nth-child(6){
+    grid-column:span 2;
+  }
+}
+
 
 
 /* Açık / Karanlık Tema */
@@ -416,6 +464,10 @@ body[data-theme="light"] .sale-entry-switch{background:#e8eceb}
   .sale-cost-mini{font-size:11px;color:var(--muted);line-height:1.25;white-space:nowrap}
   .sale-cost-mini strong{color:var(--text)}
   @media(max-width:900px){.sale-stock-preview{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+  .v5-action-grid{display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:10px}.v5-action-grid .btn{min-height:56px;text-align:left;justify-content:flex-start}.v5-ledger{max-height:430px;overflow:auto}.v5-status{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.v5-special-photo{width:54px;height:54px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+  @media(max-width:1150px){.v5-action-grid{grid-template-columns:repeat(2,minmax(180px,1fr))}}@media(max-width:650px){.v5-action-grid{grid-template-columns:1fr}}
+
 </style>
 </head>
 <body>
@@ -437,6 +489,9 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   // Asil Kuyumcu fiyat ekranında çalışan mevcut canlı fiyat altyapısı.
   const LIVE_PRICE_WORKER_URL = 'https://altin-proxy.ufuk87900.workers.dev';
   const ASIL_PRICE_SETTINGS_URL = 'https://asil-kuyumculuk-2feb6-default-rtdb.firebaseio.com/ayarlar.json';
+  const CLOUD_STATE_URL = 'https://asil-kuyumculuk-2feb6-default-rtdb.firebaseio.com/kuyumcuProV5/state.json';
+  const CLOUD_BACKUP_BASE = 'https://asil-kuyumculuk-2feb6-default-rtdb.firebaseio.com/kuyumcuProV5/backups';
+  var cloudInitializedV5=false, cloudApplyingV5=false, cloudPushTimerV5=null, cloudStreamV5=null;
   const LIVE_PRICE_INTERVAL_MS = 5000;
 
   const money = (n, cur='TL') => new Intl.NumberFormat('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2}).format(Number(n||0)) + ' ' + cur;
@@ -544,6 +599,8 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     ensureStateShape();
     try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch {}
   }
+  ensureV5State();
+  reconcileTransactionLedgerV5();
   save();
   let uiMode = state.settings.uiMode || 'pc';
   let theme = state.settings.theme || 'dark';
@@ -587,8 +644,13 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     }
   }
   function save(){
-    try { localStorage.setItem(LS_KEY, JSON.stringify(state)); }
-    catch { /* Yerel dosya modunda depolama engellense bile uygulama çalışmaya devam eder. */ }
+    try{
+      if(typeof ensureV5State==='function') ensureV5State();
+      if(typeof reconcileTransactionLedgerV5==='function') reconcileTransactionLedgerV5();
+      state.meta=state.meta||{}; state.meta.updatedAt=now(); state.meta.appVersion='5.0';
+      localStorage.setItem(LS_KEY, JSON.stringify(state));
+    } catch { /* Yerel dosya modunda depolama engellense bile uygulama çalışmaya devam eder. */ }
+    if(cloudInitializedV5 && !cloudApplyingV5 && state?.cloudSync?.enabled && typeof scheduleCloudPushV5==='function') scheduleCloudPushV5();
   }
   function safeSessionGet(){
     try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null'); }
@@ -793,6 +855,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       state.stocks.forEach(x=>state.stockMoves.push({id:uid('SM'),period:x.period||state.activePeriod,date:x.entryDate||now(),stockId:x.id,code:x.code,type:'DEVİR / MEVCUT STOK',from:'',to:x.location||'Mağaza',description:'V3.0 geçişinde mevcut stok kaydı',user:'Sistem'}));
     }
     migrateOpeningCostBasis();
+    migrateFxCostBasis();
     if(!state.priceSnapshots.length)recordPriceSnapshot(true);
   }
 
@@ -876,6 +939,113 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     (state.openStocks||[]).forEach(o=>{const r=suggestedOpenUnitCostHas(o);o.openingUnitCostHas=r;o.inventoryUnitCostHas=r;o.openingCostHas=Number(o.amount||0)*r;o.costBasisSource='Pusula devir / kullanıcı açılış maliyeti';});
     state.meta.openCostMigrationVersion=1; state.meta.openingCostBasis='HAS bazlı açılış maliyeti';
   }
+  function currentCurrencyBalance(cur){
+    const c=String(cur||'').toUpperCase();
+    return [...(state.cashAccounts||[]),...(state.bankAccounts||[])].filter(x=>String(x.currency||'').toUpperCase()===c).reduce((a,x)=>a+Number(x.balance||0),0);
+  }
+  function migrateFxCostBasis(){
+    state.meta=state.meta||{};
+    state.fxCostBasis=state.fxCostBasis||{};
+    if(Number(state.meta.fxCostBasisVersion||0)>=1)return;
+    ['USD','EUR','GBP','CHF','SAR'].forEach(cur=>{
+      const qtyNow=currentCurrencyBalance(cur);
+      const rate=cur==='SAR'?0:currencyTlRate(cur,'buy');
+      state.fxCostBasis[cur]={qty:qtyNow,avgTl:Number(rate||0),source:'V5.0 açılış — mevcut bakiye canlı alış kuruyla bazlandı'};
+    });
+    state.meta.fxCostBasisVersion=1;
+  }
+  function updateFxCostBasis(cur,side,amount,rate){
+    state.fxCostBasis=state.fxCostBasis||{};
+    const c=String(cur||'').toUpperCase(), q=Math.max(0,Number(amount||0)), r=Math.max(0,Number(rate||0));
+    const b=state.fxCostBasis[c]||{qty:0,avgTl:r||currencyTlRate(c,'buy')||0};
+    let realizedTl=0, costTl=0;
+    if(side==='Alış'){
+      const oldQty=Math.max(0,Number(b.qty||0)), oldCost=oldQty*Number(b.avgTl||0), newQty=oldQty+q;
+      b.avgTl=newQty?(oldCost+q*r)/newQty:r; b.qty=newQty;
+    }else{
+      const avg=Number(b.avgTl||r||0); costTl=q*avg; realizedTl=q*r-costTl; b.qty=Math.max(0,Number(b.qty||0)-q);
+    }
+    state.fxCostBasis[c]=b;
+    return {avgTl:Number(b.avgTl||0),costTl,realizedTl,remainingQty:Number(b.qty||0)};
+  }
+  function currentTlRateForUnit(unit){
+    const u=String(unit||'TL').toUpperCase();
+    if(u==='TL')return 1;
+    if(u==='HAS')return Number(state.prices.has?.buy||1);
+    if(['USD','EUR','GBP','CHF'].includes(u))return Number(currencyTlRate(u,'buy')||0);
+    if(u==='SAR')return 0;
+    return 0;
+  }
+  function customerUnitBalance(c,unit){
+    const u=String(unit||'TL').toUpperCase();
+    if(u==='TL')return Number(c.tlBalance||0);
+    if(u==='HAS')return Number(c.hasBalance||0);
+    return Number(c.otherBalances?.[u]||0);
+  }
+  function openDebitLots(customerId,unit){
+    const u=String(unit||'TL').toUpperCase();
+    const rows=(state.customerMoves||[]).filter(m=>m.customerId===customerId&&String(m.unit||'TL').toUpperCase()===u).slice().sort((a,b)=>new Date(a.date)-new Date(b.date));
+    const lots=[];
+    rows.forEach(m=>{
+      let debit=Math.max(0,Number(m.debit||0)), credit=Math.max(0,Number(m.credit||0));
+      if(debit>0)lots.push({date:m.date,remaining:debit,source:m.type||''});
+      while(credit>0&&lots.length){const l=lots[0], take=Math.min(credit,l.remaining);l.remaining-=take;credit-=take;if(l.remaining<=1e-9)lots.shift();}
+    });
+    return lots.filter(x=>x.remaining>1e-9);
+  }
+  function cariAgingReport(){
+    const nowMs=Date.now(), buckets={'0-30':0,'31-60':0,'61-90':0,'90+':0}, details=[];
+    (state.customers||[]).filter(c=>['Müşteri','Toptancı','Özel'].includes(c.type)).forEach(c=>{
+      const units=['TL','HAS',...Object.keys(c.otherBalances||{})];
+      let totalTl=0, oldest=0, parts=[];
+      units.forEach(unit=>{
+        const bal=customerUnitBalance(c,unit); if(bal<=1e-9)return;
+        let lots=openDebitLots(c.id,unit);
+        if(!lots.length)lots=[{date:`${state.activePeriod}-01-01T00:00:00`,remaining:bal,source:'Bakiye'}];
+        const lotSum=lots.reduce((a,l)=>a+l.remaining,0); if(lotSum<bal-1e-6)lots.unshift({date:`${state.activePeriod}-01-01T00:00:00`,remaining:bal-lotSum,source:'Devir/Bakiye'});
+        const rate=currentTlRateForUnit(unit); let native=0;
+        lots.forEach(l=>{
+          native+=l.remaining; const age=Math.max(0,Math.floor((nowMs-new Date(l.date).getTime())/86400000)); oldest=Math.max(oldest,age); const tl=l.remaining*rate; totalTl+=tl;
+          const key=age<=30?'0-30':age<=60?'31-60':age<=90?'61-90':'90+'; buckets[key]+=tl;
+        });
+        parts.push(`${qty(native)} ${unit}`);
+      });
+      if(totalTl>0.01)details.push({name:c.name,type:c.type,totalTl,oldest,parts:parts.join(' + ')});
+    });
+    details.sort((a,b)=>b.totalTl-a.totalTl);
+    return {buckets,details};
+  }
+  function reportExpenseGroups(){
+    const rows=(state.financeMoves||[]).filter(x=>x.period===state.activePeriod&&inReportRange(x.date)&&/komisyon gider|komisyon|masraf|gider/i.test(String(x.type||'')+' '+String(x.sourceCategory||'')));
+    const map={}; rows.forEach(x=>{const k=x.accountName||x.type||'Diğer';const tl=Math.abs(Number(x.tlAmount??x.amount??0));(map[k]??={name:k,tl:0,count:0}).tl+=tl;map[k].count++;});
+    return Object.values(map).sort((a,b)=>b.tl-a.tl);
+  }
+  function stockValuationReport(){
+    const barcode=activeStock(), open=(state.openStocks||[]).filter(x=>x.period===state.activePeriod), scrap=(state.scrapStocks||[]).filter(x=>x.period===state.activePeriod);
+    const barcodeCost=barcode.reduce((a,x)=>a+Number(x.costHas||0),0), barcodePhysical=barcode.reduce((a,x)=>a+Number(x.hasWeight||stockHas(x)||0),0), barcodeSale=barcode.reduce((a,x)=>a+Number(x.saleHas||x.counterHas||0),0);
+    const openCost=open.reduce((a,x)=>a+openInventoryCostHas(x),0), openPhysical=open.reduce((a,x)=>a+Number(x.hasWeight||0),0);
+    const scrapCost=scrap.reduce((a,x)=>a+Number(x.amount||0)*Number(x.unitCostHas||Number(x.milyem||0)/1000||0),0), scrapPhysical=scrap.reduce((a,x)=>a+Number(x.hasWeight||0),0);
+    return {barcodeCost,barcodePhysical,barcodeSale,openCost,openPhysical,scrapCost,scrapPhysical,totalCost:barcodeCost+openCost+scrapCost,totalPhysical:barcodePhysical+openPhysical+scrapPhysical};
+  }
+  function periodPulse(from,to){
+    const f=new Date(from).getTime(), t=new Date(to).getTime(), inside=iso=>{const x=new Date(iso).getTime();return x>=f&&x<=t;};
+    const sales=activeSales().filter(s=>s.status==='Tamamlandı'&&inside(s.date));
+    const salesTl=sales.reduce((a,s)=>a+Number(s.total||0),0), profitHas=sales.reduce((a,s)=>a+saleRevenueHas(s)-saleCostHas(s),0);
+    const moves=(state.financeMoves||[]).filter(x=>x.period===state.activePeriod&&inside(x.date));
+    const incoming=moves.filter(x=>x.direction==='Giriş').reduce((a,x)=>a+financeTlValue(x),0), outgoing=moves.filter(x=>x.direction==='Çıkış').reduce((a,x)=>a+financeTlValue(x),0);
+    return {salesTl,profitHas,incoming,outgoing,netCash:incoming-outgoing,count:sales.length};
+  }
+  function reportPulseRows(){
+    const nowD=new Date(), end=new Date(nowD);end.setHours(23,59,59,999);
+    const dayStart=new Date(nowD);dayStart.setHours(0,0,0,0);
+    const weekStart=new Date(nowD);weekStart.setDate(nowD.getDate()-((nowD.getDay()+6)%7));weekStart.setHours(0,0,0,0);
+    const monthStart=new Date(nowD.getFullYear(),nowD.getMonth(),1);
+    return [{label:'Bugün',...periodPulse(dayStart,end)},{label:'Bu Hafta',...periodPulse(weekStart,end)},{label:'Bu Ay',...periodPulse(monthStart,end)}];
+  }
+  function personnelProfitRows(sales){
+    const map={}; sales.filter(s=>s.status==='Tamamlandı').forEach(s=>{const n=s.salesperson||'Belirsiz';const r=map[n]||(map[n]={name:n,count:0,revenueHas:0,costHas:0,profitHas:0,salesTl:0});const rev=saleRevenueHas(s),cost=saleCostHas(s);r.count++;r.revenueHas+=rev;r.costHas+=cost;r.profitHas+=rev-cost;r.salesTl+=Number(s.total||0);});
+    return Object.values(map).sort((a,b)=>b.profitHas-a.profitHas);
+  }
   function recordPriceSnapshot(force=false){
     state.priceSnapshots=Array.isArray(state.priceSnapshots)?state.priceSnapshots:[];
     const day=new Date().toISOString().slice(0,10), last=state.priceSnapshots[state.priceSnapshots.length-1];
@@ -909,18 +1079,22 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const expRows=(state.expenses||[]).filter(x=>x.period===state.activePeriod&&inReportRange(x.date));
     const expTl=expRows.reduce((a,x)=>a+Number(x.amount||0),0); const expHas=expRows.reduce((a,x)=>a+Number(x.amount||0)/Number(x.hasRateAtEntry||historicalHasRate(x.date,'buy')||1),0);
     const feeRows=(state.financeMoves||[]).filter(x=>x.period===state.activePeriod&&inReportRange(x.date)&&/komisyon gider|masraf|gider/i.test(String(x.type||x.sourceCategory||'')));
-    const feeTl=feeRows.reduce((a,x)=>a+Number(x.tlAmount??x.amount??0),0); const feeHas=feeRows.reduce((a,x)=>a+Number(x.tlAmount??x.amount??0)/Number(x.hasRateAtEntry||historicalHasRate(x.date,'buy')||1),0);
-    const tradeProfitHas=(state.tradeMoves||[]).filter(x=>x.period===state.activePeriod&&inReportRange(x.date)).reduce((a,x)=>a+Number(x.profitHas||0),0);
-    const netHas=grossHas-expHas-feeHas+tradeProfitHas;
+    const feeTl=feeRows.reduce((a,x)=>a+Math.abs(Number(x.tlAmount??x.amount??0)),0); const feeHas=feeRows.reduce((a,x)=>a+Math.abs(Number(x.tlAmount??x.amount??0))/Number(x.hasRateAtEntry||historicalHasRate(x.date,'buy')||1),0);
+    const trades=(state.tradeMoves||[]).filter(x=>x.period===state.activePeriod&&inReportRange(x.date));
+    const tradeProfitHas=trades.reduce((a,x)=>a+Number(x.profitHas||0),0);
+    const realizedFxPlTl=trades.reduce((a,x)=>a+Number(x.realizedFxPlTl||0),0), realizedFxPlHas=trades.reduce((a,x)=>a+Number(x.realizedFxPlHas||0),0);
+    const netHas=grossHas-expHas-feeHas+tradeProfitHas+realizedFxPlHas;
     const b=rangeBounds(), closeRate=historicalHasRate(b.to,reportFilters.valuationSide||'buy'), openRate=historicalHasRate(b.from,reportFilters.valuationSide||'buy');
-    const nominalTl=sales.reduce((a,s)=>a+(Number(s.total||0)-saleCostHas(s)*Number(s.hasBuyRateAtSale||historicalHasRate(s.date,'buy'))),0)-expTl-feeTl+tradeProfitHas*closeRate;
+    const nominalTl=sales.reduce((a,s)=>a+(Number(s.total||0)-saleCostHas(s)*Number(s.hasBuyRateAtSale||historicalHasRate(s.date,'buy'))),0)-expTl-feeTl+tradeProfitHas*closeRate+realizedFxPlTl;
     const adjustedTl=netHas*closeRate, valuationDiff=adjustedTl-nominalTl;
-    return {sales,revenueTl,revenueHas,cogsHas,grossHas,expTl,expHas,feeTl,feeHas,tradeProfitHas,netHas,openRate,closeRate,nominalTl,adjustedTl,valuationDiff};
+    return {sales,revenueTl,revenueHas,cogsHas,grossHas,expTl,expHas,feeTl,feeHas,tradeProfitHas,realizedFxPlTl,realizedFxPlHas,netHas,openRate,closeRate,nominalTl,adjustedTl,valuationDiff};
   }
+
   function render(){
     applyUiMode();
     applyTheme();
     if(!session) return renderLogin();
+    state.currentUser=state.users.find(x=>x.id===session?.id)||state.users[0]||null;
     app.innerHTML = shell(renderPage(route));
     bindShell();
     bindPage(route);
@@ -965,13 +1139,13 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
 
   const navItems = [
-    ['dashboard','⌂','Ana Panel'],['sales','▣','Satış'],['purchases','⇩','Altın Giriş / Alış'],['stocks','◇','Stok Yönetimi'],['customers','◎','Cari Hesaplar'],['finance','₺','Kasa / Finans'],['scrap','◆','Hurda / Ziynet'],['prices','⇄','Fiyat & Kur'],['count','▦','Sayım'],['parameters','⚙','Sistem Ayarları'],['definitions','▤','Tanımlamalar'],['reports','≡','Raporlar'],['backup','↻','Yedek / Sistem']
+    ['dashboard','⌂','Ana Panel'],['sales','▣','Satış'],['operations','◈','İşlem Merkezi'],['purchases','⇩','Altın Giriş / Alış'],['stocks','◇','Stok Yönetimi'],['customers','◎','Cari Hesaplar'],['finance','₺','Kasa / Finans'],['scrap','◆','Hurda / Ziynet'],['prices','⇄','Fiyat & Kur'],['count','▦','Sayım'],['parameters','⚙','Sistem Ayarları'],['definitions','▤','Tanımlamalar'],['reports','≡','Raporlar'],['backup','↻','Yedek / Sistem']
   ];
 
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v4.9</small></div></div>
+        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v5.0</small></div></div>
         <div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off"></div><div class="nav">${navItems.map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div>
         <div class="sidebar-bottom">
           <div class="user-chip"><div class="avatar">${esc(session.name.split(' ').map(x=>x[0]).slice(0,2).join(''))}</div><div><strong>${esc(session.name)}</strong><div class="muted" style="font-size:12px">${esc(session.role)}</div></div></div>
@@ -1006,7 +1180,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
 
   function renderPage(r){
-    if(r==='sales') return pageSales(); if(r==='purchases') return pagePurchases(); if(r==='stocks') return pageStocks(); if(r==='customers') return pageCustomers(); if(r==='finance') return pageFinance(); if(r==='scrap') return pageScrap(); if(r==='prices') return pagePrices(); if(r==='count') return pageCount(); if(r==='parameters') return pageParameters(); if(r==='definitions') return pageDefinitions(); if(r==='reports') return pageReports(); if(r==='backup') return pageBackup(); return pageDashboard();
+    if(r==='sales') return pageSales(); if(r==='operations') return pageOperationsV5(); if(r==='purchases') return pagePurchases(); if(r==='stocks') return pageStocks(); if(r==='customers') return pageCustomers(); if(r==='finance') return pageFinance(); if(r==='scrap') return pageScrap(); if(r==='prices') return pagePrices(); if(r==='count') return pageCount(); if(r==='parameters') return pageParameters(); if(r==='definitions') return pageDefinitions(); if(r==='reports') return pageReports(); if(r==='backup') return pageBackup(); return pageDashboard();
   }
 
   function pageDashboard(){
@@ -1021,7 +1195,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const hasPos = state.customers.reduce((a,c)=>a+(c.hasBalance||0),0);
     const recent = [...activeSales()].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8);
     return `<div class="page-title"><div><h1>Ana Panel</h1><p>${state.activePeriod} dönemi — ${esc(state.settings.branch)} · Pusula alışkanlığına yakın hızlı menü</p></div><button class="btn btn-primary" id="quickSale">+ Yeni Satış</button></div>
-      <div class="pusula-ribbon"><button class="btn" data-go="sales">SATIŞ İŞLEMLERİ</button><button class="btn" data-go="prices">ALTIN FİYATLARI</button><button class="btn" data-go="purchases">ALTIN GİRİŞ</button><button class="btn" data-go="scrap">HURDA / ZİYNET</button><button class="btn" data-go="finance">KASA / POS</button><button class="btn" data-go="customers">CARİ İŞLEMLER</button><button class="btn" data-go="stocks">STOKLAR</button></div>
+      <div class="pusula-ribbon"><button class="btn" data-go="sales">SATIŞ İŞLEMLERİ</button><button class="btn" data-go="operations">İŞLEM MERKEZİ</button><button class="btn" data-go="prices">ALTIN FİYATLARI</button><button class="btn" data-go="purchases">ALTIN GİRİŞ</button><button class="btn" data-go="scrap">HURDA / ZİYNET</button><button class="btn" data-go="finance">KASA / POS</button><button class="btn" data-go="customers">CARİ İŞLEMLER</button><button class="btn" data-go="stocks">STOKLAR</button></div>
       <div class="grid grid-6">
         ${metric('Bugünkü Satış',money(turnover),'Tamamlanan satışlar')}
         ${metric('Tahmini Kâr',money(profit),'Maliyet verisine göre',profit>=0?'positive':'negative')}
@@ -1483,7 +1657,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function pageStocks(){
     const rows=state.stocks.filter(x=>x.period===state.activePeriod && x.status!=='Satıldı');
     let body=stockSummaryView(); if(stockView==='list') body=stockListView(rows); if(stockView==='cards') body=stockCardsView(); if(stockView==='labels') body=labelsView(rows); if(stockView==='moves') body=movementsView();
-    return `<div class="page-title"><div><h1>Stok Yönetimi</h1><p>Pusula düzeni: açık stok + barkodlu stok + hurda + kasa/POS tek merkezde.</p></div><span class="badge gold">V4.9 · Kasa sadeleştirildi · Satış Geçmişi/Düzeltme · 1.691 Barkod · 82 Cari</span></div>${stockHeaderTabs()}${body}`;
+    return `<div class="page-title"><div><h1>Stok Yönetimi</h1><p>Pusula düzeni: açık stok + barkodlu stok + hurda + kasa/POS tek merkezde.</p></div><span class="badge gold">V5.0 · Kasa sadeleştirildi · Satış Geçmişi/Düzeltme · 1.691 Barkod · 82 Cari</span></div>${stockHeaderTabs()}${body}`;
   }
 
   function customerCardsView(){
@@ -1565,26 +1739,36 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const rows=(state.systemParameters||[]).map((x,i)=>`<tr data-param-row="${i}" data-param-group="${esc(x.group||'Diğer')}"><td><strong>${esc(x.label)}</strong><div class="muted" style="font-size:11px">${esc(x.group||'Diğer')}</div></td><td>${x.type==='bool'?`<select class="param-value" data-param-index="${i}"><option ${['Evet','1','true',true].includes(x.value)?'selected':''}>Evet</option><option ${['Hayır','0','false',false].includes(x.value)?'selected':''}>Hayır</option></select>`:`<input class="param-value" data-param-index="${i}" type="${x.type==='number'?'number':'text'}" step="${x.type==='number'?'0.01':'any'}" value="${esc(x.value)}">`}</td></tr>`).join('');
     return `<div class="page-title"><div><h1>Sistem Parametreleri</h1><p>Pusula mantığı: hesap, satış, stok, POS, fiyat, yazıcı ve RFID davranışları kod yerine parametrelerden yönetilir.</p></div><button class="btn btn-primary" id="saveSystemParameters">KAYIT</button></div>
       <div class="system-param-layout"><div class="card param-groups"><button class="btn btn-primary" data-param-filter="">TÜMÜ</button>${groups.map(g=>`<button class="btn btn-outline" data-param-filter="${esc(g)}">${esc(g)}</button>`).join('')}</div><div><div class="card"><div class="table-wrap"><table class="table param-table" style="min-width:680px"><thead><tr><th>Parametre Adı</th><th>Parametre Tipi / Değer</th></tr></thead><tbody>${rows}</tbody></table></div></div>
-      <div class="card" style="margin-top:14px"><div class="section-head"><h3>Kullanıcı Yetkileri — ${esc(user?.name||'')}</h3><span>Pusula alt bölümüne benzer</span></div><div class="grid grid-4"><label class="permission-box"><input id="permSell" type="checkbox" ${user?.permissions?.canSell!==false?'checked':''}> Satan Eleman</label><label class="permission-box"><input id="permPrice" type="checkbox" ${user?.permissions?.canChangePrice?'checked':''}> Satış Fiyatını Değiştir</label><label class="permission-box"><input id="permCost" type="checkbox" ${user?.permissions?.canViewCost?'checked':''}> Satış Ekr. Maliyet Göster</label><label class="permission-box"><input id="permFinance" type="checkbox" ${user?.permissions?.canManageFinance?'checked':''}> Kasa / Finans Yetkisi</label></div></div></div></div>`;
+      <div class="card" style="margin-top:14px"><div class="section-head"><h3>Kullanıcı Yetkileri — ${esc(user?.name||'')}</h3><span>Pusula alt bölümüne benzer</span></div><div class="grid grid-4"><label class="permission-box"><input id="permSell" type="checkbox" ${user?.permissions?.canSell!==false?'checked':''}> Satan Eleman</label><label class="permission-box"><input id="permPrice" type="checkbox" ${user?.permissions?.canChangePrice?'checked':''}> Satış Fiyatını Değiştir</label><label class="permission-box"><input id="permCost" type="checkbox" ${user?.permissions?.canViewCost?'checked':''}> Satış Ekr. Maliyet Göster</label><label class="permission-box"><input id="permFinance" type="checkbox" ${user?.permissions?.canManageFinance?'checked':''}> Kasa / Finans Yetkisi</label><label class="permission-box"><input id="permReturn" type="checkbox" ${user?.permissions?.canReturn!==false?'checked':''}> İade / Değişim</label><label class="permission-box"><input id="permTransform" type="checkbox" ${user?.permissions?.canTransform!==false?'checked':''}> Hurda / Dönüşüm</label><label class="permission-box"><input id="permClosePeriod" type="checkbox" ${user?.permissions?.canClosePeriod!==false?'checked':''}> Dönem Kapatma</label><label class="permission-box"><input id="permCloud" type="checkbox" ${user?.permissions?.canCloudSync!==false?'checked':''}> Bulut Senkron</label></div></div></div></div>`;
   }
 
   function pageReports(){
-    const r=reportStats(), b=rangeBounds(), openCost=(state.openStocks||[]).filter(x=>x.period===state.activePeriod).reduce((a,x)=>a+openInventoryCostHas(x),0), barcodeCost=activeStock().reduce((a,x)=>a+Number(x.costHas||0),0);
+    const r=reportStats(), b=rangeBounds(), sv=stockValuationReport(), aging=cariAgingReport(), expenseGroups=reportExpenseGroups(), pulses=reportPulseRows(), personnel=personnelProfitRows(r.sales);
     const show=(has,tl)=>reportFilters.mode==='TL'?money(tl):`${qty(has)} HAS`;
-    return `<div class="page-title"><div><h1>HAS Ağırlıklı Kâr / Zarar Raporları</h1><p>Altın fiyatındaki yükselişi gerçek ticari kârla karıştırmamak için ana rapor HAS bazında tutulur. TL görünümü kapanış HAS kuru ile değerlenir.</p></div><button class="btn" id="exportReport">Excel/CSV Aktar</button></div>
-      <div class="card report-controls"><div class="form-grid"><div class="labelled"><label>Dönem</label><select id="reportRange" class="select"><option value="month" ${reportFilters.range==='month'?'selected':''}>Aylık</option><option value="year" ${reportFilters.range==='year'?'selected':''}>Yıllık</option></select></div><div class="labelled"><label>Ay</label><input id="reportMonth" class="input" type="month" value="${reportFilters.month}" ${reportFilters.range==='year'?'disabled':''}></div><div class="labelled"><label>Gösterim</label><select id="reportMode" class="select"><option value="HAS" ${reportFilters.mode==='HAS'?'selected':''}>HAS</option><option value="TL" ${reportFilters.mode==='TL'?'selected':''}>TL</option></select></div><div class="labelled"><label>TL Değerleme Kuru</label><select id="reportValuation" class="select"><option value="buy" ${reportFilters.valuationSide==='buy'?'selected':''}>HAS Alış</option><option value="sell" ${reportFilters.valuationSide==='sell'?'selected':''}>HAS Satış</option></select></div></div><div class="notice" style="margin-top:10px"><strong>${b.from.slice(0,10)} → ${b.to.slice(0,10)}</strong> · Açılış HAS kuru ${money(r.openRate)} · Kapanış/değerleme HAS kuru ${money(r.closeRate)}. HAS raporu kur hareketinden bağımsız gerçek ticari sonucu gösterir.</div></div>
-      <div class="grid grid-6" style="margin-top:16px">${metric('Satış Karşılığı',show(r.revenueHas,r.revenueTl),`${r.sales.length} fiş`)}${metric('Satılan Mal Maliyeti',show(r.cogsHas,r.cogsHas*r.closeRate),'Açılış/alış HAS maliyeti')}${metric('Brüt Kâr',show(r.grossHas,r.grossHas*r.closeRate),'Satış − maliyet',r.grossHas>=0?'positive':'negative')}${metric('Gider + POS',show(r.expHas+r.feeHas,r.expTl+r.feeTl),'Dönem giderleri')}${metric('Net Kâr',show(r.netHas,r.adjustedTl),'Kur farkı düzeltilmiş',r.netHas>=0?'positive':'negative')}${metric('Değerleme Farkı',money(r.valuationDiff),'Nominal TL ↔ HAS değerleme',r.valuationDiff>=0?'positive':'negative')}</div>
-      <div class="grid grid-3" style="margin-top:16px"><div class="card"><div class="section-head"><h3>Net Kâr Özeti</h3><span>HAS esas</span></div><div class="summary-row total"><span>Net Kâr HAS</span><strong class="${r.netHas>=0?'positive':'negative'}">${qty(r.netHas)} HAS</strong></div><div class="summary-row"><span>TL Karşılığı</span><strong>${money(r.adjustedTl)}</strong></div><div class="summary-row"><span>Nominal TL İşlem Kârı</span><strong>${money(r.nominalTl)}</strong></div><div class="summary-row"><span>Kur/Fiyat Değerleme Farkı</span><strong class="${r.valuationDiff>=0?'positive':'negative'}">${money(r.valuationDiff)}</strong></div></div><div class="card"><div class="section-head"><h3>Stok Maliyet HAS</h3><span>Anlık</span></div><div class="summary-row"><span>Barkodsuz / Açık</span><strong>${qty(openCost)} HAS</strong></div><div class="summary-row"><span>Barkodlu</span><strong>${qty(barcodeCost)} HAS</strong></div><div class="summary-row total"><span>Toplam Maliyet</span><strong>${qty(openCost+barcodeCost)} HAS</strong></div><button class="btn btn-outline" id="reportEditOpeningCosts" style="width:100%;margin-top:10px">Açılış Maliyetlerini Düzenle</button></div><div class="card"><div class="section-head"><h3>Rapor Mantığı</h3><span>Pusula benzeri</span></div><p class="muted">Ziynet ve barkodsuz stoklar fiziksel saflık HAS'ı ile değil, size geliş maliyet HAS'ı ile kâra girer. Yeni alışlarda maliyet ortalaması otomatik güncellenir; barkod basınca aynı maliyet açık stoktan barkodlu stoğa taşınır.</p></div></div>
-      <div class="grid grid-2" style="margin-top:16px"><div class="card"><div class="section-head"><h3>Satış Raporu</h3><span>${reportFilters.range==='month'?reportFilters.month:state.activePeriod}</span></div>${salesTable(r.sales.sort((a,b)=>b.date.localeCompare(a.date)))}</div><div class="card"><div class="section-head"><h3>Personel Performansı</h3><span>Satış toplamı</span></div>${personTable(r.sales)}</div></div>`;
-  }
-  function personTable(sales){
-    const map={}; sales.filter(s=>s.status==='Tamamlandı').forEach(s=>map[s.salesperson]=(map[s.salesperson]||0)+s.total);
-    return `<div class="table-wrap"><table class="table" style="min-width:0"><thead><tr><th>Personel</th><th class="num">Satış</th></tr></thead><tbody>${Object.entries(map).sort((a,b)=>b[1]-a[1]).map(([n,v])=>`<tr><td>${esc(n)}</td><td class="num">${money(v)}</td></tr>`).join('')||'<tr><td colspan="2">Kayıt yok</td></tr>'}</tbody></table></div>`;
+    const bucket=aging.buckets;
+    const stockTl=sv.totalCost*r.closeRate;
+    return `<div class="page-title"><div><h1>HAS Ağırlıklı Yönetim Raporları</h1><p>Net kâr, stok maliyeti, cari yaşlandırma, banka/POS giderleri, döviz kur kâr/zararı ve personel kârlılığı tek merkezde.</p></div><button class="btn" id="exportReport">Excel/CSV Aktar</button></div>
+      <div class="card report-controls"><div class="form-grid"><div class="labelled"><label>Dönem</label><select id="reportRange" class="select"><option value="month" ${reportFilters.range==='month'?'selected':''}>Aylık</option><option value="year" ${reportFilters.range==='year'?'selected':''}>Yıllık</option></select></div><div class="labelled"><label>Ay</label><input id="reportMonth" class="input" type="month" value="${reportFilters.month}" ${reportFilters.range==='year'?'disabled':''}></div><div class="labelled"><label>Gösterim</label><select id="reportMode" class="select"><option value="HAS" ${reportFilters.mode==='HAS'?'selected':''}>HAS</option><option value="TL" ${reportFilters.mode==='TL'?'selected':''}>TL</option></select></div><div class="labelled"><label>TL Değerleme Kuru</label><select id="reportValuation" class="select"><option value="buy" ${reportFilters.valuationSide==='buy'?'selected':''}>HAS Alış</option><option value="sell" ${reportFilters.valuationSide==='sell'?'selected':''}>HAS Satış</option></select></div></div><div class="notice" style="margin-top:10px"><strong>${b.from.slice(0,10)} → ${b.to.slice(0,10)}</strong> · Açılış HAS ${money(r.openRate)} · Kapanış HAS ${money(r.closeRate)}. Ana performans ölçüsü HAS'tır; TL raporu dönem sonu değerleme kuruyla gösterilir.</div></div>
+      <div class="grid grid-6" style="margin-top:16px">${metric('Satış Karşılığı',show(r.revenueHas,r.revenueTl),`${r.sales.length} fiş`)}${metric('Satılan Mal Maliyeti',show(r.cogsHas,r.cogsHas*r.closeRate),'Gerçek HAS maliyeti')}${metric('Brüt Kâr',show(r.grossHas,r.grossHas*r.closeRate),'Satış − maliyet',r.grossHas>=0?'positive':'negative')}${metric('Gider + POS',show(r.expHas+r.feeHas,r.expTl+r.feeTl),'Banka/POS dahil')}${metric('Döviz Gerç. K/Z',reportFilters.mode==='TL'?money(r.realizedFxPlTl):`${qty(r.realizedFxPlHas)} HAS`,'Satılan dövizde gerçekleşen',r.realizedFxPlTl>=0?'positive':'negative')}${metric('Net Kâr',show(r.netHas,r.adjustedTl),'Kur farkı düzeltilmiş',r.netHas>=0?'positive':'negative')}</div>
+      <div class="grid grid-3" style="margin-top:16px">
+        <div class="card"><div class="section-head"><h3>Net Kâr / Değerleme</h3><span>HAS esas</span></div><div class="summary-row total"><span>Net Kâr HAS</span><strong class="${r.netHas>=0?'positive':'negative'}">${qty(r.netHas)} HAS</strong></div><div class="summary-row"><span>TL Karşılığı</span><strong>${money(r.adjustedTl)}</strong></div><div class="summary-row"><span>Nominal TL İşlem Kârı</span><strong>${money(r.nominalTl)}</strong></div><div class="summary-row"><span>Kur/Fiyat Değerleme Farkı</span><strong class="${r.valuationDiff>=0?'positive':'negative'}">${money(r.valuationDiff)}</strong></div><div class="summary-row"><span>Döviz Gerçekleşen K/Z</span><strong class="${r.realizedFxPlTl>=0?'positive':'negative'}">${money(r.realizedFxPlTl)}</strong></div></div>
+        <div class="card"><div class="section-head"><h3>Stok Değerleme</h3><span>Anlık maliyet</span></div><div class="summary-row"><span>Barkodlu</span><strong>${qty(sv.barcodeCost)} HAS</strong></div><div class="summary-row"><span>Açık / Barkodsuz</span><strong>${qty(sv.openCost)} HAS</strong></div><div class="summary-row"><span>Hurda</span><strong>${qty(sv.scrapCost)} HAS</strong></div><div class="summary-row total"><span>Toplam Maliyet</span><strong>${qty(sv.totalCost)} HAS</strong></div><div class="summary-row"><span>TL Değeri</span><strong>${money(stockTl)}</strong></div><div class="summary-row"><span>Fiziksel HAS</span><strong>${qty(sv.totalPhysical)} HAS</strong></div><button class="btn btn-outline" id="reportEditOpeningCosts" style="width:100%;margin-top:10px">Açılış Maliyetlerini Düzenle</button></div>
+        <div class="card"><div class="section-head"><h3>Bugün / Hafta / Ay</h3><span>Hızlı bilanço</span></div><div class="table-wrap"><table class="table" style="min-width:0"><thead><tr><th>Dönem</th><th class="num">Satış</th><th class="num">Kâr HAS</th><th class="num">Net Kasa</th></tr></thead><tbody>${pulses.map(x=>`<tr><td><strong>${x.label}</strong><br><small>${x.count} fiş</small></td><td class="num">${money(x.salesTl)}</td><td class="num">${qty(x.profitHas)}</td><td class="num ${x.netCash>=0?'positive':'negative'}">${money(x.netCash)}</td></tr>`).join('')}</tbody></table></div></div>
+      </div>
+      <div class="grid grid-2" style="margin-top:16px">
+        <div class="card"><div class="section-head"><h3>Cari Yaşlandırma</h3><span>Hareket yaşına göre</span></div><div class="grid grid-4" style="margin-bottom:12px">${metric('0–30 Gün',money(bucket['0-30']),'TL eşdeğer')}${metric('31–60 Gün',money(bucket['31-60']),'TL eşdeğer')}${metric('61–90 Gün',money(bucket['61-90']),'TL eşdeğer')}${metric('90+ Gün',money(bucket['90+']),'TL eşdeğer')}</div><div class="table-wrap"><table class="table"><thead><tr><th>Cari</th><th>Tür</th><th>Bakiye</th><th class="num">TL Eşdeğer</th><th class="num">En Eski</th></tr></thead><tbody>${aging.details.slice(0,15).map(x=>`<tr><td><strong>${esc(x.name)}</strong></td><td>${esc(x.type)}</td><td>${esc(x.parts)}</td><td class="num">${money(x.totalTl)}</td><td class="num">${x.oldest} gün</td></tr>`).join('')||'<tr><td colspan="5">Borçlu cari yok.</td></tr>'}</tbody></table></div><div class="muted" style="margin-top:8px;font-size:11px">Not: Vade tarihi tutulmayan eski Pusula devir bakiyeleri hareket tarihine göre yaşlandırılır.</div></div>
+        <div class="card"><div class="section-head"><h3>Banka / POS Giderleri</h3><span>${expenseGroups.reduce((a,x)=>a+x.count,0)} hareket</span></div><div class="table-wrap"><table class="table" style="min-width:0"><thead><tr><th>Hesap / Tür</th><th class="num">Hareket</th><th class="num">Gider TL</th><th class="num">HAS</th></tr></thead><tbody>${expenseGroups.map(x=>`<tr><td>${esc(x.name)}</td><td class="num">${x.count}</td><td class="num">${money(x.tl)}</td><td class="num">${qty(x.tl/r.closeRate)}</td></tr>`).join('')||'<tr><td colspan="4">Bu dönemde banka/POS gideri yok.</td></tr>'}</tbody></table></div>${(state.posAccounts||[]).map(x=>`<div class="summary-row"><span>${esc(x.bank||'')} ${esc(x.name||'POS')}</span><strong>${money(x.balance||0)} · Kom. %${Number(x.commission||0).toFixed(2)}</strong></div>`).join('')}</div>
+      </div>
+      <div class="grid grid-2" style="margin-top:16px">
+        <div class="card"><div class="section-head"><h3>Personel Kârlılığı</h3><span>HAS kârına göre</span></div><div class="table-wrap"><table class="table"><thead><tr><th>Personel</th><th class="num">Fiş</th><th class="num">Satış TL</th><th class="num">Satış HAS</th><th class="num">Maliyet HAS</th><th class="num">Kâr HAS</th><th class="num">Marj</th></tr></thead><tbody>${personnel.map(x=>`<tr><td><strong>${esc(x.name)}</strong></td><td class="num">${x.count}</td><td class="num">${money(x.salesTl)}</td><td class="num">${qty(x.revenueHas)}</td><td class="num">${qty(x.costHas)}</td><td class="num ${x.profitHas>=0?'positive':'negative'}">${qty(x.profitHas)}</td><td class="num">${x.revenueHas?((x.profitHas/x.revenueHas)*100).toFixed(1):'0.0'}%</td></tr>`).join('')||'<tr><td colspan="7">Kayıt yok.</td></tr>'}</tbody></table></div></div>
+        <div class="card"><div class="section-head"><h3>Satış Raporu</h3><span>${reportFilters.range==='month'?reportFilters.month:state.activePeriod}</span></div>${salesTable(r.sales.sort((a,b)=>b.date.localeCompare(a.date)))}</div>
+      </div>`;
   }
 
   function pageBackup(){
-    return `<div class="page-title"><div><h1>Yedek & Sistem</h1><p>Manuel JSON yedek, geri yükleme ve kullanıcı işlem geçmişi.</p></div></div>
-      <div class="grid grid-3"><div class="card"><h3>Yedek Al</h3><p class="muted">Tüm prototip verisini tek dosyaya aktarır.</p><button class="btn btn-primary" id="backupDownload">Yedeği İndir</button></div><div class="card"><h3>Yedek Yükle</h3><p class="muted">Daha önce indirilmiş JSON yedeğini geri yükler.</p><input type="file" id="backupFile" accept="application/json" class="input"></div><div class="card"><h3>Dönem</h3><p class="muted">${state.activePeriod} aktif. Gelecekte yıl sonu devir burada yapılacak.</p><button class="btn" id="periodCarry">${state.activePeriod} → ${state.activePeriod+1} Devir Simülasyonu</button></div></div>
+    ensureV5State();
+    return `<div class="page-title"><div><h1>Yedek & Sistem</h1><p>Yerel yedek, merkezi Asil bulut senkronu, gerçek dönem kapatma/devir ve işlem geçmişi.</p></div><span class="badge ${state.cloudSync?.lastStatus==='Bağlı'?'green':'gold'}">Bulut: ${esc(state.cloudSync?.lastStatus||'Bekliyor')}</span></div>
+      <div class="grid grid-4"><div class="card"><h3>Yedek Al</h3><p class="muted">Tüm veriyi tek JSON dosyasına aktarır.</p><button class="btn btn-primary" id="backupDownload">Yedeği İndir</button></div><div class="card"><h3>Yedek Yükle</h3><p class="muted">Daha önce indirilmiş JSON yedeğini geri yükler.</p><input type="file" id="backupFile" accept="application/json" class="input"></div><div class="card"><h3>Merkezi Bulut</h3><p class="muted">PC/tablet aynı veri setini kullanır.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="backupCloudPush">Buluta Gönder</button><button class="btn" id="backupCloudPull">Buluttan Al</button></div></div><div class="card"><h3>Dönem Kapat / Devir</h3><p class="muted">${state.activePeriod} kapanışını kilitler ve ${state.activePeriod+1} açılış stoklarını oluşturur.</p><button class="btn" id="periodCarry">${state.activePeriod} → ${state.activePeriod+1} GERÇEK DEVİR</button></div></div>
       <div class="card" style="margin-top:16px"><div class="section-head"><h3>İşlem Geçmişi</h3><span>Son ${Math.min(100,state.audits.length)} hareket</span></div><div class="table-wrap"><table class="table"><thead><tr><th>Tarih</th><th>Kullanıcı</th><th>Modül</th><th>İşlem</th></tr></thead><tbody>${state.audits.slice(0,100).map(a=>`<tr><td>${trDate(a.date)}</td><td>${esc(a.user)}</td><td><span class="badge">${esc(a.module)}</span></td><td>${esc(a.action)}</td></tr>`).join('')}</tbody></table></div></div>`;
   }
 
@@ -1619,6 +1803,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       const q=document.getElementById('quickSale'); if(q) q.addEventListener('click',()=>{route='sales';render();});
     }
     if(r==='sales'){ bindSales(); bindEnterAsTab('.content'); }
+    if(r==='operations') bindOperationsV5();
     if(r==='purchases') bindPurchases();
     if(r==='stocks') bindStocks();
     if(r==='customers') bindCustomers();
@@ -1669,10 +1854,11 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
         const cur=document.getElementById('stFx').value, qtyVal=Number(document.getElementById('stQty').value||0), rate=Number(document.getElementById('stPrice').value||0), total=qtyVal*rate, tlKey=document.getElementById('stTlAccount').value, fxKey=document.getElementById('stFxAccount').value, customer=document.getElementById('stCustomer').value||'Peşin Müşteri';
         if(qtyVal<=0||rate<=0)return toast('Döviz miktarı ve kur girin','err'); if(!fxKey)return toast(`${cur} kasası seçin`,'err');
         const prefix=side==='Alış'?'DA':'DS',docNo=nextDocNo(prefix,state.tradeMoves);
+        const fxCost=updateFxCostBasis(cur,side,qtyVal,rate), hasAtTrade=Number(state.prices.has?.buy||1), realizedFxPlHas=Number(fxCost.realizedTl||0)/hasAtTrade;
         const tl=adjustAccount(tlKey,side==='Alış'?-total:total), fx=adjustAccount(fxKey,side==='Alış'?qtyVal:-qtyVal); if(!tl||!fx)return toast('Hesap seçimi hatalı','err');
         addFinanceMove({direction:side==='Alış'?'Çıkış':'Giriş',type:`${tradeType} / TL ${side==='Alış'?'Çıkış':'Giriş'}`,accountKey:tlKey,accountAmount:total,accountCurrency:'TL',tlAmount:total,customer,description:`${qtyVal} ${cur} × ${rate}`,sourceDocNo:docNo,tradeType});
         addFinanceMove({direction:side==='Alış'?'Giriş':'Çıkış',type:`${tradeType} / ${cur} ${side==='Alış'?'Giriş':'Çıkış'}`,accountKey:fxKey,accountAmount:qtyVal,accountCurrency:cur,tlAmount:total,customer,description:`Kur ${rate}`,sourceDocNo:docNo,tradeType});
-        state.tradeMoves.unshift({id:uid('TRD'),docNo,period:state.activePeriod,date:now(),tradeType,side,item:cur,quantity:qtyVal,unit:cur,unitPrice:rate,totalTL:total,totalHas:total/Number(state.prices.has?.[side==='Alış'?'buy':'sell']||1),settlementCurrency:'TL',settlementAmount:total,settlementLabel:'TL ↔ '+cur,accountKey:tlKey,accountName:tl.name,secondaryAccountKey:fxKey,secondaryAccountName:fx.name,customer,user:session.name}); audit(`${docNo} ${tradeType} ${qtyVal} ${cur} / ${money(total)}`,'Satış'); closeModal();save();render();
+        state.tradeMoves.unshift({id:uid('TRD'),docNo,period:state.activePeriod,date:now(),tradeType,side,item:cur,quantity:qtyVal,unit:cur,unitPrice:rate,totalTL:total,totalHas:total/Number(state.prices.has?.[side==='Alış'?'buy':'sell']||1),settlementCurrency:'TL',settlementAmount:total,settlementLabel:'TL ↔ '+cur,accountKey:tlKey,accountName:tl.name,secondaryAccountKey:fxKey,secondaryAccountName:fx.name,customer,user:session.name,fxAvgCostTl:Number(fxCost.avgTl||0),fxCostTl:Number(fxCost.costTl||0),realizedFxPlTl:Number(fxCost.realizedTl||0),realizedFxPlHas}); audit(`${docNo} ${tradeType} ${qtyVal} ${cur} / ${money(total)}${side==='Satış'?` / Kur K/Z ${money(fxCost.realizedTl)}`:''}`,'Satış'); closeModal();save();render();
       },`${tradeType} Kaydet`);
       const fxEl=document.getElementById('stFx'),qtyEl=document.getElementById('stQty'),priceEl=document.getElementById('stPrice'),totalEl=document.getElementById('stTotal'),fxAcc=document.getElementById('stFxAccount');
       const recalc=()=>{const cur=fxEl.value,rate=currencyTlRate(cur,side==='Alış'?'buy':'sell'); if(document.activeElement!==priceEl)priceEl.value=rate.toFixed(4); totalEl.value=(Number(qtyEl.value||0)*Number(priceEl.value||0)).toFixed(2); fxAcc.innerHTML=accountOptions(cur,false).map(x=>`<option value="${x.key}">${esc(x.name)}</option>`).join('');};
@@ -2318,6 +2504,8 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
   function cancelSaleById(saleId){
     const sale=state.sales.find(x=>x.id===saleId); if(!sale)return {ok:false,msg:'Bağlı satış belgesi bulunamadı'};
+    state.cancelledDocuments=state.cancelledDocuments||[];
+    if(!state.cancelledDocuments.some(x=>x.originalId===sale.id&&x.originalDocNo===sale.docNo)) state.cancelledDocuments.unshift({id:uid('ARC'),originalId:sale.id,originalDocNo:sale.docNo,type:'SATIŞ',date:now(),cancelledBy:session?.name||'Sistem',snapshot:clone(sale)});
     const cms=state.customerMoves.filter(m=>m.sourceType==='sale' && (m.sourceId===sale.id || m.sourceDocNo===sale.docNo));
     cms.forEach(m=>{const c=state.customers.find(x=>x.id===m.customerId);if(c)applyCariBalance(c,m.unit,Number(m.credit||0),Number(m.debit||0));});
     state.customerMoves=state.customerMoves.filter(m=>!(m.sourceType==='sale' && (m.sourceId===sale.id || m.sourceDocNo===sale.docNo)));
@@ -2333,7 +2521,9 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     (sale.payments||[]).filter(p=>p.type==='Altın / Ziynet').forEach(reverseTradeInFromStock);
     const ids=new Set((sale.lines||[]).filter(l=>l.stockId).map(l=>l.stockId));
     state.stockMoves=state.stockMoves.filter(m=>!(ids.has(m.stockId) && m.type==='SATIŞ' && String(m.description||'').includes(sale.docNo||'')));
-    state.sales=state.sales.filter(x=>x.id!==sale.id); audit(`${sale.docNo||sale.id} satış belgesi iptal/düzeltme için geri alındı; stok/finans/cari ters kayıtlandı`,'Satış'); return {ok:true};
+    state.sales=state.sales.filter(x=>x.id!==sale.id); audit(`${sale.docNo||sale.id} satış belgesi iptal/düzeltme için geri alındı; stok/finans/cari ters kayıtlandı`,'Satış');
+    const tx=(state.transactions||[]).find(x=>x.docNo===sale.docNo); if(tx){tx.status='Ters Kayıt';tx.reversedAt=now();tx.reversedBy=session?.name||'Sistem';}
+    return {ok:true};
   }
   function cancelPurchaseById(purchaseId){
     const pur=state.purchases.find(x=>x.id===purchaseId); if(!pur)return {ok:false,msg:'Bağlı altın giriş belgesi bulunamadı'};
@@ -2413,7 +2603,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     document.querySelectorAll('[data-param-filter]').forEach(b=>b.addEventListener('click',()=>{const g=b.dataset.paramFilter||'';document.querySelectorAll('[data-param-filter]').forEach(x=>x.classList.toggle('btn-primary',x===b));document.querySelectorAll('[data-param-row]').forEach(r=>r.style.display=!g||r.dataset.paramGroup===g?'':'none');}));
     document.getElementById('saveSystemParameters')?.addEventListener('click',()=>{
       document.querySelectorAll('.param-value').forEach(el=>{const i=Number(el.dataset.paramIndex);if(state.systemParameters[i])state.systemParameters[i].value=el.value;});
-      const user=state.users.find(x=>x.id===session?.id)||state.users[0]; user.permissions=user.permissions||{};user.permissions.canSell=document.getElementById('permSell')?.checked!==false;user.permissions.canChangePrice=Boolean(document.getElementById('permPrice')?.checked);user.permissions.canViewCost=Boolean(document.getElementById('permCost')?.checked);user.permissions.canManageFinance=Boolean(document.getElementById('permFinance')?.checked);
+      const user=state.users.find(x=>x.id===session?.id)||state.users[0]; user.permissions=user.permissions||{};user.permissions.canSell=document.getElementById('permSell')?.checked!==false;user.permissions.canChangePrice=Boolean(document.getElementById('permPrice')?.checked);user.permissions.canViewCost=Boolean(document.getElementById('permCost')?.checked);user.permissions.canManageFinance=Boolean(document.getElementById('permFinance')?.checked);user.permissions.canReturn=Boolean(document.getElementById('permReturn')?.checked);user.permissions.canTransform=Boolean(document.getElementById('permTransform')?.checked);user.permissions.canClosePeriod=Boolean(document.getElementById('permClosePeriod')?.checked);user.permissions.canCloudSync=Boolean(document.getElementById('permCloud')?.checked);
       const auto=state.systemParameters.find(x=>x.key==='autoGoldPrice'); if(auto)state.settings.livePriceSync=String(auto.value).toLowerCase()!=='hayır'&&String(auto.value)!=='0';
       const mins=state.systemParameters.find(x=>x.key==='exchangeUpdateMinutes'); if(mins&&Number(mins.value)>0)state.settings.exchangeUpdateMinutes=Number(mins.value);
       audit('Sistem parametreleri güncellendi','Sistem');save();toast('Sistem parametreleri kaydedildi');render();
@@ -2424,12 +2614,113 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const rerender=()=>{reportFilters.range=document.getElementById('reportRange')?.value||'month';reportFilters.month=document.getElementById('reportMonth')?.value||reportFilters.month;reportFilters.mode=document.getElementById('reportMode')?.value||'HAS';reportFilters.valuationSide=document.getElementById('reportValuation')?.value||'buy';render();};
     ['reportRange','reportMonth','reportMode','reportValuation'].forEach(id=>document.getElementById(id)?.addEventListener('change',rerender));
     document.getElementById('reportEditOpeningCosts')?.addEventListener('click',openOpeningCostEditor);
-    document.getElementById('exportReport')?.addEventListener('click',()=>{const r=reportStats(),rows=[['Tarih','Belge','Müşteri','Personel','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS','Durum'],...r.sales.map(s=>[trDate(s.date),s.docNo||s.id,state.customers.find(c=>c.id===s.customerId)?.name||'',s.salesperson,Number(s.total||0).toFixed(2),saleRevenueHas(s).toFixed(4),saleCostHas(s).toFixed(4),(saleRevenueHas(s)-saleCostHas(s)).toFixed(4),s.status]),[],['NET KÂR HAS',r.netHas.toFixed(4)],['TL KARŞILIĞI',r.adjustedTl.toFixed(2)],['DEĞERLEME FARKI',r.valuationDiff.toFixed(2)]];downloadText(rows.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(';')).join('\n'),`asil_kar_zarar_${reportFilters.range==='month'?reportFilters.month:state.activePeriod}.csv`,'text/csv;charset=utf-8');audit('HAS ağırlıklı kâr/zarar raporu dışa aktarıldı','Rapor');});
+    document.getElementById('exportReport')?.addEventListener('click',()=>{
+      const r=reportStats(), sv=stockValuationReport(), aging=cariAgingReport(), expenses=reportExpenseGroups(), personnel=personnelProfitRows(r.sales);
+      const rows=[['ASIL KUYUMCU PRO V5.0 — HAS YÖNETİM RAPORU'],['Dönem',reportFilters.range==='month'?reportFilters.month:state.activePeriod],[],['ÖZET','HAS','TL'],['Satış Karşılığı',r.revenueHas.toFixed(4),r.revenueTl.toFixed(2)],['Satılan Mal Maliyeti',r.cogsHas.toFixed(4),(r.cogsHas*r.closeRate).toFixed(2)],['Brüt Kâr',r.grossHas.toFixed(4),(r.grossHas*r.closeRate).toFixed(2)],['Gider + POS',(r.expHas+r.feeHas).toFixed(4),(r.expTl+r.feeTl).toFixed(2)],['Döviz Gerçekleşen K/Z',r.realizedFxPlHas.toFixed(4),r.realizedFxPlTl.toFixed(2)],['NET KÂR',r.netHas.toFixed(4),r.adjustedTl.toFixed(2)],['Değerleme Farkı','',r.valuationDiff.toFixed(2)],[],['STOK DEĞERLEME','HAS'],['Barkodlu',sv.barcodeCost.toFixed(4)],['Açık/Barkodsuz',sv.openCost.toFixed(4)],['Hurda',sv.scrapCost.toFixed(4)],['Toplam',sv.totalCost.toFixed(4)],[],['SATIŞLAR','Tarih','Belge','Müşteri','Personel','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS','Durum'],...r.sales.map(s=>['',trDate(s.date),s.docNo||s.id,state.customers.find(c=>c.id===s.customerId)?.name||'',s.salesperson,Number(s.total||0).toFixed(2),saleRevenueHas(s).toFixed(4),saleCostHas(s).toFixed(4),(saleRevenueHas(s)-saleCostHas(s)).toFixed(4),s.status]),[],['PERSONEL','Fiş','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS'],...personnel.map(x=>[x.name,x.count,x.salesTl.toFixed(2),x.revenueHas.toFixed(4),x.costHas.toFixed(4),x.profitHas.toFixed(4)]),[],['CARİ YAŞLANDIRMA','Tür','Bakiye','TL Eşdeğer','En Eski Gün'],...aging.details.map(x=>[x.name,x.type,x.parts,x.totalTl.toFixed(2),x.oldest]),[],['BANKA/POS GİDERLERİ','Hareket','TL'],...expenses.map(x=>[x.name,x.count,x.tl.toFixed(2)])];
+      downloadText(rows.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(';')).join('\n'),`asil_yonetim_raporu_${reportFilters.range==='month'?reportFilters.month:state.activePeriod}.csv`,'text/csv;charset=utf-8');audit('Genişletilmiş HAS yönetim raporu dışa aktarıldı','Rapor');
+    });
   }
+
   function bindBackup(){
+    document.getElementById('backupCloudPush')?.addEventListener('click',()=>cloudPushV5(true));
+    document.getElementById('backupCloudPull')?.addEventListener('click',()=>cloudPullV5(true));
     document.getElementById('backupDownload').addEventListener('click',()=>{downloadText(JSON.stringify(state,null,2),`ASIL_${state.activePeriod}_${new Date().toISOString().replace(/[:.]/g,'-')}.json`,'application/json');audit('Manuel yedek indirildi','Yedek');});
     document.getElementById('backupFile').addEventListener('change',e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const data=JSON.parse(reader.result);if(!data.meta||!data.users)throw new Error();state=data;save();audit('Yedekten geri yükleme yapıldı','Yedek');toast('Yedek geri yüklendi');render();}catch{toast('Geçersiz yedek dosyası','err')}};reader.readAsText(file);});
-    document.getElementById('periodCarry').addEventListener('click',()=>{const next=state.activePeriod+1;if(next>2027)return toast('Demo dönemi sınırı','err');modal('Dönem Devir Simülasyonu',`<p><strong>${state.activePeriod}</strong> kapanış bakiyeleri <strong>${next}</strong> açılışına aktarılacak. Eski hareketler kendi döneminde kalacak.</p><div class="summary-row"><span>Cari sayısı</span><strong>${state.customers.length}</strong></div><div class="summary-row"><span>Aktif stok</span><strong>${activeStock().length}</strong></div><div class="summary-row"><span>HAS cari bakiyesi</span><strong>${qty(state.customers.reduce((a,c)=>a+c.hasBalance,0))} HAS</strong></div>`,()=>{activeStock().forEach(s=>state.stocks.push({...clone(s),id:uid('S'),period:next}));state.activePeriod=next;audit(`${next} dönemi devir simülasyonu oluşturuldu`,'Dönem');closeModal();save();render();});});
+    document.getElementById('periodCarry')?.addEventListener('click',openFiscalCloseV5);
+  }
+
+
+  // ===================== ASİL KUYUMCU PRO V5 ÇEKİRDEK =====================
+  function ensureV5State(){
+    state.meta=state.meta||{};state.meta.appVersion='5.0';
+    state.transactions=Array.isArray(state.transactions)?state.transactions:[];
+    state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
+    state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
+    state.posSettlements=Array.isArray(state.posSettlements)?state.posSettlements:[];
+    state.yearClosings=Array.isArray(state.yearClosings)?state.yearClosings:[];
+    state.closedPeriods=Array.isArray(state.closedPeriods)?state.closedPeriods:[];
+    state.cloudSync=state.cloudSync||{enabled:true,lastStatus:'Bekliyor',lastPush:'',lastPull:'',endpoint:CLOUD_STATE_URL};
+    state.cloudSync.endpoint=CLOUD_STATE_URL;
+    (state.users||[]).forEach(u=>{u.permissions=u.permissions||{};const admin=/yönetici|admin/i.test(String(u.role||''));[['canReturn',admin],['canTransform',admin],['canSupplierReturn',admin],['canSettlePos',admin],['canManageSpecial',admin],['canClosePeriod',admin],['canCloudSync',admin],['canCancel',admin]].forEach(([k,d])=>{if(typeof u.permissions[k]!=='boolean')u.permissions[k]=d;});});
+  }
+  function v5User(){return state.users.find(x=>x.id===session?.id)||state.users[0]||{permissions:{}};}
+  function v5Can(key){const u=v5User();return /yönetici|admin/i.test(String(u.role||''))||u.permissions?.[key]===true;}
+  function v5Guard(key,msg='Bu işlem için yetkiniz yok'){if(v5Can(key))return true;toast(msg,'err');return false;}
+  function docFromTextV5(s){const m=String(s||'').match(/\b(?:SAT|AG|FIN|NT|NO|SI|TPI|B2H|H2O|POS|SPC|EXC|ZG|ZC|HG|HC)-\d{4}-[A-Z0-9-]+\b/i);return m?m[0].toUpperCase():'';}
+  function txnTypeV5(doc){const p=String(doc||'').split('-')[0];return ({SAT:'SATIŞ',AG:'ALTIN GİRİŞ',FIN:'FİNANS',NT:'NAKİT TAHSİLAT',NO:'NAKİT ÖDEME',SI:'SATIŞ İADESİ',TPI:'TOPTANCI İADESİ',B2H:'BARKOD→HURDA',H2O:'HURDA→AÇIK STOK',POS:'POS VALÖR',SPC:'ÖZEL ÜRÜN',EXC:'ÜRÜN DEĞİŞİMİ'})[p]||p||'İŞLEM';}
+  function reconcileTransactionLedgerV5(){
+    if(!state||!Array.isArray(state.transactions))return;
+    const map=new Map();
+    const put=(doc,kind,id,obj)=>{doc=String(doc||'').trim();if(!doc)return;let g=map.get(doc);if(!g){g={docNo:doc,refs:[],date:obj?.date||now(),period:obj?.period||state.activePeriod};map.set(doc,g);}g.refs.push({kind,id});if(obj?.date&&obj.date<g.date)g.date=obj.date;};
+    (state.sales||[]).forEach(x=>put(x.docNo,'Satış',x.id,x));
+    (state.purchases||[]).forEach(x=>put(x.docNo,'Alış',x.id,x));
+    (state.customerMoves||[]).forEach(x=>put(x.sourceDocNo,'Cari',x.id,x));
+    (state.financeMoves||[]).forEach(x=>put(x.sourceDocNo,'Finans',x.id,x));
+    (state.tradeMoves||[]).forEach(x=>put(x.sourceDocNo||x.docNo,'Takas/Döviz',x.id,x));
+    (state.stockMoves||[]).forEach(x=>put(x.sourceDocNo||docFromTextV5(x.description),'Stok',x.id,x));
+    map.forEach(g=>{
+      let t=state.transactions.find(x=>x.docNo===g.docNo);
+      if(!t){t={id:uid('TXN'),docNo:g.docNo,type:txnTypeV5(g.docNo),period:g.period,date:g.date,status:'Aktif',user:'Sistem',description:'Bağlı modül hareketleri otomatik gruplanmıştır',refs:[]};state.transactions.unshift(t);}
+      t.refs=g.refs;t.period=g.period||t.period;t.date=t.date||g.date;
+      g.refs.forEach(r=>{let arr=r.kind==='Satış'?state.sales:r.kind==='Alış'?state.purchases:r.kind==='Cari'?state.customerMoves:r.kind==='Finans'?state.financeMoves:r.kind==='Takas/Döviz'?state.tradeMoves:state.stockMoves;const o=arr?.find(x=>x.id===r.id);if(o)o.transactionId=t.id;});
+    });
+  }
+  function registerTransactionV5(type,docNo,description='',extra={}){ensureV5State();let t=state.transactions.find(x=>x.docNo===docNo);if(!t){t={id:uid('TXN'),docNo,type,period:state.activePeriod,date:now(),status:'Aktif',user:session?.name||'Sistem',description,refs:[],...extra};state.transactions.unshift(t);}else{t.type=type||t.type;t.description=description||t.description;Object.assign(t,extra);}return t;}
+  function transactionDetailV5(id){reconcileTransactionLedgerV5();const t=state.transactions.find(x=>x.id===id);if(!t)return;const refs=(t.refs||[]);modal(`İşlem Bağlantısı — ${esc(t.docNo)}`,`<div class="summary-row"><span>Tür</span><strong>${esc(t.type)}</strong></div><div class="summary-row"><span>Durum</span><strong>${esc(t.status||'Aktif')}</strong></div><div class="summary-row"><span>Tarih</span><strong>${trDate(t.date)}</strong></div><div class="summary-row"><span>Açıklama</span><strong>${esc(t.description||'')}</strong></div><div class="table-wrap" style="margin-top:12px"><table class="table" style="min-width:0"><thead><tr><th>Modül</th><th>Kayıt ID</th></tr></thead><tbody>${refs.map(r=>`<tr><td>${esc(r.kind)}</td><td>${esc(r.id)}</td></tr>`).join('')||'<tr><td colspan="2">Bağlı kayıt bulunamadı.</td></tr>'}</tbody></table></div>`,null,'Kapat');}
+
+  function cloudSafeStateV5(){const c=clone(state);if(Array.isArray(c.specialProducts))c.specialProducts.forEach(x=>{if(String(x.photo||'').length>250000)x.photo='';});return c;}
+  function scheduleCloudPushV5(){clearTimeout(cloudPushTimerV5);cloudPushTimerV5=setTimeout(()=>cloudPushV5(false),2200);}
+  async function cloudPushV5(manual=false){
+    ensureV5State();if(!state.cloudSync.enabled&&!manual)return;if(manual&&!v5Guard('canCloudSync'))return;
+    try{state.cloudSync.lastStatus='Gönderiliyor';state.meta.updatedAt=now();const payload=cloudSafeStateV5();const r=await fetch(CLOUD_STATE_URL,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(!r.ok)throw new Error(`HTTP ${r.status}`);state.cloudSync.lastStatus='Bağlı';state.cloudSync.lastPush=now();localStorage.setItem(LS_KEY,JSON.stringify(state));if(manual){toast('Merkezi buluta gönderildi');render();}}
+    catch(e){state.cloudSync.lastStatus='Bağlantı Hatası';state.cloudSync.lastError=String(e?.message||e);if(manual){toast('Bulut gönderimi başarısız','err');render();}}
+  }
+  async function cloudPullV5(manual=false){
+    ensureV5State();if(manual&&!v5Guard('canCloudSync'))return false;
+    try{state.cloudSync.lastStatus='Alınıyor';const r=await fetch(CLOUD_STATE_URL+'?v='+Date.now(),{cache:'no-store'});if(!r.ok)throw new Error(`HTTP ${r.status}`);const remote=await r.json();if(!remote||!Array.isArray(remote.stocks)||remote.stocks.length<1000){state.cloudSync.lastStatus='İlk Kurulum';if(manual)await cloudPushV5(true);return false;}const rt=new Date(remote?.meta?.updatedAt||0).getTime(),lt=new Date(state?.meta?.updatedAt||0).getTime();if(manual||rt>lt+1000){cloudApplyingV5=true;state=remote;ensureStateShape();ensureV5State();reconcileTransactionLedgerV5();localStorage.setItem(LS_KEY,JSON.stringify(state));cloudApplyingV5=false;state.cloudSync.lastPull=now();state.cloudSync.lastStatus='Bağlı';if(manual){toast('Buluttaki güncel veri alındı');render();}return true;}state.cloudSync.lastStatus='Bağlı';return false;}
+    catch(e){state.cloudSync.lastStatus='Bağlantı Hatası';state.cloudSync.lastError=String(e?.message||e);if(manual){toast('Buluttan veri alınamadı','err');render();}return false;}
+  }
+  async function cloudBackupV5(label='AUTO'){try{const key=new Date().toISOString().replace(/[.:]/g,'-');await fetch(`${CLOUD_BACKUP_BASE}/${key}.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({label,date:now(),state:cloudSafeStateV5()})});}catch(e){}}
+  async function initCloudSyncV5(){ensureV5State();await cloudPullV5(false);cloudInitializedV5=true;if(state.cloudSync.enabled){if(!state.cloudSync.lastPull)await cloudPushV5(false);try{cloudStreamV5?.close?.();cloudStreamV5=new EventSource(CLOUD_STATE_URL);cloudStreamV5.addEventListener('put',async ev=>{try{const p=JSON.parse(ev.data||'{}');if(p.path!=='/'||!p.data)return;const remote=p.data,rt=new Date(remote?.meta?.updatedAt||0).getTime(),lt=new Date(state?.meta?.updatedAt||0).getTime();if(rt>lt+1200){cloudApplyingV5=true;state=remote;ensureStateShape();ensureV5State();localStorage.setItem(LS_KEY,JSON.stringify(state));cloudApplyingV5=false;render();}}catch(_){}});}catch(_){}}}
+
+  function saleLineFromStockV5(s){const saleHas=Number(s.saleHas||stockCounterHas(s)||0),unitPrice=saleHas*Number(state.prices.has.sell||1);return {sourceType:'barcode',stockId:s.id,code:s.barcode||s.code,name:s.name||s.type,karat:String(s.purity||s.karat||''),weight:stockAmount(s),displayAmount:stockAmount(s),unit:'GR',qty:1,unitPrice,price:unitPrice,total:unitPrice,costHas:Number(s.costHas||0),saleHas,cost:Number(s.costHas||0)*Number(state.prices.has.buy||1),note:'Ürün değişimi'};}
+  function openExchangeV5(){
+    if(!v5Guard('canReturn'))return;const sales=(state.sales||[]).filter(s=>s.period===state.activePeriod&&s.status==='Tamamlandı'&&(s.lines||[]).some(l=>l.stockId));if(!sales.length)return toast('Değişime uygun satış bulunamadı','err');
+    const repl=activeStock();if(!repl.length)return toast('Yeni ürün için barkodlu stok yok','err');
+    modal('Ürün Değişimi — Tek Fişte',`<div class="form-grid"><div class="labelled span-2"><label>Eski Satış</label><select id="exSale" class="select">${sales.map(s=>`<option value="${s.id}">${esc(s.docNo)} · ${esc(state.customers.find(c=>c.id===s.customerId)?.name||'Peşin')} · ${money(s.total||0)}</option>`).join('')}</select></div><div class="labelled span-2"><label>Geri Alınacak Ürün</label><select id="exOld" class="select"></select></div><div class="labelled span-2"><label>Verilecek Yeni Barkod</label><select id="exNew" class="select">${repl.map(s=>`<option value="${s.id}">${esc(s.barcode||s.code)} · ${esc(s.name)} · ${qty(stockAmount(s))} GR · ${qty(s.saleHas||0)} HAS</option>`).join('')}</select></div><div class="notice span-4"><b>İşleyiş:</b> Eski fişin stok/cari/kasa bağlantıları önce güvenli olarak geri alınır. Geri verilmeyen eski ürünler + yeni ürün aynı belge numarasıyla satış ekranına açılır. Önceki ödemeler yüklenir; farkı nakit/kart/HAS/cari ile kapatırsınız.</div></div>`,()=>{const s=state.sales.find(x=>x.id===document.getElementById('exSale').value),idx=Number(document.getElementById('exOld').value),n=state.stocks.find(x=>x.id===document.getElementById('exNew').value);if(!s||!n||!Number.isInteger(idx))return toast('Ürün seçimini kontrol edin','err');const snap=clone(s),r=cancelSaleById(s.id);if(!r.ok)return toast(r.msg,'err');const lines=(snap.lines||[]).filter((_,i)=>i!==idx);lines.push(saleLineFromStockV5(n));saleDraft={customerId:snap.customerId||'CASH',salesperson:snap.salesperson||session?.name||'',lines,payments:clone(snap.payments||[]),discount:Number(snap.discount||0),commission:Number(snap.commission||0),returns:0,saleMode:'Barkodlu',editingDocNo:snap.docNo||'',editingOriginalId:snap.id||''};registerTransactionV5('ÜRÜN DEĞİŞİMİ',`EXC-${state.activePeriod}-${String(Date.now()).slice(-6)}`,`${snap.docNo} değişim için fişe açıldı`,{relatedDocNo:snap.docNo});closeModal();route='sales';save();render();toast('Değişim fişe açıldı; fiyat farkını ödeme/takas bölümünden kapatın');},'DEĞİŞİMİ FİŞE AÇ');
+    const saleEl=document.getElementById('exSale'),oldEl=document.getElementById('exOld');const refresh=()=>{const s=state.sales.find(x=>x.id===saleEl.value);oldEl.innerHTML=(s?.lines||[]).map((l,i)=>l.stockId?`<option value="${i}">${esc(l.code)} · ${esc(l.name)} · ${money(l.total||0)}</option>`:'').join('');};saleEl.addEventListener('change',refresh);refresh();
+  }
+  function openCustomerReturnV5(){
+    if(!v5Guard('canReturn'))return;const sales=(state.sales||[]).filter(s=>s.period===state.activePeriod&&s.status==='Tamamlandı');if(!sales.length)return toast('İade edilecek satış yok','err');modal('Müşteri Satış İadesi',`<div class="form-grid"><div class="labelled span-4"><label>Satış Belgesi</label><select id="retSale" class="select">${sales.map(s=>`<option value="${s.id}">${esc(s.docNo)} · ${esc(state.customers.find(c=>c.id===s.customerId)?.name||'Peşin')} · ${money(s.total||0)}</option>`).join('')}</select></div><div class="notice span-4">Tam fiş iadesi yapılır: ürünler stoğa döner, cari ve kasa/POS hareketleri ters kayıtlanır. Orijinal belge silinmeden İptal/İade Arşivi'nde saklanır.</div></div>`,()=>{const s=state.sales.find(x=>x.id===document.getElementById('retSale').value);if(!s)return;const original=clone(s),doc=`SI-${state.activePeriod}-${String(Date.now()).slice(-6)}`,r=cancelSaleById(s.id);if(!r.ok)return toast(r.msg,'err');state.cancelledDocuments.unshift({id:uid('ARC'),originalId:original.id,originalDocNo:original.docNo,type:'MÜŞTERİ İADESİ',date:now(),cancelledBy:session?.name||'',snapshot:original,returnDocNo:doc});registerTransactionV5('SATIŞ İADESİ',doc,`${original.docNo} tam iade`,{relatedDocNo:original.docNo,amountTl:-Number(original.total||0)});audit(`${original.docNo} müşteri iadesi yapıldı`,'İade');closeModal();save();render();toast('Satış iadesi tamamlandı');},'İADEYİ TAMAMLA');
+  }
+  function openSupplierReturnV5(){
+    if(!v5Guard('canSupplierReturn'))return;const stocks=activeStock(),suppliers=state.customers.filter(c=>c.type==='Toptancı');if(!stocks.length||!suppliers.length)return toast('Stok veya toptancı bulunamadı','err');modal('Toptancıya Barkodlu Ürün İadesi',`<div class="form-grid"><div class="labelled span-2"><label>Barkodlu Ürün</label><select id="srStock" class="select">${stocks.map(s=>`<option value="${s.id}">${esc(s.barcode||s.code)} · ${esc(s.name)} · Maliyet ${qty(s.costHas||0)} HAS</option>`).join('')}</select></div><div class="labelled span-2"><label>Toptancı</label><select id="srSupplier" class="select">${suppliers.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div><div class="labelled span-4"><label>Açıklama</label><input id="srNote" class="input" placeholder="İade nedeni"></div></div>`,()=>{const st=state.stocks.find(x=>x.id===document.getElementById('srStock').value),sup=state.customers.find(x=>x.id===document.getElementById('srSupplier').value);if(!st||!sup)return;const has=Number(st.costHas||stockHas(st)||0),doc=`TPI-${state.activePeriod}-${String(Date.now()).slice(-6)}`;st.status='Toptancı İade';st.location='Toptancı';st.saleDate=now();applyCariBalance(sup,'HAS',has,0);state.customerMoves.unshift({id:uid('CM'),customerId:sup.id,period:state.activePeriod,date:now(),type:'TOPTANCIYA BARKODLU İADE',unit:'HAS',debit:has,credit:0,description:`${doc} · ${st.barcode||st.code}`,user:session.name,sourceType:'supplierReturn',sourceId:st.id,sourceDocNo:doc});state.stockMoves.unshift({id:uid('SM'),period:state.activePeriod,date:now(),stockId:st.id,code:st.code,type:'TOPTANCI İADE',from:'Mağaza',to:sup.name,description:`${doc} · ${document.getElementById('srNote').value}`,sourceDocNo:doc,user:session.name});registerTransactionV5('TOPTANCI İADESİ',doc,`${st.barcode||st.code} → ${sup.name}`,{amountHas:has,customerId:sup.id});audit(`${doc}: ${st.code} toptancıya iade`,'Stok');closeModal();save();render();toast('Toptancı iadesi işlendi');},'İADEYİ KAYDET');
+  }
+  function openBarcodeToScrapV5(){
+    if(!v5Guard('canTransform'))return;const stocks=activeStock();if(!stocks.length)return toast('Barkodlu stok yok','err');modal('Barkodlu Ürünü Hurdaya Çıkar',`<div class="form-grid"><div class="labelled span-3"><label>Barkodlu Ürün</label><select id="b2hStock" class="select">${stocks.map(s=>`<option value="${s.id}">${esc(s.barcode||s.code)} · ${esc(s.name)} · ${qty(stockAmount(s))} GR · ${qty(stockHas(s))} HAS</option>`).join('')}</select></div><div class="labelled"><label>Hurda Adı</label><input id="b2hName" class="input" value="HURDA"></div><div class="notice span-4">Barkod kapanır; ürünün gramı, fiziksel HAS'ı ve maliyet HAS'ı hurda stoğuna devredilir. Toplam işletme HAS maliyeti değişmez.</div></div>`,()=>{const st=state.stocks.find(x=>x.id===document.getElementById('b2hStock').value);if(!st)return;const gram=stockAmount(st),has=stockHas(st),cost=Number(st.costHas||has),purity=Number(st.purity||0),name=(document.getElementById('b2hName').value.trim()||`${purity} HURDASI`).toUpperCase();let h=state.scrapStocks.find(x=>x.period===state.activePeriod&&String(x.name).toUpperCase()===name);if(!h){h={id:uid('SCR'),period:state.activePeriod,name,milyem:purity,amount:0,hasWeight:0,unit:'GR',unitCostHas:0};state.scrapStocks.push(h);}const oldCost=Number(h.amount||0)*Number(h.unitCostHas||0);h.unitCostHas=(oldCost+cost)/Math.max(.000001,Number(h.amount||0)+gram);h.amount=Number(h.amount||0)+gram;h.hasWeight=Number(h.hasWeight||0)+has;st.status='Hurdaya Çıktı';st.location='Hurda';const doc=`B2H-${state.activePeriod}-${String(Date.now()).slice(-6)}`;state.stockMoves.unshift({id:uid('SM'),period:state.activePeriod,date:now(),stockId:st.id,code:st.code,type:'BARKOD → HURDA',from:'Barkodlu Stok',to:name,description:`${doc} · ${qty(gram)} GR · ${qty(has)} HAS`,sourceDocNo:doc,user:session.name});registerTransactionV5('BARKOD→HURDA',doc,`${st.barcode||st.code} hurdaya çevrildi`,{amountHas:has,costHas:cost});audit(`${doc}: ${st.code} hurdaya çıktı`,'Dönüşüm');closeModal();save();render();toast('Ürün hurda stoğuna aktarıldı');},'HURDAYA AKTAR');
+  }
+  function openScrapTransformV5(){
+    if(!v5Guard('canTransform'))return;const scraps=(state.scrapStocks||[]).filter(x=>x.period===state.activePeriod&&Number(x.amount||0)>0),opens=(state.openStocks||[]).filter(x=>x.period===state.activePeriod);if(!scraps.length||!opens.length)return toast('Hurda veya hedef açık stok bulunamadı','err');modal('Hurdadan Açık Stok / Mamul Dönüşümü',`<div class="form-grid"><div class="labelled span-2"><label>Kaynak Hurda</label><select id="h2oScrap" class="select">${scraps.map(h=>`<option value="${h.id}">${esc(h.name)} · ${qty(h.amount)} GR · ${qty(h.hasWeight||0)} HAS</option>`).join('')}</select></div><div class="labelled span-2"><label>Hedef Açık Stok</label><select id="h2oOpen" class="select">${opens.map(o=>`<option value="${o.id}">${esc(o.name)} · ${qty(o.amount)} ${esc(o.unit)}</option>`).join('')}</select></div><div class="labelled"><label>Kullanılan Hurda GR</label><input id="h2oIn" class="input" type="number" step="0.001"></div><div class="labelled"><label>Çıkan Mamul GR/Adet</label><input id="h2oOut" class="input" type="number" step="0.001"></div><div class="labelled"><label>Fire HAS</label><input id="h2oFire" class="input" type="number" step="0.001" value="0"></div><div class="labelled"><label>Ek İşçilik HAS</label><input id="h2oWork" class="input" type="number" step="0.001" value="0"></div></div>`,()=>{const h=state.scrapStocks.find(x=>x.id===document.getElementById('h2oScrap').value),o=state.openStocks.find(x=>x.id===document.getElementById('h2oOpen').value),gin=Number(document.getElementById('h2oIn').value||0),out=Number(document.getElementById('h2oOut').value||0),fire=Math.max(0,Number(document.getElementById('h2oFire').value||0)),work=Math.max(0,Number(document.getElementById('h2oWork').value||0));if(!h||!o||gin<=0||out<=0||gin>Number(h.amount||0)+.0001)return toast('Miktarları kontrol edin','err');const ratio=gin/Math.max(.000001,Number(h.amount||0)),sourceHas=Number(h.hasWeight||0)*ratio,sourceCost=gin*Number(h.unitCostHas||sourceHas/Math.max(.000001,gin)),targetPhysical=Math.max(0,sourceHas-fire),targetCost=sourceCost+work;h.amount=Math.max(0,Number(h.amount||0)-gin);h.hasWeight=Math.max(0,Number(h.hasWeight||0)-sourceHas);setOpenWeightedUnitCost(o,out,targetCost);o.amount=Number(o.amount||0)+out;o.hasWeight=Number(o.hasWeight||0)+targetPhysical;o.workmanshipTotalHas=Number(o.workmanshipTotalHas||0)+work;if(o.unit==='ADET')o.count=Number(o.amount||0);const doc=`H2O-${state.activePeriod}-${String(Date.now()).slice(-6)}`;state.stockMoves.unshift({id:uid('SM'),period:state.activePeriod,date:now(),stockId:o.id,code:o.productCode||o.pusulaCode||o.id,type:'HURDA → AÇIK STOK',from:h.name,to:o.name,description:`${doc} · Girdi ${qty(gin)} GR · Çıktı ${qty(out)} · Fire ${qty(fire)} HAS · İşçilik ${qty(work)} HAS`,sourceDocNo:doc,user:session.name});registerTransactionV5('HURDA→AÇIK STOK',doc,`${h.name} → ${o.name}`,{amountHas:targetPhysical,costHas:targetCost,fireHas:fire});audit(`${doc}: hurdadan mamul/açık stok dönüşümü`,'Dönüşüm');closeModal();save();render();toast('Dönüşüm kaydedildi');},'DÖNÜŞÜMÜ KAYDET');
+  }
+  function openSpecialProductV5(){
+    if(!v5Guard('canManageSpecial'))return;modal('Özel Ürün Kartı — Pırlanta / Saat / Gümüş / Çelik',`<div class="form-grid"><div class="labelled"><label>Ürün Türü</label><select id="spType" class="select"><option>Pırlanta</option><option>Saat</option><option>Gümüş</option><option>Çelik</option><option>Taş</option><option>Diğer</option></select></div><div class="labelled span-2"><label>Ürün Adı</label><input id="spName" class="input"></div><div class="labelled"><label>Ürün Kodu</label><input id="spCode" class="input"></div><div class="labelled"><label>Barkod</label><input id="spBarcode" class="input" placeholder="Boşsa otomatik"></div><div class="labelled"><label>Marka</label><input id="spBrand" class="input"></div><div class="labelled"><label>Model</label><input id="spModel" class="input"></div><div class="labelled"><label>Seri No</label><input id="spSerial" class="input"></div><div class="labelled"><label>RFID</label><input id="spRfid" class="input"></div><div class="labelled"><label>Gram</label><input id="spWeight" class="input" type="number" step="0.001" value="0"></div><div class="labelled"><label>Karat (ct)</label><input id="spCarat" class="input" type="number" step="0.001" value="0"></div><div class="labelled"><label>Renk</label><input id="spColor" class="input"></div><div class="labelled"><label>Berraklık</label><input id="spClarity" class="input"></div><div class="labelled span-2"><label>Sertifika No / Laboratuvar</label><input id="spCert" class="input"></div><div class="labelled"><label>Maliyet TL</label><input id="spCost" class="input" type="number" step="0.01"></div><div class="labelled"><label>Satış TL</label><input id="spSale" class="input" type="number" step="0.01"></div><div class="labelled span-2"><label>Fotoğraf</label><input id="spPhoto" class="input" type="file" accept="image/*"></div></div>`,async()=>{const name=document.getElementById('spName').value.trim();if(!name)return toast('Ürün adı girin','err');const type=document.getElementById('spType').value,prefix=type==='Pırlanta'?'PIR':type==='Saat'?'SAT':type==='Gümüş'?'GMS':'OZL',code=(document.getElementById('spCode').value.trim()||`${prefix}${String(Date.now()).slice(-6)}`).toUpperCase(),barcode=document.getElementById('spBarcode').value.trim()||generateBarcode(),file=document.getElementById('spPhoto').files?.[0];let photo='';if(file&&file.size<350000){photo=await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(String(fr.result||''));fr.onerror=()=>res('');fr.readAsDataURL(file);});}const costTl=Number(document.getElementById('spCost').value||0),saleTl=Number(document.getElementById('spSale').value||0),rec={id:uid('SP'),period:state.activePeriod,type,name,code,barcode,brand:document.getElementById('spBrand').value,model:document.getElementById('spModel').value,serial:document.getElementById('spSerial').value,rfid:document.getElementById('spRfid').value,weight:Number(document.getElementById('spWeight').value||0),carat:Number(document.getElementById('spCarat').value||0),color:document.getElementById('spColor').value,clarity:document.getElementById('spClarity').value,certificate:document.getElementById('spCert').value,costTl,saleTl,photo,status:'Stokta',date:now()};state.specialProducts.unshift(rec);const st={id:uid('S'),period:state.activePeriod,source:'Özel Ürün',stockMode:'Barkodlu',barcode,code,pusulaCode:code,group:type.toUpperCase(),category:type,name,type,productType:type,karat:rec.carat?`${rec.carat} ct`:'',purity:type==='Gümüş'?925:0,amount:rec.weight||1,qty:rec.weight||1,count:1,hasWeight:0,costHas:costTl/Math.max(1,Number(state.prices.has.buy||1)),saleHas:saleTl/Math.max(1,Number(state.prices.has.sell||1)),brand:rec.brand,model:rec.model,serial:rec.serial,rfid:rec.rfid,certificate:rec.certificate,photo,status:'Stokta',location:'Mağaza',entryDate:now()};state.stocks.push(st);rec.stockId=st.id;const doc=`SPC-${state.activePeriod}-${String(Date.now()).slice(-6)}`;state.stockMoves.unshift({id:uid('SM'),period:state.activePeriod,date:now(),stockId:st.id,code:st.code,type:'ÖZEL ÜRÜN GİRİŞ',from:'Tedarikçi',to:'Mağaza',description:`${doc} · ${type}`,sourceDocNo:doc,user:session.name});registerTransactionV5('ÖZEL ÜRÜN',doc,`${type} · ${name}`,{costTl,saleTl});audit(`${doc}: ${type} özel ürün kartı eklendi`,'Özel Ürün');closeModal();save();render();toast('Özel ürün stoğa eklendi');},'ÜRÜNÜ KAYDET');
+  }
+  function pendingPosMovesV5(posId=''){return (state.financeMoves||[]).filter(x=>x.period===state.activePeriod&&x.accountKind==='POS'&&x.direction==='Giriş'&&/Kredi Kartı/i.test(x.type||'')&&!x.settledAt&&(!posId||x.accountId===posId));}
+  function openPosSettlementV5(){
+    if(!v5Guard('canSettlePos'))return;const pos=state.posAccounts||[],banks=state.bankAccounts.filter(x=>x.currency==='TL');if(!pos.length||!banks.length)return toast('POS veya TL banka hesabı tanımlı değil','err');modal('POS Valör / Bankaya Aktarım',`<div class="form-grid"><div class="labelled span-2"><label>POS Hesabı</label><select id="psPos" class="select">${pos.map(x=>`<option value="${x.id}">${esc(x.bank||'')} · ${esc(x.name)} · Bakiye ${money(x.balance||0)}</option>`).join('')}</select></div><div class="labelled span-2"><label>Aktarım Bankası</label><select id="psBank" class="select">${banks.map(x=>`<option value="${x.id}">${esc(x.bank)} · ${esc(x.name)}</option>`).join('')}</select></div><div class="notice span-4" id="psInfo"></div></div>`,()=>{const pid=document.getElementById('psPos').value,bid=document.getElementById('psBank').value,moves=pendingPosMovesV5(pid),pa=state.posAccounts.find(x=>x.id===pid),ba=state.bankAccounts.find(x=>x.id===bid);if(!moves.length||!pa||!ba)return toast('Bekleyen POS hareketi yok','err');const gross=moves.reduce((a,x)=>a+Number(x.accountAmount??x.amount??0),0),docs=new Set(moves.map(x=>x.sourceDocNo).filter(Boolean)),fee=(state.financeMoves||[]).filter(x=>docs.has(x.sourceDocNo)&&/POS Komisyon Gideri/i.test(x.type||'')).reduce((a,x)=>a+Math.abs(Number(x.tlAmount??x.amount??0)),0),net=Math.max(0,gross-fee),doc=`POS-${state.activePeriod}-${String(Date.now()).slice(-6)}`;pa.balance=Number(pa.balance||0)-gross;ba.balance=Number(ba.balance||0)+net;moves.forEach(x=>{x.settledAt=now();x.settlementDocNo=doc;});state.financeMoves.unshift({id:uid('FIN'),period:state.activePeriod,date:now(),direction:'Giriş',type:'POS VALÖR AKTARIMI',accountKind:'Banka',accountId:ba.id,accountName:`${ba.bank} / ${ba.name}`,amount:net,accountAmount:net,accountCurrency:'TL',tlAmount:net,description:`${pa.name} brüt ${money(gross)} · komisyon ${money(fee)}`,user:session.name,sourceDocNo:doc,sourceCategory:'POS Valör'});state.posSettlements.unshift({id:uid('PST'),docNo:doc,period:state.activePeriod,date:now(),posId:pa.id,bankId:ba.id,gross,fee,net,moveIds:moves.map(x=>x.id),user:session.name});registerTransactionV5('POS VALÖR',doc,`${pa.name} → ${ba.bank}`,{gross,fee,net});audit(`${doc}: POS ${money(gross)} → banka ${money(net)}`,'POS');closeModal();save();render();toast('POS valörü bankaya aktarıldı');},'BANKAYA AKTAR');const posEl=document.getElementById('psPos'),info=document.getElementById('psInfo');const upd=()=>{const m=pendingPosMovesV5(posEl.value),gross=m.reduce((a,x)=>a+Number(x.accountAmount??x.amount??0),0),docs=new Set(m.map(x=>x.sourceDocNo).filter(Boolean)),fee=(state.financeMoves||[]).filter(x=>docs.has(x.sourceDocNo)&&/POS Komisyon Gideri/i.test(x.type||'')).reduce((a,x)=>a+Math.abs(Number(x.tlAmount??x.amount??0)),0);info.innerHTML=`Bekleyen <b>${m.length}</b> hareket · Brüt <b>${money(gross)}</b> · Komisyon <b>${money(fee)}</b> · Bankaya Net <b>${money(Math.max(0,gross-fee))}</b>`;};posEl.addEventListener('change',upd);upd();
+  }
+  function openFiscalCloseV5(){
+    if(!v5Guard('canClosePeriod'))return;const y=state.activePeriod,next=y+1;if(state.closedPeriods.includes(y))return toast(`${y} zaten kapatılmış`,'err');if(!YEARS.includes(next))return toast(`${next} giriş listesinde tanımlı değil`,'err');const stocks=activeStock(),opens=(state.openStocks||[]).filter(x=>x.period===y&&Number(x.amount||0)>0),scraps=(state.scrapStocks||[]).filter(x=>x.period===y&&Number(x.amount||0)>0);modal('Gerçek Dönem Kapatma / Devir',`<div class="notice"><strong>${y}</strong> kapanışı kilitlenecek. <strong>${next}</strong> için stok açılış kayıtları üretilecek. Eski yılın satış/cari/kasa hareketleri kendi yılında kalacak.</div><div class="summary-row"><span>Barkodlu Stok</span><strong>${stocks.length}</strong></div><div class="summary-row"><span>Açık Stok</span><strong>${opens.length}</strong></div><div class="summary-row"><span>Hurda Stok</span><strong>${scraps.length}</strong></div><div class="summary-row"><span>Cari</span><strong>${state.customers.length}</strong></div>`,async()=>{await cloudBackupV5(`DÖNEM KAPANIŞ ${y}`);const map=new Map();stocks.forEach(s=>{const n={...clone(s),id:uid('S'),period:next,carryFromId:s.id,entryYear:next,entryDate:now(),source:`${y} DEVİR`};state.stocks.push(n);map.set(s.id,n.id);});opens.forEach(o=>state.openStocks.push({...clone(o),id:uid('OPEN'),period:next,carryFromId:o.id,source:`${y} DEVİR`}));scraps.forEach(h=>state.scrapStocks.push({...clone(h),id:uid('SCR'),period:next,carryFromId:h.id,source:`${y} DEVİR`}));state.yearClosings.unshift({id:uid('YC'),year:y,nextYear:next,date:now(),user:session.name,barcodeCount:stocks.length,openCount:opens.length,scrapCount:scraps.length,customerBalances:state.customers.map(c=>({id:c.id,tl:Number(c.tlBalance||0),has:Number(c.hasBalance||0),other:clone(c.otherBalances||{})})),cashBalances:state.cashAccounts.map(x=>({id:x.id,balance:Number(x.balance||0)})),bankBalances:state.bankAccounts.map(x=>({id:x.id,balance:Number(x.balance||0)}))});state.closedPeriods.push(y);state.activePeriod=next;registerTransactionV5('DÖNEM DEVİR',`DEVIR-${y}-${next}`,`${y} kapandı, ${next} açıldı`,{status:'Tamamlandı'});audit(`${y} gerçek dönem kapanışı yapıldı; ${next} açılışı oluşturuldu`,'Dönem');closeModal();save();render();toast(`${y} kapandı, ${next} dönemi açıldı`);},'DÖNEMİ KAPAT VE DEVRET');
+  }
+  function pageOperationsV5(){
+    ensureV5State();reconcileTransactionLedgerV5();const pending=pendingPosMovesV5(),specials=state.specialProducts.filter(x=>x.period===state.activePeriod),tx=state.transactions.filter(x=>x.period===state.activePeriod).slice(0,80),cloud=state.cloudSync||{};
+    return `<div class="page-title"><div><h1>Pusula İşlem Merkezi — V5</h1><p>İade/değişim, toptancı iadesi, stok dönüşümü, özel ürün, POS valör, işlem bağlantıları, bulut ve dönem devri tek merkezde.</p></div><div class="v5-status"><span class="badge green">Transaction Motoru Aktif</span><span class="badge ${cloud.lastStatus==='Bağlı'?'green':'gold'}">Bulut: ${esc(cloud.lastStatus||'Bekliyor')}</span></div></div>
+      <div class="card"><div class="v5-action-grid"><button class="btn btn-primary" id="v5Exchange">⇄ ÜRÜN DEĞİŞİMİ<br><small>Eski ürün + yeni ürün + fiyat farkı</small></button><button class="btn" id="v5Return">↩ MÜŞTERİ İADESİ<br><small>Stok/cari/kasa ters kayıt</small></button><button class="btn" id="v5SupplierReturn">⇧ TOPTANCI İADESİ<br><small>Barkod + toptancı HAS</small></button><button class="btn" id="v5B2H">◆ BARKOD → HURDA<br><small>Maliyet/HAS korunur</small></button><button class="btn" id="v5H2O">◇ HURDA → MAMUL<br><small>Fire + işçilik + açık stok</small></button><button class="btn" id="v5Special">◆ ÖZEL ÜRÜN KARTI<br><small>Pırlanta/saat/gümüş/çelik</small></button><button class="btn" id="v5Pos">▣ POS VALÖR<br><small>POS → banka net aktarım</small></button><button class="btn" id="v5Close">↻ DÖNEM KAPAT / DEVİR<br><small>Gerçek yıl açılışı</small></button></div></div>
+      <div class="grid grid-3" style="margin-top:16px"><div class="card"><h3>Merkezi Veri</h3><div class="summary-row"><span>Durum</span><strong>${esc(cloud.lastStatus||'Bekliyor')}</strong></div><div class="summary-row"><span>Son Gönderim</span><strong>${cloud.lastPush?trDate(cloud.lastPush):'—'}</strong></div><div class="summary-row"><span>Son Alım</span><strong>${cloud.lastPull?trDate(cloud.lastPull):'—'}</strong></div><div style="display:flex;gap:8px"><button class="btn" id="v5CloudPush">Buluta Gönder</button><button class="btn" id="v5CloudPull">Buluttan Al</button></div></div><div class="card"><h3>POS Bekleyen</h3><div class="summary-row"><span>Hareket</span><strong>${pending.length}</strong></div><div class="summary-row"><span>Brüt</span><strong>${money(pending.reduce((a,x)=>a+Number(x.accountAmount??x.amount??0),0))}</strong></div><button class="btn" id="v5Pos2" style="width:100%">Valör Aktar</button></div><div class="card"><h3>Özel Ürün</h3><div class="summary-row"><span>Aktif Kart</span><strong>${specials.length}</strong></div><div class="summary-row"><span>RFID Tanımlı</span><strong>${specials.filter(x=>x.rfid).length}</strong></div><button class="btn" id="v5Special2" style="width:100%">Yeni Özel Ürün</button></div></div>
+      <div class="grid grid-2" style="margin-top:16px"><div class="card"><div class="section-head"><h3>Bağlı İşlem Defteri</h3><span>${state.transactions.length} işlem</span></div><div class="table-wrap v5-ledger"><table class="table"><thead><tr><th>Belge</th><th>Tür</th><th>Tarih</th><th>Durum</th><th class="num">Bağ</th><th></th></tr></thead><tbody>${tx.map(t=>`<tr><td><strong>${esc(t.docNo)}</strong></td><td>${esc(t.type)}</td><td>${trDate(t.date)}</td><td><span class="badge ${t.status==='Aktif'?'green':t.status==='Ters Kayıt'?'red':'gold'}">${esc(t.status||'Aktif')}</span></td><td class="num">${(t.refs||[]).length}</td><td><button class="btn btn-outline" data-v5-txn="${t.id}">Bağlantı</button></td></tr>`).join('')||'<tr><td colspan="6">İşlem yok.</td></tr>'}</tbody></table></div></div><div class="card"><div class="section-head"><h3>Özel Ürün Stoku</h3><span>Pırlanta / Saat / Gümüş / Çelik</span></div><div class="table-wrap"><table class="table"><thead><tr><th>Ürün</th><th>Barkod</th><th>Detay</th><th class="num">Maliyet</th><th class="num">Satış</th></tr></thead><tbody>${specials.slice(0,30).map(x=>`<tr><td>${x.photo?`<img class="v5-special-photo" src="${esc(x.photo)}">`:''}<strong>${esc(x.name)}</strong><br><small>${esc(x.type)} · ${esc(x.brand||'')}</small></td><td>${esc(x.barcode)}</td><td>${esc([x.model,x.serial,x.certificate].filter(Boolean).join(' · '))}</td><td class="num">${money(x.costTl||0)}</td><td class="num">${money(x.saleTl||0)}</td></tr>`).join('')||'<tr><td colspan="5">Özel ürün yok.</td></tr>'}</tbody></table></div></div></div>`;
+  }
+  function bindOperationsV5(){
+    document.getElementById('v5Exchange')?.addEventListener('click',openExchangeV5);document.getElementById('v5Return')?.addEventListener('click',openCustomerReturnV5);document.getElementById('v5SupplierReturn')?.addEventListener('click',openSupplierReturnV5);document.getElementById('v5B2H')?.addEventListener('click',openBarcodeToScrapV5);document.getElementById('v5H2O')?.addEventListener('click',openScrapTransformV5);document.getElementById('v5Special')?.addEventListener('click',openSpecialProductV5);document.getElementById('v5Special2')?.addEventListener('click',openSpecialProductV5);document.getElementById('v5Pos')?.addEventListener('click',openPosSettlementV5);document.getElementById('v5Pos2')?.addEventListener('click',openPosSettlementV5);document.getElementById('v5Close')?.addEventListener('click',openFiscalCloseV5);document.getElementById('v5CloudPush')?.addEventListener('click',()=>cloudPushV5(true));document.getElementById('v5CloudPull')?.addEventListener('click',()=>cloudPullV5(true));document.querySelectorAll('[data-v5-txn]').forEach(b=>b.addEventListener('click',()=>transactionDetailV5(b.dataset.v5Txn)));
   }
 
   function modal(title,body,onConfirm,confirmText='Kaydet'){
@@ -2441,6 +2732,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   if('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js').catch(()=>{});
   render();
   initLivePriceSync();
+  initCloudSyncV5();
 })();
 
   </script>
