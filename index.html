@@ -1205,7 +1205,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v5.8</small></div></div>
+        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v5.9</small></div></div>
         <div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off"></div><div class="nav">${navItems.map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div>
         <div class="sidebar-bottom">
           <div class="user-chip"><div class="avatar">${esc(session.name.split(' ').map(x=>x[0]).slice(0,2).join(''))}</div><div><strong>${esc(session.name)}</strong><div class="muted" style="font-size:12px">${esc(session.role)}</div></div></div>
@@ -1485,7 +1485,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const t=saleTotals();
     const barcodeMode=saleDraft.saleMode!=='Barkodsuz';
     return `<div class="page-title"><div><h1>Satış İşlemleri</h1><p>Pusula alışkanlığı: barkodlu/barkodsuz ürün, takas, altın/ziynet, hurda, döviz, kart, açık hesap ve çoklu ödeme aynı ekranda.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" id="saleHistory">Satış Geçmişi</button><button class="btn btn-outline" id="resetSale">Yeni Fiş</button></div></div>
-      <div class="card" style="margin-bottom:14px"><div class="section-head"><h3>Hızlı Kuyumcu İşlemleri</h3><span>Satış ekranından ayrılmadan</span></div><div class="trade-actions"><button class="btn buy" data-special-trade="Ziynet Alış">Ziynet Alış</button><button class="btn sell" data-special-trade="Ziynet Satış">Ziynet Satış</button><button class="btn buy" data-special-trade="Hurda Alış">Hurda Alış</button><button class="btn sell" data-special-trade="Hurda Satış">Hurda Satış</button><button class="btn buy btn-primary" data-special-trade="Döviz Alış">Döviz Alış</button><button class="btn sell btn-primary" data-special-trade="Döviz Satış">Döviz Satış</button></div></div>
+      <div class="card" style="margin-bottom:14px"><div class="section-head"><h3>Hızlı Kuyumcu İşlemleri</h3><span>Satış ekranından ayrılmadan · Enter = sonraki alan · son alanda Enter = kaydet</span></div><div class="trade-actions"><button class="btn buy" data-special-trade="Ziynet Alış">Ziynet Alış</button><button class="btn sell" data-special-trade="Ziynet Satış">Ziynet Satış</button><button class="btn buy" data-special-trade="Hurda Alış">Hurda Alış</button><button class="btn sell" data-special-trade="Hurda Satış">Hurda Satış</button><button class="btn buy btn-primary" data-special-trade="Döviz Alış">Döviz Alış</button><button class="btn sell btn-primary" data-special-trade="Döviz Satış">Döviz Satış</button></div></div>
       <div class="sale-layout">
         <div>
           <div class="card">
@@ -1717,7 +1717,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function pageStocks(){
     const rows=state.stocks.filter(x=>x.period===state.activePeriod && x.status!=='Satıldı');
     let body=stockSummaryView(); if(stockView==='list') body=stockListView(rows); if(stockView==='cards') body=stockCardsView(); if(stockView==='labels') body=labelsView(rows); if(stockView==='moves') body=movementsView();
-    return `<div class="page-title"><div><h1>Stok Yönetimi</h1><p>Pusula düzeni: açık stok + barkodlu stok + hurda + kasa/POS tek merkezde.</p></div><span class="badge gold">V5.8 · Sade Finans · Döviz Alış/Satış Satış Ekranında</span></div>${stockHeaderTabs()}${body}`;
+    return `<div class="page-title"><div><h1>Stok Yönetimi</h1><p>Pusula düzeni: açık stok + barkodlu stok + hurda + kasa/POS tek merkezde.</p></div><span class="badge gold">V5.9 · Klavye Akışı · Enter ile İşlem</span></div>${stockHeaderTabs()}${body}`;
   }
 
   function customerCardsView(){
@@ -1834,29 +1834,54 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       <div class="card" style="margin-top:16px"><div class="section-head"><h3>İşlem Geçmişi</h3><span>Son ${Math.min(100,state.audits.length)} hareket</span></div><div class="table-wrap"><table class="table"><thead><tr><th>Tarih</th><th>Kullanıcı</th><th>Modül</th><th>İşlem</th></tr></thead><tbody>${state.audits.slice(0,100).map(a=>`<tr><td>${trDate(a.date)}</td><td>${esc(a.user)}</td><td><span class="badge">${esc(a.module)}</span></td><td>${esc(a.action)}</td></tr>`).join('')}</tbody></table></div></div>`;
   }
 
-  function bindEnterAsTab(scope){
+  function focusAndSelect(el){
+    if(!el)return;
+    el.focus();
+    if(el instanceof HTMLInputElement&&['text','number','search','tel','email'].includes(el.type)){try{el.select();}catch(_){}}
+  }
+
+  function bindEnterAsTab(scope,options={}){
     const root=typeof scope==='string'?document.querySelector(scope):scope;
-    if(!root)return;
-    const skipIds=new Set(['barcodeSearch']);
+    if(!root||root.dataset.enterFlowBound==='1')return;
+    root.dataset.enterFlowBound='1';
+    const skipIds=new Set(options.skipIds||['barcodeSearch']);
     const focusables=()=>Array.from(root.querySelectorAll('input, select, textarea, button')).filter(el=>{
       if(el.disabled||el.hidden||el.type==='hidden'||el.tabIndex<0)return false;
       if(el.matches('[readonly]'))return false;
       if(el.closest('[style*="display:none"]'))return false;
+      if(options.excludeCancel&&['modalX','modalCancel'].includes(el.id))return false;
       return el.offsetParent!==null;
     });
     root.addEventListener('keydown',e=>{
-      if(e.key!=='Enter'||e.shiftKey||e.ctrlKey||e.altKey||e.metaKey)return;
+      if(e.key==='Escape'&&options.escapeCloses){e.preventDefault();closeModal();return;}
+      if(e.key!=='Enter'||e.ctrlKey||e.altKey||e.metaKey)return;
       const el=e.target;
       if(!(el instanceof HTMLElement))return;
-      if(skipIds.has(el.id)||el.tagName==='TEXTAREA'||el.tagName==='BUTTON')return;
+      if(skipIds.has(el.id))return;
+      if(el.tagName==='BUTTON')return; // Enter naturally clicks focused buttons.
       if(el.matches('input[type="checkbox"],input[type="radio"],input[type="file"],input[type="submit"],input[type="button"]'))return;
+      if(el.tagName==='TEXTAREA'&&e.shiftKey)return; // Shift+Enter keeps newline capability.
       const list=focusables();
       const i=list.indexOf(el);
       if(i<0)return;
       e.preventDefault();
-      const next=list[i+1];
-      if(next){next.focus();if(next instanceof HTMLInputElement&&['text','number','search','tel','email'].includes(next.type)){try{next.select();}catch(_){}}}
+      const step=e.shiftKey?-1:1;
+      const next=list[i+step];
+      if(next){focusAndSelect(next);return;}
+      if(step>0&&options.confirmOnEnd){
+        const btn=root.querySelector('#modalConfirm');
+        if(btn&&!btn.disabled){btn.focus();btn.click();}
+      }
     });
+  }
+
+  function bindModalKeyboardFlow(root){
+    if(!root)return;
+    bindEnterAsTab(root,{skipIds:[],excludeCancel:true,confirmOnEnd:true,escapeCloses:true});
+    setTimeout(()=>{
+      const first=Array.from(root.querySelectorAll('.modal-body input:not([readonly]):not([disabled]), .modal-body select:not([disabled]), .modal-body textarea:not([disabled]), .modal-body button:not([disabled])')).find(el=>el.offsetParent!==null);
+      focusAndSelect(first);
+    },0);
   }
 
   function bindPage(r){
@@ -1912,7 +1937,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       if(!tlAccounts.length)return toast('TL kasa/banka hesabı tanımlayın','err');
       const fxList=['USD','EUR','GBP','CHF'];
       const opts=fxList.map(c=>`<option value="${c}">${c}</option>`).join('');
-      modal(tradeType,`<div class="form-grid"><div class="labelled"><label>Döviz</label><select id="stFx" class="select">${opts}</select></div><div class="labelled"><label>Miktar</label><input id="stQty" class="input" type="number" step="0.01" value="100"></div><div class="labelled"><label>Kur</label><input id="stPrice" class="input" type="number" step="0.0001"></div><div class="labelled"><label>TL Toplam</label><input id="stTotal" class="input" readonly></div><div class="labelled span-2"><label>TL Kasa / Banka</label><select id="stTlAccount" class="select">${tlAccounts.map(x=>`<option value="${x.key}">${esc(x.name)}</option>`).join('')}</select></div><div class="labelled span-2"><label>Döviz Kasası</label><select id="stFxAccount" class="select"></select></div><div class="labelled span-2"><label>Cari / Açıklama</label><input id="stCustomer" class="input" placeholder="Peşin müşteri / açıklama"></div></div>`,()=>{
+      modal(tradeType,`<div class="form-grid"><div class="labelled"><label>Döviz</label><select id="stFx" class="select">${opts}</select></div><div class="labelled"><label>Miktar</label><input id="stQty" class="input" type="number" step="0.01" value="" autocomplete="off"></div><div class="labelled"><label>Kur</label><input id="stPrice" class="input" type="number" step="0.0001"></div><div class="labelled"><label>TL Toplam</label><input id="stTotal" class="input" readonly></div><div class="labelled span-2"><label>TL Kasa / Banka</label><select id="stTlAccount" class="select">${tlAccounts.map(x=>`<option value="${x.key}">${esc(x.name)}</option>`).join('')}</select></div><div class="labelled span-2"><label>Döviz Kasası</label><select id="stFxAccount" class="select"></select></div><div class="labelled span-2"><label>Cari / Açıklama</label><input id="stCustomer" class="input" placeholder="Peşin müşteri / açıklama"></div></div>`,()=>{
         const cur=document.getElementById('stFx').value, qtyVal=Number(document.getElementById('stQty').value||0), rate=Number(document.getElementById('stPrice').value||0), total=qtyVal*rate, tlKey=document.getElementById('stTlAccount').value, fxKey=document.getElementById('stFxAccount').value, customer=document.getElementById('stCustomer').value||'Peşin Müşteri';
         if(qtyVal<=0||rate<=0)return toast('Döviz miktarı ve kur girin','err'); if(!fxKey)return toast(`${cur} kasası seçin`,'err');
         const prefix=side==='Alış'?'DA':'DS',docNo=nextDocNo(prefix,state.tradeMoves);
@@ -2011,6 +2036,10 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
 
   function bindSales(){
     document.querySelectorAll('[data-special-trade]').forEach(b=>b.addEventListener('click',()=>openSpecialTrade(b.dataset.specialTrade)));
+    setTimeout(()=>{
+      const target=saleDraft.saleMode==='Barkodsuz'?document.getElementById('saleOpenStock'):document.getElementById('barcodeSearch');
+      if(target&&document.activeElement===document.body)focusAndSelect(target);
+    },0);
     document.querySelectorAll('[data-sale-mode]').forEach(b=>b.addEventListener('click',()=>{saleDraft.saleMode=b.dataset.saleMode;render();}));
     const cust=document.getElementById('saleCustomer'); cust?.addEventListener('change',e=>{saleDraft.customerId=e.target.value;});
     const person=document.getElementById('salePerson'); person?.addEventListener('change',e=>saleDraft.salesperson=e.target.value);
@@ -2033,7 +2062,13 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     document.getElementById('salePrice')?.addEventListener('input',e=>{const q=Number(document.getElementById('saleQty')?.value||1);const payable=document.getElementById('salePayable');if(payable)payable.value=(Number(e.target.value||0)*q).toFixed(2);});
 
     document.getElementById('barcodeSearch')?.addEventListener('keydown',e=>{
-      if(e.key!=='Enter') return; e.preventDefault(); const v=e.target.value.trim(); const s=findSaleStockByLookup(v);
+      if(e.key!=='Enter') return; e.preventDefault(); const v=e.target.value.trim();
+      if(!v&&saleDraft.lines.length){
+        const t=saleTotals();
+        const target=Math.abs(t.remain)<=0.01?document.getElementById('finalizeSale'):document.querySelector('[data-pay]');
+        if(target){target.focus();return;}
+      }
+      const s=findSaleStockByLookup(v);
       if(!s)return toast('Barkodlu stokta ürün bulunamadı. Örn: ALY 1335 veya ALY0001335','err'); if(stockSel){stockSel.value=s.id;stockSel.dispatchEvent(new Event('change'));document.getElementById('addSaleLine')?.click();}
     });
     document.getElementById('addSaleLine')?.addEventListener('click',()=>{
@@ -2083,7 +2118,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       const cur=document.getElementById('payCur').value,native=Number(document.getElementById('payNative').value||0),tl=Number(document.getElementById('payTl').value||0),key=document.getElementById('payAccount').value;
       if(native<=0||tl<=0)return toast('Miktar girin','err'); if(!key)return toast('Kasa / banka hesabı seçin','err');
       const a=accountByKey(key),isBank=a.kind==='Banka',actualType=isBank?(isOutgoing?'Havale / EFT Ödeme':'Havale / EFT Tahsilat'):type;
-      saleDraft.payments.push({type:actualType,amount:isOutgoing?-tl:tl,nativeAmount:native,currency:cur,accountKey:key,commissionRate:0,detail:`${qty(native)} ${cur} · ${isBank?'Havale / EFT — komisyonsuz':(isOutgoing?'ödeme':'tahsilat')}`}); closeModal();render();
+      saleDraft.payments.push({type:actualType,amount:isOutgoing?-tl:tl,nativeAmount:native,currency:cur,accountKey:key,commissionRate:0,detail:`${qty(native)} ${cur} · ${isBank?'Havale / EFT — komisyonsuz':(isOutgoing?'ödeme':'tahsilat')}`}); closeModal();render();setTimeout(()=>{const t=saleTotals();const target=Math.abs(t.remain)<=0.01?document.getElementById('finalizeSale'):document.getElementById('barcodeSearch');focusAndSelect(target);},0);
     },isOutgoing?'ÖDEME EKLE':'TAHSİLAT EKLE');
     const curEl=document.getElementById('payCur'),nativeEl=document.getElementById('payNative'),rateEl=document.getElementById('payRate'),tlEl=document.getElementById('payTl'),accEl=document.getElementById('payAccount'),hint=document.getElementById('payChannelHint');
     const sync=()=>{const cur=curEl.value,rate=currencyTlRate(cur,isOutgoing?'sell':'buy'),native=Number(nativeEl.value||0);rateEl.value=rate.toFixed(cur==='TL'?2:4);tlEl.value=(native*rate).toFixed(2);let opts=accountOptions(cur,false);if(forceBank)opts=opts.filter(x=>String(x.key).startsWith('Banka:'));accEl.innerHTML=opts.map(x=>`<option value="${x.key}">${esc(x.name)}</option>`).join('');syncHint();};
@@ -3126,7 +3161,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
 
   function modal(title,body,onConfirm,confirmText='Kaydet'){
-    closeModal(); const el=document.createElement('div'); el.id='modalRoot'; el.className='modal-backdrop'; el.innerHTML=`<div class="modal"><div class="modal-head"><h3>${title}</h3><button class="btn btn-outline" id="modalX">×</button></div><div class="modal-body">${body}</div><div class="modal-actions"><button class="btn btn-outline" id="modalCancel">Vazgeç</button>${onConfirm?`<button class="btn btn-primary" id="modalConfirm">${confirmText}</button>`:''}</div></div>`;document.body.appendChild(el);document.getElementById('modalX').onclick=closeModal;document.getElementById('modalCancel').onclick=closeModal;if(onConfirm)document.getElementById('modalConfirm').onclick=onConfirm;
+    closeModal(); const el=document.createElement('div'); el.id='modalRoot'; el.className='modal-backdrop'; el.innerHTML=`<div class="modal"><div class="modal-head"><h3>${title}</h3><button class="btn btn-outline" id="modalX">×</button></div><div class="modal-body">${body}</div><div class="modal-actions"><button class="btn btn-outline" id="modalCancel">Vazgeç</button>${onConfirm?`<button class="btn btn-primary" id="modalConfirm">${confirmText}</button>`:''}</div></div>`;document.body.appendChild(el);document.getElementById('modalX').onclick=closeModal;document.getElementById('modalCancel').onclick=closeModal;if(onConfirm)document.getElementById('modalConfirm').onclick=onConfirm;bindModalKeyboardFlow(el);
   }
   function closeModal(){document.getElementById('modalRoot')?.remove();}
   function downloadText(text,name,type){const blob=new Blob([text],{type});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
