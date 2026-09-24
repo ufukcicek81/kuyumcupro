@@ -1,10 +1,11 @@
-# Asil Kuyumcu Pro v5.13
+# Asil Kuyumcu Pro v5.14
 
-Cari işlem akışı düzenlendi.
+Cari Ekstre ekranı Pusula tarzında yeniden düzenlendi.
 
-- Cari işlem formunda son adım artık doğrudan kayıt yapmaz; önce **İşlem Özeti** açılır.
-- Özette cari, işlem türü, tutar/kur/karşılık, BORÇ-ALACAK, kasa-banka ve açıklama kontrol edilir.
-- Özette **KAYDET** denince gerçek işlem oluşturulur.
-- Kayıt sonrası Cari Hesaplar ana sayfasına dönmez; **aynı cari hesabının işlem penceresi yeniden açılır**.
-- Böylece aynı müşteri/toptancı üzerinde peş peşe farklı cari işlemleri mouse kullanmadan yapılabilir.
-- Enter ile alan ilerletme korunur; işlem sonunda İŞLEM ÖZETİ butonuna gelip Enter ile özet açılır.
+- Ekstre artık yatay kaydırma gerektirmeyen tek ekran tablo kullanır.
+- Üstte güncel Son Bakiye kartları gösterilir (HAS, TL ve diğer para birimleri).
+- Her hareket satırında o hareketten sonraki ilgili birim bakiyesi görünür.
+- Bir hareketin üzerine tıklanınca alttaki Son Durum alanı o tarihteki tüm cari bakiyeleri gösterir.
+- Yukarı/Aşağı oklarla hareketler arasında gezilebilir.
+- Seçili hareketin belge, açıklama, kaynak ve karşılık bilgisi tek ekranda gösterilir.
+- Seçili hareket detayından silme yapılabilir; bağlı stok/kasa ters kayıt mantığı korunur.
