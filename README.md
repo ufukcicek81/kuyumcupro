@@ -1,12 +1,14 @@
-# Asil Kuyumcu Pro v5.4
+# Asil Kuyumcu Pro v5.5 — Sade Banka Modeli
 
-## Banka cari NT/NO Pusula mantığı
+Bu sürüm bankacılık/POS akışını Pusula kullanımına yaklaştırır.
 
-- Banka hesapları Cari Hesaplar içinde cari kart olarak görünür.
-- Banka carisinde **NT - Nakit Tahsilat**: banka bakiyesi azalır, seçilen nakit kasa aynı tutarda artar.
-- Banka carisinde **NO - Nakit Ödeme**: seçilen nakit kasa azalır, banka bakiyesi aynı tutarda artar.
-- Bu virmanlarda **komisyon hesaplanmaz**. POS komisyonu, POS valöründe zaten düşülmüş net banka bakiyesinde kalır.
-- İşlem iki bağlı finans hareketiyle aynı belge numarasına yazılır.
-- Cari hareketi silinirse banka ve kasa etkisi birlikte geri alınır.
-- Mevcut banka hesapları otomatik olarak Cari Hesaplar içindeki Banka kartlarına bağlanır.
-- V5.3 stok/tanımlama silme, hurda cari-stok bağlantısı ve önceki tüm özellikler korunur.
+- Banka için ayrı POS ve Havale hesabı yoktur.
+- Her banka tek cari/finans hesabıdır.
+- Havale / EFT aynı banka hesabına kesintisiz tam tutar işler.
+- Kredi kartı tahsilatında bankaya tanımlanan komisyon otomatik düşülür; net tutar aynı banka bakiyesine eklenir.
+- Kart komisyonu ayrı gider hareketi olarak kaydedilir.
+- Kasa / Banka ekranında ayrı POS bölümü ve POS valör ekranı kaldırılmıştır.
+- Banka Ayarı ekranından Kart/POS komisyon yüzdesi değiştirilebilir.
+- Cari ekranında banka tek kart olarak görünür; ayrı POS kartları gösterilmez.
+- Cari ve finans işlemlerinde İşlem Açıklaması alanı korunur ve görünürdür.
+- Eski POS bakiyesi varsa ilk açılışta bağlı TL banka hesabına bir defaya mahsus netleştirilerek birleştirilir.
