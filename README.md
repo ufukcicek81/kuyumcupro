@@ -1,20 +1,12 @@
-# Asil Kuyumcu Pro v5.3 — Tüm Cari Hareketleri Bağlı Motor
+# Asil Kuyumcu Pro v5.3
 
-Cari Hesap İşlemleri ekranındaki tüm tanımlı hareket kodları tek tek tamamlandı.
+## Tanımlama silme güncellemesi
 
-- AC Açıklama: belge/audit, bakiye yok
-- AG Altın Giriş: mevcut detaylı alış ekranı, açık stok + cari
-- AX Altın Çıkış: açık altın stok + cari HAS
-- AL Alacaklandır: cari kontrollü alacak belgesi
-- BR Borçlandır: cari kontrollü borç belgesi
-- CI Çıkan İade: açık stoktan çıkış + cari
-- CV Çevirme: aynı caride iki birim arasında çift kayıt
-- HC/HG Hurda Çıkış/Giriş: hurda gram+milyem, stok+cari
-- MH Mahsup: iki cari arasında çift taraflı kayıt
-- NT/NO Nakit Tahsilat/Ödeme: cari+kasa/banka
-- OC/OG Özel Ürün Çıkış/Alış: özel ürün stoğu+cari
-- SI Satış İadesi: bağlı satışın stok/finans/cari ters kaydı
-- TC/TG/TS Taş hareketleri: CT stoğu+cari CT
-- ZC/ZG Ziynet Çıkış/Giriş: adet stoğu + HAS cari
+- Stok Kartları ekranına **Sil** düğmesi eklendi.
+- Tüm Tanımlamalar listelerinde mevcut Sil işlevi onay penceresi ve yetki kontrolüyle güçlendirildi.
+- Kullanımda olan stok kartı, bağlı barkodlu/açık stok veya alış kaydı varsa veri bütünlüğü için silinmez; önce bağlı kayıtlar temizlenir.
+- Kasa / Finans ekranındaki boş ve hareketsiz kasa hesaplarına da Sil düğmesi eklendi.
+- Banka ve POS silme işlemlerinde yönetici/tanımlama yetkisi kontrolü eklendi.
+- Silme işlemleri denetim kaydına yazılır.
 
-Silme/geri alma işleminde aynı belgeye bağlı stok, cari, kasa/banka ve karşı kayıtlar birlikte ters çevrilir.
+Mevcut gerçek stok, cari, toptancı ve hareket verileri korunur.
