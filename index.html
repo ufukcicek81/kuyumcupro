@@ -397,6 +397,11 @@ body[data-theme="light"] .nav-search input{background:#f7f8fa;color:#18202a}body
 @media(max-width:700px){.trade-actions{grid-template-columns:repeat(2,1fr)}}
 
 
+
+/* === V5.12 TEK KUTU OTOMATIK STOK TAMAMLAMA === */
+.sale-search-results{display:none!important}
+.sale-inline-help{display:block;margin-top:5px;font-size:11px;color:var(--muted);white-space:nowrap}
+
 /* === V2.9 ASİL CANLI FİYAT ENTEGRASYONU === */
 .market-sync{display:inline-flex;align-items:center;gap:6px;padding:5px 8px;border:1px solid var(--line);border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap}
 .market-sync .dot{width:7px;height:7px;border-radius:50%;background:#f0ad4e;box-shadow:0 0 0 3px rgba(240,173,78,.12)}
@@ -1232,7 +1237,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v5.11</small></div></div>
+        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v5.12</small></div></div>
         <div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off"></div><div class="nav">${navItems.map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div>
         <div class="sidebar-bottom">
           <div class="user-chip"><div class="avatar">${esc(session.name.split(' ').map(x=>x[0]).slice(0,2).join(''))}</div><div><strong>${esc(session.name)}</strong><div class="muted" style="font-size:12px">${esc(session.role)}</div></div></div>
@@ -1531,7 +1536,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
             <div class="form-grid">
               <div class="labelled span-2"><label>Cari / Müşteri</label><select class="select" id="saleCustomer">${state.customers.filter(c=>['Müşteri','Toptancı','Özel'].includes(c.type)||c.id==='CASH').map(c=>`<option value="${c.id}" ${saleDraft.customerId===c.id?'selected':''}>${esc(c.code?c.code+' · ':'')}${esc(c.name)}</option>`).join('')}</select></div>
               <div class="labelled"><label>Satan Eleman</label><select class="select" id="salePerson"><option value="">Seçiniz</option>${state.users.filter(u=>u.permissions?.canSell!==false).map(u=>`<option ${saleDraft.salesperson===u.name?'selected':''}>${esc(u.name)}</option>`).join('')}</select></div>
-              <div class="labelled sale-search-wrap"><label>Stok Kodu / Barkod</label><input id="saleProductSearch" class="input" value="${esc(saleDraft.entryQuery||'')}" placeholder="C = Çeyrek, 34, ALY 1335..." autocomplete="off"><div id="saleSearchResults" class="sale-search-results"></div></div>
+              <div class="labelled sale-search-wrap"><label>Stok Kodu / Barkod</label><input id="saleProductSearch" class="input" value="${esc(saleDraft.entryQuery||'')}" placeholder="C yaz = ÇEYREK · 34 · ALY 1335" autocomplete="off"><small class="sale-inline-help">Yazdıkça en yakın stok aynı kutuda tamamlanır · Enter = seç</small></div>
             </div>
           </div>
 
@@ -2096,27 +2101,65 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     });
     return rows.sort((a,b)=>a.rank-b.rank||String(a.label).localeCompare(String(b.label),'tr')||String(a.code).localeCompare(String(b.code),'tr')).slice(0,limit);
   }
-  function chooseSaleSuggestion(item){
-    if(!item)return;
+  function saleSuggestionText(item){
+    if(!item)return '';
+    if(item.type==='open')return String(item.label||item.code||'').trim();
+    const code=String(item.code||'').trim();
+    const m=code.match(/^([A-Za-zÇĞİÖŞÜ]+)0*(\d+)$/);
+    return m?`${m[1].toLocaleUpperCase('tr-TR')} ${Number(m[2])}`:code;
+  }
+  function bestInlineSaleSuggestion(value){
+    const q=foldSaleSearchKey(value);if(!q)return null;
+    const rows=saleLookupSuggestions(value,40);
+    if(!rows.length)return null;
+    const score=r=>{
+      const label=foldSaleSearchKey(r.label), code=foldSaleSearchKey(r.code);
+      const openBonus=r.type==='open'?0:20;
+      if(label===q)return -100+openBonus;
+      if(code===q)return -90+openBonus;
+      if(label.startsWith(q))return (label.length-q.length)+openBonus;
+      if(code.startsWith(q))return 30+(code.length-q.length)+openBonus;
+      if(label.includes(q))return 60+label.indexOf(q)+openBonus;
+      if(code.includes(q))return 80+code.indexOf(q)+openBonus;
+      return 9999;
+    };
+    return rows.slice().sort((a,b)=>score(a)-score(b)||String(a.label).localeCompare(String(b.label),'tr'))[0]||null;
+  }
+  function applyInlineSaleAutocomplete(input){
+    if(!input)return null;
+    const typed=input.value||'';
+    if(!typed.trim())return null;
+    const item=bestInlineSaleSuggestion(typed);
+    if(!item)return null;
+    const completion=saleSuggestionText(item);
+    const typedKey=foldSaleSearchKey(typed);
+    const completionKey=foldSaleSearchKey(completion);
+    // Only inline-complete when the candidate begins with what the user typed.
+    if(!completionKey.startsWith(typedKey))return item;
+    const typedLen=typed.length;
+    input.value=completion;
+    try{input.setSelectionRange(Math.min(typedLen,completion.length),completion.length);}catch(_){ }
+    input.dataset.inlineSuggestionType=item.type;
+    input.dataset.inlineSuggestionId=item.id;
+    saleDraft.entryQuery=completion;
+    return item;
+  }
+  function chooseInlineSaleSuggestion(input){
+    if(!input)return false;
+    let item=null;
+    if(input.dataset.inlineSuggestionId){
+      item={type:input.dataset.inlineSuggestionType,id:input.dataset.inlineSuggestionId};
+    }else{
+      const found=findUnifiedSaleEntry(input.value.trim());
+      if(found)item=found;
+      else item=bestInlineSaleSuggestion(input.value.trim());
+    }
+    if(!item)return false;
     saleDraft.entrySelection={type:item.type,id:item.id};
-    saleDraft.entryQuery=item.code||item.label||'';
+    saleDraft.entryQuery=input.value.trim();
     render();
     setTimeout(()=>focusAndSelect(document.getElementById(item.type==='open'?'saleEntryAmount':'saleEntryPrice')),0);
-  }
-  function paintSaleSuggestions(input){
-    const box=document.getElementById('saleSearchResults');if(!box)return [];
-    const rows=saleLookupSuggestions(input?.value||'');
-    box.innerHTML=rows.map((r,i)=>`<div class="sale-search-item ${i===0?'active':''}" data-sale-suggest-index="${i}"><span class="badge ${r.type==='open'?'gold':'blue'}">${r.type==='open'?'AÇIK':'BARKOD'}</span><span class="sale-search-main"><strong>${esc(r.code?`${r.code} · ${r.label}`:r.label)}</strong><small>${esc(r.meta)}</small></span><span class="sale-search-stock">${r.type==='open'?esc(r.meta):''}</span></div>`).join('');
-    box.classList.toggle('show',rows.length>0);
-    box.dataset.activeIndex='0';
-    box.querySelectorAll('[data-sale-suggest-index]').forEach(el=>el.addEventListener('mousedown',e=>{e.preventDefault();chooseSaleSuggestion(rows[Number(el.dataset.saleSuggestIndex)]);}));
-    return rows;
-  }
-  function moveSaleSuggestion(delta){
-    const box=document.getElementById('saleSearchResults');if(!box||!box.classList.contains('show'))return false;
-    const els=[...box.querySelectorAll('[data-sale-suggest-index]')];if(!els.length)return false;
-    let i=Number(box.dataset.activeIndex||0);i=(i+delta+els.length)%els.length;box.dataset.activeIndex=String(i);
-    els.forEach((el,j)=>el.classList.toggle('active',j===i));els[i]?.scrollIntoView({block:'nearest'});return true;
+    return true;
   }
 
 
@@ -2134,22 +2177,20 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     document.getElementById('saleHistory')?.addEventListener('click',openSalesHistory);
 
     const search=document.getElementById('saleProductSearch');
-    search?.addEventListener('input',e=>{saleDraft.entryQuery=e.target.value;paintSaleSuggestions(e.target);});
-    search?.addEventListener('focus',e=>paintSaleSuggestions(e.target));
-    search?.addEventListener('blur',()=>setTimeout(()=>document.getElementById('saleSearchResults')?.classList.remove('show'),120));
+    search?.addEventListener('input',e=>{
+      // Kullanıcı her harf yazdığında ayrı liste açma; en yakın ürünü aynı kutuda tamamla.
+      delete e.target.dataset.inlineSuggestionId;delete e.target.dataset.inlineSuggestionType;
+      saleDraft.entryQuery=e.target.value;
+      applyInlineSaleAutocomplete(e.target);
+    });
     search?.addEventListener('keydown',e=>{
-      if(e.key==='ArrowDown'){if(moveSaleSuggestion(1))e.preventDefault();return;}
-      if(e.key==='ArrowUp'){if(moveSaleSuggestion(-1))e.preventDefault();return;}
-      if(e.key==='Escape'){document.getElementById('saleSearchResults')?.classList.remove('show');return;}
-      if(e.key!=='Enter')return;e.preventDefault();const v=e.target.value.trim();
+      if(e.key==='Escape'){e.preventDefault();e.target.value='';saleDraft.entryQuery='';delete e.target.dataset.inlineSuggestionId;delete e.target.dataset.inlineSuggestionType;return;}
+      if(e.key!=='Enter')return;
+      e.preventDefault();
+      const v=e.target.value.trim();
       if(!v&&saleDraft.lines.length){const t=saleTotals();const target=Math.abs(t.remain)<=0.01?document.getElementById('finalizeSale'):document.querySelector('[data-pay]');if(target){target.focus();return;}}
-      const box=document.getElementById('saleSearchResults');
-      const suggestions=saleLookupSuggestions(v);
-      if(box?.classList.contains('show')&&suggestions.length){const idx=Math.max(0,Math.min(suggestions.length-1,Number(box.dataset.activeIndex||0)));chooseSaleSuggestion(suggestions[idx]);return;}
-      const found=findUnifiedSaleEntry(v);
-      if(!found)return toast('Ürün bulunamadı. İsim/kod yazın (örn. C = Çeyrek, 34 = 22 Bilezik, ALY 1335 = barkodlu ürün).','err');
-      saleDraft.entrySelection=found;saleDraft.entryQuery=v;render();
-      setTimeout(()=>focusAndSelect(document.getElementById(found.type==='open'?'saleEntryAmount':'saleEntryPrice')),0);
+      if(!v)return;
+      if(!chooseInlineSaleSuggestion(e.target))toast('Ürün bulunamadı. C = Çeyrek, 34 = 22 Bilezik, ALY 1335 = barkodlu ürün.','err');
     });
 
     const calcEntryPayable=()=>{
