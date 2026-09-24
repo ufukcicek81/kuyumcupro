@@ -1,11 +1,12 @@
-# Asil Kuyumcu Pro v5.14
+# Asil Kuyumcu Pro v5.16
 
-Cari Ekstre ekranı Pusula tarzında yeniden düzenlendi.
+Mobil ekran ve klavye akışı düzeltmeleri.
 
-- Ekstre artık yatay kaydırma gerektirmeyen tek ekran tablo kullanır.
-- Üstte güncel Son Bakiye kartları gösterilir (HAS, TL ve diğer para birimleri).
-- Her hareket satırında o hareketten sonraki ilgili birim bakiyesi görünür.
-- Bir hareketin üzerine tıklanınca alttaki Son Durum alanı o tarihteki tüm cari bakiyeleri gösterir.
-- Yukarı/Aşağı oklarla hareketler arasında gezilebilir.
-- Seçili hareketin belge, açıklama, kaynak ve karşılık bilgisi tek ekranda gösterilir.
-- Seçili hareket detayından silme yapılabilir; bağlı stok/kasa ters kayıt mantığı korunur.
+- Mobilde sayfanın sağa/sola taşması engellendi.
+- Satış ekranı mobilde tek kolon akışına alındı.
+- Ürün tablosu mobilde önemli kolonlara indirildi.
+- Ödeme/Takas düğmeleri mobilde düzenli grid yapısına alındı.
+- Modal pencereler mobil ekran yüksekliğine göre çalışır.
+- Enter ile sonraki alana geçildiğinde aktif alan otomatik görünür bölgeye kaydırılır.
+- Sanal klavye açıldığında odaktaki alanın klavyenin arkasında kalmaması için VisualViewport desteği eklendi.
+- Barkod/stok araması sonrası ilgili Miktar/Birim Fiyat alanı otomatik ekrana getirilir.
