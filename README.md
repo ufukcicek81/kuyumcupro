@@ -1,12 +1,12 @@
-# Asil Kuyumcu Pro v5.3
+# Asil Kuyumcu Pro v5.4
 
-## Tanımlama silme güncellemesi
+## Banka cari NT/NO Pusula mantığı
 
-- Stok Kartları ekranına **Sil** düğmesi eklendi.
-- Tüm Tanımlamalar listelerinde mevcut Sil işlevi onay penceresi ve yetki kontrolüyle güçlendirildi.
-- Kullanımda olan stok kartı, bağlı barkodlu/açık stok veya alış kaydı varsa veri bütünlüğü için silinmez; önce bağlı kayıtlar temizlenir.
-- Kasa / Finans ekranındaki boş ve hareketsiz kasa hesaplarına da Sil düğmesi eklendi.
-- Banka ve POS silme işlemlerinde yönetici/tanımlama yetkisi kontrolü eklendi.
-- Silme işlemleri denetim kaydına yazılır.
-
-Mevcut gerçek stok, cari, toptancı ve hareket verileri korunur.
+- Banka hesapları Cari Hesaplar içinde cari kart olarak görünür.
+- Banka carisinde **NT - Nakit Tahsilat**: banka bakiyesi azalır, seçilen nakit kasa aynı tutarda artar.
+- Banka carisinde **NO - Nakit Ödeme**: seçilen nakit kasa azalır, banka bakiyesi aynı tutarda artar.
+- Bu virmanlarda **komisyon hesaplanmaz**. POS komisyonu, POS valöründe zaten düşülmüş net banka bakiyesinde kalır.
+- İşlem iki bağlı finans hareketiyle aynı belge numarasına yazılır.
+- Cari hareketi silinirse banka ve kasa etkisi birlikte geri alınır.
+- Mevcut banka hesapları otomatik olarak Cari Hesaplar içindeki Banka kartlarına bağlanır.
+- V5.3 stok/tanımlama silme, hurda cari-stok bağlantısı ve önceki tüm özellikler korunur.

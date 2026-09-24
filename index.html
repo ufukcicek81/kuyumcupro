@@ -601,6 +601,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch {}
   }
   ensureV5State();
+  ensureBankCariLinksV54();
   reconcileTransactionLedgerV5();
   save();
   let uiMode = state.settings.uiMode || 'pc';
@@ -904,6 +905,41 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     return {kind,id,account,name};
   }
 
+  function linkedBankForCari(c){
+    if(!c || c.type!=='Banka')return null;
+    return (state.bankAccounts||[]).find(x=>x.id===c.financeAccountId || x.customerId===c.id) || null;
+  }
+  function linkedPosForCari(c){
+    if(!c || c.type!=='POS')return null;
+    return (state.posAccounts||[]).find(x=>x.id===c.financeAccountId || x.customerId===c.id) || null;
+  }
+  function cariDisplayTlBalance(c){
+    const b=linkedBankForCari(c); if(b)return Number(b.balance||0);
+    const p=linkedPosForCari(c); if(p)return Number(p.balance||0);
+    return Number(c?.tlBalance||0);
+  }
+  function syncLinkedFinanceCariBalance(c){
+    if(!c)return;
+    const b=linkedBankForCari(c); if(b){c.tlBalance=Number(b.balance||0);return;}
+    const p=linkedPosForCari(c); if(p){c.tlBalance=Number(p.balance||0);}
+  }
+  function ensureBankCariLinksV54(){
+    state.meta=state.meta||{};
+    if(Number(state.meta.bankCariLinkVersion||0)>=1)return;
+    (state.bankAccounts||[]).forEach((b,i)=>{
+      let c=(state.customers||[]).find(x=>x.id===b.customerId) || (state.customers||[]).find(x=>x.type==='Banka' && (x.financeAccountId===b.id || String(x.name||'').toLocaleUpperCase('tr-TR').includes(String(b.bank||'').toLocaleUpperCase('tr-TR'))));
+      if(!c){
+        const cid=`BANK-CARI-${b.id||i}`;
+        c={id:cid,code:`BNK${String(i+1).padStart(3,'0')}`,name:`${b.bank||'BANKA'}${b.name?' / '+b.name:''}`,type:'Banka',accountingNature:'Varlık',branch:state.settings?.branch||'',phone:'',email:'',taxNo:'',address:'',city:'',country:'Türkiye',tlBalance:Number(b.balance||0),hasBalance:0,otherBalances:{},openingBalances:{TL:Number(b.balance||0)},financeAccountId:b.id};
+        state.customers.push(c);
+        const openingDoc=`BANKA-CARI-ACILIS-${b.id}`;
+        if(Number(b.balance||0)!==0 && !state.customerMoves.some(m=>m.sourceDocNo===openingDoc)) state.customerMoves.unshift({id:uid('CM'),customerId:c.id,period:state.activePeriod,date:now(),code:'DV',type:'DEVİR / AÇILIŞ',unit:String(b.currency||'TL').toUpperCase(),debit:Number(b.balance||0)>0?Number(b.balance||0):0,credit:Number(b.balance||0)<0?Math.abs(Number(b.balance||0)):0,description:'Banka cari açılış bakiyesi (finans hesabı ile eşitlendi)',user:'Sistem',sourceType:'openingBankCari',sourceDocNo:openingDoc});
+      }
+      c.type='Banka'; c.financeAccountId=b.id; b.customerId=c.id; syncLinkedFinanceCariBalance(c);
+    });
+    state.meta.bankCariLinkVersion=1;
+  }
+
   function normalizeInventoryName(v){
     return String(v||'').toLocaleUpperCase('tr-TR').replace(/İ/g,'I').replace(/Ş/g,'S').replace(/Ğ/g,'G').replace(/Ü/g,'U').replace(/Ö/g,'O').replace(/Ç/g,'C').trim();
   }
@@ -1147,7 +1183,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v5.3</small></div></div>
+        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v5.4</small></div></div>
         <div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off"></div><div class="nav">${navItems.map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div>
         <div class="sidebar-bottom">
           <div class="user-chip"><div class="avatar">${esc(session.name.split(' ').map(x=>x[0]).slice(0,2).join(''))}</div><div><strong>${esc(session.name)}</strong><div class="muted" style="font-size:12px">${esc(session.role)}</div></div></div>
@@ -1659,13 +1695,13 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function pageStocks(){
     const rows=state.stocks.filter(x=>x.period===state.activePeriod && x.status!=='Satıldı');
     let body=stockSummaryView(); if(stockView==='list') body=stockListView(rows); if(stockView==='cards') body=stockCardsView(); if(stockView==='labels') body=labelsView(rows); if(stockView==='moves') body=movementsView();
-    return `<div class="page-title"><div><h1>Stok Yönetimi</h1><p>Pusula düzeni: açık stok + barkodlu stok + hurda + kasa/POS tek merkezde.</p></div><span class="badge gold">V5.3 · Stok kartı + tüm tanımlamalarda güvenli silme · 25 Toptancı · Banka/POS/Havale</span></div>${stockHeaderTabs()}${body}`;
+    return `<div class="page-title"><div><h1>Stok Yönetimi</h1><p>Pusula düzeni: açık stok + barkodlu stok + hurda + kasa/POS tek merkezde.</p></div><span class="badge gold">V5.4 · Stok kartı + tüm tanımlamalarda güvenli silme · 25 Toptancı · Banka/POS/Havale</span></div>${stockHeaderTabs()}${body}`;
   }
 
   function customerCardsView(){
     const types=['Tümü','Müşteri','Toptancı','Banka','POS','Özel'];
     return `<div class="card" style="margin-top:14px"><div class="section-head"><h3>Cari Çağır</h3><span id="cariCardCount">${state.customers.length} cari</span></div><div class="filter-panel" style="grid-template-columns:minmax(260px,1fr) auto"><input id="cariCardSearch" class="input" autocomplete="off" placeholder="Cari / toptancı adı, hesap kodu, telefon veya tür yazın; Enter = Cari İşlem"><button class="btn btn-outline" id="cariCardClear">Temizle</button></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${types.map(t=>`<button class="btn ${cariTypeFilter===t?'btn-primary':'btn-outline'}" data-cari-type-filter="${t}">${t}</button>`).join('')}</div><div class="muted" style="margin-top:8px">Müşteriler ve <b>Toptancılar</b> aynı cari motorunda aranır; Toptancı filtresi Pusula tedarikçi hesaplarını gösterir.</div></div>
-    <div class="grid grid-3" id="cariCardGrid" style="margin-top:14px">${state.customers.map(c=>{const other=Object.entries(c.otherBalances||{}).filter(([,v])=>Math.abs(Number(v||0))>0.000001).map(([u,v])=>`<div class="summary-row"><span>${esc(u)} Bakiye</span><strong>${qty(Math.abs(v))} ${esc(u)} ${v>0?'Borç':'Alacak'}</strong></div>`).join('');const search=[c.name,c.code,c.phone,c.mobile,c.type,c.email].filter(Boolean).join(' ').toLocaleLowerCase('tr-TR');return `<div class="card" data-cari-card="${c.id}" data-cari-type="${esc(c.type||'')}" data-cari-search="${esc(search)}"><div class="section-head"><h3>${esc(c.name)}</h3><span class="badge ${c.type==='Toptancı'?'gold':'blue'}">${esc(c.type)}</span></div>${c.code?`<div class="muted" style="margin-bottom:8px">Hesap Kodu: <strong>${esc(c.code)}</strong></div>`:''}<div class="summary-row"><span>TL Bakiye</span><strong class="${c.tlBalance>0?'negative':c.tlBalance<0?'positive':''}">${money(Math.abs(c.tlBalance))} ${c.tlBalance>0?'Borç':c.tlBalance<0?'Alacak':''}</strong></div><div class="summary-row"><span>HAS Bakiye</span><strong class="${c.hasBalance<0?'negative':'positive'}">${qty(Math.abs(c.hasBalance))} HAS ${c.hasBalance<0?'Alacak':'Borç'}</strong></div>${other}<div style="display:flex;gap:8px;margin-top:14px"><button class="btn grow" data-cari-move="${c.id}">Cari İşlem</button><button class="btn btn-outline" data-cari-detail="${c.id}">Ekstre</button></div></div>`}).join('')}</div>`;
+    <div class="grid grid-3" id="cariCardGrid" style="margin-top:14px">${state.customers.map(c=>{const displayTl=cariDisplayTlBalance(c);const other=Object.entries(c.otherBalances||{}).filter(([,v])=>Math.abs(Number(v||0))>0.000001).map(([u,v])=>`<div class="summary-row"><span>${esc(u)} Bakiye</span><strong>${qty(Math.abs(v))} ${esc(u)} ${v>0?'Borç':'Alacak'}</strong></div>`).join('');const search=[c.name,c.code,c.phone,c.mobile,c.type,c.email].filter(Boolean).join(' ').toLocaleLowerCase('tr-TR');return `<div class="card" data-cari-card="${c.id}" data-cari-type="${esc(c.type||'')}" data-cari-search="${esc(search)}"><div class="section-head"><h3>${esc(c.name)}</h3><span class="badge ${c.type==='Toptancı'?'gold':'blue'}">${esc(c.type)}</span></div>${c.code?`<div class="muted" style="margin-bottom:8px">Hesap Kodu: <strong>${esc(c.code)}</strong></div>`:''}<div class="summary-row"><span>${c.type==='Banka'?'Banka Bakiyesi':'TL Bakiye'}</span><strong class="${c.type==='Banka'?'positive':displayTl>0?'negative':displayTl<0?'positive':''}">${money(Math.abs(displayTl))} ${c.type==='Banka'?'TL':displayTl>0?'Borç':displayTl<0?'Alacak':''}</strong></div><div class="summary-row"><span>HAS Bakiye</span><strong class="${c.hasBalance<0?'negative':'positive'}">${qty(Math.abs(c.hasBalance))} HAS ${c.hasBalance<0?'Alacak':'Borç'}</strong></div>${other}<div style="display:flex;gap:8px;margin-top:14px"><button class="btn grow" data-cari-move="${c.id}">Cari İşlem</button><button class="btn btn-outline" data-cari-detail="${c.id}">Ekstre</button></div></div>`}).join('')}</div>`;
   }
   function customerMovesCenterView(){
     const rows=state.customerMoves.filter(x=>x.period===state.activePeriod).slice().sort((a,b)=>b.date.localeCompare(a.date));
@@ -2429,6 +2465,39 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     state.financeMoves.unshift(rec);
     return rec;
   }
+
+  function createBankCashTransferForCari({move,customer,def,cashKey,amount,unit,description}){
+    const bank=linkedBankForCari(customer); if(!bank)return {ok:false,msg:'Bu banka carisine bağlı banka hesabı bulunamadı'};
+    const cash=accountByKey(cashKey); if(cash.kind!=='Kasa'||!cash.account)return {ok:false,msg:'Nakit kasa seçin'};
+    const cur=String(unit||bank.currency||'TL').toUpperCase();
+    if(String(bank.currency||'TL').toUpperCase()!==cur || String(cash.account.currency||'TL').toUpperCase()!==cur)return {ok:false,msg:'Banka ve kasa para birimi aynı olmalı'};
+    amount=Number(amount||0); if(amount<=0)return {ok:false,msg:'Tutar girin'};
+    const isWithdraw=String(def?.code)==='NT';
+    if(isWithdraw && Number(bank.balance||0)+.000001<amount)return {ok:false,msg:`Banka bakiyesi ${money(bank.balance||0)}. ${money(amount)} nakit tahsilat yapılamaz.`};
+    if(!isWithdraw && Number(cash.account.balance||0)+.000001<amount)return {ok:false,msg:`${cash.account.name} bakiyesi ${money(cash.account.balance||0)}. ${money(amount)} bankaya yatırılamaz.`};
+    const docNo=move.sourceDocNo||`BNK-${state.activePeriod}-${String(Date.now()).slice(-6)}`; move.sourceDocNo=docNo;
+    if(isWithdraw){bank.balance=Number(bank.balance||0)-amount;cash.account.balance=Number(cash.account.balance||0)+amount;}
+    else {cash.account.balance=Number(cash.account.balance||0)-amount;bank.balance=Number(bank.balance||0)+amount;}
+    syncLinkedFinanceCariBalance(customer);
+    const tlAmount=amount*currencyTlRate(cur,'buy');
+    const outRec={id:uid('FIN'),period:state.activePeriod,date:move.date,direction:'Çıkış',type:isWithdraw?'Bankadan Nakit Çekim':'Kasadan Bankaya Yatırma',accountKind:isWithdraw?'Banka':'Kasa',accountId:isWithdraw?bank.id:cash.id,accountName:isWithdraw?`${bank.bank} / ${bank.name}`:cash.name,amount:tlAmount,accountAmount:amount,accountCurrency:cur,tlAmount,customer:customer.name,customerId:customer.id,description:description||move.description||'',user:session.name,sourceCategory:'Banka / Nakit Virman',sourceType:'bankCashTransfer',sourceId:move.id,sourceDocNo:docNo};
+    const inRec={id:uid('FIN'),period:state.activePeriod,date:move.date,direction:'Giriş',type:isWithdraw?'Bankadan Nakit Tahsilat':'Bankaya Nakit Ödeme',accountKind:isWithdraw?'Kasa':'Banka',accountId:isWithdraw?cash.id:bank.id,accountName:isWithdraw?cash.name:`${bank.bank} / ${bank.name}`,amount:tlAmount,accountAmount:amount,accountCurrency:cur,tlAmount,customer:customer.name,customerId:customer.id,description:description||move.description||'',user:session.name,sourceCategory:'Banka / Nakit Virman',sourceType:'bankCashTransfer',sourceId:move.id,sourceDocNo:docNo};
+    state.financeMoves.unshift(inRec,outRec);
+    move.bankTransferImpact={bankId:bank.id,cashId:cash.id,direction:isWithdraw?'bankToCash':'cashToBank',amount,currency:cur};
+    registerTransactionV5(isWithdraw?'BANKA → KASA':'KASA → BANKA',docNo,`${customer.name} · ${money(amount)} ${cur} · komisyonsuz nakit virman`,{amountTl:tlAmount});
+    return {ok:true,bank,cash:cash.account};
+  }
+  function reverseBankCashTransferForCariMove(move){
+    const imp=move?.bankTransferImpact;if(!imp)return 0;
+    const bank=(state.bankAccounts||[]).find(x=>x.id===imp.bankId),cash=(state.cashAccounts||[]).find(x=>x.id===imp.cashId);if(!bank||!cash)return 0;
+    const amount=Number(imp.amount||0);
+    if(imp.direction==='bankToCash'){bank.balance=Number(bank.balance||0)+amount;cash.balance=Number(cash.balance||0)-amount;}
+    else {bank.balance=Number(bank.balance||0)-amount;cash.balance=Number(cash.balance||0)+amount;}
+    const c=(state.customers||[]).find(x=>x.id===move.customerId);syncLinkedFinanceCariBalance(c);
+    state.financeMoves=state.financeMoves.filter(f=>!(f.sourceType==='bankCashTransfer'&&f.sourceId===move.id));
+    const tx=(state.transactions||[]).find(x=>x.docNo===move.sourceDocNo);if(tx){tx.status='Ters Kayıt';tx.reversedAt=now();tx.reversedBy=session?.name||'Sistem';}
+    return 1;
+  }
   function reverseLinkedFinanceForCariMove(move){
     const linked=state.financeMoves.filter(f=>f.sourceType==='cariManual'&&f.sourceId===move.id);
     linked.forEach(reverseFinanceMove);
@@ -2550,12 +2619,21 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
         if(String(a.account.currency||'TL').toUpperCase()!==String(unit||'TL').toUpperCase())return toast('Cari birimi ile kasa/banka para birimi aynı olmalı','err');
         move.sourceDocNo=`CAR-${state.activePeriod}-${String(Date.now()).slice(-6)}`;
       }
-      applyCariBalance(c,unit,debit,credit);
-      state.customerMoves.unshift(move);
-      if(cariMoveNeedsFinance(def)){
-        const accountKey=document.getElementById('cmFinanceAccount').value;
-        const fm=createFinanceForCariMove({move,customer:c,def,accountKey,amount,unit,description:desc});
-        if(!fm){ applyCariBalance(c,unit,credit,debit); state.customerMoves=state.customerMoves.filter(x=>x.id!==move.id); return toast('Kasa hareketi oluşturulamadı','err'); }
+      const bankCariTransfer=c.type==='Banka' && cariMoveNeedsFinance(def);
+      if(bankCariTransfer){
+        const accountKey=document.getElementById('cmFinanceAccount')?.value||'';
+        move.sourceType='bankCashTransfer';
+        const r=createBankCashTransferForCari({move,customer:c,def,cashKey:accountKey,amount,unit,description:desc});
+        if(!r.ok)return toast(r.msg,'err');
+        state.customerMoves.unshift(move);
+      }else{
+        applyCariBalance(c,unit,debit,credit);
+        state.customerMoves.unshift(move);
+        if(cariMoveNeedsFinance(def)){
+          const accountKey=document.getElementById('cmFinanceAccount').value;
+          const fm=createFinanceForCariMove({move,customer:c,def,accountKey,amount,unit,description:desc});
+          if(!fm){ applyCariBalance(c,unit,credit,debit); state.customerMoves=state.customerMoves.filter(x=>x.id!==move.id); return toast('Kasa hareketi oluşturulamadı','err'); }
+        }
       }
       audit(`${c.name} cari hesabı: ${cariMoveLabel(def)} ${amount||''} ${def?.effect==='none'?'':unit}`,'Cari'); closeModal(); save(); render();
     },'İŞLEMİ KAYDET');
@@ -2563,18 +2641,20 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const scrapRows=()=> (state.scrapStocks||[]).filter(x=>x.period===state.activePeriod && (Number(x.amount||0)>0 || typeEl.value==='HG'));
     const fillScrap=()=>{const rows=scrapRows();scrapEl.innerHTML=rows.map(h=>`<option value="${h.id}">${esc(h.name)} · ${qty(h.amount||0)} GR · ${qty(h.hasWeight||0)} HAS</option>`).join('');syncScrapCalc(true);};
     const syncScrapCalc=(resetMilyem=false)=>{const h=(state.scrapStocks||[]).find(x=>x.id===scrapEl?.value);if(!h)return;if(resetMilyem||!Number(scrapMilyem.value||0))scrapMilyem.value=String(scrapPriceMilyem(h,typeEl.value)||'');const g=Number(scrapGram.value||0),m=Number(scrapMilyem.value||0),hh=g*m/1000;scrapHas.value=hh?qty(hh):'0';scrapAvailable.value=`${qty(h.amount||0)} GR · Fiziksel ${qty(h.hasWeight||0)} HAS · Ort. ${qty(Number(h.amount||0)>0?Number(h.hasWeight||0)/Number(h.amount||0)*1000:0)} milyem`;amountEl.value=hh||0;};
-    const fillFinance=()=>{const unit=unitEl.value;const rows=accountRowsForCurrency(unit).filter(x=>x.kind!=='POS');finEl.innerHTML=rows.map(x=>`<option value="${x.key}">${esc(x.name)} (${esc(x.currency)})</option>`).join('');const defKey=defaultAccountKeyForCurrency(unit);if(defKey&&rows.some(x=>x.key===defKey))finEl.value=defKey;};
+    const fillFinance=()=>{const unit=unitEl.value;let rows=accountRowsForCurrency(unit).filter(x=>x.kind!=='POS');if(c.type==='Banka')rows=rows.filter(x=>x.kind==='Kasa');finEl.innerHTML=rows.map(x=>`<option value="${x.key}">${esc(x.name)} (${esc(x.currency)})</option>`).join('');const defKey=c.type==='Banka'?(rows[0]?.key||''):defaultAccountKeyForCurrency(unit);if(defKey&&rows.some(x=>x.key===defKey))finEl.value=defKey;};
     const sync=()=>{
       const def=CARI_MOVE_TYPES.find(x=>x.code===typeEl.value)||CARI_MOVE_TYPES[0]; unitEl.value=def.defaultUnit||'HAS';
       const manual=def.effect==='manual'; sideEl.disabled=!manual && def.effect!=='none'; if(def.effect==='debit')sideEl.value='debit'; if(def.effect==='credit')sideEl.value='credit';
       const scrapMode=cariMoveIsScrap(def); amountEl.disabled=def.effect==='none' || def.special==='goldIn' || scrapMode; scrapWrap.style.display=scrapMode?'block':'none';
       if(scrapMode){unitEl.value='HAS';unitEl.disabled=true;sideEl.disabled=true;fillScrap();}else unitEl.disabled=false;
-      const linkedFinance=cariMoveNeedsFinance(def); finWrap.style.display=linkedFinance?'':'none'; if(linkedFinance)fillFinance();
+      const linkedFinance=cariMoveNeedsFinance(def); finWrap.style.display=linkedFinance?'':'none';
+      if(linkedFinance && c.type==='Banka'){const b=linkedBankForCari(c);if(b){unitEl.value=String(b.currency||'TL').toUpperCase();unitEl.disabled=true;}document.querySelector('#cmFinanceWrap label').textContent=def.code==='NT'?'Hedef Nakit Kasa':'Kaynak Nakit Kasa';fillFinance();}
+      else if(linkedFinance)fillFinance();
       if(def.special==='goldIn') hint.innerHTML='<strong>AG - ALTIN GİRİŞ:</strong> Kaydet dediğinizde Pusula tipindeki Mal Tanımı → Miktar → Ayar → HAS → İşçilik ekranına geçilir.';
       else if(def.code==='HC') hint.innerHTML='<strong>HC - HURDA ÇIKIŞ:</strong> Hurda türünü, gramı ve işlem milyemini girin. Örn. 14 HURDASI 575 milyem. Cari BORÇ otomatik HAS hesaplanır; hurda gramı stoktan düşer. Stok ortalama maliyeti ile 575 arasındaki fark Hurda Kâr/Zarar olarak rapora yansır.';
       else if(def.code==='HG') hint.innerHTML='<strong>HG - HURDA GİRİŞ:</strong> Hurda türünü, gramı ve işlem milyemini girin. Cari ALACAK otomatik HAS hesaplanır ve hurda stoğu artar.';
-      else if(def.code==='NT') hint.innerHTML='<strong>NT - NAKİT TAHSİLAT:</strong> Cari ALACAK çalışır ve seçtiğiniz TL kasaya/bankaya aynı anda GİRİŞ yazar. Örn. Sami Çiçek’ten 10.000 TL aldıysanız cari borcu 10.000 TL azalır, TL Kasa 10.000 TL artar.';
-      else if(def.code==='NO') hint.innerHTML='<strong>NO - NAKİT ÖDEME:</strong> Cari BORÇ çalışır ve seçtiğiniz TL kasadan/bankadan aynı anda ÇIKIŞ yazar.';
+      else if(def.code==='NT') hint.innerHTML=c.type==='Banka'?`<strong>NT - NAKİT TAHSİLAT / BANKADAN KASAYA:</strong> ${esc(c.name)} hesabındaki net bakiye zaten POS komisyonu düşülmüş tutardır. Girilen tutar bankadan <b>eksilir</b>, seçilen nakit kasaya aynı tutar <b>komisyonsuz</b> girer. Tekrar POS komisyonu hesaplanmaz.`:'<strong>NT - NAKİT TAHSİLAT:</strong> Cari ALACAK çalışır ve seçtiğiniz TL kasaya/bankaya aynı anda GİRİŞ yazar. Örn. Sami Çiçek’ten 10.000 TL aldıysanız cari borcu 10.000 TL azalır, TL Kasa 10.000 TL artar.';
+      else if(def.code==='NO') hint.innerHTML=c.type==='Banka'?`<strong>NO - NAKİT ÖDEME / KASADAN BANKAYA:</strong> Seçilen nakit kasadan tutar <b>eksilir</b>, ${esc(c.name)} banka hesabına aynı tutar <b>komisyonsuz</b> girer.`:'<strong>NO - NAKİT ÖDEME:</strong> Cari BORÇ çalışır ve seçtiğiniz TL kasadan/bankadan aynı anda ÇIKIŞ yazar.';
       else if(def.effect==='none') hint.innerHTML='<strong>AC - AÇIKLAMA:</strong> Bakiye değiştirmez; yalnız cari ekstreye açıklama satırı ekler.';
       else if(manual) hint.innerHTML='<strong>'+esc(cariMoveLabel(def))+':</strong> İşlemin BORÇ / ALACAK yönünü seçin. Kasa/stok etkisi olan işlem türleri ayrı bağlı belge mantığıyla işlenir.';
       else hint.innerHTML='<strong>'+esc(cariMoveLabel(def))+':</strong> Varsayılan cari etkisi <b>'+(def.effect==='debit'?'BORÇ':'ALACAK')+'</b> olarak ayarlandı.';
@@ -2589,8 +2669,8 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
   function removeManualCariMove(moveId){
     const m=state.customerMoves.find(x=>x.id===moveId); if(!m)return false; const c=state.customers.find(x=>x.id===m.customerId); if(c)applyCariBalance(c,m.unit,Number(m.credit||0),Number(m.debit||0));
-    const linkedFinanceCount=reverseLinkedFinanceForCariMove(m); const linkedScrapCount=reverseLinkedScrapForCariMove(m);
-    state.customerMoves=state.customerMoves.filter(x=>x.id!==moveId); audit(`${c?.name||'Cari'} hareketi silindi: ${m.type}${linkedFinanceCount?' · bağlı kasa hareketi geri alındı':''}${linkedScrapCount?' · hurda stok hareketi geri alındı':''}`,'Cari'); return true;
+    const bankTransferCount=reverseBankCashTransferForCariMove(m); const linkedFinanceCount=bankTransferCount?0:reverseLinkedFinanceForCariMove(m); const linkedScrapCount=reverseLinkedScrapForCariMove(m);
+    state.customerMoves=state.customerMoves.filter(x=>x.id!==moveId); audit(`${c?.name||'Cari'} hareketi silindi: ${m.type}${bankTransferCount?' · banka/kasa virmanı geri alındı':''}${linkedFinanceCount?' · bağlı kasa hareketi geri alındı':''}${linkedScrapCount?' · hurda stok hareketi geri alındı':''}`,'Cari'); return true;
   }
   function reverseTradeInFromStock(p){
     if(p.itemKind==='Hurda'){
