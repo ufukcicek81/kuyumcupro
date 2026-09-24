@@ -1,12 +1,8 @@
-# Asil Kuyumcu Pro v5.10
+# Asil Kuyumcu Pro v5.11
 
-Satış ekranı sadeleştirildi.
-
-- Barkodlu / Barkodsuz seçim düğmeleri kaldırıldı.
-- Tek Stok Kodu / Barkod alanı kullanılır.
-- Sistem girilen koda göre barkodlu ürünü veya açık stoğu otomatik bulur.
-- Örnek: `5` = Çeyrek açık stok, `34` = 22 Bilezik açık stok, `ALY 1335` = ALY0001335 barkodlu ürün.
-- Tek ürün giriş satırı: Ürün, Miktar, Birim, Ayar, Birim Fiyat, Ödenecek Tutar, Not, Ekle.
-- Satış tablosundaki gereksiz Tip kolonu kaldırıldı.
-- Hızlı kuyumcu işlemleri ve ödeme/takas alanı daha kompakt hale getirildi.
-- Enter ile klavye akışı korunur.
+- Satış ekranındaki Stok Kodu / Barkod alanına canlı stok arama eklendi.
+- C yazınca Çeyrek gibi eşleşen açık stoklar anında listelenir.
+- Ürün adı, stok kodu, Pusula kodu, barkod ve grup üzerinden arama yapılır.
+- Türkçe karakterler aramada sadeleştirilir: C -> Çeyrek, S -> Ş...
+- Yukarı/Aşağı ok ile sonuç seçilir, Enter ile çağrılır; mouse zorunlu değildir.
+- ALY 1335 kısa barkod desteği korunur.
