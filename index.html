@@ -418,6 +418,21 @@ body[data-ui-mode="pc"] .table-wrap{border-radius:7px}
 .pusula-sales-tabs{display:flex;gap:6px;flex-wrap:wrap;padding:8px;background:rgba(232,154,47,.08);border:1px solid rgba(232,154,47,.3);border-radius:8px;margin-bottom:10px}
 .pusula-sales-tabs .btn{min-width:96px;border:1px solid var(--line);font-weight:800}
 .pusula-sales-tabs .btn:hover{border-color:var(--pusula-orange)}
+
+.sale-quick-card{padding:10px 12px}
+.sale-quick-card .section-head{margin-bottom:8px}
+.sale-quick-card .trade-actions{gap:7px}
+.sale-quick-card .trade-actions .btn{min-height:40px;padding:8px 10px;font-size:13px}
+.sale-unified-editor{display:grid;grid-template-columns:minmax(190px,1.35fr) minmax(85px,.55fr) minmax(70px,.45fr) minmax(85px,.5fr) minmax(135px,.8fr) minmax(145px,.85fr) minmax(140px,1fr) auto;gap:8px;align-items:end}
+.sale-unified-editor .labelled{min-width:0}
+.sale-unified-editor .input,.sale-unified-editor .select{min-width:0;padding:10px 10px;font-variant-numeric:tabular-nums}
+.sale-unified-editor input[type=number]{text-align:right}
+.sale-entry-status{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;color:var(--muted);font-size:12px}
+.sale-entry-status .badge{font-size:11px}
+.sale-main-card{padding-bottom:12px}
+@media(max-width:1180px){.sale-unified-editor{grid-template-columns:repeat(4,minmax(0,1fr))}.sale-unified-editor .wide{grid-column:span 2}}
+@media(max-width:760px){.sale-unified-editor{grid-template-columns:repeat(2,minmax(0,1fr))}.sale-unified-editor .wide{grid-column:1/-1}.sale-unified-editor .btn{width:100%}}
+
 .sale-entry-switch{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding:9px 10px;border:1px solid var(--line);background:var(--panel-2);border-radius:8px}
 .sale-entry-switch label{font-weight:900;color:var(--gold-2)}
 .stock-tabs{background:var(--panel);border:1px solid var(--line);padding:8px;border-radius:8px}
@@ -888,7 +903,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const el=document.createElement('div'); el.className=`toast ${type}`; el.textContent=msg; toastRoot.appendChild(el);
     setTimeout(()=>el.remove(),2800);
   }
-  function newSaleDraft(){ return {customerId:'CASH', salesperson:'', lines:[], payments:[], discount:0, commission:0, returns:0, saleMode:'Barkodlu',editingDocNo:'',editingOriginalId:''}; }
+  function newSaleDraft(){ return {customerId:'CASH', salesperson:'', lines:[], payments:[], discount:0, commission:0, returns:0, saleMode:'Otomatik',entrySelection:null,entryQuery:'',editingDocNo:'',editingOriginalId:''}; }
   function newPurchaseDraft(){ return {supplierId:'CASH', invoiceNo:'', partyId:'', transactionType:'AG - ALTIN GİRİŞ', lines:[], paymentType:'Cari', accountKey:'', note:''}; }
   function activeStock(){ return state.stocks.filter(x=>x.period===state.activePeriod && x.status==='Stokta'); }
   function activeSales(){ return state.sales.filter(x=>x.period===state.activePeriod); }
@@ -1205,7 +1220,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v5.9</small></div></div>
+        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v5.10</small></div></div>
         <div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off"></div><div class="nav">${navItems.map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div>
         <div class="sidebar-bottom">
           <div class="user-chip"><div class="avatar">${esc(session.name.split(' ').map(x=>x[0]).slice(0,2).join(''))}</div><div><strong>${esc(session.name)}</strong><div class="muted" style="font-size:12px">${esc(session.role)}</div></div></div>
@@ -1297,7 +1312,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const snapshot=clone(s);
     modal('Satışı Düzelt',`<div class="notice"><strong>${esc(s.docNo||s.id)}</strong> bağlı stok, cari ve kasa hareketleri geri alınacak; fiş satış ekranına yeniden açılacak. Değişiklikten sonra tekrar <b>Satış Onayla</b> demelisiniz.</div>${saleDetailHtml(s)}`,()=>{
       const r=cancelSaleById(id);if(!r.ok)return toast(r.msg,'err');
-      saleDraft={customerId:snapshot.customerId||'CASH',salesperson:snapshot.salesperson||'',lines:clone(snapshot.lines||[]),payments:clone(snapshot.payments||[]),discount:Number(snapshot.discount||0),commission:Number(snapshot.commission||0),returns:Number(snapshot.returns||0),saleMode:(snapshot.lines||[]).some(l=>l.sourceType==='open')?'Barkodsuz':'Barkodlu',editingDocNo:snapshot.docNo||'',editingOriginalId:snapshot.id||''};
+      saleDraft={customerId:snapshot.customerId||'CASH',salesperson:snapshot.salesperson||'',lines:clone(snapshot.lines||[]),payments:clone(snapshot.payments||[]),discount:Number(snapshot.discount||0),commission:Number(snapshot.commission||0),returns:Number(snapshot.returns||0),saleMode:'Otomatik',entrySelection:null,entryQuery:'',editingDocNo:snapshot.docNo||'',editingOriginalId:snapshot.id||''};
       closeModal();route='sales';save();render();toast(`${snapshot.docNo||'Satış'} düzeltme için fişe açıldı`);
     },'DÜZELTMEYE AÇ');
   }
@@ -1483,69 +1498,67 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
 
   function pageSales(){
     const t=saleTotals();
-    const barcodeMode=saleDraft.saleMode!=='Barkodsuz';
-    return `<div class="page-title"><div><h1>Satış İşlemleri</h1><p>Pusula alışkanlığı: barkodlu/barkodsuz ürün, takas, altın/ziynet, hurda, döviz, kart, açık hesap ve çoklu ödeme aynı ekranda.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" id="saleHistory">Satış Geçmişi</button><button class="btn btn-outline" id="resetSale">Yeni Fiş</button></div></div>
-      <div class="card" style="margin-bottom:14px"><div class="section-head"><h3>Hızlı Kuyumcu İşlemleri</h3><span>Satış ekranından ayrılmadan · Enter = sonraki alan · son alanda Enter = kaydet</span></div><div class="trade-actions"><button class="btn buy" data-special-trade="Ziynet Alış">Ziynet Alış</button><button class="btn sell" data-special-trade="Ziynet Satış">Ziynet Satış</button><button class="btn buy" data-special-trade="Hurda Alış">Hurda Alış</button><button class="btn sell" data-special-trade="Hurda Satış">Hurda Satış</button><button class="btn buy btn-primary" data-special-trade="Döviz Alış">Döviz Alış</button><button class="btn sell btn-primary" data-special-trade="Döviz Satış">Döviz Satış</button></div></div>
+    const entry=saleDraft.entrySelection||null;
+    const barcodeItem=entry?.type==='barcode'?state.stocks.find(x=>x.id===entry.id):null;
+    const openItem=entry?.type==='open'?(state.openStocks||[]).find(x=>x.id===entry.id):null;
+    const selected=barcodeItem||openItem||null;
+    const isBarcode=!!barcodeItem;
+    const entryName=selected?(selected.name||selected.type||''):'';
+    const entryUnit=isBarcode?'GR':(openItem?.unit||'');
+    const entryAmount=isBarcode?stockAmount(barcodeItem):(openItem?(openItem.unit==='ADET'?1:Math.min(1,Number(openItem.amount||0))):'');
+    const entryKarat=isBarcode?(barcodeItem.purity||barcodeItem.karat||''):(openItem?.purity||'');
+    const entryPrice=isBarcode?(Number(barcodeItem.saleHas||stockCounterHas(barcodeItem)||0)*Number(state.prices.has.sell||0)):(openItem?openStockSaleDefaultPrice(openItem,1):0);
+    const entryPayable=isBarcode?entryPrice:(Number(entryAmount||0)*Number(entryPrice||0));
+    const entryCostHas=isBarcode?Number(barcodeItem.costHas||0):(openItem?openInventoryCostHas(openItem,Number(entryAmount||0)):0);
+    const entrySaleHas=entryPayable/Math.max(1,Number(state.prices.has.sell||1));
+    return `<div class="page-title"><div><h1>Satış</h1><p>Stok kodu veya barkodu yazın; sistem ürünün barkodlu ya da açık stok olduğunu otomatik bulur.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" id="saleHistory">Satış Geçmişi</button><button class="btn btn-outline" id="resetSale">Yeni Fiş</button></div></div>
+      <div class="card sale-quick-card" style="margin-bottom:12px"><div class="section-head"><h3>Hızlı İşlem</h3><span>Enter ile ilerle</span></div><div class="trade-actions"><button class="btn buy" data-special-trade="Ziynet Alış">Ziynet Alış</button><button class="btn sell" data-special-trade="Ziynet Satış">Ziynet Satış</button><button class="btn buy" data-special-trade="Hurda Alış">Hurda Alış</button><button class="btn sell" data-special-trade="Hurda Satış">Hurda Satış</button><button class="btn buy" data-special-trade="Döviz Alış">Döviz Alış</button><button class="btn sell" data-special-trade="Döviz Satış">Döviz Satış</button></div></div>
       <div class="sale-layout">
         <div>
-          <div class="card">
+          <div class="card sale-main-card">
             <div class="form-grid">
               <div class="labelled span-2"><label>Cari / Müşteri</label><select class="select" id="saleCustomer">${state.customers.filter(c=>['Müşteri','Toptancı','Özel'].includes(c.type)||c.id==='CASH').map(c=>`<option value="${c.id}" ${saleDraft.customerId===c.id?'selected':''}>${esc(c.code?c.code+' · ':'')}${esc(c.name)}</option>`).join('')}</select></div>
               <div class="labelled"><label>Satan Eleman</label><select class="select" id="salePerson"><option value="">Seçiniz</option>${state.users.filter(u=>u.permissions?.canSell!==false).map(u=>`<option ${saleDraft.salesperson===u.name?'selected':''}>${esc(u.name)}</option>`).join('')}</select></div>
-              <div class="labelled"><label>Barkod / Stok Kodu</label><input id="barcodeSearch" class="input" placeholder="Barkod okut veya ALY 1335 yazıp Enter" ${barcodeMode?'':'disabled'}></div>
+              <div class="labelled"><label>Stok Kodu / Barkod</label><input id="saleProductSearch" class="input" value="${esc(saleDraft.entryQuery||'')}" placeholder="5, 34, ALY 1335... Enter"></div>
             </div>
           </div>
 
-          <div class="card" style="margin-top:14px">
-            <div class="sale-entry-switch">
-              <label>Ürün Girişi:</label>
-              <button class="btn ${barcodeMode?'btn-primary':''}" data-sale-mode="Barkodlu">Barkodlu</button>
-              <button class="btn ${!barcodeMode?'btn-primary':''}" data-sale-mode="Barkodsuz">Barkodsuz / Açık Stok</button>
-              <span class="muted">Barkodsuz satış açık stoktan düşer; barkodlu satış tekil barkodu kapatır.</span>
+          <div class="card" style="margin-top:12px">
+            <div class="section-head"><h3>Ürün</h3><span>${selected?'Ürün bulundu':'Stok kodunu yazıp Enter'}</span></div>
+            <div class="sale-entry-status">${selected?`<span class="badge ${isBarcode?'blue':'gold'}">${isBarcode?'BARKODLU':'AÇIK STOK'}</span><strong>${esc(entryName)}</strong><span>${isBarcode?esc(barcodeItem.barcode||barcodeItem.code):`Kod ${esc(openItem.pusulaCode||openItem.productCode||'')}`}</span>${!isBarcode?`<span>Stok: ${qty(openItem.amount)} ${esc(openItem.unit||'')}</span>`:''}`:'<span>Örn. Çeyrek için <b>5</b>, 22 bilezik için <b>34</b>, barkodlu ürün için <b>ALY 1335</b>.</span>'}</div>
+            <div class="sale-unified-editor">
+              <div class="labelled wide"><label>Ürün</label><input id="saleEntryName" class="input" value="${esc(entryName)}" readonly></div>
+              <div class="labelled"><label>Miktar</label><input id="saleEntryAmount" class="input" type="number" step="${openItem?.unit==='ADET'?'1':'0.001'}" value="${selected?entryAmount:''}" ${!selected||isBarcode?'readonly':''}></div>
+              <div class="labelled"><label>Birim</label><input id="saleEntryUnit" class="input" value="${esc(entryUnit)}" readonly></div>
+              <div class="labelled"><label>Ayar</label><input id="saleEntryKarat" class="input" value="${esc(String(entryKarat||''))}" readonly></div>
+              <div class="labelled"><label>Birim Fiyat (TL)</label><input id="saleEntryPrice" class="input" type="number" step="0.01" value="${selected?Number(entryPrice||0).toFixed(2):''}" ${selected?'':'disabled'}></div>
+              <div class="labelled"><label>Ödenecek Tutar</label><input id="saleEntryPayable" class="input" type="number" step="0.01" value="${selected?Number(entryPayable||0).toFixed(2):''}" readonly></div>
+              <div class="labelled wide"><label>Not</label><input id="saleEntryNote" class="input" placeholder="İsteğe bağlı" ${selected?'':'disabled'}></div>
+              <button class="btn btn-primary" id="saleAddUnified" ${selected?'':'disabled'}>Ekle</button>
             </div>
-            ${barcodeMode?`
-            <div class="sale-line-editor">
-              <div class="labelled"><label>Barkodlu Stok</label><select id="saleStock" class="select"><option value="">Ürün seç</option>${activeStock().map(s=>`<option value="${s.id}">${esc(s.barcode||s.code)} — ${esc(s.name||s.type)} / ${qty(stockAmount(s))} GR</option>`).join('')}</select></div>
-              <div class="labelled"><label>Adet</label><input id="saleQty" class="input" type="number" value="1" readonly></div>
-              <div class="labelled"><label>Ayar</label><input id="saleKarat" class="input" value="" readonly></div>
-              <div class="labelled"><label>Birim Fiyat (TL)</label><input id="salePrice" class="input" type="number" step="0.01"></div>
-              <div class="labelled"><label>Ödenecek Tutar (TL)</label><input id="salePayable" class="input" type="number" step="0.01" readonly></div>
-              <div class="labelled"><label>Not</label><input id="saleNote" class="input" placeholder="opsiyonel"></div>
-              <button class="btn btn-primary" id="addSaleLine">Ekle</button>
-            </div>
-            <div id="saleStockPreview" class="sale-stock-preview" style="display:none"></div>`:`
-            <div class="sale-line-editor">
-              <div class="labelled"><label>Mal Tanımı</label><select id="saleOpenStock" class="select"><option value="">Açık stok seç</option>${(state.openStocks||[]).filter(x=>x.period===state.activePeriod&&Number(x.amount||0)>0).map(o=>`<option value="${o.id}">${esc(o.name)} — ${qty(o.amount)} ${esc(o.unit)}</option>`).join('')}</select></div>
-              <div class="labelled"><label>Miktar</label><input id="saleOpenAmount" class="input" type="number" step="0.001" value="1"></div>
-              <div class="labelled"><label>Birim</label><input id="saleOpenUnit" class="input" value="GR" readonly></div>
-              <div class="labelled"><label>Birim Fiyat (TL)</label><input id="saleOpenPrice" class="input" type="number" step="0.01"></div>
-              <div class="labelled"><label>Ödenecek Tutar (TL)</label><input id="saleOpenPayable" class="input" type="number" step="0.01" readonly></div>
-              <div class="labelled"><label>Banko / Not</label><input id="saleOpenNote" class="input"></div>
-              <button class="btn btn-primary" id="addOpenSaleLine">Ekle</button>
-            </div>`}
-            ${saleDraft.lines.length?`<div class="table-wrap"><table class="table" style="min-width:1120px"><thead><tr><th>Tip</th><th>Ürün Kodu / Ürün</th><th>Birim</th><th class="num">Gram / Adet</th><th>Ayar</th><th class="num">Birim Fiyat</th><th class="num">Ödenecek Tutar</th><th class="num">Satış HAS</th><th>Maliyet / Kâr</th><th></th></tr></thead><tbody>${saleDraft.lines.map((l,i)=>{const sh=Number(l.saleHas??((Number(l.total||0))/(Number(state.prices.has.sell||1))));const ch=Number(l.costHas||0);const ph=sh-ch;const display=Number(l.displayAmount??l.weight??l.qty??1);const unitPrice=Number(l.unitPrice??l.price??(display?Number(l.total||0)/display:Number(l.total||0)));const payable=Number(l.total??unitPrice*display);return `<tr><td><span class="badge ${l.sourceType==='open'?'gold':'blue'}">${l.sourceType==='open'?'BARKODSUZ':'BARKODLU'}</span></td><td><strong>${esc(l.code)}</strong><br><small>${esc(l.name)}</small></td><td>${esc(l.unit||'GR')}</td><td class="num"><strong>${qty(display)}</strong></td><td>${esc(l.karat||'')}</td><td class="num"><strong>${money(unitPrice)}</strong></td><td class="num"><strong>${money(payable)}</strong></td><td class="num"><strong>${qty(sh)} HAS</strong></td><td>${state.currentUser?.permissions?.showCost===false?'—':`<div class="sale-cost-mini">Maliyet <strong>${qty(ch)} HAS</strong><br>Kâr <strong class="${ph>=0?'positive':'negative'}">${qty(ph)} HAS</strong></div>`}</td><td><button class="btn btn-danger" data-remove-line="${i}">Sil</button></td></tr>`}).join('')}</tbody></table></div>`:`<div class="empty-state"><strong>Satış fişi boş</strong>Barkod okutun veya açık stoktan ürün ekleyin.</div>`}
+            ${selected?`<div class="sale-stock-preview" style="display:grid"><div class="metric"><span>${isBarcode?'Gram':'Stok Türü'}</span><strong>${isBarcode?qty(stockAmount(barcodeItem))+' GR':esc(openItem.unit||'')}</strong></div><div class="metric"><span>Satış HAS</span><strong>${qty(entrySaleHas)} HAS</strong></div><div class="metric"><span>Ayar</span><strong>${esc(String(entryKarat||''))}</strong></div>${state.currentUser?.permissions?.showCost===false?'':`<div class="metric"><span>Maliyet / Tahmini Kâr</span><strong>${qty(entryCostHas)} / ${qty(entrySaleHas-entryCostHas)} HAS</strong></div>`}</div>`:''}
+            ${saleDraft.lines.length?`<div class="table-wrap" style="margin-top:12px"><table class="table" style="min-width:1000px"><thead><tr><th>Ürün Kodu / Ürün</th><th>Birim</th><th class="num">Gram / Adet</th><th>Ayar</th><th class="num">Birim Fiyat</th><th class="num">Ödenecek Tutar</th><th class="num">Satış HAS</th><th>Maliyet / Kâr</th><th></th></tr></thead><tbody>${saleDraft.lines.map((l,i)=>{const sh=Number(l.saleHas??((Number(l.total||0))/(Number(state.prices.has.sell||1))));const ch=Number(l.costHas||0);const ph=sh-ch;const display=Number(l.displayAmount??l.weight??l.qty??1);const unitPrice=Number(l.unitPrice??l.price??(display?Number(l.total||0)/display:Number(l.total||0)));const payable=Number(l.total??unitPrice*display);return `<tr><td><strong>${esc(l.code)}</strong><br><small>${esc(l.name)}</small></td><td>${esc(l.unit||'GR')}</td><td class="num"><strong>${qty(display)}</strong></td><td>${esc(l.karat||'')}</td><td class="num"><strong>${money(unitPrice)}</strong></td><td class="num"><strong>${money(payable)}</strong></td><td class="num"><strong>${qty(sh)} HAS</strong></td><td>${state.currentUser?.permissions?.showCost===false?'—':`<div class="sale-cost-mini">Maliyet <strong>${qty(ch)} HAS</strong><br>Kâr <strong class="${ph>=0?'positive':'negative'}">${qty(ph)} HAS</strong></div>`}</td><td><button class="btn btn-danger" data-remove-line="${i}">Sil</button></td></tr>`}).join('')}</tbody></table></div>`:`<div class="empty-state" style="padding:18px"><strong>Satış fişi boş</strong>Stok kodu veya barkod yazıp Enter'a basın.</div>`}
           </div>
 
-          <div class="card" style="margin-top:14px">
-            <div class="section-head"><h3>Ödeme / Takas</h3><span>Aynı fişte birden fazla karşılık eklenebilir</span></div>
+          <div class="card" style="margin-top:12px">
+            <div class="section-head"><h3>Ödeme / Takas</h3><span>Kalan tutarı kapat</span></div>
             <div class="pusula-sales-tabs">
               ${['Nakit','Havale / EFT','Altın / Ziynet','Kredi Kartı','İskonto','Açık Hesap','Ödeme','Komisyon','İade'].map(x=>`<button class="btn" data-pay="${x}">${x}</button>`).join('')}
             </div>
-            <div class="table-wrap"><table class="table" style="min-width:760px"><thead><tr><th>Sıra</th><th>Tutar</th><th>Tür</th><th>Ödenecek / Alınan</th><th>Birim / Detay</th><th></th></tr></thead><tbody>${saleDraft.payments.map((p,i)=>`<tr><td>${i+1}</td><td class="num">${money(Math.abs(p.amount))}</td><td>${p.amount<0?'<span class="badge red">ÖDEME</span>':'<span class="badge green">TAHSİLAT / MAHSUP</span>'}</td><td>${esc(p.type)}</td><td>${esc(p.detail||p.currency||'TL')}</td><td><button class="btn btn-danger" data-remove-pay="${i}">Sil</button></td></tr>`).join('')||'<tr><td colspan="6">Henüz ödeme/takas satırı yok.</td></tr>'}</tbody></table></div>
+            ${saleDraft.payments.length?`<div class="table-wrap"><table class="table" style="min-width:700px"><thead><tr><th>#</th><th>Tutar</th><th>İşlem</th><th>Detay</th><th></th></tr></thead><tbody>${saleDraft.payments.map((p,i)=>`<tr><td>${i+1}</td><td class="num">${money(Math.abs(p.amount))}</td><td>${p.amount<0?'Ödeme':'Tahsilat / Mahsup'}</td><td>${esc(p.type)} · ${esc(p.detail||p.currency||'TL')}</td><td><button class="btn btn-danger" data-remove-pay="${i}">Sil</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="muted" style="padding-top:8px">Henüz ödeme/takas eklenmedi.</div>'}
           </div>
         </div>
 
         <aside class="card sale-summary">
           <div class="section-head"><h3>Satış Özeti</h3><span>${saleDraft.lines.length} kalem</span></div>
           <div class="summary-row"><span>Ürün Toplamı</span><strong>${money(t.gross)}</strong></div>
-          <div class="summary-row"><span>İskonto</span><strong class="negative">-${money(saleDraft.discount||0)}</strong></div>
-          <div class="summary-row"><span>İade</span><strong class="negative">-${money(saleDraft.returns||0)}</strong></div>
-          <div class="summary-row"><span>Komisyon</span><strong class="positive">+${money(saleDraft.commission||0)}</strong></div>
+          ${Number(saleDraft.discount||0)?`<div class="summary-row"><span>İskonto</span><strong class="negative">-${money(saleDraft.discount||0)}</strong></div>`:''}
+          ${Number(saleDraft.returns||0)?`<div class="summary-row"><span>İade</span><strong class="negative">-${money(saleDraft.returns||0)}</strong></div>`:''}
+          ${Number(saleDraft.commission||0)?`<div class="summary-row"><span>Komisyon</span><strong class="positive">+${money(saleDraft.commission||0)}</strong></div>`:''}
           <div class="summary-row"><span>Net Tutar</span><strong>${money(t.net)}</strong></div>
-          <div class="summary-row"><span>Toplam Ödenen / Mahsup</span><strong>${money(t.settled)}</strong></div>
-          <div class="summary-row total"><span>${t.remain<0?'Müşteriye Ödenecek':'Ödenecek Tutar'}</span><strong class="${Math.abs(t.remain)<0.01?'positive':'negative'}">${money(Math.abs(t.remain))}</strong></div>
+          <div class="summary-row"><span>Ödenen / Mahsup</span><strong>${money(t.settled)}</strong></div>
+          <div class="summary-row total"><span>${t.remain<0?'Müşteriye Ödenecek':'Kalan'}</span><strong class="${Math.abs(t.remain)<0.01?'positive':'negative'}">${money(Math.abs(t.remain))}</strong></div>
           <button class="btn btn-primary" id="finalizeSale" style="width:100%;margin-top:14px" ${saleDraft.lines.length?'':'disabled'}>Satış Onayla</button>
-          <div class="pusula-ribbon" style="margin-top:12px"><strong>TAKAS:</strong><span>Örn. 22 ayar bilezik sat + karşılığında çeyrek/hurda/USD al + kalan farkı nakit/kart/cari kapat.</span></div>
         </aside>
       </div>
       ${specialTradesTable()}`;
@@ -1844,7 +1857,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const root=typeof scope==='string'?document.querySelector(scope):scope;
     if(!root||root.dataset.enterFlowBound==='1')return;
     root.dataset.enterFlowBound='1';
-    const skipIds=new Set(options.skipIds||['barcodeSearch']);
+    const skipIds=new Set(options.skipIds||['barcodeSearch','saleProductSearch']);
     const focusables=()=>Array.from(root.querySelectorAll('input, select, textarea, button')).filter(el=>{
       if(el.disabled||el.hidden||el.type==='hidden'||el.tabIndex<0)return false;
       if(el.matches('[readonly]'))return false;
@@ -2034,65 +2047,68 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     return null;
   }
 
+  function findOpenSaleStockByLookup(value){
+    const q=normalizeSaleStockKey(value);if(!q)return null;
+    const list=(state.openStocks||[]).filter(x=>x.period===state.activePeriod&&Number(x.amount||0)>0);
+    let found=list.find(o=>[o.productCode,o.pusulaCode,o.name].some(v=>normalizeSaleStockKey(v)===q));
+    if(found)return found;
+    const starts=list.filter(o=>normalizeSaleStockKey(o.name).startsWith(q));
+    return starts.length===1?starts[0]:null;
+  }
+  function findUnifiedSaleEntry(value){
+    const barcode=findSaleStockByLookup(value);if(barcode)return {type:'barcode',id:barcode.id};
+    const open=findOpenSaleStockByLookup(value);if(open)return {type:'open',id:open.id};
+    return null;
+  }
+
+
   function bindSales(){
     document.querySelectorAll('[data-special-trade]').forEach(b=>b.addEventListener('click',()=>openSpecialTrade(b.dataset.specialTrade)));
     setTimeout(()=>{
-      const target=saleDraft.saleMode==='Barkodsuz'?document.getElementById('saleOpenStock'):document.getElementById('barcodeSearch');
+      let target=document.getElementById('saleProductSearch');
+      if(saleDraft.entrySelection?.type==='open')target=document.getElementById('saleEntryAmount');
+      if(saleDraft.entrySelection?.type==='barcode')target=document.getElementById('saleEntryPrice');
       if(target&&document.activeElement===document.body)focusAndSelect(target);
     },0);
-    document.querySelectorAll('[data-sale-mode]').forEach(b=>b.addEventListener('click',()=>{saleDraft.saleMode=b.dataset.saleMode;render();}));
     const cust=document.getElementById('saleCustomer'); cust?.addEventListener('change',e=>{saleDraft.customerId=e.target.value;});
     const person=document.getElementById('salePerson'); person?.addEventListener('change',e=>saleDraft.salesperson=e.target.value);
     document.getElementById('resetSale')?.addEventListener('click',()=>{saleDraft=newSaleDraft();render();});
     document.getElementById('saleHistory')?.addEventListener('click',openSalesHistory);
 
-    const stockSel=document.getElementById('saleStock');
-    stockSel?.addEventListener('change',e=>{
-      const s=state.stocks.find(x=>x.id===e.target.value);
-      const preview=document.getElementById('saleStockPreview');
-      if(s){
-        const saleHas=Number(s.saleHas||stockCounterHas(s)||0), costHas=Number(s.costHas||s.purchaseHas||0), profitHas=saleHas-costHas;
-        document.getElementById('saleKarat').value=s.purity||s.karat||'';
-        const unitTl=saleHas*state.prices.has.sell;
-        document.getElementById('salePrice').value=unitTl.toFixed(2);
-        const payable=document.getElementById('salePayable'); if(payable)payable.value=unitTl.toFixed(2);
-        if(preview){preview.style.display='grid';preview.innerHTML=`<div class="metric"><span>Gram</span><strong>${qty(stockAmount(s))} GR</strong></div><div class="metric"><span>Satış HAS (işçilik dahil)</span><strong>${qty(saleHas)} HAS</strong></div><div class="metric"><span>Ayar</span><strong>${esc(String(s.purity||s.karat||''))}</strong></div>${state.currentUser?.permissions?.showCost===false?'':`<div class="metric"><span>Maliyet / Kâr</span><strong>${qty(costHas)} / ${qty(profitHas)} HAS</strong></div>`}`;}
-      }else if(preview){preview.style.display='none';preview.innerHTML='';}
-    });
-    document.getElementById('salePrice')?.addEventListener('input',e=>{const q=Number(document.getElementById('saleQty')?.value||1);const payable=document.getElementById('salePayable');if(payable)payable.value=(Number(e.target.value||0)*q).toFixed(2);});
-
-    document.getElementById('barcodeSearch')?.addEventListener('keydown',e=>{
-      if(e.key!=='Enter') return; e.preventDefault(); const v=e.target.value.trim();
-      if(!v&&saleDraft.lines.length){
-        const t=saleTotals();
-        const target=Math.abs(t.remain)<=0.01?document.getElementById('finalizeSale'):document.querySelector('[data-pay]');
-        if(target){target.focus();return;}
-      }
-      const s=findSaleStockByLookup(v);
-      if(!s)return toast('Barkodlu stokta ürün bulunamadı. Örn: ALY 1335 veya ALY0001335','err'); if(stockSel){stockSel.value=s.id;stockSel.dispatchEvent(new Event('change'));document.getElementById('addSaleLine')?.click();}
-    });
-    document.getElementById('addSaleLine')?.addEventListener('click',()=>{
-      const s=state.stocks.find(x=>x.id===stockSel?.value); if(!s)return toast('Barkodlu ürün seçin','err'); const unitPrice=Number(document.getElementById('salePrice').value||0), itemQty=Number(document.getElementById('saleQty')?.value||1), total=unitPrice*itemQty; if(unitPrice<=0)return toast('Birim fiyat girin','err');
-      if(saleDraft.lines.some(l=>l.stockId===s.id))return toast('Bu barkod fişte zaten var','err');
-      saleDraft.lines.push({sourceType:'barcode',stockId:s.id,code:s.barcode||s.code,name:s.name||s.type,karat:String(s.purity||s.karat||''),weight:stockAmount(s),displayAmount:stockAmount(s),unit:'GR',qty:itemQty,unitPrice,price:unitPrice,total,costHas:Number(s.costHas||0),saleHas:total/Number(state.prices.has.sell||1),cost:Number(s.costHas||0)*state.prices.has.buy,note:document.getElementById('saleNote')?.value||''}); render();
+    const search=document.getElementById('saleProductSearch');
+    search?.addEventListener('input',e=>{saleDraft.entryQuery=e.target.value;});
+    search?.addEventListener('keydown',e=>{
+      if(e.key!=='Enter')return;e.preventDefault();const v=e.target.value.trim();
+      if(!v&&saleDraft.lines.length){const t=saleTotals();const target=Math.abs(t.remain)<=0.01?document.getElementById('finalizeSale'):document.querySelector('[data-pay]');if(target){target.focus();return;}}
+      const found=findUnifiedSaleEntry(v);
+      if(!found)return toast('Ürün bulunamadı. Açık stok kodu (örn. 5 / 34) veya barkod (örn. ALY 1335) yazın.','err');
+      saleDraft.entrySelection=found;saleDraft.entryQuery=v;render();
+      setTimeout(()=>focusAndSelect(document.getElementById(found.type==='open'?'saleEntryAmount':'saleEntryPrice')),0);
     });
 
-    const openSel=document.getElementById('saleOpenStock');
-    const refreshOpen=()=>{
-      const o=(state.openStocks||[]).find(x=>x.id===openSel?.value); if(!o)return; const amtEl=document.getElementById('saleOpenAmount'),unitEl=document.getElementById('saleOpenUnit'),priceEl=document.getElementById('saleOpenPrice');
-      if(unitEl)unitEl.value=o.unit||'GR'; if(amtEl){amtEl.step=o.unit==='ADET'?'1':'0.001';amtEl.value=o.unit==='ADET'?'1':Math.min(1,Number(o.amount||0)).toFixed(3);}
-      const unitPrice=openStockSaleDefaultPrice(o,1);
-      if(priceEl)priceEl.value=unitPrice.toFixed(2);
-      const payEl=document.getElementById('saleOpenPayable'); if(payEl)payEl.value=(unitPrice*Number(amtEl?.value||1)).toFixed(2);
+    const calcEntryPayable=()=>{
+      const price=Number(document.getElementById('saleEntryPrice')?.value||0),amount=Number(document.getElementById('saleEntryAmount')?.value||0),factor=saleDraft.entrySelection?.type==='open'?amount:1;
+      const pay=document.getElementById('saleEntryPayable');if(pay)pay.value=(price*factor).toFixed(2);
     };
-    openSel?.addEventListener('change',refreshOpen);
-    document.getElementById('saleOpenAmount')?.addEventListener('input',()=>{const amount=Number(document.getElementById('saleOpenAmount').value||0),unitPrice=Number(document.getElementById('saleOpenPrice')?.value||0),pay=document.getElementById('saleOpenPayable');if(pay)pay.value=(amount*unitPrice).toFixed(2);});
-    document.getElementById('saleOpenPrice')?.addEventListener('input',()=>{const amount=Number(document.getElementById('saleOpenAmount')?.value||0),unitPrice=Number(document.getElementById('saleOpenPrice')?.value||0),pay=document.getElementById('saleOpenPayable');if(pay)pay.value=(amount*unitPrice).toFixed(2);});
-    document.getElementById('addOpenSaleLine')?.addEventListener('click',()=>{
-      const o=(state.openStocks||[]).find(x=>x.id===openSel?.value); if(!o)return toast('Açık stok seçin','err'); const amount=Number(document.getElementById('saleOpenAmount').value||0), unitPrice=Number(document.getElementById('saleOpenPrice').value||0), total=amount*unitPrice;
-      if(amount<=0||amount>Number(o.amount||0)+0.0001)return toast('Açık stok miktarını kontrol edin','err'); if(unitPrice<=0)return toast('Birim fiyat girin','err');
-      const gram=o.unit==='ADET'?Number(o.zGram||0)*amount:amount, has=calcHas(gram,Number(o.purity||0));
-      saleDraft.lines.push({sourceType:'open',openStockId:o.id,code:o.pusulaCode||o.productCode,name:o.name,karat:String(o.purity||''),displayAmount:amount,unit:o.unit||'GR',weight:gram,hasWeight:has,qty:amount,unitPrice,price:unitPrice,total,saleHas:total/Number(state.prices.has.sell||1),costHas:openInventoryCostHas(o,amount),cost:openInventoryCostHas(o,amount)*state.prices.has.buy,note:document.getElementById('saleOpenNote')?.value||''}); render();
+    document.getElementById('saleEntryAmount')?.addEventListener('input',calcEntryPayable);
+    document.getElementById('saleEntryPrice')?.addEventListener('input',calcEntryPayable);
+    document.getElementById('saleAddUnified')?.addEventListener('click',()=>{
+      const sel=saleDraft.entrySelection;if(!sel)return toast('Önce stok kodu veya barkod çağırın','err');
+      const unitPrice=Number(document.getElementById('saleEntryPrice')?.value||0),note=document.getElementById('saleEntryNote')?.value||'';
+      if(unitPrice<=0)return toast('Birim fiyat girin','err');
+      if(sel.type==='barcode'){
+        const s=state.stocks.find(x=>x.id===sel.id);if(!s)return toast('Barkodlu ürün bulunamadı','err');
+        if(saleDraft.lines.some(l=>l.stockId===s.id))return toast('Bu barkod fişte zaten var','err');
+        const total=unitPrice;
+        saleDraft.lines.push({sourceType:'barcode',stockId:s.id,code:s.barcode||s.code,name:s.name||s.type,karat:String(s.purity||s.karat||''),weight:stockAmount(s),displayAmount:stockAmount(s),unit:'GR',qty:1,unitPrice,price:unitPrice,total,costHas:Number(s.costHas||0),saleHas:total/Number(state.prices.has.sell||1),cost:Number(s.costHas||0)*state.prices.has.buy,note});
+      }else{
+        const o=(state.openStocks||[]).find(x=>x.id===sel.id);if(!o)return toast('Açık stok bulunamadı','err');
+        const amount=Number(document.getElementById('saleEntryAmount')?.value||0),total=amount*unitPrice;
+        if(amount<=0||amount>Number(o.amount||0)+0.0001)return toast('Açık stok miktarını kontrol edin','err');
+        const gram=o.unit==='ADET'?Number(o.zGram||0)*amount:amount,has=calcHas(gram,Number(o.purity||0));
+        saleDraft.lines.push({sourceType:'open',openStockId:o.id,code:o.pusulaCode||o.productCode,name:o.name,karat:String(o.purity||''),displayAmount:amount,unit:o.unit||'GR',weight:gram,hasWeight:has,qty:amount,unitPrice,price:unitPrice,total,saleHas:total/Number(state.prices.has.sell||1),costHas:openInventoryCostHas(o,amount),cost:openInventoryCostHas(o,amount)*state.prices.has.buy,note});
+      }
+      saleDraft.entrySelection=null;saleDraft.entryQuery='';render();setTimeout(()=>focusAndSelect(document.getElementById('saleProductSearch')),0);
     });
 
     document.querySelectorAll('[data-remove-line]').forEach(b=>b.addEventListener('click',()=>{saleDraft.lines.splice(Number(b.dataset.removeLine),1);render();}));
@@ -2100,6 +2116,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     document.querySelectorAll('[data-remove-pay]').forEach(b=>b.addEventListener('click',()=>{saleDraft.payments.splice(Number(b.dataset.removePay),1);render();}));
     document.getElementById('finalizeSale')?.addEventListener('click',openSaleConfirm);
   }
+
 
   function paymentCurrencyOptions(){
     return ['TL','HAS','USD','EUR','GBP','CHF'].filter(cur=>cur==='TL'||cur==='HAS'||state.prices[String(cur).toLowerCase()]);
@@ -2118,7 +2135,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       const cur=document.getElementById('payCur').value,native=Number(document.getElementById('payNative').value||0),tl=Number(document.getElementById('payTl').value||0),key=document.getElementById('payAccount').value;
       if(native<=0||tl<=0)return toast('Miktar girin','err'); if(!key)return toast('Kasa / banka hesabı seçin','err');
       const a=accountByKey(key),isBank=a.kind==='Banka',actualType=isBank?(isOutgoing?'Havale / EFT Ödeme':'Havale / EFT Tahsilat'):type;
-      saleDraft.payments.push({type:actualType,amount:isOutgoing?-tl:tl,nativeAmount:native,currency:cur,accountKey:key,commissionRate:0,detail:`${qty(native)} ${cur} · ${isBank?'Havale / EFT — komisyonsuz':(isOutgoing?'ödeme':'tahsilat')}`}); closeModal();render();setTimeout(()=>{const t=saleTotals();const target=Math.abs(t.remain)<=0.01?document.getElementById('finalizeSale'):document.getElementById('barcodeSearch');focusAndSelect(target);},0);
+      saleDraft.payments.push({type:actualType,amount:isOutgoing?-tl:tl,nativeAmount:native,currency:cur,accountKey:key,commissionRate:0,detail:`${qty(native)} ${cur} · ${isBank?'Havale / EFT — komisyonsuz':(isOutgoing?'ödeme':'tahsilat')}`}); closeModal();render();setTimeout(()=>{const t=saleTotals();const target=Math.abs(t.remain)<=0.01?document.getElementById('finalizeSale'):document.getElementById('saleProductSearch');focusAndSelect(target);},0);
     },isOutgoing?'ÖDEME EKLE':'TAHSİLAT EKLE');
     const curEl=document.getElementById('payCur'),nativeEl=document.getElementById('payNative'),rateEl=document.getElementById('payRate'),tlEl=document.getElementById('payTl'),accEl=document.getElementById('payAccount'),hint=document.getElementById('payChannelHint');
     const sync=()=>{const cur=curEl.value,rate=currencyTlRate(cur,isOutgoing?'sell':'buy'),native=Number(nativeEl.value||0);rateEl.value=rate.toFixed(cur==='TL'?2:4);tlEl.value=(native*rate).toFixed(2);let opts=accountOptions(cur,false);if(forceBank)opts=opts.filter(x=>String(x.key).startsWith('Banka:'));accEl.innerHTML=opts.map(x=>`<option value="${x.key}">${esc(x.name)}</option>`).join('');syncHint();};
@@ -3123,7 +3140,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function openExchangeV5(){
     if(!v5Guard('canReturn'))return;const sales=(state.sales||[]).filter(s=>s.period===state.activePeriod&&s.status==='Tamamlandı'&&(s.lines||[]).some(l=>l.stockId));if(!sales.length)return toast('Değişime uygun satış bulunamadı','err');
     const repl=activeStock();if(!repl.length)return toast('Yeni ürün için barkodlu stok yok','err');
-    modal('Ürün Değişimi — Tek Fişte',`<div class="form-grid"><div class="labelled span-2"><label>Eski Satış</label><select id="exSale" class="select">${sales.map(s=>`<option value="${s.id}">${esc(s.docNo)} · ${esc(state.customers.find(c=>c.id===s.customerId)?.name||'Peşin')} · ${money(s.total||0)}</option>`).join('')}</select></div><div class="labelled span-2"><label>Geri Alınacak Ürün</label><select id="exOld" class="select"></select></div><div class="labelled span-2"><label>Verilecek Yeni Barkod</label><select id="exNew" class="select">${repl.map(s=>`<option value="${s.id}">${esc(s.barcode||s.code)} · ${esc(s.name)} · ${qty(stockAmount(s))} GR · ${qty(s.saleHas||0)} HAS</option>`).join('')}</select></div><div class="notice span-4"><b>İşleyiş:</b> Eski fişin stok/cari/kasa bağlantıları önce güvenli olarak geri alınır. Geri verilmeyen eski ürünler + yeni ürün aynı belge numarasıyla satış ekranına açılır. Önceki ödemeler yüklenir; farkı nakit/kart/HAS/cari ile kapatırsınız.</div></div>`,()=>{const s=state.sales.find(x=>x.id===document.getElementById('exSale').value),idx=Number(document.getElementById('exOld').value),n=state.stocks.find(x=>x.id===document.getElementById('exNew').value);if(!s||!n||!Number.isInteger(idx))return toast('Ürün seçimini kontrol edin','err');const snap=clone(s),r=cancelSaleById(s.id);if(!r.ok)return toast(r.msg,'err');const lines=(snap.lines||[]).filter((_,i)=>i!==idx);lines.push(saleLineFromStockV5(n));saleDraft={customerId:snap.customerId||'CASH',salesperson:snap.salesperson||session?.name||'',lines,payments:clone(snap.payments||[]),discount:Number(snap.discount||0),commission:Number(snap.commission||0),returns:0,saleMode:'Barkodlu',editingDocNo:snap.docNo||'',editingOriginalId:snap.id||''};registerTransactionV5('ÜRÜN DEĞİŞİMİ',`EXC-${state.activePeriod}-${String(Date.now()).slice(-6)}`,`${snap.docNo} değişim için fişe açıldı`,{relatedDocNo:snap.docNo});closeModal();route='sales';save();render();toast('Değişim fişe açıldı; fiyat farkını ödeme/takas bölümünden kapatın');},'DEĞİŞİMİ FİŞE AÇ');
+    modal('Ürün Değişimi — Tek Fişte',`<div class="form-grid"><div class="labelled span-2"><label>Eski Satış</label><select id="exSale" class="select">${sales.map(s=>`<option value="${s.id}">${esc(s.docNo)} · ${esc(state.customers.find(c=>c.id===s.customerId)?.name||'Peşin')} · ${money(s.total||0)}</option>`).join('')}</select></div><div class="labelled span-2"><label>Geri Alınacak Ürün</label><select id="exOld" class="select"></select></div><div class="labelled span-2"><label>Verilecek Yeni Barkod</label><select id="exNew" class="select">${repl.map(s=>`<option value="${s.id}">${esc(s.barcode||s.code)} · ${esc(s.name)} · ${qty(stockAmount(s))} GR · ${qty(s.saleHas||0)} HAS</option>`).join('')}</select></div><div class="notice span-4"><b>İşleyiş:</b> Eski fişin stok/cari/kasa bağlantıları önce güvenli olarak geri alınır. Geri verilmeyen eski ürünler + yeni ürün aynı belge numarasıyla satış ekranına açılır. Önceki ödemeler yüklenir; farkı nakit/kart/HAS/cari ile kapatırsınız.</div></div>`,()=>{const s=state.sales.find(x=>x.id===document.getElementById('exSale').value),idx=Number(document.getElementById('exOld').value),n=state.stocks.find(x=>x.id===document.getElementById('exNew').value);if(!s||!n||!Number.isInteger(idx))return toast('Ürün seçimini kontrol edin','err');const snap=clone(s),r=cancelSaleById(s.id);if(!r.ok)return toast(r.msg,'err');const lines=(snap.lines||[]).filter((_,i)=>i!==idx);lines.push(saleLineFromStockV5(n));saleDraft={customerId:snap.customerId||'CASH',salesperson:snap.salesperson||session?.name||'',lines,payments:clone(snap.payments||[]),discount:Number(snap.discount||0),commission:Number(snap.commission||0),returns:0,saleMode:'Otomatik',entrySelection:null,entryQuery:'',editingDocNo:snap.docNo||'',editingOriginalId:snap.id||''};registerTransactionV5('ÜRÜN DEĞİŞİMİ',`EXC-${state.activePeriod}-${String(Date.now()).slice(-6)}`,`${snap.docNo} değişim için fişe açıldı`,{relatedDocNo:snap.docNo});closeModal();route='sales';save();render();toast('Değişim fişe açıldı; fiyat farkını ödeme/takas bölümünden kapatın');},'DEĞİŞİMİ FİŞE AÇ');
     const saleEl=document.getElementById('exSale'),oldEl=document.getElementById('exOld');const refresh=()=>{const s=state.sales.find(x=>x.id===saleEl.value);oldEl.innerHTML=(s?.lines||[]).map((l,i)=>l.stockId?`<option value="${i}">${esc(l.code)} · ${esc(l.name)} · ${money(l.total||0)}</option>`:'').join('');};saleEl.addEventListener('change',refresh);refresh();
   }
   function openCustomerReturnV5(){
