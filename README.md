@@ -1,11 +1,10 @@
-# Asil Kuyumcu Pro v5.12
+# Asil Kuyumcu Pro v5.13
 
-## Satış stok araması sadeleştirildi
+Cari işlem akışı düzenlendi.
 
-- Satış ekranında stok ararken açılan sonuç listesi tamamen kaldırıldı.
-- Yazılan harfe göre en yakın stok doğrudan aynı arama kutusunda otomatik tamamlanır.
-- Örnek: `C` yazınca kutu `ÇEYREK` olarak tamamlanır ve kalan kısmı seçili gelir.
-- Yazmaya devam edersen seçili kısım yeni harfle değişir.
-- Enter ile kutudaki öneri seçilir ve ürün girişine geçilir.
-- `34` ve `ALY 1335` gibi Pusula kısa kod aramaları aynen çalışır.
-- Ayrı popup/dropdown sonuç ekranı açılmaz.
+- Cari işlem formunda son adım artık doğrudan kayıt yapmaz; önce **İşlem Özeti** açılır.
+- Özette cari, işlem türü, tutar/kur/karşılık, BORÇ-ALACAK, kasa-banka ve açıklama kontrol edilir.
+- Özette **KAYDET** denince gerçek işlem oluşturulur.
+- Kayıt sonrası Cari Hesaplar ana sayfasına dönmez; **aynı cari hesabının işlem penceresi yeniden açılır**.
+- Böylece aynı müşteri/toptancı üzerinde peş peşe farklı cari işlemleri mouse kullanmadan yapılabilir.
+- Enter ile alan ilerletme korunur; işlem sonunda İŞLEM ÖZETİ butonuna gelip Enter ile özet açılır.
