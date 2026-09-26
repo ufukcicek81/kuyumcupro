@@ -1,5 +1,8 @@
-# Asil Kuyumcu Pro v5.18
+# Asil Kuyumcu Pro v5.19
 
-- Satış ekranı PC/notebook çözünürlüklerinde yana taşmayacak şekilde sıkılaştırıldı.
-- Ziynet/Hurda alış-satışta varsayılan cari PEŞİN MÜŞTERİ oldu; AÇIKTAN / CARİSİZ seçeneği eklendi.
-- KOLYE 585, KÜPE 333, KELEPÇE 585 gibi eski sürümlerde otomatik türemiş gereksiz stok kartları bir defaya mahsus temizlenir. Fiziksel barkodlu stok ürünleri silinmez.
+- Satış ekranı tek sayfaya daha yakın, daha kompakt bir düzende yeniden toplandı.
+- Satış başlığı, hızlı işlem düğmeleri, cari/personel/stok arama alanları tek üst kartta birleştirildi.
+- Satış ekranının altındaki ek özel işlem listesi kaldırıldı; böylece ana satış akışı için sayfa yüksekliği küçültüldü.
+- Ödeme / Takas bölümü ve Satış Özeti sıkılaştırıldı; masaüstünde scroll ihtiyacı azaltıldı.
+- Klavye akışı görünür şekilde sadeleştirildi: stok kodu -> fiyat -> not -> ekle -> ödeme tipi -> satış onayla.
+- Var olan Enter ile ilerleme mantığı korunarak mouse ihtiyacı azaltıldı.
