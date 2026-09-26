@@ -1072,7 +1072,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const el=document.createElement('div'); el.className=`toast ${type}`; el.textContent=msg; toastRoot.appendChild(el);
     setTimeout(()=>el.remove(),2800);
   }
-  function newSaleDraft(){ return {customerId:'CASH', salesperson:'', lines:[], payments:[], discount:0, commission:0, returns:0, saleMode:'Otomatik',entrySelection:null,entryQuery:'',editingDocNo:'',editingOriginalId:''}; }
+  function newSaleDraft(){ return {customerId:'CASH', salesperson:'', lines:[], payments:[], returnItems:[], discount:0, commission:0, returns:0, saleMode:'Otomatik',entrySelection:null,entryQuery:'',editingDocNo:'',editingOriginalId:''}; }
   function newPurchaseDraft(){ return {supplierId:'CASH', invoiceNo:'', partyId:'', transactionType:'AG - ALTIN GİRİŞ', lines:[], paymentType:'Cari', accountKey:'', note:''}; }
   function activeStock(){ return state.stocks.filter(x=>x.period===state.activePeriod && x.status==='Stokta'); }
   function activeSales(){ return state.sales.filter(x=>x.period===state.activePeriod); }
@@ -1389,7 +1389,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v6.1</small></div></div>
+        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v6.2</small></div></div>
         <div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off"></div><div class="nav">${navItems.map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div>
         <div class="sidebar-bottom">
           <div class="user-chip"><div class="avatar">${esc(session.name.split(' ').map(x=>x[0]).slice(0,2).join(''))}</div><div><strong>${esc(session.name)}</strong><div class="muted" style="font-size:12px">${esc(session.role)}</div></div></div>
@@ -1471,7 +1471,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const c=state.customers.find(x=>x.id===s.customerId);
     const lines=(s.lines||[]).map(l=>`<tr><td>${esc(l.code||'')}</td><td>${esc(l.name||'')}</td><td class="num">${qty(l.displayAmount??l.weight??l.qty??1)} ${esc(l.unit||'')}</td><td class="num">${money(l.unitPrice??l.price??0)}</td><td class="num"><strong>${money(l.total||0)}</strong></td><td class="num">${qty(l.saleHas||0)} HAS</td></tr>`).join('');
     const pays=(s.payments||[]).map(p=>`<tr><td>${esc(p.type)}</td><td>${esc(p.detail||p.currency||'TL')}</td><td class="num">${money(Math.abs(Number(p.amount||0)))}</td></tr>`).join('');
-    return `<div class="summary-row"><span>Belge</span><strong>${esc(s.docNo||s.id)}</strong></div><div class="summary-row"><span>Tarih</span><strong>${trDate(s.date)}</strong></div><div class="summary-row"><span>Cari</span><strong>${esc(c?.name||'Peşin Müşteri')}</strong></div><div class="summary-row"><span>Personel</span><strong>${esc(s.salesperson||'')}</strong></div><div class="table-wrap" style="margin-top:12px"><table class="table"><thead><tr><th>Kod</th><th>Ürün</th><th class="num">Gram/Adet</th><th class="num">Birim Fiyat</th><th class="num">Ödenecek</th><th class="num">Satış HAS</th></tr></thead><tbody>${lines||'<tr><td colspan="6">Ürün satırı yok.</td></tr>'}</tbody></table></div><div class="table-wrap" style="margin-top:12px"><table class="table"><thead><tr><th>Ödeme / Takas</th><th>Detay</th><th class="num">TL Karşılığı</th></tr></thead><tbody>${pays||'<tr><td colspan="3">Ödeme satırı yok.</td></tr>'}</tbody></table></div><div class="summary-row total"><span>Toplam</span><strong>${money(s.total||0)}</strong></div>`;
+    return `<div class="summary-row"><span>Belge</span><strong>${esc(s.docNo||s.id)}</strong></div><div class="summary-row"><span>Tarih</span><strong>${trDate(s.date)}</strong></div><div class="summary-row"><span>Cari</span><strong>${esc(c?.name||'Peşin Müşteri')}</strong></div><div class="summary-row"><span>Personel</span><strong>${esc(s.salesperson||'')}</strong></div><div class="table-wrap" style="margin-top:12px"><table class="table"><thead><tr><th>Kod</th><th>Ürün</th><th class="num">Gram/Adet</th><th class="num">Birim Fiyat</th><th class="num">Ödenecek</th><th class="num">Satış HAS</th></tr></thead><tbody>${lines||'<tr><td colspan="6">Ürün satırı yok.</td></tr>'}</tbody></table></div><div class="table-wrap" style="margin-top:12px"><table class="table"><thead><tr><th>Ödeme / Takas</th><th>Detay</th><th class="num">TL Karşılığı</th></tr></thead><tbody>${pays||'<tr><td colspan="3">Ödeme satırı yok.</td></tr>'}</tbody></table></div>${(s.returnItems||[]).length?`<div class="table-wrap" style="margin-top:12px"><table class="table"><thead><tr><th>İade Ürün</th><th>Kaynak</th><th class="num">Tutar</th></tr></thead><tbody>${(s.returnItems||[]).map(r=>`<tr><td>${esc(r.itemCode||'')} · ${esc(r.itemName||'')}</td><td>${r.kind==='barcode'?`Eski satış ${esc(r.originalSaleDoc||'')}`:'Barkodsuz stok'}</td><td class="num">-${money(r.amount||0)}</td></tr>`).join('')}</tbody></table></div>`:''}<div class="summary-row total"><span>Toplam</span><strong>${money(s.total||0)}</strong></div>`;
   }
   function viewSaleRecord(id){
     const s=state.sales.find(x=>x.id===id);if(!s)return toast('Satış bulunamadı','err');
@@ -1482,7 +1482,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const snapshot=clone(s);
     modal('Satışı Düzelt',`<div class="notice"><strong>${esc(s.docNo||s.id)}</strong> bağlı stok, cari ve kasa hareketleri geri alınacak; fiş satış ekranına yeniden açılacak. Değişiklikten sonra tekrar <b>Satış Onayla</b> demelisiniz.</div>${saleDetailHtml(s)}`,()=>{
       const r=cancelSaleById(id);if(!r.ok)return toast(r.msg,'err');
-      saleDraft={customerId:snapshot.customerId||'CASH',salesperson:snapshot.salesperson||'',lines:clone(snapshot.lines||[]),payments:clone(snapshot.payments||[]),discount:Number(snapshot.discount||0),commission:Number(snapshot.commission||0),returns:Number(snapshot.returns||0),saleMode:'Otomatik',entrySelection:null,entryQuery:'',editingDocNo:snapshot.docNo||'',editingOriginalId:snapshot.id||''};
+      saleDraft={customerId:snapshot.customerId||'CASH',salesperson:snapshot.salesperson||'',lines:clone(snapshot.lines||[]),payments:clone(snapshot.payments||[]),returnItems:clone(snapshot.returnItems||[]),discount:Number(snapshot.discount||0),commission:Number(snapshot.commission||0),returns:Number(snapshot.returns||0),saleMode:'Otomatik',entrySelection:null,entryQuery:'',editingDocNo:snapshot.docNo||'',editingOriginalId:snapshot.id||''};
       closeModal();route='sales';save();render();toast(`${snapshot.docNo||'Satış'} düzeltme için fişe açıldı`);
     },'DÜZELTMEYE AÇ');
   }
@@ -1495,7 +1495,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const body=`<div class="toolbar"><input id="saleHistSearch" class="input search" placeholder="Belge, müşteri, barkod veya personel ara..."></div><div class="table-wrap"><table class="table" style="min-width:900px"><thead><tr><th>Belge</th><th>Tarih</th><th>Müşteri</th><th>Personel</th><th class="num">Toplam</th><th>İşlem</th></tr></thead><tbody id="saleHistBody"></tbody></table></div><div class="notice" style="margin-top:12px">Düzeltme, eski fişi güvenli şekilde geri alıp aynı belge numarasıyla satış ekranına yeniden açar. Tekrar onaylandığında stok/cari/kasa bağlantıları yeniden oluşturulur.</div>`;
     modal('Satış Geçmişi',body,null,'Kapat');
     const tb=document.getElementById('saleHistBody'),q=document.getElementById('saleHistSearch');
-    const draw=()=>{const term=String(q?.value||'').toLocaleUpperCase('tr-TR').trim();const filtered=rows.filter(s=>{const c=state.customers.find(x=>x.id===s.customerId);const hay=[s.docNo,c?.name,s.salesperson,...(s.lines||[]).flatMap(l=>[l.code,l.name])].join(' ').toLocaleUpperCase('tr-TR');return !term||hay.includes(term);});tb.innerHTML=filtered.map(s=>`<tr><td><strong>${esc(s.docNo||s.id)}</strong></td><td>${trDate(s.date)}</td><td>${esc(state.customers.find(c=>c.id===s.customerId)?.name||'Peşin')}</td><td>${esc(s.salesperson||'')}</td><td class="num"><strong>${money(s.total||0)}</strong></td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-outline" data-sale-view="${s.id}">Gör</button><button class="btn btn-primary" data-sale-edit="${s.id}">Düzelt</button><button class="btn btn-danger" data-sale-cancel="${s.id}">İptal</button></div></td></tr>`).join('')||'<tr><td colspan="6">Satış bulunamadı.</td></tr>';document.querySelectorAll('[data-sale-view]').forEach(b=>b.onclick=()=>viewSaleRecord(b.dataset.saleView));document.querySelectorAll('[data-sale-edit]').forEach(b=>b.onclick=()=>reopenSaleForEdit(b.dataset.saleEdit));document.querySelectorAll('[data-sale-cancel]').forEach(b=>b.onclick=()=>cancelSaleFromHistory(b.dataset.saleCancel));};
+    const draw=()=>{const term=String(q?.value||'').toLocaleUpperCase('tr-TR').trim();const filtered=rows.filter(s=>{const c=state.customers.find(x=>x.id===s.customerId);const hay=[s.docNo,c?.name,s.salesperson,...(s.lines||[]).flatMap(l=>[l.code,l.name]),...(s.returnItems||[]).flatMap(r=>[r.itemCode,r.itemName,r.originalSaleDoc])].join(' ').toLocaleUpperCase('tr-TR');return !term||hay.includes(term);});tb.innerHTML=filtered.map(s=>`<tr><td><strong>${esc(s.docNo||s.id)}</strong></td><td>${trDate(s.date)}</td><td>${esc(state.customers.find(c=>c.id===s.customerId)?.name||'Peşin')}</td><td>${esc(s.salesperson||'')}</td><td class="num"><strong>${money(s.total||0)}</strong></td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-outline" data-sale-view="${s.id}">Gör</button><button class="btn btn-primary" data-sale-edit="${s.id}">Düzelt</button><button class="btn btn-danger" data-sale-cancel="${s.id}">İptal</button></div></td></tr>`).join('')||'<tr><td colspan="6">Satış bulunamadı.</td></tr>';document.querySelectorAll('[data-sale-view]').forEach(b=>b.onclick=()=>viewSaleRecord(b.dataset.saleView));document.querySelectorAll('[data-sale-edit]').forEach(b=>b.onclick=()=>reopenSaleForEdit(b.dataset.saleEdit));document.querySelectorAll('[data-sale-cancel]').forEach(b=>b.onclick=()=>cancelSaleFromHistory(b.dataset.saleCancel));};
     q?.addEventListener('input',draw);draw();
   }
 
@@ -1719,7 +1719,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
             <div class="pusula-sales-tabs">
               ${['Nakit','Havale / EFT','Altın / Ziynet','Kredi Kartı','İskonto','Açık Hesap','Ödeme','Komisyon','İade'].map(x=>`<button class="btn" data-pay="${x}">${x}</button>`).join('')}
             </div>
-            ${saleDraft.payments.length?`<div class="table-wrap" style="margin-top:10px"><table class="table" style="min-width:700px"><thead><tr><th>#</th><th>Tutar</th><th>İşlem</th><th>Detay</th><th></th></tr></thead><tbody>${saleDraft.payments.map((p,i)=>`<tr><td>${i+1}</td><td class="num">${money(Math.abs(p.amount))}</td><td>${p.amount<0?'Ödeme':'Tahsilat / Mahsup'}</td><td>${esc(p.type)} · ${esc(p.detail||p.currency||'TL')}</td><td><button class="btn btn-danger" data-remove-pay="${i}">Sil</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="muted" style="padding-top:10px">Henüz ödeme/takas eklenmedi.</div>'}
+            ${saleDraft.payments.length?`<div class="table-wrap" style="margin-top:10px"><table class="table" style="min-width:700px"><thead><tr><th>#</th><th>Tutar</th><th>İşlem</th><th>Detay</th><th></th></tr></thead><tbody>${saleDraft.payments.map((p,i)=>`<tr><td>${i+1}</td><td class="num">${money(Math.abs(p.amount))}</td><td>${p.amount<0?'Ödeme':'Tahsilat / Mahsup'}</td><td>${esc(p.type)} · ${esc(p.detail||p.currency||'TL')}</td><td><button class="btn btn-danger" data-remove-pay="${i}">Sil</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="muted" style="padding-top:10px">Henüz ödeme/takas eklenmedi.</div>'}${(saleDraft.returnItems||[]).length?`<div class="table-wrap" style="margin-top:8px"><table class="table" style="min-width:700px"><thead><tr><th>İade</th><th>Miktar</th><th>Kaynak</th><th class="num">Mahsup Tutarı</th><th></th></tr></thead><tbody>${(saleDraft.returnItems||[]).map((r,i)=>`<tr><td><strong>${esc(r.itemName||'Ürün')}</strong><br><small>${esc(r.itemCode||'')}</small></td><td>${qty(r.quantity||1)} ${esc(r.unit||'')}</td><td>${r.kind==='barcode'?`Eski satış ${esc(r.originalSaleDoc||'')}`:'Barkodsuz stok'}</td><td class="num"><strong>-${money(r.amount||0)}</strong></td><td><button class="btn btn-danger" data-remove-return="${i}">Sil</button></td></tr>`).join('')}</tbody></table></div>`:''}
             <div class="sales-extra-note">Klavye akışı: Stok kodu → Enter · Fiyat → Enter · Not → Enter · Ekle → Enter · Ödeme tipi → Enter · Satış Onayla → Enter</div>
           </div>
         </div>
@@ -2523,6 +2523,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     document.querySelectorAll('[data-remove-line]').forEach(b=>b.addEventListener('click',()=>{saleDraft.lines.splice(Number(b.dataset.removeLine),1);render();}));
     document.querySelectorAll('[data-pay]').forEach(b=>b.addEventListener('click',()=>openPaymentModal(b.dataset.pay)));
     document.querySelectorAll('[data-remove-pay]').forEach(b=>b.addEventListener('click',()=>{saleDraft.payments.splice(Number(b.dataset.removePay),1);render();}));
+    document.querySelectorAll('[data-remove-return]').forEach(b=>b.addEventListener('click',()=>{saleDraft.returnItems=saleDraft.returnItems||[];saleDraft.returnItems.splice(Number(b.dataset.removeReturn),1);recalcSaleReturnTotal();render();}));
     document.getElementById('finalizeSale')?.addEventListener('click',openSaleConfirm);
   }
 
@@ -2552,9 +2553,89 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     curEl.addEventListener('change',sync); nativeEl.addEventListener('input',sync);accEl.addEventListener('change',syncHint); sync();
   }
 
+  function tradePaymentItems(){
+    const out=[],seen=new Set();
+    const add=x=>{
+      if(!x||!x.name)return;
+      const key=`${x.kind||''}|${normalizeInventoryName(x.name)}|${x.unit||''}`;
+      if(seen.has(key))return;seen.add(key);
+      out.push({code:String(x.code||x.name),name:String(x.name),kind:x.kind||'Ziynet',unit:x.unit||'ADET',purity:Number(x.purity||0),zGram:Number(x.zGram||0),priceCode:String(x.priceCode||x.code||'')});
+    };
+    // Mevcut hurda stokları: Pusula'daki Altın/Ziynet tahsilatına doğrudan girer.
+    (state.scrapStocks||[]).filter(x=>x.period===state.activePeriod).forEach(h=>add({code:h.id,name:h.name,kind:'Hurda',unit:'GR',purity:Number(h.milyem||0),priceCode:(state.prices.items||[]).find(p=>normalizeInventoryName(p.name).includes(normalizeInventoryName(h.name).replace('HURDASI','HURDA')))?.code||''}));
+    // Fiyat sistemindeki hurda kartları stokta henüz hareket görmemiş olsa da listede bulunsun.
+    (state.prices.items||[]).filter(x=>/HURDA/i.test(String(x.name||''))||/H$/i.test(String(x.code||''))).forEach(x=>add({code:x.code,name:x.name,kind:'Hurda',unit:'GR',purity:Number(x.buyMilyem||x.sellMilyem||0),priceCode:x.code}));
+    // Adetli açık stokların tamamı: çeyrek, yarım, ata, reşat, gram altın vb.
+    (state.openStocks||[]).filter(o=>o.period===state.activePeriod&&String(o.unit||'').toUpperCase()==='ADET').forEach(o=>{
+      const n=normalizeInventoryName(o.name),px=(state.prices.items||[]).find(x=>normalizeInventoryName(x.name)===n||n.includes(normalizeInventoryName(x.name))||normalizeInventoryName(x.name).includes(n));
+      let zg=Number(o.zGram||0);if(!zg&&Number(o.amount||0)>0&&Number(o.hasWeight||0)>0&&Number(o.purity||0)>0)zg=(Number(o.hasWeight||0)/Number(o.amount||1))*1000/Number(o.purity||916);
+      add({code:o.pusulaCode||o.productCode||o.id,name:o.name,kind:'Ziynet',unit:'ADET',purity:Number(o.purity||916),zGram:zg,priceCode:px?.code||''});
+    });
+    // Temel ziynetler stok miktarı sıfır olsa da tahsilat listesinde hazır olsun.
+    const zgrams={CEYREK:1.75,YARIM:3.50,ZIYNET:7.00,ATA:7.216,RESAT:7.216};
+    (state.prices.items||[]).filter(x=>['CEYREK','YARIM','ZIYNET','ATA','RESAT','22G1','24G1'].includes(String(x.code||'').toUpperCase())).forEach(x=>add({code:x.code,name:x.name,kind:'Ziynet',unit:'ADET',purity:(String(x.code).toUpperCase()==='24G1'?995:916),zGram:zgrams[String(x.code).toUpperCase()]||1,priceCode:x.code}));
+    return out.sort((a,b)=>String(a.kind).localeCompare(String(b.kind),'tr')||String(a.name).localeCompare(String(b.name),'tr'));
+  }
+
+  function recalcSaleReturnTotal(){
+    saleDraft.returnItems=saleDraft.returnItems||[];
+    saleDraft.returns=(saleDraft.returnItems||[]).reduce((a,x)=>a+Math.abs(Number(x.amount||0)),0);
+  }
+  function findSoldSaleLineByBarcode(value){
+    const q=normalizeSaleStockKey(value);if(!q)return null;
+    const st=(state.stocks||[]).find(x=>x.period===state.activePeriod&&[x.barcode,x.code].some(v=>normalizeSaleStockKey(v)===q));
+    const sales=(state.sales||[]).filter(s=>s.period===state.activePeriod&&s.status==='Tamamlandı').slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+    for(const s of sales){
+      const idx=(s.lines||[]).findIndex(l=>l.sourceType==='barcode'&&((st&&l.stockId===st.id)||normalizeSaleStockKey(l.code)===q));
+      if(idx>=0){const line=s.lines[idx],stock=st||(state.stocks||[]).find(x=>x.id===line.stockId);return {sale:s,line,index:idx,stock};}
+    }
+    return null;
+  }
+  function openReturnPayment(){
+    saleDraft.returnItems=saleDraft.returnItems||[];
+    const openRows=(state.openStocks||[]).filter(o=>o.period===state.activePeriod).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),'tr'));
+    const body=`<div class="form-grid">
+      <div class="labelled span-2"><label>İade Türü</label><select id="retKind" class="select"><option value="open">Barkodsuz / Açık Stok Ürün İadesi</option><option value="barcode">Barkodlu Ürün — Eski Satıştan Çağır</option></select></div>
+      <div class="notice span-2"><strong>Pusula mantığı:</strong> İade bir TL indirimi değildir. Ürün stoğa geri döner; değeri fişten mahsup edilir. Barkodlu üründe barkodu yazınca eski satış otomatik bulunur.</div>
+      <div id="retOpenWrap" class="span-4"><div class="form-grid">
+        <div class="labelled span-2"><label>Barkodsuz Ürün</label><select id="retOpenStock" class="select">${openRows.map(o=>`<option value="${o.id}">${esc(o.name)} · ${qty(o.amount||0)} ${esc(o.unit||'')}</option>`).join('')}</select></div>
+        <div class="labelled"><label>Miktar / Adet</label><input id="retOpenQty" class="input" type="number" step="0.001" value="1"></div>
+        <div class="labelled"><label>Birim Fiyat (TL)</label><input id="retOpenPrice" class="input" type="number" step="0.01"></div>
+        <div class="labelled span-2"><label>İade Toplamı</label><input id="retOpenTotal" class="input" readonly></div>
+        <div class="labelled span-2"><label>Açıklama</label><input id="retOpenNote" class="input" placeholder="Barkodsuz ürün iadesi"></div>
+      </div></div>
+      <div id="retBarcodeWrap" class="span-4" style="display:none"><div class="form-grid">
+        <div class="labelled span-2"><label>Eski Satış Barkodu</label><input id="retBarcode" class="input" placeholder="Örn. ALY 1335" autocomplete="off"></div>
+        <div class="labelled span-2"><label>İade Tutarı (TL)</label><input id="retBarcodeAmount" class="input" type="number" step="0.01" disabled></div>
+        <div class="span-4" id="retBarcodeResult"><div class="notice">Barkodu yazın; eski satış belgesi, müşteri, tarih ve satış tutarı burada gelir.</div></div>
+      </div></div>
+      ${(saleDraft.returnItems||[]).length?`<div class="span-4"><div class="notice"><strong>Fişteki iadeler:</strong> ${(saleDraft.returnItems||[]).map(x=>`${esc(x.itemName)} · ${money(x.amount)}`).join(' + ')} = <b>${money(saleDraft.returns||0)}</b></div></div>`:''}
+    </div>`;
+    let barcodeMatch=null;
+    modal('İade — Ürün Stoğa Geri Al',body,()=>{
+      const kind=document.getElementById('retKind').value;
+      if(kind==='open'){
+        const o=(state.openStocks||[]).find(x=>x.id===document.getElementById('retOpenStock').value),q=Number(document.getElementById('retOpenQty').value||0),price=Number(document.getElementById('retOpenPrice').value||0);if(!o||q<=0||price<=0)return toast('Ürün, miktar ve iade fiyatını kontrol edin','err');
+        const amount=q*price,gram=String(o.unit||'').toUpperCase()==='ADET'?q*Number(o.zGram||0):q,physicalHas=calcHas(gram,Number(o.purity||0)),costHas=openInventoryCostHas(o,q)||physicalHas;
+        saleDraft.returnItems.push({id:uid('RET'),kind:'open',openStockId:o.id,itemCode:o.pusulaCode||o.productCode||'',itemName:o.name,quantity:q,unit:o.unit||'GR',unitPrice:price,amount,hasAmount:physicalHas,costHas,note:document.getElementById('retOpenNote').value||'',detail:`${o.name} · ${qty(q)} ${o.unit||''}`});
+      }else{
+        if(!barcodeMatch)return toast('Barkoddan eski satış bulunamadı','err');const {sale,line,stock}=barcodeMatch;if(!stock)return toast('Barkod stok kartı bulunamadı','err');if(stock.status!=='Satıldı')return toast('Bu barkod şu anda satılmış durumda değil; ikinci kez iade alınamaz.','err');if((saleDraft.returnItems||[]).some(x=>x.kind==='barcode'&&x.stockId===stock.id))return toast('Bu barkod fişe zaten iade olarak eklendi','err');
+        const amount=Number(document.getElementById('retBarcodeAmount').value||0);if(amount<=0)return toast('İade tutarını kontrol edin','err');
+        saleDraft.returnItems.push({id:uid('RET'),kind:'barcode',stockId:stock.id,itemCode:stock.barcode||stock.code,itemName:line.name||stock.name,quantity:1,unit:'ADET',unitPrice:amount,amount,costHas:Number(line.costHas||stock.costHas||0),hasAmount:Number(line.hasWeight||stockHas(stock)||0),originalSaleId:sale.id,originalSaleDoc:sale.docNo,originalCustomerId:sale.customerId,originalSaleDate:sale.date,detail:`${stock.barcode||stock.code} · Eski satış ${sale.docNo}`});
+      }
+      recalcSaleReturnTotal();closeModal();render();setTimeout(()=>document.querySelector('[data-pay="İade"]')?.focus(),0);
+    },'İADEYİ FİŞE EKLE');
+    const kindEl=document.getElementById('retKind'),ow=document.getElementById('retOpenWrap'),bw=document.getElementById('retBarcodeWrap'),os=document.getElementById('retOpenStock'),oq=document.getElementById('retOpenQty'),op=document.getElementById('retOpenPrice'),ot=document.getElementById('retOpenTotal'),bi=document.getElementById('retBarcode'),ba=document.getElementById('retBarcodeAmount'),br=document.getElementById('retBarcodeResult');
+    const syncOpen=(resetPrice=false)=>{const o=(state.openStocks||[]).find(x=>x.id===os?.value);if(!o)return;if(resetPrice||!Number(op.value||0))op.value=(openStockSaleDefaultPrice(o,1)||0).toFixed(2);ot.value=(Number(oq.value||0)*Number(op.value||0)).toFixed(2);};
+    const findBarcode=()=>{barcodeMatch=findSoldSaleLineByBarcode(bi.value);if(!barcodeMatch){ba.value='';ba.disabled=true;br.innerHTML='<div class="notice">Eski satış bulunamadı. Barkodu tam veya kısa biçimde yazabilirsiniz.</div>';return;}const {sale,line,stock}=barcodeMatch,c=state.customers.find(x=>x.id===sale.customerId),oldAmount=Number(line.total??line.price??0);ba.disabled=false;ba.value=oldAmount.toFixed(2);br.innerHTML=`<div class="notice"><strong>${esc(stock?.barcode||line.code||'')}</strong> · ${esc(line.name||stock?.name||'')}<br>Eski satış: <b>${esc(sale.docNo||sale.id)}</b> · ${trDate(sale.date)} · ${esc(c?.name||'Peşin Müşteri')} · Satış tutarı <b>${money(oldAmount)}</b></div>`;};
+    const syncKind=()=>{const barcode=kindEl.value==='barcode';ow.style.display=barcode?'none':'block';bw.style.display=barcode?'block':'none';if(barcode)setTimeout(()=>focusAndSelect(bi),0);else{syncOpen(true);setTimeout(()=>focusAndSelect(os),0);}};
+    kindEl.addEventListener('change',syncKind);os?.addEventListener('change',()=>syncOpen(true));oq?.addEventListener('input',()=>syncOpen(false));op?.addEventListener('input',()=>syncOpen(false));bi?.addEventListener('input',findBarcode);bi?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();findBarcode();if(barcodeMatch)focusAndSelect(ba);}});syncKind();syncOpen(true);
+  }
+
   function openTradeInPayment(){
     const items=tradePaymentItems();
-    modal('Altın / Ziynet — Takas Mahsubu',`<div class="form-grid">
+    if(!items.length)return toast('Altın / ziynet tahsilat tanımı bulunamadı','err');
+    modal('Altın / Ziynet — Müşteriden Al / Takas Mahsubu',`<div class="form-grid">
       <div class="labelled span-2"><label>Hurda / Ziynet Grup</label><select id="tiItem" class="select">${items.map((x,i)=>`<option value="${i}">${esc(x.name)}</option>`).join('')}</select></div>
       <div class="labelled"><label>Miktar</label><input id="tiQty" class="input" type="number" step="0.001" value="1"></div>
       <div class="labelled"><label>Birim</label><input id="tiUnit" class="input" readonly></div>
@@ -2568,7 +2649,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       saleDraft.payments.push({type:'Altın / Ziynet',amount:total,itemCode:item.code,itemName:item.name,itemKind:item.kind,unit:item.unit,nativeAmount:n,purity:item.purity,zGram:item.zGram||0,hasAmount:has,detail:`${item.name} · ${qty(n)} ${item.unit} · ${qty(has)} HAS`});closeModal();render();
     },'TAKASA EKLE');
     const itemEl=document.getElementById('tiItem'),qEl=document.getElementById('tiQty'),pEl=document.getElementById('tiPrice'),uEl=document.getElementById('tiUnit'),mEl=document.getElementById('tiPurity'),hEl=document.getElementById('tiHas'),tEl=document.getElementById('tiTotal');
-    const recalc=()=>{const item=items[Number(itemEl.value)],n=Number(qEl.value||0),gram=item.unit==='ADET'?n*Number(item.zGram||0):n,has=calcHas(gram,item.purity);let price=Number(pEl.value||0);if(!price){const px=state.prices.items.find(x=>x.code===item.code);price=Number(px?.buy||0);if(!price&&item.unit==='GR')price=Number(state.prices.has.buy||0)*(item.purity/1000);pEl.value=price.toFixed(2);}uEl.value=item.unit;mEl.value=item.purity;hEl.value=has.toFixed(3);tEl.value=(n*price).toFixed(2);};
+    const recalc=()=>{const item=items[Number(itemEl.value)],n=Number(qEl.value||0),gram=item.unit==='ADET'?n*Number(item.zGram||0):n,has=calcHas(gram,item.purity);let price=Number(pEl.value||0);if(!price){const px=state.prices.items.find(x=>x.code===item.priceCode||x.code===item.code);price=Number(px?.buy||0);if(!price&&item.unit==='GR')price=Number(state.prices.has.buy||0)*(item.purity/1000);if(!price&&item.unit==='ADET'){const unitHas=calcHas(Number(item.zGram||0),Number(item.purity||916));price=unitHas*Number(state.prices.has.buy||0);}pEl.value=price.toFixed(2);}uEl.value=item.unit;mEl.value=item.purity;hEl.value=has.toFixed(3);tEl.value=(n*price).toFixed(2);};
     itemEl.addEventListener('change',()=>{pEl.value='';recalc();}); qEl.addEventListener('input',recalc);pEl.addEventListener('input',recalc);recalc();
   }
 
@@ -2596,13 +2677,11 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     if(type==='Komisyon'){
       modal('Komisyon',`<div class="form-grid"><div class="labelled"><label>Komisyon Tutarı</label><input id="comAmount" class="input" type="number" step="0.01" value="${Number(saleDraft.commission||0)}"></div><div class="labelled"><label>Oran %</label><input id="comRate" class="input" type="number" step="0.01" value="0"></div><div class="labelled span-2"><label>Gelir Hesabı</label><select id="comAccount" class="select">${state.accountingAccounts.filter(x=>x.accountingNature==='Gelir').map(x=>`<option>${esc(x.name)}</option>`).join('')}</select></div></div>`,()=>{saleDraft.commission=Math.max(0,Number(document.getElementById('comAmount').value||0));closeModal();render();},'KOMİSYON EKLE');const gross=saleDraft.lines.reduce((a,l)=>a+Number(l.total||0),0),a=document.getElementById('comAmount'),r=document.getElementById('comRate');r.addEventListener('input',()=>a.value=(gross*Number(r.value||0)/100).toFixed(2));return;
     }
-    if(type==='İade'){
-      modal('İade / Mahsup',`<div class="form-grid"><div class="labelled span-2"><label>İade Tutarı (TL)</label><input id="retAmount" class="input" type="number" step="0.01" value="${Number(saleDraft.returns||0)}"></div><div class="labelled span-2"><label>Açıklama</label><input id="retDesc" class="input" placeholder="Önceki satış / ürün iadesi"></div></div>`,()=>{saleDraft.returns=Math.max(0,Number(document.getElementById('retAmount').value||0));closeModal();render();},'İADEYİ UYGULA');return;
-    }
+    if(type==='İade')return openReturnPayment();
   }
 
   function openSaleConfirm(){
-    const t=saleTotals(); if(!saleDraft.salesperson)return toast('Satan elemanı seçin','err'); if(t.net<=0)return toast('Satış tutarı yok','err');
+    const t=saleTotals(); if(!saleDraft.salesperson)return toast('Satan elemanı seçin','err'); if(Math.abs(t.net)<=0.01&&!saleDraft.lines.length&&!(saleDraft.returnItems||[]).length)return toast('Satış veya iade işlemi yok','err');
     if(t.remain<-.01)return toast('Müşteriye ödeme farkı var. Ödeme sekmesinden kasa çıkışı ekleyin.','err');
     if(t.remain>.01 && saleDraft.customerId==='CASH')return toast('Ödenecek tutar kapanmadı. Nakit/kart/takas ekleyin veya cari müşteri seçin.','err');
     const cust=state.customers.find(c=>c.id===saleDraft.customerId);
@@ -2621,9 +2700,9 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
 
   function finalizeSale(){
-    const t=saleTotals(),hasBuyRateAtSale=Number(state.prices.has?.buy||1),hasSellRateAtSale=Number(state.prices.has?.sell||hasBuyRateAtSale),costHas=saleDraft.lines.reduce((a,l)=>a+Number(l.costHas||0),0),cost=costHas*hasBuyRateAtSale,docNo=saleDraft.editingDocNo||nextDocNo('SAT',state.sales),id=saleDraft.editingOriginalId||uid('SAT'),customer=state.customers.find(c=>c.id===saleDraft.customerId);
+    const t=saleTotals(),hasBuyRateAtSale=Number(state.prices.has?.buy||1),hasSellRateAtSale=Number(state.prices.has?.sell||hasBuyRateAtSale),returnedCostHas=(saleDraft.returnItems||[]).reduce((a,r)=>a+Number(r.costHas||0),0),costHas=saleDraft.lines.reduce((a,l)=>a+Number(l.costHas||0),0)-returnedCostHas,cost=costHas*hasBuyRateAtSale,docNo=saleDraft.editingDocNo||nextDocNo('SAT',state.sales),id=saleDraft.editingOriginalId||uid('SAT'),customer=state.customers.find(c=>c.id===saleDraft.customerId);
     if(!customer)return toast('Cari hesap bulunamadı','err');
-    state.sales.unshift({id,docNo,period:state.activePeriod,date:now(),customerId:saleDraft.customerId,salesperson:saleDraft.salesperson,lines:clone(saleDraft.lines),payments:clone(saleDraft.payments),discount:Number(saleDraft.discount||0),commission:Number(saleDraft.commission||0),returns:Number(saleDraft.returns||0),total:t.net,cost,costHas,revenueHas:t.net/hasSellRateAtSale,profitHas:(t.net/hasSellRateAtSale)-costHas,hasBuyRateAtSale,hasSellRateAtSale,status:'Tamamlandı'});
+    state.sales.unshift({id,docNo,period:state.activePeriod,date:now(),customerId:saleDraft.customerId,salesperson:saleDraft.salesperson,lines:clone(saleDraft.lines),payments:clone(saleDraft.payments),returnItems:clone(saleDraft.returnItems||[]),discount:Number(saleDraft.discount||0),commission:Number(saleDraft.commission||0),returns:Number(saleDraft.returns||0),total:t.net,cost,costHas,revenueHas:t.net/hasSellRateAtSale,profitHas:(t.net/hasSellRateAtSale)-costHas,hasBuyRateAtSale,hasSellRateAtSale,status:'Tamamlandı'});
 
     saleDraft.lines.forEach(l=>{
       if(l.sourceType==='open'){
@@ -2631,6 +2710,14 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
         const ratio=before>0?take/before:0;o.amount=Math.max(0,before-take);o.hasWeight=Math.max(0,Number(o.hasWeight||0)-Number(l.hasWeight||0));o.workmanshipTotalHas=Number(o.workmanshipTotalHas||0)*(1-ratio);if(o.unit==='ADET')o.count=Number(o.amount||0);
       }else{
         const s=state.stocks.find(x=>x.id===l.stockId);if(s){const from=s.location||'Mağaza';s.status='Satıldı';s.saleTo=customer.name;s.saleDate=now();addStockMove(s,'SATIŞ',from,'Müşteri',docNo);}
+      }
+    });
+
+    (saleDraft.returnItems||[]).forEach(r=>{
+      if(r.kind==='open'){
+        const o=(state.openStocks||[]).find(x=>x.id===r.openStockId);if(!o)return;const q=Number(r.quantity||0),ph=Number(r.hasAmount||0),ch=Number(r.costHas||ph);setOpenWeightedUnitCost(o,q,ch);o.amount=Number(o.amount||0)+q;o.hasWeight=Number(o.hasWeight||0)+ph;o.workmanshipTotalHas=Number(o.workmanshipTotalHas||0)+Math.max(0,ch-ph);if(String(o.unit||'').toUpperCase()==='ADET')o.count=Number(o.amount||0);state.stockMoves.unshift({id:uid('SM'),period:state.activePeriod,date:now(),stockId:o.id,code:o.pusulaCode||o.productCode||'',type:'BARKODSUZ SATIŞ İADESİ',from:'Müşteri',to:'Açık Stok',description:`${docNo} · ${r.detail||r.itemName}`,sourceDocNo:docNo,user:session.name});
+      }else if(r.kind==='barcode'){
+        const st=state.stocks.find(x=>x.id===r.stockId);if(!st)return;st.status='Stokta';st.saleTo='';st.saleDate='';st.returnedByDocNo=docNo;state.stockMoves.unshift({id:uid('SM'),period:state.activePeriod,date:now(),stockId:st.id,code:st.code,type:'BARKODLU SATIŞ İADESİ',from:'Müşteri',to:'Mağaza',description:`${docNo} · Eski satış ${r.originalSaleDoc||''}`,sourceDocNo:docNo,user:session.name});
       }
     });
 
@@ -3511,7 +3598,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     if(o){o.amount=Math.max(0,Number(o.amount||0)-Number(p.nativeAmount||0));o.count=Number(o.amount||0);o.hasWeight=Math.max(0,Number(o.hasWeight||0)-Number(p.hasAmount||0));}
   }
   function cancelSaleById(saleId){
-    const sale=state.sales.find(x=>x.id===saleId); if(!sale)return {ok:false,msg:'Bağlı satış belgesi bulunamadı'};
+    const sale=state.sales.find(x=>x.id===saleId); if(!sale)return {ok:false,msg:'Bağlı satış belgesi bulunamadı'};const resold=(sale.returnItems||[]).filter(r=>r.kind==='barcode').map(r=>state.stocks.find(x=>x.id===r.stockId)).filter(Boolean).find(st=>st.status!=='Stokta');if(resold)return {ok:false,msg:`İade ile stoğa dönen ${resold.barcode||resold.code} daha sonra tekrar satılmış/hareket görmüş. Önce sonraki işlemi geri alın.`};
     state.cancelledDocuments=state.cancelledDocuments||[];
     if(!state.cancelledDocuments.some(x=>x.originalId===sale.id&&x.originalDocNo===sale.docNo)) state.cancelledDocuments.unshift({id:uid('ARC'),originalId:sale.id,originalDocNo:sale.docNo,type:'SATIŞ',date:now(),cancelledBy:session?.name||'Sistem',snapshot:clone(sale)});
     const cms=state.customerMoves.filter(m=>m.sourceType==='sale' && (m.sourceId===sale.id || m.sourceDocNo===sale.docNo));
@@ -3526,6 +3613,14 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
         const st=state.stocks.find(x=>x.id===l.stockId);if(st){st.status='Stokta';st.saleTo='';st.saleDate='';}
       }
     });
+    (sale.returnItems||[]).forEach(r=>{
+      if(r.kind==='open'){
+        const o=(state.openStocks||[]).find(x=>x.id===r.openStockId);if(!o)return;const q=Number(r.quantity||0),ph=Number(r.hasAmount||0),ch=Number(r.costHas||ph);o.amount=Math.max(0,Number(o.amount||0)-q);o.hasWeight=Math.max(0,Number(o.hasWeight||0)-ph);o.workmanshipTotalHas=Math.max(0,Number(o.workmanshipTotalHas||0)-Math.max(0,ch-ph));if(String(o.unit||'').toUpperCase()==='ADET')o.count=Number(o.amount||0);
+      }else if(r.kind==='barcode'){
+        const st=state.stocks.find(x=>x.id===r.stockId);if(st){const oc=state.customers.find(x=>x.id===r.originalCustomerId);st.status='Satıldı';st.saleTo=oc?.name||'';st.saleDate=r.originalSaleDate||'';delete st.returnedByDocNo;}
+      }
+    });
+    state.stockMoves=state.stockMoves.filter(m=>!(m.sourceDocNo===sale.docNo&&/SATIŞ İADESİ/.test(String(m.type||''))));
     (sale.payments||[]).filter(p=>p.type==='Altın / Ziynet').forEach(reverseTradeInFromStock);
     const ids=new Set((sale.lines||[]).filter(l=>l.stockId).map(l=>l.stockId));
     state.stockMoves=state.stockMoves.filter(m=>!(ids.has(m.stockId) && m.type==='SATIŞ' && String(m.description||'').includes(sale.docNo||'')));
@@ -3735,7 +3830,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     document.getElementById('dayCloseV6')?.addEventListener('click',openDayCloseV6);
     document.getElementById('exportReport')?.addEventListener('click',()=>{
       const r=reportStats(), sv=stockValuationReport(), aging=cariAgingReport(), expenses=reportExpenseGroups(), personnel=personnelProfitRows(r.sales), pos=managementPositionReport(), health=systemHealthReport();
-      const rows=[['ASIL KUYUMCU PRO V6.1 — HAS YÖNETİM RAPORU'],['Dönem',reportFilters.range==='month'?reportFilters.month:state.activePeriod],[],['ÖZET','HAS','TL'],['Satış Karşılığı',r.revenueHas.toFixed(4),r.revenueTl.toFixed(2)],['Satılan Mal Maliyeti',r.cogsHas.toFixed(4),(r.cogsHas*r.closeRate).toFixed(2)],['Brüt Kâr',r.grossHas.toFixed(4),(r.grossHas*r.closeRate).toFixed(2)],['Gider + POS',(r.expHas+r.feeHas).toFixed(4),(r.expTl+r.feeTl).toFixed(2)],['Döviz Gerçekleşen K/Z',r.realizedFxPlHas.toFixed(4),r.realizedFxPlTl.toFixed(2)],['NET KÂR',r.netHas.toFixed(4),r.adjustedTl.toFixed(2)],['Değerleme Farkı','',r.valuationDiff.toFixed(2)],[],['STOK DEĞERLEME','HAS'],['Barkodlu',sv.barcodeCost.toFixed(4)],['Açık/Barkodsuz',sv.openCost.toFixed(4)],['Hurda',sv.scrapCost.toFixed(4)],['Toplam',sv.totalCost.toFixed(4)],[],['YÖNETİM POZİSYONU','HAS'],['Fiziksel Altın',pos.sv.totalPhysical.toFixed(4)],['Cari HAS Net',Number(pos.cari.HAS||0).toFixed(4)],['Parasal Pozisyon HAS',pos.monetaryHas.toFixed(4)],['NET POZİSYON',pos.netHas.toFixed(4)],[],['SİSTEM SAĞLIĞI','Seviye','Açıklama'],...health.issues.map(x=>[x.title,x.level,x.detail]),[],['SATIŞLAR','Tarih','Belge','Müşteri','Personel','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS','Durum'],...r.sales.map(s=>['',trDate(s.date),s.docNo||s.id,state.customers.find(c=>c.id===s.customerId)?.name||'',s.salesperson,Number(s.total||0).toFixed(2),saleRevenueHas(s).toFixed(4),saleCostHas(s).toFixed(4),(saleRevenueHas(s)-saleCostHas(s)).toFixed(4),s.status]),[],['PERSONEL','Fiş','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS'],...personnel.map(x=>[x.name,x.count,x.salesTl.toFixed(2),x.revenueHas.toFixed(4),x.costHas.toFixed(4),x.profitHas.toFixed(4)]),[],['CARİ YAŞLANDIRMA','Tür','Bakiye','TL Eşdeğer','En Eski Gün'],...aging.details.map(x=>[x.name,x.type,x.parts,x.totalTl.toFixed(2),x.oldest]),[],['BANKA/POS GİDERLERİ','Hareket','TL'],...expenses.map(x=>[x.name,x.count,x.tl.toFixed(2)])];
+      const rows=[['ASIL KUYUMCU PRO V6.2 — HAS YÖNETİM RAPORU'],['Dönem',reportFilters.range==='month'?reportFilters.month:state.activePeriod],[],['ÖZET','HAS','TL'],['Satış Karşılığı',r.revenueHas.toFixed(4),r.revenueTl.toFixed(2)],['Satılan Mal Maliyeti',r.cogsHas.toFixed(4),(r.cogsHas*r.closeRate).toFixed(2)],['Brüt Kâr',r.grossHas.toFixed(4),(r.grossHas*r.closeRate).toFixed(2)],['Gider + POS',(r.expHas+r.feeHas).toFixed(4),(r.expTl+r.feeTl).toFixed(2)],['Döviz Gerçekleşen K/Z',r.realizedFxPlHas.toFixed(4),r.realizedFxPlTl.toFixed(2)],['NET KÂR',r.netHas.toFixed(4),r.adjustedTl.toFixed(2)],['Değerleme Farkı','',r.valuationDiff.toFixed(2)],[],['STOK DEĞERLEME','HAS'],['Barkodlu',sv.barcodeCost.toFixed(4)],['Açık/Barkodsuz',sv.openCost.toFixed(4)],['Hurda',sv.scrapCost.toFixed(4)],['Toplam',sv.totalCost.toFixed(4)],[],['YÖNETİM POZİSYONU','HAS'],['Fiziksel Altın',pos.sv.totalPhysical.toFixed(4)],['Cari HAS Net',Number(pos.cari.HAS||0).toFixed(4)],['Parasal Pozisyon HAS',pos.monetaryHas.toFixed(4)],['NET POZİSYON',pos.netHas.toFixed(4)],[],['SİSTEM SAĞLIĞI','Seviye','Açıklama'],...health.issues.map(x=>[x.title,x.level,x.detail]),[],['SATIŞLAR','Tarih','Belge','Müşteri','Personel','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS','Durum'],...r.sales.map(s=>['',trDate(s.date),s.docNo||s.id,state.customers.find(c=>c.id===s.customerId)?.name||'',s.salesperson,Number(s.total||0).toFixed(2),saleRevenueHas(s).toFixed(4),saleCostHas(s).toFixed(4),(saleRevenueHas(s)-saleCostHas(s)).toFixed(4),s.status]),[],['PERSONEL','Fiş','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS'],...personnel.map(x=>[x.name,x.count,x.salesTl.toFixed(2),x.revenueHas.toFixed(4),x.costHas.toFixed(4),x.profitHas.toFixed(4)]),[],['CARİ YAŞLANDIRMA','Tür','Bakiye','TL Eşdeğer','En Eski Gün'],...aging.details.map(x=>[x.name,x.type,x.parts,x.totalTl.toFixed(2),x.oldest]),[],['BANKA/POS GİDERLERİ','Hareket','TL'],...expenses.map(x=>[x.name,x.count,x.tl.toFixed(2)])];
       downloadText(rows.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(';')).join('\n'),`asil_yonetim_raporu_${reportFilters.range==='month'?reportFilters.month:state.activePeriod}.csv`,'text/csv;charset=utf-8');audit('Genişletilmiş HAS yönetim raporu dışa aktarıldı','Rapor');
     });
   }
@@ -3925,7 +4020,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function openExchangeV5(){
     if(!v5Guard('canReturn'))return;const sales=(state.sales||[]).filter(s=>s.period===state.activePeriod&&s.status==='Tamamlandı'&&(s.lines||[]).some(l=>l.stockId));if(!sales.length)return toast('Değişime uygun satış bulunamadı','err');
     const repl=activeStock();if(!repl.length)return toast('Yeni ürün için barkodlu stok yok','err');
-    modal('Ürün Değişimi — Tek Fişte',`<div class="form-grid"><div class="labelled span-2"><label>Eski Satış</label><select id="exSale" class="select">${sales.map(s=>`<option value="${s.id}">${esc(s.docNo)} · ${esc(state.customers.find(c=>c.id===s.customerId)?.name||'Peşin')} · ${money(s.total||0)}</option>`).join('')}</select></div><div class="labelled span-2"><label>Geri Alınacak Ürün</label><select id="exOld" class="select"></select></div><div class="labelled span-2"><label>Verilecek Yeni Barkod</label><select id="exNew" class="select">${repl.map(s=>`<option value="${s.id}">${esc(s.barcode||s.code)} · ${esc(s.name)} · ${qty(stockAmount(s))} GR · ${qty(s.saleHas||0)} HAS</option>`).join('')}</select></div><div class="notice span-4"><b>İşleyiş:</b> Eski fişin stok/cari/kasa bağlantıları önce güvenli olarak geri alınır. Geri verilmeyen eski ürünler + yeni ürün aynı belge numarasıyla satış ekranına açılır. Önceki ödemeler yüklenir; farkı nakit/kart/HAS/cari ile kapatırsınız.</div></div>`,()=>{const s=state.sales.find(x=>x.id===document.getElementById('exSale').value),idx=Number(document.getElementById('exOld').value),n=state.stocks.find(x=>x.id===document.getElementById('exNew').value);if(!s||!n||!Number.isInteger(idx))return toast('Ürün seçimini kontrol edin','err');const snap=clone(s),r=cancelSaleById(s.id);if(!r.ok)return toast(r.msg,'err');const lines=(snap.lines||[]).filter((_,i)=>i!==idx);lines.push(saleLineFromStockV5(n));saleDraft={customerId:snap.customerId||'CASH',salesperson:snap.salesperson||session?.name||'',lines,payments:clone(snap.payments||[]),discount:Number(snap.discount||0),commission:Number(snap.commission||0),returns:0,saleMode:'Otomatik',entrySelection:null,entryQuery:'',editingDocNo:snap.docNo||'',editingOriginalId:snap.id||''};registerTransactionV5('ÜRÜN DEĞİŞİMİ',`EXC-${state.activePeriod}-${String(Date.now()).slice(-6)}`,`${snap.docNo} değişim için fişe açıldı`,{relatedDocNo:snap.docNo});closeModal();route='sales';save();render();toast('Değişim fişe açıldı; fiyat farkını ödeme/takas bölümünden kapatın');},'DEĞİŞİMİ FİŞE AÇ');
+    modal('Ürün Değişimi — Tek Fişte',`<div class="form-grid"><div class="labelled span-2"><label>Eski Satış</label><select id="exSale" class="select">${sales.map(s=>`<option value="${s.id}">${esc(s.docNo)} · ${esc(state.customers.find(c=>c.id===s.customerId)?.name||'Peşin')} · ${money(s.total||0)}</option>`).join('')}</select></div><div class="labelled span-2"><label>Geri Alınacak Ürün</label><select id="exOld" class="select"></select></div><div class="labelled span-2"><label>Verilecek Yeni Barkod</label><select id="exNew" class="select">${repl.map(s=>`<option value="${s.id}">${esc(s.barcode||s.code)} · ${esc(s.name)} · ${qty(stockAmount(s))} GR · ${qty(s.saleHas||0)} HAS</option>`).join('')}</select></div><div class="notice span-4"><b>İşleyiş:</b> Eski fişin stok/cari/kasa bağlantıları önce güvenli olarak geri alınır. Geri verilmeyen eski ürünler + yeni ürün aynı belge numarasıyla satış ekranına açılır. Önceki ödemeler yüklenir; farkı nakit/kart/HAS/cari ile kapatırsınız.</div></div>`,()=>{const s=state.sales.find(x=>x.id===document.getElementById('exSale').value),idx=Number(document.getElementById('exOld').value),n=state.stocks.find(x=>x.id===document.getElementById('exNew').value);if(!s||!n||!Number.isInteger(idx))return toast('Ürün seçimini kontrol edin','err');const snap=clone(s),r=cancelSaleById(s.id);if(!r.ok)return toast(r.msg,'err');const lines=(snap.lines||[]).filter((_,i)=>i!==idx);lines.push(saleLineFromStockV5(n));saleDraft={customerId:snap.customerId||'CASH',salesperson:snap.salesperson||session?.name||'',lines,payments:clone(snap.payments||[]),returnItems:[],discount:Number(snap.discount||0),commission:Number(snap.commission||0),returns:0,saleMode:'Otomatik',entrySelection:null,entryQuery:'',editingDocNo:snap.docNo||'',editingOriginalId:snap.id||''};registerTransactionV5('ÜRÜN DEĞİŞİMİ',`EXC-${state.activePeriod}-${String(Date.now()).slice(-6)}`,`${snap.docNo} değişim için fişe açıldı`,{relatedDocNo:snap.docNo});closeModal();route='sales';save();render();toast('Değişim fişe açıldı; fiyat farkını ödeme/takas bölümünden kapatın');},'DEĞİŞİMİ FİŞE AÇ');
     const saleEl=document.getElementById('exSale'),oldEl=document.getElementById('exOld');const refresh=()=>{const s=state.sales.find(x=>x.id===saleEl.value);oldEl.innerHTML=(s?.lines||[]).map((l,i)=>l.stockId?`<option value="${i}">${esc(l.code)} · ${esc(l.name)} · ${money(l.total||0)}</option>`:'').join('');};saleEl.addEventListener('change',refresh);refresh();
   }
   function openCustomerReturnV5(){
