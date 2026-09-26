@@ -835,7 +835,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     try{
       if(typeof ensureV5State==='function') ensureV5State();
       if(typeof reconcileTransactionLedgerV5==='function') reconcileTransactionLedgerV5();
-      state.meta=state.meta||{}; state.meta.updatedAt=now(); state.meta.appVersion='6.0';
+      state.meta=state.meta||{}; state.meta.updatedAt=now(); state.meta.appVersion='6.1';
       localStorage.setItem(LS_KEY, JSON.stringify(state));
     } catch { /* Yerel dosya modunda depolama engellense bile uygulama çalışmaya devam eder. */ }
     if(cloudInitializedV5 && !cloudApplyingV5 && state?.cloudSync?.enabled && typeof scheduleCloudPushV5==='function') scheduleCloudPushV5();
@@ -1389,7 +1389,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v6.0</small></div></div>
+        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v6.1</small></div></div>
         <div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off"></div><div class="nav">${navItems.map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div>
         <div class="sidebar-bottom">
           <div class="user-chip"><div class="avatar">${esc(session.name.split(' ').map(x=>x[0]).slice(0,2).join(''))}</div><div><strong>${esc(session.name)}</strong><div class="muted" style="font-size:12px">${esc(session.role)}</div></div></div>
@@ -3735,7 +3735,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     document.getElementById('dayCloseV6')?.addEventListener('click',openDayCloseV6);
     document.getElementById('exportReport')?.addEventListener('click',()=>{
       const r=reportStats(), sv=stockValuationReport(), aging=cariAgingReport(), expenses=reportExpenseGroups(), personnel=personnelProfitRows(r.sales), pos=managementPositionReport(), health=systemHealthReport();
-      const rows=[['ASIL KUYUMCU PRO V5.2 — HAS YÖNETİM RAPORU'],['Dönem',reportFilters.range==='month'?reportFilters.month:state.activePeriod],[],['ÖZET','HAS','TL'],['Satış Karşılığı',r.revenueHas.toFixed(4),r.revenueTl.toFixed(2)],['Satılan Mal Maliyeti',r.cogsHas.toFixed(4),(r.cogsHas*r.closeRate).toFixed(2)],['Brüt Kâr',r.grossHas.toFixed(4),(r.grossHas*r.closeRate).toFixed(2)],['Gider + POS',(r.expHas+r.feeHas).toFixed(4),(r.expTl+r.feeTl).toFixed(2)],['Döviz Gerçekleşen K/Z',r.realizedFxPlHas.toFixed(4),r.realizedFxPlTl.toFixed(2)],['NET KÂR',r.netHas.toFixed(4),r.adjustedTl.toFixed(2)],['Değerleme Farkı','',r.valuationDiff.toFixed(2)],[],['STOK DEĞERLEME','HAS'],['Barkodlu',sv.barcodeCost.toFixed(4)],['Açık/Barkodsuz',sv.openCost.toFixed(4)],['Hurda',sv.scrapCost.toFixed(4)],['Toplam',sv.totalCost.toFixed(4)],[],['YÖNETİM POZİSYONU','HAS'],['Fiziksel Altın',pos.sv.totalPhysical.toFixed(4)],['Cari HAS Net',Number(pos.cari.HAS||0).toFixed(4)],['Parasal Pozisyon HAS',pos.monetaryHas.toFixed(4)],['NET POZİSYON',pos.netHas.toFixed(4)],[],['SİSTEM SAĞLIĞI','Seviye','Açıklama'],...health.issues.map(x=>[x.title,x.level,x.detail]),[],['SATIŞLAR','Tarih','Belge','Müşteri','Personel','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS','Durum'],...r.sales.map(s=>['',trDate(s.date),s.docNo||s.id,state.customers.find(c=>c.id===s.customerId)?.name||'',s.salesperson,Number(s.total||0).toFixed(2),saleRevenueHas(s).toFixed(4),saleCostHas(s).toFixed(4),(saleRevenueHas(s)-saleCostHas(s)).toFixed(4),s.status]),[],['PERSONEL','Fiş','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS'],...personnel.map(x=>[x.name,x.count,x.salesTl.toFixed(2),x.revenueHas.toFixed(4),x.costHas.toFixed(4),x.profitHas.toFixed(4)]),[],['CARİ YAŞLANDIRMA','Tür','Bakiye','TL Eşdeğer','En Eski Gün'],...aging.details.map(x=>[x.name,x.type,x.parts,x.totalTl.toFixed(2),x.oldest]),[],['BANKA/POS GİDERLERİ','Hareket','TL'],...expenses.map(x=>[x.name,x.count,x.tl.toFixed(2)])];
+      const rows=[['ASIL KUYUMCU PRO V6.1 — HAS YÖNETİM RAPORU'],['Dönem',reportFilters.range==='month'?reportFilters.month:state.activePeriod],[],['ÖZET','HAS','TL'],['Satış Karşılığı',r.revenueHas.toFixed(4),r.revenueTl.toFixed(2)],['Satılan Mal Maliyeti',r.cogsHas.toFixed(4),(r.cogsHas*r.closeRate).toFixed(2)],['Brüt Kâr',r.grossHas.toFixed(4),(r.grossHas*r.closeRate).toFixed(2)],['Gider + POS',(r.expHas+r.feeHas).toFixed(4),(r.expTl+r.feeTl).toFixed(2)],['Döviz Gerçekleşen K/Z',r.realizedFxPlHas.toFixed(4),r.realizedFxPlTl.toFixed(2)],['NET KÂR',r.netHas.toFixed(4),r.adjustedTl.toFixed(2)],['Değerleme Farkı','',r.valuationDiff.toFixed(2)],[],['STOK DEĞERLEME','HAS'],['Barkodlu',sv.barcodeCost.toFixed(4)],['Açık/Barkodsuz',sv.openCost.toFixed(4)],['Hurda',sv.scrapCost.toFixed(4)],['Toplam',sv.totalCost.toFixed(4)],[],['YÖNETİM POZİSYONU','HAS'],['Fiziksel Altın',pos.sv.totalPhysical.toFixed(4)],['Cari HAS Net',Number(pos.cari.HAS||0).toFixed(4)],['Parasal Pozisyon HAS',pos.monetaryHas.toFixed(4)],['NET POZİSYON',pos.netHas.toFixed(4)],[],['SİSTEM SAĞLIĞI','Seviye','Açıklama'],...health.issues.map(x=>[x.title,x.level,x.detail]),[],['SATIŞLAR','Tarih','Belge','Müşteri','Personel','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS','Durum'],...r.sales.map(s=>['',trDate(s.date),s.docNo||s.id,state.customers.find(c=>c.id===s.customerId)?.name||'',s.salesperson,Number(s.total||0).toFixed(2),saleRevenueHas(s).toFixed(4),saleCostHas(s).toFixed(4),(saleRevenueHas(s)-saleCostHas(s)).toFixed(4),s.status]),[],['PERSONEL','Fiş','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS'],...personnel.map(x=>[x.name,x.count,x.salesTl.toFixed(2),x.revenueHas.toFixed(4),x.costHas.toFixed(4),x.profitHas.toFixed(4)]),[],['CARİ YAŞLANDIRMA','Tür','Bakiye','TL Eşdeğer','En Eski Gün'],...aging.details.map(x=>[x.name,x.type,x.parts,x.totalTl.toFixed(2),x.oldest]),[],['BANKA/POS GİDERLERİ','Hareket','TL'],...expenses.map(x=>[x.name,x.count,x.tl.toFixed(2)])];
       downloadText(rows.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(';')).join('\n'),`asil_yonetim_raporu_${reportFilters.range==='month'?reportFilters.month:state.activePeriod}.csv`,'text/csv;charset=utf-8');audit('Genişletilmiş HAS yönetim raporu dışa aktarıldı','Rapor');
     });
   }
@@ -3765,6 +3765,12 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       const code=String(c.productCode||c.code||'').toLocaleUpperCase('tr-TR').trim();
       const name=String(c.productDefinition||c.name||'').toLocaleUpperCase('tr-TR').trim();
       const pus=String(c.pusulaCode||'').toLocaleUpperCase('tr-TR').trim();
+      // Pusula'dan gelen açık/barkodsuz stokların stok kartları asla otomatik temizlikte silinmez.
+      const linkedToOpen=(state.openStocks||[]).some(o=>
+        String(o.stockCardId||'')===String(c.id||'') ||
+        (String(o.productCode||o.pusulaCode||'').trim() && String(o.productCode||o.pusulaCode||'').trim()===String(c.productCode||c.pusulaCode||'').trim())
+      );
+      if(linkedToOpen)return false;
       if(essential.has(code)||essential.has(pus))return false;
       const codeParts=code.split(/[-_\s]+/).filter(Boolean), nameParts=name.split(/\s+/).filter(Boolean);
       const codePurity=codeParts[codeParts.length-1]||'', namePurity=nameParts[nameParts.length-1]||'';
@@ -3780,8 +3786,81 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     state.meta.stockCardCleanupVersion=1;
   }
 
+  function ensureOpenStockCardsV61(){
+    state.stockCardsMaster=Array.isArray(state.stockCardsMaster)?state.stockCardsMaster:[];
+    state.openStocks=Array.isArray(state.openStocks)?state.openStocks:[];
+    let added=0, relinked=0;
+    const norm=s=>String(s||'').toLocaleUpperCase('tr-TR').replace(/\s+/g,' ').trim();
+    state.openStocks.forEach((o,idx)=>{
+      const code=String(o.productCode||o.pusulaCode||'').trim();
+      const name=String(o.name||`AÇIK STOK ${code||idx+1}`).trim();
+      const desiredId=String(o.stockCardId||`SC-OPEN-${code||idx+1}`);
+      let card=state.stockCardsMaster.find(c=>String(c.id||'')===desiredId);
+      if(!card && code) card=state.stockCardsMaster.find(c=>String(c.productCode||c.pusulaCode||c.code||'').trim()===code);
+      if(!card) card=state.stockCardsMaster.find(c=>norm(c.productDefinition||c.name)===norm(name) && Number(c.fixedMilyem??c.purity??0)===Number(o.purity||0));
+      const isAdet=String(o.unit||'').toUpperCase()==='ADET';
+      if(!card){
+        card={
+          id:desiredId,
+          pusulaCode:code,
+          code:code,
+          productCode:code,
+          name,
+          productDefinition:name,
+          productGroup:isAdet?'ZİYNET':'ALTIN',
+          stockTrackingUnit:'HAS',
+          workmanshipTrackingUnit:'HAS',
+          unit12:isAdet?'AD':'GR',
+          fixedMilyem:Number(o.purity||0),
+          fixedPrice:0,
+          canChangePurity:false,
+          ziynet:isAdet,
+          workmanshipIncluded:false,
+          countedTracking:isAdet,
+          hideFromSale:false,
+          showGoldPrice:false,
+          formula:'',
+          productType:isAdet?'Ziynet':'Altın Mamul',
+          group:isAdet?'ZIYNET':'ALTIN',
+          category:name,
+          subCategory:'',
+          karat:String(o.purity||''),
+          purity:String(o.purity||''),
+          unit:isAdet?'Adet':'Gram',
+          workmanshipType:'HAS',
+          zGram:Number(o.zGram||0),
+          restoredFromOpenStock:true
+        };
+        state.stockCardsMaster.push(card);
+        added++;
+      }else{
+        // Var olan gerçek kartı eksik alanlar yüzünden bozmayız; yalnız Pusula açık stok bağı için gerekli alanları tamamlarız.
+        card.pusulaCode=card.pusulaCode||code;
+        card.productCode=card.productCode||card.code||code;
+        card.code=card.code||card.productCode||code;
+        card.name=card.name||name;
+        card.productDefinition=card.productDefinition||card.name||name;
+        card.productGroup=card.productGroup||(isAdet?'ZİYNET':'ALTIN');
+        card.stockTrackingUnit=card.stockTrackingUnit||'HAS';
+        card.workmanshipTrackingUnit=card.workmanshipTrackingUnit||'HAS';
+        card.unit12=card.unit12||(isAdet?'AD':'GR');
+        if(!Number(card.fixedMilyem||0))card.fixedMilyem=Number(o.purity||0);
+        if(!Number(card.purity||0))card.purity=String(o.purity||'');
+        card.ziynet=Boolean(card.ziynet||isAdet);
+        card.countedTracking=Boolean(card.countedTracking||isAdet);
+        if(isAdet && !Number(card.zGram||0))card.zGram=Number(o.zGram||0);
+      }
+      if(String(o.stockCardId||'')!==String(card.id||'')){o.stockCardId=card.id;relinked++;}
+    });
+    state.meta=state.meta||{};
+    state.meta.openStockCardRepairVersion=1;
+    state.meta.openStockCardRepairAdded=added;
+    state.meta.openStockCardRepairRelinked=relinked;
+    return {added,relinked};
+  }
+
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion='6.0';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();
+    state.meta=state.meta||{};state.meta.appVersion='6.1';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
