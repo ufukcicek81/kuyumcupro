@@ -84,3 +84,6 @@ Bu sürümde **Barkod Yazdır** varsayılan olarak `QZ Tray — Doğrudan Etiket
 5. Bundan sonra **Barkod Yazdır** düğmesi etiketi doğrudan seçilen yazıcıya yollar.
 
 Not: Normal web tarayıcısı güvenlik nedeniyle tek başına sessiz/doğrudan baskı yapamaz. Bu nedenle doğrudan baskı QZ Tray üzerinden yapılır. `Tarayıcı Yazdır` modu seçilirse önizleme ekranı tekrar açılır.
+
+## V6.17 - QZ İmzalı Sessiz Baskı
+Yazıcı ayarlarından `QZ Yetkilendir (1 Kez)` düğmesine basıp `private-key.pem` dosyasını seçin. Bu özel anahtar GitHub'a yüklenmez, yalnızca o tarayıcıda tutulur. Ardından QZ bağlantısını test edin ve yazıcıyı seçin.
