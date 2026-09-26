@@ -1,8 +1,8 @@
-# Asil Kuyumcu Pro v5.19
+# Asil Kuyumcu Pro v5.20
 
-- Satış ekranı tek sayfaya daha yakın, daha kompakt bir düzende yeniden toplandı.
-- Satış başlığı, hızlı işlem düğmeleri, cari/personel/stok arama alanları tek üst kartta birleştirildi.
-- Satış ekranının altındaki ek özel işlem listesi kaldırıldı; böylece ana satış akışı için sayfa yüksekliği küçültüldü.
-- Ödeme / Takas bölümü ve Satış Özeti sıkılaştırıldı; masaüstünde scroll ihtiyacı azaltıldı.
-- Klavye akışı görünür şekilde sadeleştirildi: stok kodu -> fiyat -> not -> ekle -> ödeme tipi -> satış onayla.
-- Var olan Enter ile ilerleme mantığı korunarak mouse ihtiyacı azaltıldı.
+- PC modu artık tarayıcıyı %75'e küçültmüş gibi kompakt çalışır.
+- Kullanıcının tarayıcı zoomunu %75 yapmasına gerek kalmaz; %100 zoomda satış ekranı aynı yoğunlukta görünür.
+- PC modunda sidebar, üst bar, satış formu, ödeme/takas ve satış özeti birlikte küçülür.
+- Satış özeti sağda kalır ve satış ekranı geniş masaüstü yerleşimini korur.
+- Tablet ve mobil mod etkilenmez; sadece PC moduna uygulanır.
+- V5.19'daki Enter ile klavye akışı korunur.
