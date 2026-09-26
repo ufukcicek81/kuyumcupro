@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101113" />
-  <meta name="description" content="Asil Kuyumcu Pro V6.12 - gelişmiş ürün kartı, stok, barkod, sayım, cari, kasa ve finans prototipi" />
+  <meta name="description" content="Asil Kuyumcu Pro V6.14 - gelişmiş ürün kartı, stok, barkod, sayım, cari, kasa ve finans prototipi" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
@@ -1852,7 +1852,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
           <div class="labelled span-2"><label>Cari Ara / Müşteri - Toptancı</label><input class="input" id="saleCustomerSearch" list="saleCustomerList" value="${esc(currentCustomer?.name||'PEŞİN MÜŞTERİ')}" autocomplete="off" placeholder="İsim yaz: İPEK KUYUMCULUK"><datalist id="saleCustomerList">${saleCustomerCandidates().map(c=>`<option value="${esc(c.name)}">${esc(c.code||'')} · ${esc(c.type||'')}</option>`).join('')}</datalist><small class="sale-inline-help">İsmin birkaç harfini yazıp Enter'a basın · Seçili: ${esc(currentCustomer?.type||'Müşteri')}</small></div>
           <div class="labelled"><label>Satış Cinsi</label><select class="select" id="saleCurrency">${paymentCurrencyOptions().map(x=>`<option ${saleCur===x?'selected':''}>${x}</option>`).join('')}</select></div>
           <div class="labelled"><label>Satan Eleman</label><select class="select" id="salePerson"><option value="">Seçiniz</option>${state.users.filter(u=>u.permissions?.canSell!==false).map(u=>`<option ${saleDraft.salesperson===u.name?'selected':''}>${esc(u.name)}</option>`).join('')}</select></div>
-          <div class="labelled sale-search-wrap"><label>Stok Kodu / Barkod</label><input id="saleProductSearch" class="input" value="${esc(saleDraft.entryQuery||'')}" placeholder="C yaz = ÇEYREK · 34 · ALY 1335" autocomplete="off"><small class="sale-inline-help">Yazdıkça en yakın stok aynı kutuda tamamlanır · Enter = seç</small></div>
+          <div class="labelled sale-search-wrap"><label>Stok Kodu / Barkod</label><input id="saleProductSearch" class="input" value="${esc(saleDraft.entryQuery||'')}" placeholder="C yaz = ÇEYREK · 34 · barkod için 1657 veya ALY1657" autocomplete="off"><small class="sale-inline-help">Yazdıkça en yakın stok aynı kutuda tamamlanır · Enter = seç</small></div>
         </div>
         <div class="sale-quick-inline"><span class="mini-label">Hızlı İşlem</span><div class="trade-actions sale-compact-actions"><button class="btn buy" data-special-trade="Ziynet Alış">Ziynet Alış</button><button class="btn sell" data-special-trade="Ziynet Satış">Ziynet Satış</button><button class="btn buy" data-special-trade="Hurda Alış">Hurda Alış</button><button class="btn sell" data-special-trade="Hurda Satış">Hurda Satış</button><button class="btn buy" data-special-trade="Döviz Alış">Döviz Alış</button><button class="btn sell" data-special-trade="Döviz Satış">Döviz Satış</button></div></div>
       </div>
@@ -1861,7 +1861,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
         <div class="sale-main-stack">
           <div class="card sale-main-card sale-product-card">
             <div class="section-head"><h3>Ürün</h3><span>${selected?'Ürün bulundu':'Stok kodunu yazıp Enter'}</span></div>
-            <div class="sale-entry-status">${selected?`<span class="badge ${isBarcode?'blue':'gold'}">${isBarcode?'BARKODLU':'AÇIK STOK'}</span><strong>${esc(entryName)}</strong><span>${isBarcode?esc(barcodeItem.barcode||barcodeItem.code):`Kod ${esc(openItem.pusulaCode||openItem.productCode||'')}`}</span>${!isBarcode?`<span>Stok: ${qty(openItem.amount)} ${esc(openItem.unit||'')}</span>`:''}`:'<span>Örn. Çeyrek için <b>5</b>, 22 bilezik için <b>34</b>, barkodlu ürün için <b>ALY 1335</b>.</span>'}</div>
+            <div class="sale-entry-status">${selected?`<span class="badge ${isBarcode?'blue':'gold'}">${isBarcode?'BARKODLU':'AÇIK STOK'}</span><strong>${esc(entryName)}</strong><span>${isBarcode?esc(barcodeItem.barcode||barcodeItem.code):`Kod ${esc(openItem.pusulaCode||openItem.productCode||'')}`}</span>${!isBarcode?`<span>Stok: ${qty(openItem.amount)} ${esc(openItem.unit||'')}</span>`:''}`:'<span>Örn. Çeyrek için <b>5</b>, 22 bilezik için <b>34</b>, barkodlu ürün için sadece <b>1657</b> veya <b>ALY1657</b>.</span>'}</div>
             <div class="sale-unified-editor">
               <div class="labelled wide"><label>Ürün</label><input id="saleEntryName" class="input" value="${esc(entryName)}" readonly></div>
               <div class="labelled"><label>Miktar</label><input id="saleEntryAmount" class="input" type="number" step="${openItem?.unit==='ADET'?'1':'0.001'}" value="${selected?entryAmount:''}" ${!selected||isBarcode?'readonly':''}></div>
@@ -2067,7 +2067,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function stockListView(rows){
     const groups=uniqueValues(rows.map(x=>x.group)), cats=uniqueValues(rows.map(x=>x.category)), karats=uniqueValues(rows.map(x=>x.purity||x.karat)), suppliers=uniqueValues(rows.map(x=>x.supplier)), statuses=uniqueValues(rows.map(x=>x.status));
     return `${stockMetrics(rows)}<div class="card"><div class="filter-panel"><input id="stockSearch" class="input" placeholder="Barkod, stok kodu, ürün, toptancı"><select id="stockGroupFilter" class="select"><option value="">Tüm Gruplar</option>${groups.map(x=>`<option>${esc(x)}</option>`).join('')}</select><select id="stockCategoryFilter" class="select"><option value="">Tüm Tanımlar</option>${cats.map(x=>`<option>${esc(x)}</option>`).join('')}</select><select id="stockKaratFilter" class="select"><option value="">Tüm Ayarlar</option>${karats.map(x=>`<option>${esc(x)}</option>`).join('')}</select><select id="stockSupplierFilter" class="select"><option value="">Tüm Toptancılar</option>${suppliers.map(x=>`<option>${esc(x)}</option>`).join('')}</select><select id="stockStatusFilter" class="select"><option value="">Tüm Durumlar</option>${statuses.map(x=>`<option>${esc(x)}</option>`).join('')}</select></div>
-    <div class="table-wrap"><table class="table" id="stockTable" style="min-width:1320px"><thead><tr><th></th><th>Ürün Kodu</th><th>Mal Tanımı</th><th>Ürün Grubu</th><th>Toptancı</th><th class="num">Miktar</th><th class="num">Ayar</th><th class="num">Mal HAS</th><th class="num">İşçilik</th><th class="num">Karşı Hesap</th><th>Konum</th><th>Durum</th><th>Barkod</th><th>İşlem</th></tr></thead><tbody>${rows.map(x=>`<tr data-search="${esc([x.pusulaCode,x.code,x.name,x.productType,x.group,x.category,x.supplier,x.barcode,x.rfid].join(' ').toLowerCase())}" data-group="${esc(x.group)}" data-category="${esc(x.category)}" data-karat="${esc(x.purity||x.karat)}" data-supplier="${esc(x.supplier)}" data-status="${esc(x.status)}"><td><input type="checkbox" class="stock-check" value="${x.id}"></td><td><strong>${esc(x.code)}</strong></td><td><div class="product-name"><strong>${esc(x.name)}</strong><small>${esc(x.purchaseDocNo||x.partyId||'')}</small></div></td><td><span class="badge blue">${esc(x.group||x.productType)}</span></td><td>${esc(x.supplier)}</td><td class="num">${qty(stockAmount(x))} GR</td><td class="num"><span class="badge gold">${qty(Number(x.purity||0))}</span></td><td class="num">${qty(stockHas(x))} HAS</td><td class="num">${qty(stockWorkmanshipHas(x))} HAS</td><td class="num"><strong>${qty(stockCounterHas(x))} HAS</strong></td><td>${esc([x.showcase,x.location].filter(Boolean).join(' / '))}</td><td><span class="badge ${stockStatusClass(x.status)}">${esc(x.status)}</span></td><td>${esc(x.barcode)}</td><td><div class="row-actions"><button class="btn btn-outline" data-stock-detail="${x.id}">Detay</button><button class="btn" data-stock-status="${x.id}">Durum</button>${x.openSourceId&&x.status==='Stokta'?`<button class="btn btn-danger" data-return-open="${x.id}">Barkodu Geri Al</button>`:''}</div></td></tr>`).join('')}</tbody></table></div></div>`;
+    <div class="table-wrap"><table class="table" id="stockTable" style="min-width:1320px"><thead><tr><th></th><th>Ürün Kodu</th><th>Mal Tanımı</th><th>Ürün Grubu</th><th>Toptancı</th><th class="num">Miktar</th><th class="num">Ayar</th><th class="num">Mal HAS</th><th class="num">İşçilik</th><th class="num">Karşı Hesap</th><th>Konum</th><th>Durum</th><th>Barkod</th><th>İşlem</th></tr></thead><tbody>${rows.map(x=>`<tr data-search="${esc([x.pusulaCode,x.code,x.name,x.productType,x.group,`${x.group||''}${x.pusulaCode||''}`,x.category,x.supplier,x.barcode,x.rfid].join(' ').toLowerCase())}" data-group="${esc(x.group)}" data-category="${esc(x.category)}" data-karat="${esc(x.purity||x.karat)}" data-supplier="${esc(x.supplier)}" data-status="${esc(x.status)}"><td><input type="checkbox" class="stock-check" value="${x.id}"></td><td><strong>${esc(x.code)}</strong></td><td><div class="product-name"><strong>${esc(x.name)}</strong><small>${esc(x.purchaseDocNo||x.partyId||'')}</small></div></td><td><span class="badge blue">${esc(x.group||x.productType)}</span></td><td>${esc(x.supplier)}</td><td class="num">${qty(stockAmount(x))} GR</td><td class="num"><span class="badge gold">${qty(Number(x.purity||0))}</span></td><td class="num">${qty(stockHas(x))} HAS</td><td class="num">${qty(stockWorkmanshipHas(x))} HAS</td><td class="num"><strong>${qty(stockCounterHas(x))} HAS</strong></td><td>${esc([x.showcase,x.location].filter(Boolean).join(' / '))}</td><td><span class="badge ${stockStatusClass(x.status)}">${esc(x.status)}</span></td><td>${esc(x.barcode)}</td><td><div class="row-actions"><button class="btn btn-outline" data-stock-detail="${x.id}">Detay</button><button class="btn" data-stock-status="${x.id}">Durum</button>${x.openSourceId&&x.status==='Stokta'?`<button class="btn btn-danger" data-return-open="${x.id}">Barkodu Geri Al</button>`:''}</div></td></tr>`).join('')}</tbody></table></div></div>`;
   }
   function stockCardsView(){
     return `<div class="page-title" style="margin-top:4px"><div><h1 style="font-size:22px">Stok Kartı Tanımlama</h1><p>Pusula ekranındaki ürün grubu, ürün kodu, takip birimleri ve sabit milyem mantığı.</p></div><button class="btn btn-primary" data-new-stockcard="1">+ Yeni Stok Kartı</button></div><div class="notice">Altın kartında <strong>Milyem Sabiti</strong> tanımlanır. Altın girişinde mal seçildiğinde ayar otomatik gelir ve miktardan HAS hesaplanır.</div><div class="master-card-grid" style="margin-top:14px">${state.stockCardsMaster.map(c=>`<div class="stock-card-box"><div class="section-head"><h4>${esc(c.productDefinition||c.name)}</h4><span class="badge gold">Kod ${esc(c.productCode||c.code)}</span></div><p>${esc(c.productGroup||c.productType)} · Stok: ${esc(c.stockTrackingUnit||'')} · İşçilik: ${esc(c.workmanshipTrackingUnit||'')}</p><div class="meta"><span class="badge">${qty(c.fixedMilyem||c.purity)} milyem</span><span class="badge">${esc(c.unit12||'GR')}</span>${c.countedTracking?'<span class="badge blue">Adetli Takip</span>':''}${c.ziynet?'<span class="badge gold">Ziynet</span>':''}${c.ziynet&&Number(c.zGram||0)>0?`<span class="badge green">1 Adet = ${qty(c.zGram)} GR</span>`:''}</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px"><button class="btn btn-outline" data-edit-stockcard="${c.id}">Düzenle</button><button class="btn btn-danger" data-delete-stockcard="${c.id}">Sil</button></div></div>`).join('')}</div>`;
@@ -2204,12 +2204,12 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
 
   function labelsView(rows){
-    const s=printerSettings(),list=rows.slice(0,160),modeLabel=s.mode==='qz'?'QZ Tray / Doğrudan':'Tarayıcı Yazdır';
+    const s=printerSettings(),list=rows.slice().sort((a,b)=>String(a.barcode||a.code||'').localeCompare(String(b.barcode||b.code||''),'tr',{numeric:true,sensitivity:'base'})),modeLabel=s.mode==='qz'?'QZ Tray / Doğrudan':'Tarayıcı Yazdır';
     return `<div class="page-title" style="margin-top:4px"><div><h1 style="font-size:22px">Barkod / Etiket Merkezi</h1><p>Ürün seç, etiketi önizle ve tarayıcıdan veya doğrudan termal yazıcıdan bas.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" id="printerSettingsBtn">Yazıcı Ayarları</button><button class="btn" id="printTestLabel">Test Etiketi</button><button class="btn btn-primary" id="printAllVisible">Seçilenleri Yazdır</button></div></div>
       <div class="printer-status"><span class="badge gold">${esc(modeLabel)}</span><span class="badge">Yazıcı: ${esc(s.printerName||'Seçilmedi / Sistem Yazıcısı')}</span><span class="badge">Etiket ${qty(s.labelWidthMm)} × ${qty(s.labelHeightMm)} mm</span><span class="badge">${s.dpi} DPI</span><span class="badge">${s.copies} kopya</span></div>
-      <div class="printer-toolbar"><input id="labelSearch" class="input grow" placeholder="Barkod, kısa kod, ürün adı veya stok kodu ara"><button class="btn btn-outline" id="labelSelectAll">Görünenleri Seç</button><button class="btn btn-outline" id="labelSelectNone">Seçimi Kaldır</button><span class="badge" id="labelSelectedCount">0 seçili</span></div>
-      <div class="notice"><strong>Pusula 72×10 kuyumcu etiketi aktif.</strong> Sol kafada barkod/kod/firma, sağ kafada iki HAS fiyatı ve ayar basılır; kuyruk boş kalır. Milimetrik hizalama <b>Yazıcı Ayarları</b> içindedir.</div>
-      <div class="barcode-labels" id="barcodeLabelGrid" style="margin-top:14px">${list.map(x=>`<label class="label-preview" data-label-search="${esc([x.code,x.name,x.barcode,x.pusulaCode,x.group,x.model].filter(Boolean).join(' ').toLocaleLowerCase('tr-TR'))}"><div class="label-top"><input type="checkbox" class="label-check" value="${x.id}"> ${esc(x.code)} · ${esc(x.name)}</div>${code128Svg(x.barcode)}<div class="label-meta"><span>${s.showKarat?esc(x.karat||x.purity||''):''}</span><span>${s.showWeight?qty(stockAmount(x))+' gr':''}</span><span>${s.showPusulaCode?esc(x.pusulaCode||''):''}</span></div>${s.showSaleHas||s.showSaleTl||s.showModel?`<div class="label-extra">${s.showModel&&x.model?`<span>${esc(x.model)}</span>`:''}${s.showSaleHas?`<span>${qty(Number(x.saleHas||stockCounterHas(x)||0))} HAS</span>`:''}${s.showSaleTl?`<span>${money(Number(x.saleHas||stockCounterHas(x)||0)*Number(state.prices.has?.sell||0))}</span>`:''}</div>`:''}</label>`).join('')}</div>`;
+      <div class="printer-toolbar"><input id="labelSearch" class="input grow" placeholder="Barkod, kısa kod (örn. 1657 / ALY1657), ürün adı veya stok kodu ara"><button class="btn btn-outline" id="labelSelectAll">Görünenleri Seç</button><button class="btn btn-outline" id="labelSelectNone">Seçimi Kaldır</button><span class="badge" id="labelSelectedCount">0 seçili</span><span class="badge gold">${list.length} ürün</span></div>
+      <div class="notice"><strong>Tüm aktif barkodlu stok listeleniyor.</strong> Aramada <b>ALY0001657</b> yerine sadece <b>1657</b> veya <b>ALY1657</b> yazabilirsin. Pusula 72×10 etiket yerleşimi ve milimetrik hizalama <b>Yazıcı Ayarları</b> içindedir.</div>
+      <div class="barcode-labels" id="barcodeLabelGrid" style="margin-top:14px">${list.map(x=>`<label class="label-preview" data-label-search="${esc([x.code,x.name,x.barcode,x.pusulaCode,x.group,`${x.group||''}${x.pusulaCode||''}`,x.model].filter(Boolean).join(' ').toLocaleLowerCase('tr-TR'))}" data-barcode="${esc(x.barcode||'')}" data-stock-code="${esc(x.code||'')}" data-pusula-code="${esc(x.pusulaCode||'')}" data-group="${esc(x.group||'')}"><div class="label-top"><input type="checkbox" class="label-check" value="${x.id}"> ${esc(x.code)} · ${esc(x.name)}</div>${code128Svg(x.barcode)}<div class="label-meta"><span>${s.showKarat?esc(x.karat||x.purity||''):''}</span><span>${s.showWeight?qty(stockAmount(x))+' gr':''}</span><span>${s.showPusulaCode?esc(x.pusulaCode||''):''}</span></div>${s.showSaleHas||s.showSaleTl||s.showModel?`<div class="label-extra">${s.showModel&&x.model?`<span>${esc(x.model)}</span>`:''}${s.showSaleHas?`<span>${qty(Number(x.saleHas||stockCounterHas(x)||0))} HAS</span>`:''}${s.showSaleTl?`<span>${money(Number(x.saleHas||stockCounterHas(x)||0)*Number(state.prices.has?.sell||0))}</span>`:''}</div>`:''}</label>`).join('')}</div>`;
   }
   function movementsView(){
     const moves=state.stockMoves.filter(x=>x.period===state.activePeriod).slice().sort((a,b)=>b.date.localeCompare(a.date));
@@ -2218,7 +2218,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function pageStocks(){
     const rows=state.stocks.filter(x=>x.period===state.activePeriod && x.status!=='Satıldı');
     let body=stockSummaryView(); if(stockView==='list') body=stockListView(rows); if(stockView==='cards') body=stockCardsView(); if(stockView==='labels') body=labelsView(rows); if(stockView==='moves') body=movementsView();
-    return `<div class="page-title"><div><h1>Stok Yönetimi</h1><p>Pusula düzeni: açık stok + barkodlu stok + hurda + kasa/POS tek merkezde.</p></div><span class="badge gold">V6.13 · Sürükle-Bırak Etiket Editörü</span></div>${stockHeaderTabs()}${body}`;
+    return `<div class="page-title"><div><h1>Stok Yönetimi</h1><p>Pusula düzeni: açık stok + barkodlu stok + hurda + kasa/POS tek merkezde.</p></div><span class="badge gold">V6.14 · Tüm Barkodlar + Kısa Kod Arama</span></div>${stockHeaderTabs()}${body}`;
   }
 
   function customerCardsView(){
@@ -2324,7 +2324,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const history=state.countSessions.filter(x=>x.period===state.activePeriod).slice().sort((a,b)=>b.date.localeCompare(a.date));
     return `<div class="page-title"><div><h1>Sayım İşlemleri</h1><p>Barkod / RFID sayımı; sayılan, sayılmayan ve eşleşmeyen ürünleri ayrı takip eder.</p></div>${sessionCount?'<button class="btn btn-success" id="finishCount">Sayımı Bitir</button>':'<button class="btn btn-primary" id="startCount">Yeni Sayım</button>'}</div>
       <div class="grid grid-6">${metric('Beklenen',sessionCount?expected.length:stock.length,'Tekil ürün')}${metric('Sayılan',counted.length,'Benzersiz okutma')}${metric('Kalan',sessionCount?missing.length:stock.length,'Sayılmayan')}${metric('Eşleşmeyen',extra.length,'Stok dışı kod')}${metric('Sayılan Miktar',qty(countedStocks.reduce((a,x)=>a+stockAmount(x),0))+' gr','Toplam miktar')}${metric('Sayılan HAS',qty(countedStocks.reduce((a,x)=>a+stockHas(x),0))+' HAS','Saf karşılık')}</div>
-      <div class="grid grid-2" style="margin-top:16px"><div class="card"><div class="section-head"><h3>${sessionCount?'Aktif Sayım':'Sayım Başlatılmadı'}</h3><span>${sessionCount?trDate(sessionCount.date):''}</span></div>${sessionCount?`<div class="count-scan"><div class="labelled"><label>Barkod / RFID / Stok Kodu</label><input id="countBarcode" class="input" placeholder="Okutun ve Enter'a basın" autofocus></div><div class="labelled"><label>Okuma Modu</label><select id="countMode" class="select"><option ${sessionCount.mode==='Barkod'?'selected':''}>Barkod</option><option ${sessionCount.mode==='RFID'?'selected':''}>RFID</option></select></div><button class="btn btn-primary" id="countFind">Say</button><button class="btn btn-outline" id="countUndo">Sonuncuyu Geri Al</button></div><div class="count-status" style="margin-top:12px"><strong>${esc(sessionCount.lastMessage||'Okutma bekleniyor')}</strong></div>`:'<div class="empty-state"><strong>Yeni sayım başlatın</strong>Başlangıç anındaki aktif stok snapshot olarak alınır.</div>'}</div>
+      <div class="grid grid-2" style="margin-top:16px"><div class="card"><div class="section-head"><h3>${sessionCount?'Aktif Sayım':'Sayım Başlatılmadı'}</h3><span>${sessionCount?trDate(sessionCount.date):''}</span></div>${sessionCount?`<div class="count-scan"><div class="labelled"><label>Barkod / RFID / Stok Kodu</label><input id="countBarcode" class="input" placeholder="Okutun veya 1657 yazıp Enter’a basın" autofocus></div><div class="labelled"><label>Okuma Modu</label><select id="countMode" class="select"><option ${sessionCount.mode==='Barkod'?'selected':''}>Barkod</option><option ${sessionCount.mode==='RFID'?'selected':''}>RFID</option></select></div><button class="btn btn-primary" id="countFind">Say</button><button class="btn btn-outline" id="countUndo">Sonuncuyu Geri Al</button></div><div class="count-status" style="margin-top:12px"><strong>${esc(sessionCount.lastMessage||'Okutma bekleniyor')}</strong></div>`:'<div class="empty-state"><strong>Yeni sayım başlatın</strong>Başlangıç anındaki aktif stok snapshot olarak alınır.</div>'}</div>
       <div class="card"><div class="section-head"><h3>Sayılmayan Ürünler</h3><span>${missing.length}</span></div><div class="mini-list">${missing.slice(0,40).map(x=>`<div class="mini-row"><span><strong>${esc(x.code)}</strong> · ${esc(x.name)}</span><span>${qty(stockAmount(x))} gr</span></div>`).join('')||'<div class="muted">Eksik ürün yok.</div>'}</div></div></div>
       <div class="card" style="margin-top:16px"><div class="section-head"><h3>Sayım Geçmişi</h3><span>${history.length} oturum</span></div><div class="table-wrap"><table class="table"><thead><tr><th>Tarih</th><th>Durum</th><th>Mod</th><th class="num">Beklenen</th><th class="num">Sayılan</th><th class="num">Eksik</th><th class="num">Eşleşmeyen</th><th>Kullanıcı</th></tr></thead><tbody>${history.map(x=>`<tr><td>${trDate(x.date)}</td><td><span class="badge ${x.status==='Tamamlandı'?'green':'gold'}">${esc(x.status)}</span></td><td>${esc(x.mode)}</td><td class="num">${x.expectedIds.length}</td><td class="num">${x.countedIds.length}</td><td class="num">${Math.max(0,x.expectedIds.length-x.countedIds.length)}</td><td class="num">${x.extraCodes.length}</td><td>${esc(x.user)}</td></tr>`).join('')||'<tr><td colspan="8">Henüz sayım yok.</td></tr>'}</tbody></table></div></div>`;
   }
@@ -2783,23 +2783,29 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
   function splitSaleStockKey(value){
     const clean=normalizeSaleStockKey(value);
+    if(!clean)return {clean:'',prefix:'',number:''};
+    const numeric=clean.match(/^0*([0-9]+)$/u);
+    if(numeric)return {clean,prefix:'',number:String(Number(numeric[1]))};
     const m=clean.match(/^([^0-9]+)0*([0-9]+)$/u);
     return m?{clean,prefix:m[1],number:String(Number(m[2]))}:{clean,prefix:'',number:''};
+  }
+  function barcodeLookupMatches(candidate,queryValue){
+    const q=splitSaleStockKey(queryValue),c=splitSaleStockKey(candidate);
+    if(!q.clean||!c.clean)return false;
+    if(c.clean===q.clean)return true;
+    if(!q.number)return false;
+    if(q.prefix)return c.prefix===q.prefix&&c.number===q.number;
+    return c.number===q.number;
+  }
+  function stockMatchesBarcodeLookup(stock,queryValue){
+    if(!stock)return false;
+    return [stock.barcode,stock.code,stock.pusulaCode,`${stock.group||''}${stock.pusulaCode||''}`].some(v=>barcodeLookupMatches(v,queryValue));
   }
   function findSaleStockByLookup(value){
     const q=splitSaleStockKey(value);
     if(!q.clean)return null;
     const list=activeStock();
-    let found=list.find(x=>[x.barcode,x.code].some(v=>normalizeSaleStockKey(v)===q.clean));
-    if(found)return found;
-    if(q.prefix&&q.number){
-      const matches=list.filter(x=>{
-        const candidates=[x.barcode,x.code,`${x.group||''}${x.pusulaCode||''}`];
-        return candidates.some(v=>{const c=splitSaleStockKey(v);return c.prefix===q.prefix&&c.number===q.number;});
-      });
-      if(matches.length)return matches[0];
-    }
-    return null;
+    return list.find(x=>stockMatchesBarcodeLookup(x,value))||null;
   }
 
   function findOpenSaleStockByLookup(value){
@@ -2811,6 +2817,9 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     return starts.length===1?starts[0]:null;
   }
   function findUnifiedSaleEntry(value){
+    const clean=normalizeSaleStockKey(value),numericOnly=/^[0-9]+$/.test(clean);
+    // Pusula açık stok kısa kodları (örn. 5, 34) barkod son numarasıyla çakışmasın.
+    if(numericOnly){const open=findOpenSaleStockByLookup(value);if(open)return {type:'open',id:open.id};}
     const barcode=findSaleStockByLookup(value);if(barcode)return {type:'barcode',id:barcode.id};
     const open=findOpenSaleStockByLookup(value);if(open)return {type:'open',id:open.id};
     return null;
@@ -2833,8 +2842,9 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       if(idx<99)rows.push({type:'open',id:o.id,rank:idx,label:o.name,code:o.pusulaCode||o.productCode||'',meta:`${qty(o.amount)} ${o.unit||''} stok`,stock:Number(o.amount||0)});
     });
     activeStock().forEach(x=>{
-      const fields=[x.barcode,x.code,x.name,x.type,x.category,x.group,`${x.group||''}${x.pusulaCode||''}`].map(foldSaleSearchKey);
-      const idx=fields.reduce((best,f)=>f===q?Math.min(best,-1):f.startsWith(q)?Math.min(best,0):f.includes(q)?Math.min(best,2):best,99);
+      const fields=[x.barcode,x.code,x.pusulaCode,x.name,x.type,x.category,x.group,`${x.group||''}${x.pusulaCode||''}`].map(foldSaleSearchKey);
+      let idx=fields.reduce((best,f)=>f===q?Math.min(best,-1):f.startsWith(q)?Math.min(best,0):f.includes(q)?Math.min(best,2):best,99);
+      if(stockMatchesBarcodeLookup(x,value))idx=Math.min(idx,-2);
       if(idx<99)rows.push({type:'barcode',id:x.id,rank:idx,label:x.name||x.type||x.category||'Barkodlu Ürün',code:x.barcode||x.code||'',meta:`${qty(stockAmount(x))} GR · ${x.purity||x.karat||''}`,stock:1});
     });
     return rows.sort((a,b)=>a.rank-b.rank||String(a.label).localeCompare(String(b.label),'tr')||String(a.code).localeCompare(String(b.code),'tr')).slice(0,limit);
@@ -2932,7 +2942,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       const v=e.target.value.trim();
       if(!v&&(saleDraft.lines.length||(saleDraft.returnItems||[]).length)){const t=saleTotals();const target=Math.abs(t.remain)<=0.01?document.getElementById('finalizeSale'):document.querySelector('[data-pay]');if(target){focusAndSelect(target);return;}}
       if(!v)return;
-      if(!chooseInlineSaleSuggestion(e.target))toast('Ürün bulunamadı. C = Çeyrek, 34 = 22 Bilezik, ALY 1335 = barkodlu ürün.','err');
+      if(!chooseInlineSaleSuggestion(e.target))toast('Ürün bulunamadı. C = Çeyrek, 34 = 22 Bilezik; barkod için 1657 veya ALY1657 yazabilirsiniz.','err');
     });
 
     const calcEntryPayable=()=>{
@@ -3041,10 +3051,10 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
   function findSoldSaleLineByBarcode(value){
     const q=normalizeSaleStockKey(value);if(!q)return null;
-    const st=(state.stocks||[]).find(x=>x.period===state.activePeriod&&[x.barcode,x.code].some(v=>normalizeSaleStockKey(v)===q));
+    const st=(state.stocks||[]).find(x=>x.period===state.activePeriod&&stockMatchesBarcodeLookup(x,value));
     const sales=(state.sales||[]).filter(s=>s.period===state.activePeriod&&s.status==='Tamamlandı').slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
     for(const s of sales){
-      const idx=(s.lines||[]).findIndex(l=>l.sourceType==='barcode'&&((st&&l.stockId===st.id)||normalizeSaleStockKey(l.code)===q));
+      const idx=(s.lines||[]).findIndex(l=>l.sourceType==='barcode'&&((st&&l.stockId===st.id)||barcodeLookupMatches(l.code,value)));
       if(idx>=0){const line=s.lines[idx],stock=st||(state.stocks||[]).find(x=>x.id===line.stockId);return {sale:s,line,index:idx,stock};}
     }
     return null;
@@ -3063,7 +3073,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
         <div class="labelled span-2"><label>Açıklama</label><input id="retOpenNote" class="input" placeholder="Barkodsuz ürün iadesi"></div>
       </div></div>
       <div id="retBarcodeWrap" class="span-4" style="display:none"><div class="form-grid">
-        <div class="labelled span-2"><label>Eski Satış Barkodu</label><input id="retBarcode" class="input" placeholder="Örn. ALY 1335" autocomplete="off"></div>
+        <div class="labelled span-2"><label>Eski Satış Barkodu</label><input id="retBarcode" class="input" placeholder="Örn. 1657 veya ALY1657" autocomplete="off"></div>
         <div class="labelled span-2"><label>İade Tutarı (TL)</label><input id="retBarcodeAmount" class="input" type="number" step="0.01" disabled></div>
         <div class="span-4" id="retBarcodeResult"><div class="notice">Barkodu yazın; eski satış belgesi, müşteri, tarih ve satış tutarı burada gelir.</div></div>
       </div></div>
@@ -3117,7 +3127,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     if(!sup||sup.type!=='Toptancı')return toast('Önce satış ekranından toptancı carisini seçin','err');
     let selectedStock=null;
     modal(`Toptancı İade — ${sup.name}`,`<div class="form-grid">
-      <div class="labelled span-2"><label>Barkod / Kısa Kod</label><input id="saleSupplierReturnBarcode" class="input" placeholder="Örn. ALY 1335" autocomplete="off"></div>
+      <div class="labelled span-2"><label>Barkod / Kısa Kod</label><input id="saleSupplierReturnBarcode" class="input" placeholder="Örn. 1657 veya ALY1657" autocomplete="off"></div>
       <div class="labelled"><label>İade HAS</label><input id="saleSupplierReturnHas" class="input" type="number" step="0.001" disabled></div>
       <div class="labelled"><label>TL Karşılığı</label><input id="saleSupplierReturnTl" class="input" readonly></div>
       <div class="span-4" id="saleSupplierReturnResult"><div class="notice">Mağazada stokta bulunan barkodu yazın. Ürün bilgisi ve maliyet HAS otomatik gelir.</div></div>
@@ -3134,7 +3144,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       audit(`${doc}: ${selectedStock.code} satış ekranından toptancıya iade`,'Stok');closeModal();save();render();toast('Toptancı iadesi işlendi');
     },'İADEYİ KAYDET');
     const bi=document.getElementById('saleSupplierReturnBarcode'),hh=document.getElementById('saleSupplierReturnHas'),tl=document.getElementById('saleSupplierReturnTl'),res=document.getElementById('saleSupplierReturnResult');
-    const find=()=>{const q=normalizeSaleStockKey(bi.value);selectedStock=(state.stocks||[]).find(s=>s.period===state.activePeriod&&s.status==='Stokta'&&[s.barcode,s.code,s.pusulaCode].some(v=>normalizeSaleStockKey(v)===q))||null;if(!selectedStock){hh.disabled=true;hh.value='';tl.value='';res.innerHTML='<div class="notice">Stokta barkod bulunamadı. Tam barkod veya ALY 1335 gibi kısa kod yazabilirsiniz.</div>';return;}const has=Number(selectedStock.costHas||stockCounterHas(selectedStock)||stockHas(selectedStock)||0);hh.disabled=false;hh.value=has.toFixed(3);tl.value=(has*Number(state.prices.has.buy||1)).toFixed(2);res.innerHTML=`<div class="notice"><strong>${esc(selectedStock.barcode||selectedStock.code)}</strong> · ${esc(selectedStock.name||selectedStock.type)} · ${qty(stockAmount(selectedStock))} GR<br>Maliyet / İade: <b>${qty(has)} HAS</b> · Cari: <b>${esc(sup.name)}</b></div>`;};
+    const find=()=>{const q=normalizeSaleStockKey(bi.value);selectedStock=(state.stocks||[]).find(s=>s.period===state.activePeriod&&s.status==='Stokta'&&stockMatchesBarcodeLookup(s,bi.value))||null;if(!selectedStock){hh.disabled=true;hh.value='';tl.value='';res.innerHTML='<div class="notice">Stokta barkod bulunamadı. Tam barkod, ALY1657 veya sadece 1657 yazabilirsiniz.</div>';return;}const has=Number(selectedStock.costHas||stockCounterHas(selectedStock)||stockHas(selectedStock)||0);hh.disabled=false;hh.value=has.toFixed(3);tl.value=(has*Number(state.prices.has.buy||1)).toFixed(2);res.innerHTML=`<div class="notice"><strong>${esc(selectedStock.barcode||selectedStock.code)}</strong> · ${esc(selectedStock.name||selectedStock.type)} · ${qty(stockAmount(selectedStock))} GR<br>Maliyet / İade: <b>${qty(has)} HAS</b> · Cari: <b>${esc(sup.name)}</b></div>`;};
     bi.addEventListener('input',find);bi.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();find();if(selectedStock)focusAndSelect(hh);}});hh.addEventListener('input',()=>tl.value=(Number(hh.value||0)*Number(state.prices.has.buy||1)).toFixed(2));setTimeout(()=>focusAndSelect(bi),0);
   }
 
@@ -3370,7 +3380,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     document.getElementById('labelSelectAll')?.addEventListener('click',()=>{document.querySelectorAll('#barcodeLabelGrid .label-preview').forEach(el=>{if(el.style.display!=='none'){const cb=el.querySelector('.label-check');if(cb)cb.checked=true;}});updateLabelSelectedCount();});
     document.getElementById('labelSelectNone')?.addEventListener('click',()=>{document.querySelectorAll('.label-check').forEach(cb=>cb.checked=false);updateLabelSelectedCount();});
     document.querySelectorAll('.label-check').forEach(cb=>cb.addEventListener('change',updateLabelSelectedCount));
-    document.getElementById('labelSearch')?.addEventListener('input',e=>{const q=String(e.target.value||'').toLocaleLowerCase('tr-TR').trim();document.querySelectorAll('#barcodeLabelGrid .label-preview').forEach(el=>{el.style.display=!q||String(el.dataset.labelSearch||'').includes(q)?'':'none';});updateLabelSelectedCount();});
+    document.getElementById('labelSearch')?.addEventListener('input',e=>{const raw=String(e.target.value||'').trim(),q=raw.toLocaleLowerCase('tr-TR');document.querySelectorAll('#barcodeLabelGrid .label-preview').forEach(el=>{const text=String(el.dataset.labelSearch||'');const shortMatch=raw&&[el.dataset.barcode,el.dataset.stockCode,el.dataset.pusulaCode,`${el.dataset.group||''}${el.dataset.pusulaCode||''}`].some(v=>barcodeLookupMatches(v,raw));el.style.display=!q||text.includes(q)||shortMatch?'':'none';});updateLabelSelectedCount();});
     updateLabelSelectedCount();
     document.getElementById('editOpeningCosts')?.addEventListener('click',openOpeningCostEditor);
   }
@@ -4361,7 +4371,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
 
   function bindCount(){
     document.getElementById('startCount')?.addEventListener('click',()=>{if(currentCountSession())return toast('Aktif sayım zaten var','err');const ids=state.stocks.filter(x=>x.period===state.activePeriod&&x.status==='Stokta').map(x=>x.id);state.countSessions.unshift({id:uid('COUNT'),period:state.activePeriod,date:now(),status:'Aktif',mode:'Barkod',expectedIds:ids,countedIds:[],extraCodes:[],scanLog:[],lastMessage:'Sayım başlatıldı',user:session.name});audit(`Sayım başlatıldı: ${ids.length} ürün`,'Sayım');save();render();});
-    const run=()=>{const cs=currentCountSession();if(!cs)return;const inp=document.getElementById('countBarcode'),v=inp.value.trim();if(!v)return;cs.mode=document.getElementById('countMode').value;const st=state.stocks.find(x=>x.period===state.activePeriod&&(x.barcode===v||x.rfid===v||x.code===v));if(!st||!cs.expectedIds.includes(st.id)){cs.extraCodes.push(v);cs.scanLog.push({code:v,stockId:'',date:now(),result:'Eşleşmeyen'});cs.lastMessage=`Eşleşmeyen kod: ${v}`;toast('Stokta eşleşen ürün yok','err');}else if(cs.countedIds.includes(st.id)){cs.scanLog.push({code:v,stockId:st.id,date:now(),result:'Tekrar'});cs.lastMessage=`Tekrar okutuldu: ${st.code}`;toast('Bu ürün daha önce sayıldı','err');}else{cs.countedIds.push(st.id);cs.scanLog.push({code:v,stockId:st.id,date:now(),result:'Sayıldı'});cs.lastMessage=`Sayıldı: ${st.code} · ${st.name}`;addStockMove(st,'SAYIM','','',`Sayım ${cs.id}`);}save();render();setTimeout(()=>document.getElementById('countBarcode')?.focus(),30);};
+    const run=()=>{const cs=currentCountSession();if(!cs)return;const inp=document.getElementById('countBarcode'),v=inp.value.trim();if(!v)return;cs.mode=document.getElementById('countMode').value;const st=state.stocks.find(x=>x.period===state.activePeriod&&(stockMatchesBarcodeLookup(x,v)||normalizeSaleStockKey(x.rfid)===normalizeSaleStockKey(v)));if(!st||!cs.expectedIds.includes(st.id)){cs.extraCodes.push(v);cs.scanLog.push({code:v,stockId:'',date:now(),result:'Eşleşmeyen'});cs.lastMessage=`Eşleşmeyen kod: ${v}`;toast('Stokta eşleşen ürün yok','err');}else if(cs.countedIds.includes(st.id)){cs.scanLog.push({code:v,stockId:st.id,date:now(),result:'Tekrar'});cs.lastMessage=`Tekrar okutuldu: ${st.code}`;toast('Bu ürün daha önce sayıldı','err');}else{cs.countedIds.push(st.id);cs.scanLog.push({code:v,stockId:st.id,date:now(),result:'Sayıldı'});cs.lastMessage=`Sayıldı: ${st.code} · ${st.name}`;addStockMove(st,'SAYIM','','',`Sayım ${cs.id}`);}save();render();setTimeout(()=>document.getElementById('countBarcode')?.focus(),30);};
     document.getElementById('countFind')?.addEventListener('click',run);document.getElementById('countBarcode')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();run();}});
     document.getElementById('countUndo')?.addEventListener('click',()=>{const cs=currentCountSession();if(!cs||!cs.scanLog.length)return toast('Geri alınacak okutma yok','err');const last=cs.scanLog.pop();if(last.result==='Sayıldı')cs.countedIds=cs.countedIds.filter(x=>x!==last.stockId);if(last.result==='Eşleşmeyen'){const i=cs.extraCodes.lastIndexOf(last.code);if(i>=0)cs.extraCodes.splice(i,1);}cs.lastMessage='Son okutma geri alındı';save();render();});
     document.getElementById('finishCount')?.addEventListener('click',()=>{const cs=currentCountSession();if(!cs)return;cs.status='Tamamlandı';cs.finishedAt=now();cs.lastMessage='Sayım tamamlandı';audit(`Sayım tamamlandı: ${cs.countedIds.length}/${cs.expectedIds.length}, eşleşmeyen ${cs.extraCodes.length}`,'Sayım');save();render();});
