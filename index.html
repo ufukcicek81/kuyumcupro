@@ -398,7 +398,7 @@ body[data-theme="light"] .nav-search input{background:#f7f8fa;color:#18202a}body
 
 
 
-/* === V5.16 TEK KUTU OTOMATIK STOK TAMAMLAMA === */
+/* === V5.18 TEK KUTU OTOMATIK STOK TAMAMLAMA === */
 .sale-search-results{display:none!important}
 .sale-inline-help{display:block;margin-top:5px;font-size:11px;color:var(--muted);white-space:nowrap}
 
@@ -484,7 +484,7 @@ body[data-theme="light"] .sale-entry-switch{background:#e8eceb}
   .sale-cost-mini{font-size:11px;color:var(--muted);line-height:1.25;white-space:nowrap}
   .sale-cost-mini strong{color:var(--text)}
 
-/* v5.16 — Cari ekstre: tek ekran, satır bazlı son durum */
+/* v5.18 — Cari ekstre: tek ekran, satır bazlı son durum */
 .cari-ekstre-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:12px}
 .cari-ekstre-balance{border:1px solid var(--line);background:var(--panel-2);border-radius:10px;padding:10px 12px}
 .cari-ekstre-balance small{display:block;color:var(--muted);margin-bottom:4px}
@@ -536,7 +536,7 @@ body[data-theme="light"] .sale-search-results{background:#fff}
   @media(max-width:1150px){.v5-action-grid{grid-template-columns:repeat(2,minmax(180px,1fr))}}@media(max-width:650px){.v5-action-grid{grid-template-columns:1fr}}
 
 
-/* === V5.16 MOBİL TAM OTURMA + KLAVYE GÖRÜNÜRLÜĞÜ === */
+/* === V5.18 MOBİL TAM OTURMA + KLAVYE GÖRÜNÜRLÜĞÜ === */
 @media (max-width:820px){
   html,body{width:100%;max-width:100%;overflow-x:hidden}
   .app-shell,.main,.content,.sale-layout,.sale-layout>*,.card,.sale-main-card,.sale-quick-card,.sale-summary{min-width:0!important;max-width:100%!important;width:100%!important}
@@ -581,6 +581,23 @@ body[data-theme="light"] .sale-search-results{background:#fff}
   .topbar-right .user-label,.topbar-right .badge{display:none!important}
 }
 
+/* === V5.18 SATIŞ EKRANI PC/NOTEBOOK SIĞDIRMA === */
+@media (min-width:821px) and (max-width:1550px){
+  .sale-layout{grid-template-columns:minmax(0,1fr)!important}
+  .sale-summary{position:static!important;top:auto!important;width:100%!important;max-width:100%!important}
+  .sale-main-card{min-width:0!important;overflow:hidden}
+  .sale-unified-editor{grid-template-columns:minmax(180px,1.55fr) minmax(80px,.55fr) minmax(70px,.48fr) minmax(80px,.52fr) minmax(130px,.85fr) minmax(145px,.95fr)!important;gap:8px!important}
+  .sale-unified-editor>.labelled:nth-child(7){grid-column:1 / 6!important}
+  .sale-unified-editor>button:nth-child(8){grid-column:6!important;width:100%}
+  .sale-unified-editor .input,.sale-unified-editor .select{min-width:0!important;width:100%!important}
+  .sale-main-card .table-wrap{max-width:100%!important;width:100%!important;overflow-x:auto!important}
+}
+@media (min-width:821px) and (max-width:1100px){
+  .sale-unified-editor{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  .sale-unified-editor>.labelled:nth-child(1){grid-column:1 / 3!important}
+  .sale-unified-editor>.labelled:nth-child(7){grid-column:1 / 3!important}
+  .sale-unified-editor>button:nth-child(8){grid-column:3!important}
+}
 </style>
 </head>
 <body>
@@ -1326,7 +1343,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v5.16</small></div></div>
+        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v5.18</small></div></div>
         <div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off"></div><div class="nav">${navItems.map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div>
         <div class="sidebar-bottom">
           <div class="user-chip"><div class="avatar">${esc(session.name.split(' ').map(x=>x[0]).slice(0,2).join(''))}</div><div><strong>${esc(session.name)}</strong><div class="muted" style="font-size:12px">${esc(session.role)}</div></div></div>
@@ -1637,7 +1654,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
               <div class="labelled"><label>Miktar</label><input id="saleEntryAmount" class="input" type="number" step="${openItem?.unit==='ADET'?'1':'0.001'}" value="${selected?entryAmount:''}" ${!selected||isBarcode?'readonly':''}></div>
               <div class="labelled"><label>Birim</label><input id="saleEntryUnit" class="input" value="${esc(entryUnit)}" readonly></div>
               <div class="labelled"><label>Ayar</label><input id="saleEntryKarat" class="input" value="${esc(String(entryKarat||''))}" readonly></div>
-              <div class="labelled"><label>Birim Fiyat (TL)</label><input id="saleEntryPrice" class="input" type="number" step="0.01" value="${selected?Number(entryPrice||0).toFixed(2):''}" ${selected?'':'disabled'}></div>
+              <div class="labelled"><label>Birim Fiyat (TL)</label><input id="saleEntryPrice" class="input" type="text" inputmode="decimal" autocomplete="off" value="${selected?Number(entryPrice||0).toFixed(2):''}" ${selected?'':'disabled'}></div>
               <div class="labelled"><label>Ödenecek Tutar</label><input id="saleEntryPayable" class="input" type="number" step="0.01" value="${selected?Number(entryPayable||0).toFixed(2):''}" readonly></div>
               <div class="labelled wide"><label>Not</label><input id="saleEntryNote" class="input" placeholder="İsteğe bağlı" ${selected?'':'disabled'}></div>
               <button class="btn btn-primary" id="saleAddUnified" ${selected?'':'disabled'}>Ekle</button>
@@ -2127,7 +2144,8 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     }
 
     const items=isZiynet?state.prices.items.filter(x=>['CEYREK','YARIM','ZIYNET','ATA','RESAT'].includes(x.code)):state.prices.items.filter(x=>['14H','22H'].includes(x.code));
-    const customers=state.customers.filter(c=>c.type==='Müşteri');
+    const cashCustomer=state.customers.find(c=>c.id==='CASH'||String(c.name||'').toLocaleUpperCase('tr-TR').includes('PEŞİN MÜŞTERİ'));
+    const customers=state.customers.filter(c=>c.type==='Müşteri'&&c.id!==cashCustomer?.id);
     const settleOptions=[
       ['TL','TL Kasa / Banka'],['HAS','HAS Kasa'],['USD','USD Kasa / Banka'],['EUR','EUR Kasa / Banka'],['GBP','GBP Kasa / Banka'],['CHF','CHF Kasa / Banka'],
       ['CARI_HAS','Cari HAS (Mahsup)'],['CARI_TL','Cari TL (Mahsup)'],['CARI_USD','Cari USD (Mahsup)'],['CARI_EUR','Cari EUR (Mahsup)']
@@ -2142,11 +2160,11 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       <div class="labelled span-2" id="stAccountWrap"><label id="stAccountLabel">Hesap</label><select id="stAccount" class="select"></select></div>
       <div class="labelled"><label>Karşılık Kuru</label><input id="stSettleRate" class="input" type="number" step="0.0001" readonly></div>
       <div class="labelled"><label id="stSettleAmountLabel">Karşılık Tutarı</label><input id="stSettleAmount" class="input" type="number" step="0.001"></div>
-      <div class="labelled span-2"><label>Cari / Müşteri</label><select id="stCustomerId" class="select">${customers.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div>
+      <div class="labelled span-2"><label>Cari / Müşteri</label><select id="stCustomerId" class="select"><option value="${cashCustomer?.id||'CASH'}" selected>PEŞİN MÜŞTERİ</option><option value="__OPEN__">AÇIKTAN / CARİSİZ</option>${customers.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div>
       <div class="labelled span-2"><label>Açıklama</label><input id="stDescription" class="input" placeholder="Peşin işlem, takas, mahsup açıklaması"></div>
     </div>`,()=>{
       const code=document.getElementById('stItem').value,item=items.find(x=>x.code===code),qtyVal=Number(document.getElementById('stQty').value||0),unitPrice=Number(document.getElementById('stPrice').value||0),total=qtyVal*unitPrice;
-      const settlement=document.getElementById('stSettlement').value, settleAmount=Number(document.getElementById('stSettleAmount').value||0), settleRate=Number(document.getElementById('stSettleRate').value||1), customerId=document.getElementById('stCustomerId').value, customer=state.customers.find(c=>c.id===customerId), description=document.getElementById('stDescription').value;
+      const settlement=document.getElementById('stSettlement').value, settleAmount=Number(document.getElementById('stSettleAmount').value||0), settleRate=Number(document.getElementById('stSettleRate').value||1), customerId=document.getElementById('stCustomerId').value, customer=state.customers.find(c=>c.id===customerId), customerLabel=customerId==='__OPEN__'?'Açıktan / Carisiz':(customer?.name||'Peşin Müşteri'), description=document.getElementById('stDescription').value;
       if(qtyVal<=0||unitPrice<=0)return toast('Miktar ve fiyat girin','err'); if(settleAmount<=0)return toast('Karşılık tutarı hesaplanamadı','err');
       const prefix=isZiynet?(side==='Alış'?'ZA':'ZS'):(side==='Alış'?'HA':'HS'),docNo=nextDocNo(prefix,state.tradeMoves),tradeId=uid('TRD');
       const hasRate=Number(state.prices.has?.[side==='Alış'?'buy':'sell']||1), totalHas=total/hasRate;
@@ -2163,9 +2181,9 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
         accountKey=document.getElementById('stAccount').value; if(!accountKey)return toast(`${settlementCurrency} hesabı seçin`,'err');
         const acc=adjustAccount(accountKey,side==='Alış'?-settleAmount:settleAmount); if(!acc)return toast('Hesap seçimi hatalı','err'); accountName=acc.name;
         settlementLabel=`${settlementCurrency} ${side==='Alış'?'Ödeme':'Tahsilat'}`;
-        addFinanceMove({direction:side==='Alış'?'Çıkış':'Giriş',type:`${tradeType} / ${settlementCurrency}`,accountKey,accountAmount:settleAmount,accountCurrency:settlementCurrency,tlAmount:total,customer:customer?.name||'Peşin Müşteri',description:`${item.name} · ${qtyVal} ${isZiynet?'ADET':'GR'}${description?' · '+description:''}`,sourceDocNo:docNo,tradeType});
+        addFinanceMove({direction:side==='Alış'?'Çıkış':'Giriş',type:`${tradeType} / ${settlementCurrency}`,accountKey,accountAmount:settleAmount,accountCurrency:settlementCurrency,tlAmount:total,customer:customerLabel,description:`${item.name} · ${qtyVal} ${isZiynet?'ADET':'GR'}${description?' · '+description:''}`,sourceDocNo:docNo,tradeType});
       }
-      state.tradeMoves.unshift({id:tradeId,docNo,period:state.activePeriod,date:now(),tradeType,side,item:item.name,itemCode:item.code,quantity:qtyVal,unit:isZiynet?'ADET':'GR',unitPrice,totalTL:total,totalHas,settlementCurrency,settlementAmount:settleAmount,settlementRate:settleRate,settlementLabel,accountKey,accountName,customerId,customer:customer?.name||'',description,user:session.name,costHas:Number(inv.costHas||0),profitHas,hasRateAtTrade:hasRate});
+      state.tradeMoves.unshift({id:tradeId,docNo,period:state.activePeriod,date:now(),tradeType,side,item:item.name,itemCode:item.code,quantity:qtyVal,unit:isZiynet?'ADET':'GR',unitPrice,totalTL:total,totalHas,settlementCurrency,settlementAmount:settleAmount,settlementRate:settleRate,settlementLabel,accountKey,accountName,customerId,customer:customerLabel,description,user:session.name,costHas:Number(inv.costHas||0),profitHas,hasRateAtTrade:hasRate});
       audit(`${docNo} ${tradeType} ${qtyVal} ${isZiynet?'adet':'gr'} / ${qty(totalHas)} HAS / ${qty(settleAmount)} ${settlementCurrency}`,'Satış');closeModal();save();render();
     },`${tradeType} Kaydet`);
 
@@ -2302,7 +2320,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     saleDraft.entrySelection={type:item.type,id:item.id};
     saleDraft.entryQuery=input.value.trim();
     render();
-    setTimeout(()=>{const target=document.getElementById(item.type==='open'?'saleEntryAmount':'saleEntryPrice');focusAndSelect(target);keepFieldAboveKeyboard(target,true);},80);
+    setTimeout(()=>{const target=document.getElementById(item.type==='open'?'saleEntryAmount':'saleEntryPrice');focusAndSelect(target);if(target?.id==='saleEntryPrice'){try{target.setSelectionRange(0,String(target.value||'').length);}catch(_){try{target.select();}catch(__){}}}keepFieldAboveKeyboard(target,true);},80);
     return true;
   }
 
@@ -2342,7 +2360,23 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       const pay=document.getElementById('saleEntryPayable');if(pay)pay.value=(price*factor).toFixed(2);
     };
     document.getElementById('saleEntryAmount')?.addEventListener('input',calcEntryPayable);
-    document.getElementById('saleEntryPrice')?.addEventListener('input',calcEntryPayable);
+    const salePriceInput=document.getElementById('saleEntryPrice');
+    const selectWholeSalePrice=()=>{
+      if(!salePriceInput||salePriceInput.disabled)return;
+      requestAnimationFrame(()=>{
+        try{
+          salePriceInput.focus({preventScroll:true});
+          salePriceInput.setSelectionRange(0,String(salePriceInput.value||'').length);
+        }catch(_){
+          try{salePriceInput.select();}catch(__){}
+        }
+        keepFieldAboveKeyboard(salePriceInput,true);
+      });
+    };
+    salePriceInput?.addEventListener('focus',selectWholeSalePrice);
+    salePriceInput?.addEventListener('click',selectWholeSalePrice);
+    salePriceInput?.addEventListener('pointerup',e=>{e.preventDefault();selectWholeSalePrice();});
+    salePriceInput?.addEventListener('input',calcEntryPayable);
     document.getElementById('saleAddUnified')?.addEventListener('click',()=>{
       const sel=saleDraft.entrySelection;if(!sel)return toast('Önce stok kodu veya barkod çağırın','err');
       const unitPrice=Number(document.getElementById('saleEntryPrice')?.value||0),note=document.getElementById('saleEntryNote')?.value||'';
@@ -3597,8 +3631,32 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     PUSULA_SUPPLIERS_V51.forEach(src=>{let c=state.customers.find(x=>String(x.code||'')===String(src.code))||state.customers.find(x=>norm(x.name)===norm(src.name));if(!c){c={id:`SUP-${src.code}`,code:String(src.code),name:src.name,type:'Toptancı',accountingNature:'Nötr',phone:'',email:'',address:'',tlBalance:0,hasBalance:0,otherBalances:{},openingBalances:{}};state.customers.push(c);}c.type='Toptancı';c.openingBalances=c.openingBalances||{};c.otherBalances=c.otherBalances||{};if(!state.definitions.suppliers.includes(src.name))state.definitions.suppliers.push(src.name);Object.entries(src.balances||{}).forEach(([unit,val])=>{const tag=`PUSULA-TOPTANCI-${src.code}-${unit}`;if(state.customerMoves.some(m=>m.sourceDocNo===tag))return;const n=Number(val||0);if(!n)return;if(unit==='TL')c.tlBalance=Number(c.tlBalance||0)+n;else if(unit==='HAS')c.hasBalance=Number(c.hasBalance||0)+n;else c.otherBalances[unit]=Number(c.otherBalances[unit]||0)+n;c.openingBalances[unit]=Number(c.openingBalances[unit]||0)+n;state.customerMoves.unshift({id:`OPEN-SUP-${src.code}-${unit}`,customerId:c.id,period:state.activePeriod,date:now(),code:'DV',type:'DEVİR / AÇILIŞ',unit,debit:n>0?n:0,credit:n<0?Math.abs(n):0,description:'Pusula TOPTANCI.xlsx açılış bakiyesi',user:'Sistem',sourceType:'openingSupplier',sourceDocNo:tag});});});state.meta.supplierImportVersion=1;state.meta.importCounts=state.meta.importCounts||{};state.meta.importCounts.suppliers=PUSULA_SUPPLIERS_V51.length;
   }
 
+  function pruneAutoDerivedStockCardsV518(){
+    state.meta=state.meta||{};
+    if(Number(state.meta.stockCardCleanupVersion||0)>=1)return;
+    const puritySet=new Set(['300','333','375','417','585','750','875','916','925','995','999']);
+    const essential=new Set(['34','22B','CEYREK','YARIM','TAM','ZIYNET','ATA','RESAT','14ALY','14YZK','14KOL','14KUP','14BLK','PIRYZK','SAAT','TAS','GMS']);
+    const isGenerated=c=>{
+      const code=String(c.productCode||c.code||'').toLocaleUpperCase('tr-TR').trim();
+      const name=String(c.productDefinition||c.name||'').toLocaleUpperCase('tr-TR').trim();
+      const pus=String(c.pusulaCode||'').toLocaleUpperCase('tr-TR').trim();
+      if(essential.has(code)||essential.has(pus))return false;
+      const codeParts=code.split(/[-_\s]+/).filter(Boolean), nameParts=name.split(/\s+/).filter(Boolean);
+      const codePurity=codeParts[codeParts.length-1]||'', namePurity=nameParts[nameParts.length-1]||'';
+      return puritySet.has(codePurity)&&puritySet.has(namePurity)&&/[-_\s]/.test(code);
+    };
+    const removed=(state.stockCardsMaster||[]).filter(isGenerated), removedIds=new Set(removed.map(x=>x.id));
+    if(removedIds.size){
+      state.stockCardsMaster=(state.stockCardsMaster||[]).filter(x=>!removedIds.has(x.id));
+      (state.stocks||[]).forEach(x=>{if(removedIds.has(x.stockCardId))x.stockCardId='';});
+      (state.openStocks||[]).forEach(x=>{if(removedIds.has(x.stockCardId))x.stockCardId='';});
+    }
+    state.meta.stockCardCleanupRemoved=removedIds.size;
+    state.meta.stockCardCleanupVersion=1;
+  }
+
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion='5.1';migratePusulaSuppliersV51();
+    state.meta=state.meta||{};state.meta.appVersion='5.18';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];

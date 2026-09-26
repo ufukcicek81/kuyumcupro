@@ -1,12 +1,5 @@
-# Asil Kuyumcu Pro v5.16
+# Asil Kuyumcu Pro v5.18
 
-Mobil ekran ve klavye akışı düzeltmeleri.
-
-- Mobilde sayfanın sağa/sola taşması engellendi.
-- Satış ekranı mobilde tek kolon akışına alındı.
-- Ürün tablosu mobilde önemli kolonlara indirildi.
-- Ödeme/Takas düğmeleri mobilde düzenli grid yapısına alındı.
-- Modal pencereler mobil ekran yüksekliğine göre çalışır.
-- Enter ile sonraki alana geçildiğinde aktif alan otomatik görünür bölgeye kaydırılır.
-- Sanal klavye açıldığında odaktaki alanın klavyenin arkasında kalmaması için VisualViewport desteği eklendi.
-- Barkod/stok araması sonrası ilgili Miktar/Birim Fiyat alanı otomatik ekrana getirilir.
+- Satış ekranı PC/notebook çözünürlüklerinde yana taşmayacak şekilde sıkılaştırıldı.
+- Ziynet/Hurda alış-satışta varsayılan cari PEŞİN MÜŞTERİ oldu; AÇIKTAN / CARİSİZ seçeneği eklendi.
+- KOLYE 585, KÜPE 333, KELEPÇE 585 gibi eski sürümlerde otomatik türemiş gereksiz stok kartları bir defaya mahsus temizlenir. Fiziksel barkodlu stok ürünleri silinmez.
