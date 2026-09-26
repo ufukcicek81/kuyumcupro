@@ -601,16 +601,23 @@ body[data-theme="light"] .sale-search-results{background:#fff}
   .sale-unified-editor>button:nth-child(8){grid-column:3!important}
 }
 
-/* === V5.20 PC %75 KOMPAKT GÖRÜNÜM ===
-   Tarayıcı zoomunu %75 yapmadan, PC modunda aynı çalışma alanını sağlar. */
+/* === V5.21 PC %75 KOMPAKT + ORTALI GÖRÜNÜM ===
+   CSS zoom yerine gerçek ölçek kullanılır; sağa taşma ve yatay kayma oluşmaz. */
 @media (min-width:821px){
+  html,body{overflow-x:hidden!important}
+  body[data-ui-mode="pc"] #app{width:100%;overflow-x:hidden}
   body[data-ui-mode="pc"] .app-shell{
-    zoom:.75;
     width:133.333333%;
     min-height:133.333333vh;
+    transform:scale(.75);
+    transform-origin:top left;
   }
   body[data-ui-mode="pc"] .sidebar{height:133.333333vh}
-  body[data-ui-mode="pc"] .content{max-width:1900px}
+  body[data-ui-mode="pc"] .content{
+    max-width:1900px;
+    margin-left:auto!important;
+    margin-right:auto!important;
+  }
 
   /* Tarayıcı %75 zoomdaki geniş masaüstü düzenini, fiziksel ekran dar olsa bile koru. */
   body[data-ui-mode="pc"] .sale-layout{
@@ -1374,7 +1381,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v5.20</small></div></div>
+        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v5.21</small></div></div>
         <div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off"></div><div class="nav">${navItems.map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div>
         <div class="sidebar-bottom">
           <div class="user-chip"><div class="avatar">${esc(session.name.split(' ').map(x=>x[0]).slice(0,2).join(''))}</div><div><strong>${esc(session.name)}</strong><div class="muted" style="font-size:12px">${esc(session.role)}</div></div></div>
