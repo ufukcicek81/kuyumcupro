@@ -22,3 +22,9 @@ Bu paket, kuyumcu barkod etiketini Pusula çıktısına yakın olacak şekilde y
 
 ## İlk kurulum
 Detaylı adımlar için `YAZICI_KURULUM.md` dosyasına bakın.
+
+
+## v6.15
+- Barkod Yazdır varsayılan olarak QZ Tray üzerinden doğrudan seçili/default etiket yazıcısına gönderilir.
+- Tarayıcı yazdırma önizlemesi doğrudan modda açılmaz.
+- İlk doğrudan baskıda default yazıcı otomatik bulunup kaydedilebilir.

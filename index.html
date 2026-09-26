@@ -951,8 +951,10 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     if(typeof state.settings.livePriceSync !== 'boolean') state.settings.livePriceSync = true;
     state.settings.livePriceWorkerUrl = state.settings.livePriceWorkerUrl || LIVE_PRICE_WORKER_URL;
     state.printerSettings = state.printerSettings || {};
-    const psDefaults={mode:'browser',mediaMode:'roll',printerName:'',labelWidthMm:50,labelHeightMm:25,gapMm:2,columns:3,pageMarginMm:8,marginTopMm:0,marginRightMm:0,marginBottomMm:0,marginLeftMm:0,orientation:'portrait',copies:1,dpi:203,fontScale:100,showName:true,showCode:true,showKarat:true,showWeight:true,showPusulaCode:true,showSaleHas:false,showSaleTl:false,showModel:false,autoPrintAfterBarcode:false,qzScriptUrl:'https://cdn.jsdelivr.net/npm/qz-tray@2.3.0/qz-tray.js'};
+    const psDefaults={mode:'qz',mediaMode:'roll',printerName:'',labelWidthMm:50,labelHeightMm:25,gapMm:2,columns:3,pageMarginMm:8,marginTopMm:0,marginRightMm:0,marginBottomMm:0,marginLeftMm:0,orientation:'portrait',copies:1,dpi:203,fontScale:100,showName:true,showCode:true,showKarat:true,showWeight:true,showPusulaCode:true,showSaleHas:false,showSaleTl:false,showModel:false,autoPrintAfterBarcode:false,qzScriptUrl:'https://cdn.jsdelivr.net/npm/qz-tray@2.3.0/qz-tray.js'};
     Object.entries(psDefaults).forEach(([k,v])=>{if(state.printerSettings[k]===undefined||state.printerSettings[k]===null)state.printerSettings[k]=v;});
+    // v6.15: Barkod Yazdır artık varsayılan olarak yazdırma penceresi açmadan QZ Tray üzerinden doğrudan yazıcıya gider.
+    if(Number(state.printerSettings.directPrintVersion||0)<1){state.printerSettings.mode='qz';state.printerSettings.directPrintVersion=1;}
     const legacyPrinter=state.systemParameters?.find?.(x=>x.key==='barcodePrinter')?.value;
     if(!state.printerSettings.printerName && legacyPrinter && !/^BarYaz$/i.test(String(legacyPrinter))) state.printerSettings.printerName=String(legacyPrinter);
     state.market = state.market || {};
@@ -2089,7 +2091,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     Object.keys(d).forEach(k=>out[k]={...d[k],...(r[k]||{})});return out;
   }
   function printerSettings(){
-    const defaults={mode:'browser',mediaMode:'roll',printerName:'',labelWidthMm:72,labelHeightMm:10,gapMm:0,columns:3,pageMarginMm:8,marginTopMm:0,marginRightMm:0,marginBottomMm:0,marginLeftMm:0,orientation:'portrait',copies:1,dpi:203,fontScale:100,showName:false,showCode:true,showKarat:true,showWeight:false,showPusulaCode:false,showSaleHas:true,showSaleTl:false,showModel:false,showInternalCode:true,autoPrintAfterBarcode:false,qzScriptUrl:'https://cdn.jsdelivr.net/npm/qz-tray@2.3.0/qz-tray.js',layout:'pusula72x10',layoutVersion:4,horizontalOffsetMm:0,verticalOffsetMm:0,labelPriceMultiplier:1.12,companyName:'ASİL KUYUMCULUK'};
+    const defaults={mode:'qz',mediaMode:'roll',printerName:'',labelWidthMm:72,labelHeightMm:10,gapMm:0,columns:3,pageMarginMm:8,marginTopMm:0,marginRightMm:0,marginBottomMm:0,marginLeftMm:0,orientation:'portrait',copies:1,dpi:203,fontScale:100,showName:false,showCode:true,showKarat:true,showWeight:false,showPusulaCode:false,showSaleHas:true,showSaleTl:false,showModel:false,showInternalCode:true,autoPrintAfterBarcode:false,qzScriptUrl:'https://cdn.jsdelivr.net/npm/qz-tray@2.3.0/qz-tray.js',layout:'pusula72x10',layoutVersion:4,directPrintVersion:1,horizontalOffsetMm:0,verticalOffsetMm:0,labelPriceMultiplier:1.12,companyName:'ASİL KUYUMCULUK'};
     const s=state.printerSettings||(state.printerSettings={...defaults});
     for(const [k,v] of Object.entries(defaults))if(s[k]===undefined||s[k]===null)s[k]=v;
     // Eski blok ayarları varsa, ilk geçişte bunları bağımsız sürüklenebilir alanlara çevir.
@@ -2131,7 +2133,17 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
   async function qzPrinterList(){const q=await qzConnect();return await q.printers.find();}
   async function printLabelsQz(rows,s=printerSettings()){
-    const q=await qzConnect(); let name=String(s.printerName||'').trim(); if(!name){const all=await q.printers.find();name=Array.isArray(all)?all[0]:all;if(!name)throw new Error('Yazıcı bulunamadı');}
+    let q;
+    try{q=await qzConnect();}catch(e){throw new Error('Doğrudan yazdırma için QZ Tray açık olmalı. QZ Tray’i çalıştırıp Yazıcı Ayarları > Yazıcıları Bul bölümünden etiket yazıcısını bir kez seç.');}
+    let name=String(s.printerName||'').trim();
+    if(!name){
+      try{if(q.printers?.getDefault)name=String(await q.printers.getDefault()||'').trim();}catch(_e){}
+      if(!name){const all=await q.printers.find();name=Array.isArray(all)?all[0]:all;}
+      if(!name)throw new Error('Etiket yazıcısı bulunamadı. Yazıcı Ayarları > Yazıcıları Bul ile yazıcıyı seç.');
+      s.printerName=name;
+      const param=state.systemParameters?.find?.(x=>x.key==='barcodePrinter');if(param)param.value=name;
+      save();
+    }
     const dpm=Math.max(1,Math.round(Number(s.dpi||203)/25.4));
     const config=q.configs.create(name,{units:'mm',size:{width:Number(s.labelWidthMm||50),height:Number(s.labelHeightMm||25)},margins:{top:Number(s.marginTopMm||0),right:Number(s.marginRightMm||0),bottom:Number(s.marginBottomMm||0),left:Number(s.marginLeftMm||0)},orientation:s.orientation||'portrait',copies:Math.max(1,Number(s.copies||1)),colorType:'grayscale',interpolation:'nearest-neighbor',density:String(dpm),scaleContent:false});
     const docs=rows.map(x=>({type:'pixel',format:'html',flavor:'plain',data:labelPrintDocument([x],s)}));
@@ -2148,7 +2160,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const s=printerSettings(),working={...s,elements:mergeLabelElements(JSON.parse(JSON.stringify(s.elements||{})))};
     const fieldNames={barcode:'Barkod',code:'Ürün Kodu',company:'Şirket Adı',price1:'Etiket / Üst HAS',price2:'Satış HAS',karat:'Ayar',internal:'Özel Kod'};
     modal('Etiket Yazıcısı ve Yerleşim Ayarları',`<div class="printer-settings-grid">
-      <div class="span-4 printer-preset-note"><strong>Pusula gibi ayarla:</strong> Aşağıdaki etiket üstünde <b>Barkod, Ürün Kodu, Şirket Adı, HAS fiyatları, Ayar ve Özel Kod</b> alanlarını fareyle tutup istediğin yere sürükleyebilirsin. Konumlar KAYDET dediğinde kalıcı olur.</div>
+      <div class="span-4 printer-preset-note"><strong>Doğrudan baskı:</strong> Barkod Yazdır düğmesi QZ Tray seçiliyken yazdırma ekranı açmadan seçili etiket yazıcısına gönderir. QZ Tray bilgisayarda açık olmalı. <br><strong>Pusula gibi ayarla:</strong> Aşağıdaki etiket üstünde <b>Barkod, Ürün Kodu, Şirket Adı, HAS fiyatları, Ayar ve Özel Kod</b> alanlarını fareyle tutup istediğin yere sürükleyebilirsin. Konumlar KAYDET dediğinde kalıcı olur.</div>
       <div class="label-layout-editor">
         <div class="editor-head"><div><strong>Etiket Yerleşim Editörü — 72 × 10 mm</strong><br><small>Alanı fareyle tutup sürükle. Seçili alanı aşağıdaki X/Y kutularından da milimetrik ayarlayabilirsin.</small></div><span id="prSelectedName" class="label-editor-selected">Barkod seçili</span></div>
         <div class="label-editor-controls">
@@ -2165,7 +2177,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
         <div class="label-editor-tip">Kesikli çizgiler iki baskı kafasını ve boş kuyruk başlangıcını gösterir. Sağdaki taralı kuyruk alanına yazı taşımamaya çalış.</div>
       </div>
 
-      <div class="labelled span-2"><label>Yazdırma Yöntemi</label><select id="prMode" class="select"><option value="browser" ${s.mode==='browser'?'selected':''}>Tarayıcı Yazdır (kurulum gerektirmez)</option><option value="qz" ${s.mode==='qz'?'selected':''}>QZ Tray — Doğrudan Etiket Yazıcısı</option></select></div>
+      <div class="labelled span-2"><label>Yazdırma Yöntemi</label><select id="prMode" class="select"><option value="qz" ${s.mode==='qz'?'selected':''}>DOĞRUDAN YAZDIR — QZ Tray (önerilen)</option><option value="browser" ${s.mode==='browser'?'selected':''}>Tarayıcı Yazdır — Önizleme penceresi açar</option></select></div>
       <div class="labelled span-2"><label>Yazıcı Adı</label><input id="prName" class="input" list="printerNames" value="${esc(s.printerName||'')}" placeholder="Örn. Xprinter XP-365B"><datalist id="printerNames"></datalist></div>
       <div class="labelled"><label>Kağıt / Etiket Modu</label><select id="prMedia" class="select"><option value="roll" ${s.mediaMode==='roll'?'selected':''}>Rulo / Tek Etiket</option><option value="a4" ${s.mediaMode==='a4'?'selected':''}>A4 Etiket Sayfası</option></select></div><div class="labelled"><label>A4 Sütun</label><input id="prColumns" class="input" type="number" min="1" max="6" value="${s.columns||3}"></div><div class="labelled"><label>Etiket Aralığı (mm)</label><input id="prGap" class="input" type="number" step="0.1" value="${s.gapMm||0}"></div><div class="labelled"><label>A4 Kenar Boşluğu (mm)</label><input id="prPageMargin" class="input" type="number" step="0.1" value="${s.pageMarginMm||8}"></div>
       <div class="labelled"><label>Etiket Genişlik (mm)</label><input id="prW" class="input" type="number" step="0.1" value="${s.labelWidthMm}"></div><div class="labelled"><label>Etiket Yükseklik (mm)</label><input id="prH" class="input" type="number" step="0.1" value="${s.labelHeightMm}"></div><div class="labelled"><label>DPI</label><select id="prDpi" class="select"><option ${Number(s.dpi)===203?'selected':''}>203</option><option ${Number(s.dpi)===300?'selected':''}>300</option><option ${Number(s.dpi)===600?'selected':''}>600</option></select></div><div class="labelled"><label>Kopya</label><input id="prCopies" class="input" type="number" min="1" max="50" value="${s.copies}"></div>

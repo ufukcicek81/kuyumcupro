@@ -71,3 +71,16 @@ Doğrudan termal yazıcıya göndermek için:
 5. Test etiketi basın.
 
 203 DPI yazıcıda DPI 203, 300 DPI yazıcıda DPI 300 seçin.
+
+## v6.15 — Yazdırma ekranını açmadan doğrudan baskı
+
+Bu sürümde **Barkod Yazdır** varsayılan olarak `QZ Tray — Doğrudan Etiket Yazıcısı` modundadır. Tarayıcının yazdırma önizlemesi açılmaz.
+
+İlk kullanımda bir kez:
+1. QZ Tray'i bilgisayara kurup çalıştırın.
+2. Programda **Barkod / Etiket → Yazıcı Ayarları** açın.
+3. **Yazıcıları Bul** düğmesine basın.
+4. Etiket yazıcınızı seçip **AYARLARI KAYDET** deyin.
+5. Bundan sonra **Barkod Yazdır** düğmesi etiketi doğrudan seçilen yazıcıya yollar.
+
+Not: Normal web tarayıcısı güvenlik nedeniyle tek başına sessiz/doğrudan baskı yapamaz. Bu nedenle doğrudan baskı QZ Tray üzerinden yapılır. `Tarayıcı Yazdır` modu seçilirse önizleme ekranı tekrar açılır.
