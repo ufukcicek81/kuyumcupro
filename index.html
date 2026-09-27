@@ -4771,8 +4771,9 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     state.complianceSettings=state.complianceSettings||{};
     if(!Number(state.complianceSettings.identityThresholdTl))state.complianceSettings.identityThresholdTl=185000;
     if(typeof state.complianceSettings.blockSaleWithoutIdentity!=='boolean')state.complianceSettings.blockSaleWithoutIdentity=true;
-    state.complianceSettings.riskProxyUrl=state.complianceSettings.riskProxyUrl||'';
-    state.complianceSettings.nfcBridgeUrl=state.complianceSettings.nfcBridgeUrl||state.complianceSettings.riskProxyUrl||'';
+    const DEFAULT_COMPLIANCE_WORKER='https://altin-proxy.ufuk87900.workers.dev';
+    state.complianceSettings.riskProxyUrl=String(state.complianceSettings.riskProxyUrl||'').trim()||DEFAULT_COMPLIANCE_WORKER;
+    state.complianceSettings.nfcBridgeUrl=String(state.complianceSettings.nfcBridgeUrl||'').trim()||state.complianceSettings.riskProxyUrl||DEFAULT_COMPLIANCE_WORKER;
     state.complianceSettings.riskProviderLabel=state.complianceSettings.riskProviderLabel||'MASAK resmi listeler + OpenSanctions';
     if(typeof state.complianceSettings.blockSaleOnRiskMatch!=='boolean')state.complianceSettings.blockSaleOnRiskMatch=true;
     state.invoiceSettings=state.invoiceSettings||{};
