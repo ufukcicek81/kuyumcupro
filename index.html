@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101113" />
-  <meta name="description" content="Asil Kuyumcu Pro V6.36 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
+  <meta name="description" content="Asil Kuyumcu Pro V6.38 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.36</title>
+  <title>Asil Kuyumcu Pro V6.38</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -819,6 +819,8 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   const SESSION_KEY = 'asil_kuyumcu_pro_session';
   const PERSIST_SESSION_KEY = 'asil_kuyumcu_pro_persist_session_v1';
   const LAST_ROUTE_KEY = 'asil_kuyumcu_pro_last_route_v1';
+  const SESSION_COOKIE_KEY = 'asil_kuyumcu_pro_session_cookie_v1';
+  const ROUTE_COOKIE_KEY = 'asil_kuyumcu_pro_route_cookie_v1';
   const NFC_RETURN_KEY = 'asil_kuyumcu_nfc_return_v1';
   // Asil Kuyumcu fiyat ekranında çalışan mevcut canlı fiyat altyapısı.
   const LIVE_PRICE_WORKER_URL = 'https://altin-proxy.ufuk87900.workers.dev';
@@ -993,7 +995,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     try{
       if(typeof ensureV5State==='function') ensureV5State();
       if(typeof reconcileTransactionLedgerV5==='function') reconcileTransactionLedgerV5();
-      state.meta=state.meta||{}; state.meta.updatedAt=now(); state.meta.appVersion='6.37';
+      state.meta=state.meta||{}; state.meta.updatedAt=now(); state.meta.appVersion='6.38';
       localStorage.setItem(LS_KEY, JSON.stringify(state));
     } catch { /* Yerel dosya modunda depolama engellense bile uygulama çalışmaya devam eder. */ }
     if(cloudInitializedV5 && !cloudApplyingV5 && state?.cloudSync?.enabled && typeof scheduleCloudPushV5==='function') scheduleCloudPushV5();
@@ -1014,57 +1016,107 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function safeNfcReturnRemove(){
     try{localStorage.removeItem(NFC_RETURN_KEY);}catch{}
   }
+  function cookieGet(name){
+    try{
+      const prefix=encodeURIComponent(name)+'=';
+      const hit=document.cookie.split(';').map(x=>x.trim()).find(x=>x.startsWith(prefix));
+      return hit ? decodeURIComponent(hit.slice(prefix.length)) : '';
+    }catch{return '';}
+  }
+  function cookieSet(name,value,maxAge=15552000){
+    try{
+      if(location.protocol!=='https:')return;
+      document.cookie=encodeURIComponent(name)+'='+encodeURIComponent(String(value||''))+'; Max-Age='+maxAge+'; Path=/; SameSite=Lax; Secure';
+    }catch{}
+  }
+  function cookieRemove(name){
+    try{document.cookie=encodeURIComponent(name)+'=; Max-Age=0; Path=/; SameSite=Lax; Secure';}catch{}
+  }
+  function normalizeSession(value){
+    if(!value||!value.id)return null;
+    const id=String(value.id);
+    const user=state?.users?.find?.(x=>String(x.id)===id);
+    if(!user && !value.name)return null;
+    return {id,name:String(value.name||user?.name||''),role:String(value.role||user?.role||'')};
+  }
   function safeSessionGet(){
     try {
-      const active=JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null');
+      const active=normalizeSession(JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null'));
       if(active)return active;
     } catch {}
 
-    // Android NFC uygulamasına geçişte Chrome aynı sekmeyi yeniden kurabilir
-    // veya farklı sekmeye dönebilir. Bu yüzden şifreyi değil, sadece aktif
-    // kullanıcı oturumunu localStorage'da ayrıca saklarız.
+    // Ana kalıcı oturum: kullanıcı elle çıkış yapana kadar localStorage'da tutulur.
     try{
       const saved=JSON.parse(localStorage.getItem(PERSIST_SESSION_KEY)||'null');
-      if(saved?.session && Number(saved.expiresAt||0)>Date.now()){
-        try{sessionStorage.setItem(SESSION_KEY,JSON.stringify(saved.session));}catch{}
-        return saved.session;
+      const restored=normalizeSession(saved?.session||saved);
+      if(restored){
+        try{sessionStorage.setItem(SESSION_KEY,JSON.stringify(restored));}catch{}
+        cookieSet(SESSION_COOKIE_KEY,JSON.stringify(restored));
+        return restored;
       }
-      if(saved) localStorage.removeItem(PERSIST_SESSION_KEY);
+    }catch{}
+
+    // localStorage kota/Android sekme geri yükleme sorunlarına karşı küçük cookie yedeği.
+    try{
+      const restored=normalizeSession(JSON.parse(cookieGet(SESSION_COOKIE_KEY)||'null'));
+      if(restored){
+        safeSessionSet(restored);
+        return restored;
+      }
     }catch{}
 
     const pending=safeNfcReturnGet();
     if(pending?.session){
-      const restored={id:pending.session.id,name:pending.session.name,role:pending.session.role};
-      safeSessionSet(restored);
-      return restored;
+      const restored=normalizeSession(pending.session);
+      if(restored){
+        safeSessionSet(restored);
+        return restored;
+      }
     }
     return null;
   }
   function safeSessionSet(value){
-    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(value)); } catch {}
+    const clean=normalizeSession(value);
+    if(!clean)return;
+    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(clean)); } catch {}
     try {
       localStorage.setItem(PERSIST_SESSION_KEY,JSON.stringify({
-        session:value,
+        session:clean,
         updatedAt:Date.now(),
-        expiresAt:Date.now()+12*60*60*1000
+        persistent:true
       }));
     } catch {}
+    cookieSet(SESSION_COOKIE_KEY,JSON.stringify(clean));
   }
   function safeSessionRemove(){
     try { sessionStorage.removeItem(SESSION_KEY); } catch {}
     try { localStorage.removeItem(PERSIST_SESSION_KEY); } catch {}
     try { localStorage.removeItem(LAST_ROUTE_KEY); } catch {}
+    cookieRemove(SESSION_COOKIE_KEY);
+    cookieRemove(ROUTE_COOKIE_KEY);
     safeNfcReturnRemove();
   }
   function safeRouteGet(){
     try{
       const r=String(localStorage.getItem(LAST_ROUTE_KEY)||'').trim();
-      return r || 'dashboard';
-    }catch{return 'dashboard';}
+      if(r)return r;
+    }catch{}
+    const fallback=String(cookieGet(ROUTE_COOKIE_KEY)||'').trim();
+    return fallback || 'dashboard';
   }
   function safeRouteSet(value){
-    try{localStorage.setItem(LAST_ROUTE_KEY,String(value||'dashboard'));}catch{}
+    const clean=String(value||'dashboard').trim()||'dashboard';
+    try{localStorage.setItem(LAST_ROUTE_KEY,clean);}catch{}
+    cookieSet(ROUTE_COOKIE_KEY,clean);
   }
+  function persistUiCheckpoint(){
+    if(!session)return;
+    safeSessionSet(session);
+    safeRouteSet(route||'dashboard');
+  }
+  window.addEventListener('pagehide',persistUiCheckpoint);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistUiCheckpoint();});
+
   function ensureStateShape(){
     state.settings = state.settings || {};
     state.settings.uiMode = state.settings.uiMode || 'pc';
@@ -1639,7 +1691,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v6.21</small></div></div>
+        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v6.38</small></div></div>
         <div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off"></div><div class="nav">${navItems.map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div>
         <div class="sidebar-bottom">
           <div class="user-chip"><div class="avatar">${esc(session.name.split(' ').map(x=>x[0]).slice(0,2).join(''))}</div><div><strong>${esc(session.name)}</strong><div class="muted" style="font-size:12px">${esc(session.role)}</div></div></div>
@@ -4691,7 +4743,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
 
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion='6.37';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
+    state.meta=state.meta||{};state.meta.appVersion='6.38';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
@@ -4846,7 +4898,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     state.invoiceSettings.companyTitle=state.invoiceSettings.companyTitle||state.settings.companyName||'ASİL KUYUMCULUK';
     state.invoiceSettings.defaultDocumentType=state.invoiceSettings.defaultDocumentType||'AUTO';
     if(!Array.isArray(state.invoiceRecords))state.invoiceRecords=[];
-    state.meta=state.meta||{};state.meta.appVersion='6.37';
+    state.meta=state.meta||{};state.meta.appVersion='6.38';
   }
   function maskIdNo(v){v=String(v||'').replace(/\D/g,'');if(v.length<5)return v||'—';return v.slice(0,2)+'*****'+v.slice(-2);}
   function identityById(id){return identityRecords.find(x=>x.id===id)||null;}
@@ -4892,10 +4944,11 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   async function startNfcPairing(recordId=''){
     const url=String(state.complianceSettings.nfcBridgeUrl||state.complianceSettings.riskProxyUrl||'').trim();
     if(!url)return toast('NFC Köprü URL adresini ayarlayın','err');
-    // NFC uygulamasına geçmeden hemen önce oturumu ve ekranı kalıcılaştır.
-    // Chrome sekmeyi yeniden yüklese bile kullanıcı tekrar giriş yapmasın.
-    if(session) safeSessionSet({id:session.id,name:session.name,role:session.role});
-    safeRouteSet('compliance');
+    // NFC uygulamasına geçmeden hemen önce oturumu ve son ekranı kalıcılaştır.
+    // Android sekmeyi askıya alsa/yeniden kursa bile kullanıcı tekrar giriş yapmasın.
+    const returnRoute=route||'compliance';
+    persistUiCheckpoint();
+    safeRouteSet(returnRoute);
     try{
       const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'createNfcSession'})});
       const data=await res.json();
@@ -4905,7 +4958,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
         code,
         url,
         recordId:String(recordId||''),
-        route:'compliance',
+        route:returnRoute,
         session:session?{id:session.id,name:session.name,role:session.role}:null,
         createdAt:Date.now(),
         expiresAt:Date.now()+11*60*1000
@@ -4913,13 +4966,13 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       const deepLink='asilnfc://scan?code='+encodeURIComponent(code)+'&url='+encodeURIComponent(url)+'&return='+encodeURIComponent(window.location.href);
       modal('NFC Kimlik Aktarımı',`<div class="notice"><strong>Otomatik mod:</strong> Android telefondaysanız Asil NFC Helper otomatik açılır; kodu elle yazmanız gerekmez. Uygulamada kimliğin arka yüzünü kameraya gösterin, ardından kartı telefona dokundurun.</div><div class="nfc-code">${esc(code)}</div><div class="addon-actions" style="margin:12px 0"><button type="button" class="btn btn-primary" id="openNfcHelper">ASİL NFC UYGULAMASINI AÇ</button></div><div class="summary-row"><span>Durum</span><strong id="nfcPairState">Telefon bekleniyor…</strong></div><div class="notice"><strong>PC kullanımı:</strong> Kod yedek yöntem olarak burada kalır. Telefonda aynı Kuyumcu Pro sayfasını açıp NFC işlemini başlattığınızda uygulama otomatik açılır. <strong>Not:</strong> Çip aktarımı resmi EKDS doğrulaması değildir.</div>`,null,'Kapat');
       const launch=()=>{
-        if(session) safeSessionSet({id:session.id,name:session.name,role:session.role});
-        safeRouteSet('compliance');
+        persistUiCheckpoint();
+        safeRouteSet(returnRoute);
         safeNfcReturnSet({
           code,
           url,
           recordId:String(recordId||''),
-          route:'compliance',
+          route:returnRoute,
           session:session?{id:session.id,name:session.name,role:session.role}:null,
           createdAt:Date.now(),
           expiresAt:Date.now()+11*60*1000
