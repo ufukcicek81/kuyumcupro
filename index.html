@@ -4630,7 +4630,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
 
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion='6.32';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
+    state.meta=state.meta||{};state.meta.appVersion='6.33';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
@@ -4824,13 +4824,40 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   async function dataUrlToFile(dataUrl,name='chip-face.jpg'){const r=await fetch(dataUrl);const b=await r.blob();return new File([b],name,{type:b.type||'image/jpeg'});}
   function riskDetail(id){const r=identityById(id);if(!r)return;const ms=Array.isArray(r.riskMatches)?r.riskMatches:[];modal(`Risk Sonucu — ${esc(r.fullName||'')}`,`<div class="summary-row"><span>Sonuç</span><strong><span class="badge ${riskBadge(r)}">${esc(r.riskStatus||'TARANMADI')}</span></strong></div><div class="summary-row"><span>Kontrol zamanı</span><strong>${r.riskCheckedAt?trDate(r.riskCheckedAt):'—'}</strong></div><div class="summary-row"><span>Kaynak</span><strong>${esc(r.riskProvider||'—')}</strong></div>${r.riskMessage?`<div class="notice" style="margin:10px 0">${esc(r.riskMessage)}</div>`:''}<div style="margin-top:12px">${ms.map(m=>`<div class="${m.status==='EŞLEŞME'?'risk-hit':'risk-review'}"><strong>${esc(m.caption||m.name||'Olası eşleşme')}</strong><br><small>Kaynak: ${esc(m.source||m.provider||'—')} · Skor: ${m.score!=null?Math.round(Number(m.score)*100)+'%':'—'}${Array.isArray(m.topics)&&m.topics.length?' · '+esc(m.topics.join(', ')):''}</small>${m.birthDate?`<br><small>Doğum: ${esc(m.birthDate)}</small>`:''}</div>`).join('')||'<div class="risk-clean"><strong>Eşleşme kaydı yok.</strong></div>'}</div>`,null,'Kapat');}
   async function importNfcPayload(payload,recordId=''){
-    const id=recordId||uid('KYC');let r=identityById(id);if(!r){r={id,createdAt:now(),riskStatus:'TARANMADI'};identityRecords.unshift(r);}Object.assign(r,{personType:'Gerçek Kişi',fullName:payload.fullName||r.fullName||'',tckn:String(payload.tckn||r.tckn||'').replace(/\D/g,''),documentType:'T.C. Kimlik Kartı',documentNo:payload.documentNumber||payload.documentNo||r.documentNo||'',birthDate:payload.birthDate||r.birthDate||'',nationality:payload.nationality||r.nationality||'T.C.',nfcRead:true,nfcReadAt:now(),nfcReader:payload.reader||'Android NFC Helper',nfcChipProtocol:payload.protocol||'ICAO NFC',verified:false,updatedAt:now()});
+    const id=recordId||uid('KYC');let r=identityById(id);if(!r){r={id,createdAt:now(),riskStatus:'TARANMADI'};identityRecords.unshift(r);}Object.assign(r,{personType:'Gerçek Kişi',fullName:payload.fullName||r.fullName||'',tckn:String(payload.tckn||r.tckn||'').replace(/\D/g,''),documentType:'T.C. Kimlik Kartı',documentNo:payload.documentNumber||payload.documentNo||r.documentNo||'',birthDate:payload.birthDate||r.birthDate||'',documentExpiry:payload.expiryDate||r.documentExpiry||'',nationality:payload.nationality||r.nationality||'T.C.',gender:payload.sex||r.gender||'',birthPlace:payload.birthPlace||r.birthPlace||'',occupation:payload.occupation||r.occupation||'',address:payload.address||r.address||'',phone:payload.phone||r.phone||'',mrzCameraRead:payload.mrzCameraRead===true||r.mrzCameraRead===true,nfcRead:true,nfcReadAt:now(),nfcReader:payload.reader||'Android NFC Helper',nfcChipProtocol:payload.protocol||'ICAO NFC',verified:false,updatedAt:now()});
     if(payload.faceImageBase64){try{const f=await dataUrlToFile(payload.faceImageBase64);await kycFilePut(id,'chipFace',f);r.hasChipFace=true;}catch{}}
     saveIdentityRecords();audit(`${r.fullName||'Yeni müşteri'} NFC kimlik verisi aktarıldı`,'Kimlik/MASAK');closeModal();render();setTimeout(()=>openIdentityModal(id),30);
   }
   async function startNfcPairing(recordId=''){
-    const url=String(state.complianceSettings.nfcBridgeUrl||state.complianceSettings.riskProxyUrl||'').trim();if(!url)return toast('NFC Köprü / Worker URL adresini ayarlayın','err');
-    try{const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'createNfcSession'})}),data=await res.json();if(!res.ok||!data.ok)throw new Error(data.message||`HTTP ${res.status}`);const code=String(data.code||'');modal('NFC Kimlik Aktarımı',`<div class="notice"><strong>Android NFC Helper</strong> uygulamasını açın, Worker URL ve aşağıdaki eşleştirme kodunu girin. Kimliği telefona dokundurduktan sonra veri bu forma gelir.</div><div class="nfc-code">${esc(code)}</div><div class="summary-row"><span>Durum</span><strong id="nfcPairState">Telefon bekleniyor…</strong></div><div class="notice"><strong>Önemli:</strong> Bu işlem çipten veri aktarımıdır; resmi EKDS doğrulaması değildir. Program kaydı otomatik olarak “doğrulandı” yapmaz.</div>`,null,'Kapat');let tries=0;const poll=async()=>{if(!document.getElementById('modalRoot'))return;tries++;try{const rr=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'pollNfcSession',code})}),dd=await rr.json();if(dd.status==='READY'&&dd.payload){const st=document.getElementById('nfcPairState');if(st)st.textContent='Kimlik verisi geldi';await importNfcPayload(dd.payload,recordId);return;}const st=document.getElementById('nfcPairState');if(st)st.textContent=`Telefon bekleniyor… (${tries})`;}catch{}if(tries<90)setTimeout(poll,2000);};setTimeout(poll,1200);}catch(e){toast('NFC eşleştirme başlatılamadı: '+String(e?.message||e),'err');}
+    const url=String(state.complianceSettings.nfcBridgeUrl||state.complianceSettings.riskProxyUrl||'').trim();
+    if(!url)return toast('NFC Köprü URL adresini ayarlayın','err');
+    try{
+      const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'createNfcSession'})});
+      const data=await res.json();
+      if(!res.ok||!data.ok)throw new Error(data.message||`HTTP ${res.status}`);
+      const code=String(data.code||'');
+      const deepLink='asilnfc://scan?code='+encodeURIComponent(code)+'&url='+encodeURIComponent(url);
+      modal('NFC Kimlik Aktarımı',`<div class="notice"><strong>Otomatik mod:</strong> Android telefondaysanız Asil NFC Helper otomatik açılır; kodu elle yazmanız gerekmez. Uygulamada kimliğin arka yüzünü kameraya gösterin, ardından kartı telefona dokundurun.</div><div class="nfc-code">${esc(code)}</div><div class="addon-actions" style="margin:12px 0"><button type="button" class="btn btn-primary" id="openNfcHelper">ASİL NFC UYGULAMASINI AÇ</button></div><div class="summary-row"><span>Durum</span><strong id="nfcPairState">Telefon bekleniyor…</strong></div><div class="notice"><strong>PC kullanımı:</strong> Kod yedek yöntem olarak burada kalır. Telefonda aynı Kuyumcu Pro sayfasını açıp NFC işlemini başlattığınızda uygulama otomatik açılır. <strong>Not:</strong> Çip aktarımı resmi EKDS doğrulaması değildir.</div>`,null,'Kapat');
+      const launch=()=>{window.location.href=deepLink;};
+      document.getElementById('openNfcHelper')?.addEventListener('click',launch);
+      if(/Android/i.test(navigator.userAgent))setTimeout(launch,350);
+      let tries=0;
+      const poll=async()=>{
+        if(!document.getElementById('modalRoot'))return;
+        tries++;
+        try{
+          const rr=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'pollNfcSession',code})});
+          const dd=await rr.json();
+          if(dd.status==='READY'&&dd.payload){
+            const st=document.getElementById('nfcPairState');if(st)st.textContent='Kimlik verisi geldi';
+            await importNfcPayload(dd.payload,recordId);return;
+          }
+          const st=document.getElementById('nfcPairState');if(st)st.textContent=`Telefon bekleniyor… (${tries})`;
+        }catch{}
+        if(tries<90)setTimeout(poll,2000);
+      };
+      setTimeout(poll,1200);
+    }catch(e){toast('NFC eşleştirme başlatılamadı: '+String(e?.message||e),'err');}
   }
 
   function complianceAmountForCurrentSale(){const t=saleTotals(),st=standaloneTradeInState();return Math.max(Math.abs(Number(t.net||0)),Math.abs(Number(st.received||0)));}
