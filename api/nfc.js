@@ -19,6 +19,11 @@ function safePayload(p={}){
     expiryDate: clean(p.expiryDate).slice(0,20),
     nationality: clean(p.nationality).slice(0,60),
     sex: clean(p.sex).slice(0,20),
+    birthPlace: clean(p.birthPlace).slice(0,160),
+    occupation: clean(p.occupation).slice(0,160),
+    address: clean(p.address).slice(0,400),
+    phone: clean(p.phone).slice(0,60),
+    mrzCameraRead: Boolean(p.mrzCameraRead),
     reader: clean(p.reader || 'Asil NFC Helper').slice(0,80),
     protocol: clean(p.protocol || 'ICAO NFC').slice(0,80)
   };
