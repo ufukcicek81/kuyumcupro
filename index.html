@@ -4630,7 +4630,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
 
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion='6.33';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
+    state.meta=state.meta||{};state.meta.appVersion='6.34';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
@@ -4836,7 +4836,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       const data=await res.json();
       if(!res.ok||!data.ok)throw new Error(data.message||`HTTP ${res.status}`);
       const code=String(data.code||'');
-      const deepLink='asilnfc://scan?code='+encodeURIComponent(code)+'&url='+encodeURIComponent(url);
+      const deepLink='asilnfc://scan?code='+encodeURIComponent(code)+'&url='+encodeURIComponent(url)+'&return='+encodeURIComponent(window.location.href);
       modal('NFC Kimlik Aktarımı',`<div class="notice"><strong>Otomatik mod:</strong> Android telefondaysanız Asil NFC Helper otomatik açılır; kodu elle yazmanız gerekmez. Uygulamada kimliğin arka yüzünü kameraya gösterin, ardından kartı telefona dokundurun.</div><div class="nfc-code">${esc(code)}</div><div class="addon-actions" style="margin:12px 0"><button type="button" class="btn btn-primary" id="openNfcHelper">ASİL NFC UYGULAMASINI AÇ</button></div><div class="summary-row"><span>Durum</span><strong id="nfcPairState">Telefon bekleniyor…</strong></div><div class="notice"><strong>PC kullanımı:</strong> Kod yedek yöntem olarak burada kalır. Telefonda aynı Kuyumcu Pro sayfasını açıp NFC işlemini başlattığınızda uygulama otomatik açılır. <strong>Not:</strong> Çip aktarımı resmi EKDS doğrulaması değildir.</div>`,null,'Kapat');
       const launch=()=>{window.location.href=deepLink;};
       document.getElementById('openNfcHelper')?.addEventListener('click',launch);
