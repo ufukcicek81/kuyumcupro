@@ -1018,7 +1018,11 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       if(active)return active;
     } catch {}
     const pending=safeNfcReturnGet();
-    return pending?.session||null;
+    if(pending?.session){
+      try{sessionStorage.setItem(SESSION_KEY,JSON.stringify(pending.session));}catch{}
+      return pending.session;
+    }
+    return null;
   }
   function safeSessionSet(value){
     try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(value)); }
@@ -4892,6 +4896,42 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     }catch(e){toast('NFC eşleştirme başlatılamadı: '+String(e?.message||e),'err');}
   }
 
+  async function resumePendingNfcReturnV635(){
+    const pending=safeNfcReturnGet();
+    if(!pending||!session||!pending.code||!pending.url)return;
+    route=pending.route||'compliance';
+    render();
+    toast('NFC sonucu alınıyor…');
+    let tries=0;
+    const poll=async()=>{
+      const current=safeNfcReturnGet();
+      if(!current)return;
+      tries++;
+      try{
+        const rr=await fetch(current.url,{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({action:'pollNfcSession',code:current.code})
+        });
+        const dd=await rr.json();
+        if(dd.status==='READY'&&dd.payload){
+          const recordId=String(current.recordId||'');
+          safeNfcReturnRemove();
+          await importNfcPayload(dd.payload,recordId);
+          toast('Kimlik NFC verisi programa aktarıldı','ok');
+          return;
+        }
+        if(dd.status==='EXPIRED'||rr.status===410){
+          safeNfcReturnRemove();
+          toast('NFC eşleştirme süresi doldu; tekrar okutun','warn');
+          return;
+        }
+      }catch{}
+      if(tries<20)setTimeout(poll,1200);
+    };
+    setTimeout(poll,250);
+  }
+
   function complianceAmountForCurrentSale(){const t=saleTotals(),st=standaloneTradeInState();return Math.max(Math.abs(Number(t.net||0)),Math.abs(Number(st.received||0)));}
   function saleIdentityGate(){
     ensureMilyemPlusAddons();
@@ -5015,6 +5055,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
 
   if('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js').catch(()=>{});
   render();
+  setTimeout(()=>resumePendingNfcReturnV635(),450);
   initLivePriceSync();
   initCloudSyncV5();
 })();
