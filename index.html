@@ -4630,7 +4630,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
 
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion='6.30';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
+    state.meta=state.meta||{};state.meta.appVersion='6.32';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
@@ -4772,8 +4772,10 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     if(!Number(state.complianceSettings.identityThresholdTl))state.complianceSettings.identityThresholdTl=185000;
     if(typeof state.complianceSettings.blockSaleWithoutIdentity!=='boolean')state.complianceSettings.blockSaleWithoutIdentity=true;
     const DEFAULT_COMPLIANCE_WORKER='https://altin-proxy.ufuk87900.workers.dev';
+    const DEFAULT_NFC_BRIDGE='https://kuyumcuproo.vercel.app/api/nfc';
     state.complianceSettings.riskProxyUrl=String(state.complianceSettings.riskProxyUrl||'').trim()||DEFAULT_COMPLIANCE_WORKER;
-    state.complianceSettings.nfcBridgeUrl=String(state.complianceSettings.nfcBridgeUrl||'').trim()||state.complianceSettings.riskProxyUrl||DEFAULT_COMPLIANCE_WORKER;
+    const savedNfcBridge=String(state.complianceSettings.nfcBridgeUrl||'').trim();
+    state.complianceSettings.nfcBridgeUrl=(!savedNfcBridge||savedNfcBridge===DEFAULT_COMPLIANCE_WORKER)?DEFAULT_NFC_BRIDGE:savedNfcBridge;
     state.complianceSettings.riskProviderLabel=state.complianceSettings.riskProviderLabel||'MASAK resmi listeler + OpenSanctions';
     if(typeof state.complianceSettings.blockSaleOnRiskMatch!=='boolean')state.complianceSettings.blockSaleOnRiskMatch=true;
     state.invoiceSettings=state.invoiceSettings||{};
