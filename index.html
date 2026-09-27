@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101113" />
-  <meta name="description" content="Asil Kuyumcu Pro V6.30 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
+  <meta name="description" content="Asil Kuyumcu Pro V6.36 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.30</title>
+  <title>Asil Kuyumcu Pro V6.36</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -817,6 +817,8 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   const DATA_REVISION = 'pusula-real-20260917-r2';
   const PUSULA_SUPPLIERS_V51=[{"code":"1136","name":"AHMET MURAT ÜRKER - GÜMÜŞ","balances":{"USD":-93.0}},{"code":"1046","name":"ALFA KUTU","balances":{"TL":2000.0}},{"code":"674","name":"AŞKıN ALYANS","balances":{"HAS":0.28}},{"code":"988","name":"BESAY KUYUMCULUK","balances":{"HAS":-1.4}},{"code":"998","name":"BURAK ÇELİK GÜMÜŞ","balances":{"USD":-125.43}},{"code":"483","name":"CARUZA","balances":{"HAS":-3.53}},{"code":"980","name":"CREO GÜMÜŞ","balances":{"USD":-93.42}},{"code":"1127","name":"ÇELEBI GÜMÜŞ","balances":{"USD":-759.88}},{"code":"1116","name":"FIRUZE","balances":{"HAS":0.06}},{"code":"900","name":"IPEK KUYUMCULUK","balances":{"HAS":-79.08}},{"code":"449","name":"KARDEŞLER KUYUMCULUK","balances":{"HAS":-9.16}},{"code":"358","name":"KONYALI SAAT","balances":{"TL":-1117.53}},{"code":"353","name":"LELY ALYANS","balances":{"HAS":-10.06}},{"code":"943","name":"MODERN KUYUMCULUK","balances":{"HAS":-10.26}},{"code":"1000","name":"NAMıK GÜMÜŞÇÜ","balances":{"USD":-8.85}},{"code":"1172","name":"NAZ GOLD","balances":{"HAS":-0.3}},{"code":"390","name":"NUR KUTU","balances":{"TL":-75.0}},{"code":"1051","name":"PLATıN SAKARYA","balances":{"HAS":0.04}},{"code":"360","name":"REVELLO","balances":{"USD":-310.0}},{"code":"901","name":"SEMIH IPEK","balances":{"HAS":-9.39}},{"code":"796","name":"SUN ALYANS","balances":{"HAS":-9.31}},{"code":"862","name":"TEMIZ TURK KUYUMCULUK","balances":{"HAS":-0.04}},{"code":"970","name":"UP WATCH","balances":{"TL":-798.9}},{"code":"984","name":"VITRIN ÜRÜNLERI","balances":{"22":1.67,"HAS":-21.48,"TL":-10430.0,"USD":-80.0}},{"code":"987","name":"YAŞAR GOLD","balances":{"HAS":-11.68}}];
   const SESSION_KEY = 'asil_kuyumcu_pro_session';
+  const PERSIST_SESSION_KEY = 'asil_kuyumcu_pro_persist_session_v1';
+  const LAST_ROUTE_KEY = 'asil_kuyumcu_pro_last_route_v1';
   const NFC_RETURN_KEY = 'asil_kuyumcu_nfc_return_v1';
   // Asil Kuyumcu fiyat ekranında çalışan mevcut canlı fiyat altyapısı.
   const LIVE_PRICE_WORKER_URL = 'https://altin-proxy.ufuk87900.workers.dev';
@@ -948,7 +950,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   let theme = state.settings.theme || 'dark';
   const pendingNfcReturnAtBoot = safeNfcReturnGet();
   let session = safeSessionGet();
-  let route = session && pendingNfcReturnAtBoot ? (pendingNfcReturnAtBoot.route||'compliance') : 'dashboard';
+  let route = session ? (pendingNfcReturnAtBoot?.route || safeRouteGet() || 'dashboard') : 'dashboard';
   let saleDraft = newSaleDraft();
   let purchaseDraft = newPurchaseDraft();
   let mobileOpen = false;
@@ -991,7 +993,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     try{
       if(typeof ensureV5State==='function') ensureV5State();
       if(typeof reconcileTransactionLedgerV5==='function') reconcileTransactionLedgerV5();
-      state.meta=state.meta||{}; state.meta.updatedAt=now(); state.meta.appVersion='6.30';
+      state.meta=state.meta||{}; state.meta.updatedAt=now(); state.meta.appVersion='6.36';
       localStorage.setItem(LS_KEY, JSON.stringify(state));
     } catch { /* Yerel dosya modunda depolama engellense bile uygulama çalışmaya devam eder. */ }
     if(cloudInitializedV5 && !cloudApplyingV5 && state?.cloudSync?.enabled && typeof scheduleCloudPushV5==='function') scheduleCloudPushV5();
@@ -1017,20 +1019,50 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       const active=JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null');
       if(active)return active;
     } catch {}
+
+    // Android NFC uygulamasına geçişte Chrome aynı sekmeyi yeniden kurabilir
+    // veya farklı sekmeye dönebilir. Bu yüzden şifreyi değil, sadece aktif
+    // kullanıcı oturumunu localStorage'da ayrıca saklarız.
+    try{
+      const saved=JSON.parse(localStorage.getItem(PERSIST_SESSION_KEY)||'null');
+      if(saved?.session && Number(saved.expiresAt||0)>Date.now()){
+        try{sessionStorage.setItem(SESSION_KEY,JSON.stringify(saved.session));}catch{}
+        return saved.session;
+      }
+      if(saved) localStorage.removeItem(PERSIST_SESSION_KEY);
+    }catch{}
+
     const pending=safeNfcReturnGet();
     if(pending?.session){
-      try{sessionStorage.setItem(SESSION_KEY,JSON.stringify(pending.session));}catch{}
+      safeSessionSet(pending.session);
       return pending.session;
     }
     return null;
   }
   function safeSessionSet(value){
-    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(value)); }
-    catch { /* Oturum sadece bu sayfa açıkken bellekte tutulur. */ }
+    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(value)); } catch {}
+    try {
+      localStorage.setItem(PERSIST_SESSION_KEY,JSON.stringify({
+        session:value,
+        updatedAt:Date.now(),
+        expiresAt:Date.now()+12*60*60*1000
+      }));
+    } catch {}
   }
   function safeSessionRemove(){
     try { sessionStorage.removeItem(SESSION_KEY); } catch {}
+    try { localStorage.removeItem(PERSIST_SESSION_KEY); } catch {}
+    try { localStorage.removeItem(LAST_ROUTE_KEY); } catch {}
     safeNfcReturnRemove();
+  }
+  function safeRouteGet(){
+    try{
+      const r=String(localStorage.getItem(LAST_ROUTE_KEY)||'').trim();
+      return r || 'dashboard';
+    }catch{return 'dashboard';}
+  }
+  function safeRouteSet(value){
+    try{localStorage.setItem(LAST_ROUTE_KEY,String(value||'dashboard'));}catch{}
   }
   function ensureStateShape(){
     state.settings = state.settings || {};
@@ -1553,6 +1585,8 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     applyUiMode();
     applyTheme();
     if(!session) return renderLogin();
+    safeSessionSet(session);
+    safeRouteSet(route);
     state.currentUser=state.users.find(x=>x.id===session?.id)||state.users[0]||null;
     app.innerHTML = shell(renderPage(route));
     bindShell();
@@ -4656,7 +4690,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
 
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion='6.34';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
+    state.meta=state.meta||{};state.meta.appVersion='6.36';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
@@ -4811,7 +4845,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     state.invoiceSettings.companyTitle=state.invoiceSettings.companyTitle||state.settings.companyName||'ASİL KUYUMCULUK';
     state.invoiceSettings.defaultDocumentType=state.invoiceSettings.defaultDocumentType||'AUTO';
     if(!Array.isArray(state.invoiceRecords))state.invoiceRecords=[];
-    state.meta=state.meta||{};state.meta.appVersion='6.35';
+    state.meta=state.meta||{};state.meta.appVersion='6.36';
   }
   function maskIdNo(v){v=String(v||'').replace(/\D/g,'');if(v.length<5)return v||'—';return v.slice(0,2)+'*****'+v.slice(-2);}
   function identityById(id){return identityRecords.find(x=>x.id===id)||null;}
