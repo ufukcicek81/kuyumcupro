@@ -1,4 +1,4 @@
-# Asil Kuyumcu Pro v6.12 — Pusula 72×10 Barkod Etiketi
+# Asil Kuyumcu Pro v6.30 — MASAK Risk + NFC + Banka + e-Fatura
 
 Bu paket, kuyumcu barkod etiketini Pusula çıktısına yakın olacak şekilde yeniden düzenler.
 
@@ -28,3 +28,9 @@ Detaylı adımlar için `YAZICI_KURULUM.md` dosyasına bakın.
 - Barkod Yazdır varsayılan olarak QZ Tray üzerinden doğrudan seçili/default etiket yazıcısına gönderilir.
 - Tarayıcı yazdırma önizlemesi doğrudan modda açılmaz.
 - İlk doğrudan baskıda default yazıcı otomatik bulunup kaydedilebilir.
+
+
+## v6.30
+- Ayrıntılar: `V6_30_DEGISIKLIKLER.md`
+- Kurulum: `MASAK_RISK_NFC_KURULUM_V630.md`
+- Android NFC kaynak projesi: `android-nfc-helper/`
