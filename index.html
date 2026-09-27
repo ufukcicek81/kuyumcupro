@@ -993,7 +993,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     try{
       if(typeof ensureV5State==='function') ensureV5State();
       if(typeof reconcileTransactionLedgerV5==='function') reconcileTransactionLedgerV5();
-      state.meta=state.meta||{}; state.meta.updatedAt=now(); state.meta.appVersion='6.36';
+      state.meta=state.meta||{}; state.meta.updatedAt=now(); state.meta.appVersion='6.37';
       localStorage.setItem(LS_KEY, JSON.stringify(state));
     } catch { /* Yerel dosya modunda depolama engellense bile uygulama çalışmaya devam eder. */ }
     if(cloudInitializedV5 && !cloudApplyingV5 && state?.cloudSync?.enabled && typeof scheduleCloudPushV5==='function') scheduleCloudPushV5();
@@ -1034,8 +1034,9 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
 
     const pending=safeNfcReturnGet();
     if(pending?.session){
-      safeSessionSet(pending.session);
-      return pending.session;
+      const restored={id:pending.session.id,name:pending.session.name,role:pending.session.role};
+      safeSessionSet(restored);
+      return restored;
     }
     return null;
   }
@@ -4690,7 +4691,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
 
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion='6.36';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
+    state.meta=state.meta||{};state.meta.appVersion='6.37';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
@@ -4845,7 +4846,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     state.invoiceSettings.companyTitle=state.invoiceSettings.companyTitle||state.settings.companyName||'ASİL KUYUMCULUK';
     state.invoiceSettings.defaultDocumentType=state.invoiceSettings.defaultDocumentType||'AUTO';
     if(!Array.isArray(state.invoiceRecords))state.invoiceRecords=[];
-    state.meta=state.meta||{};state.meta.appVersion='6.36';
+    state.meta=state.meta||{};state.meta.appVersion='6.37';
   }
   function maskIdNo(v){v=String(v||'').replace(/\D/g,'');if(v.length<5)return v||'—';return v.slice(0,2)+'*****'+v.slice(-2);}
   function identityById(id){return identityRecords.find(x=>x.id===id)||null;}
@@ -4891,6 +4892,10 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   async function startNfcPairing(recordId=''){
     const url=String(state.complianceSettings.nfcBridgeUrl||state.complianceSettings.riskProxyUrl||'').trim();
     if(!url)return toast('NFC Köprü URL adresini ayarlayın','err');
+    // NFC uygulamasına geçmeden hemen önce oturumu ve ekranı kalıcılaştır.
+    // Chrome sekmeyi yeniden yüklese bile kullanıcı tekrar giriş yapmasın.
+    if(session) safeSessionSet({id:session.id,name:session.name,role:session.role});
+    safeRouteSet('compliance');
     try{
       const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'createNfcSession'})});
       const data=await res.json();
@@ -4907,7 +4912,20 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       });
       const deepLink='asilnfc://scan?code='+encodeURIComponent(code)+'&url='+encodeURIComponent(url)+'&return='+encodeURIComponent(window.location.href);
       modal('NFC Kimlik Aktarımı',`<div class="notice"><strong>Otomatik mod:</strong> Android telefondaysanız Asil NFC Helper otomatik açılır; kodu elle yazmanız gerekmez. Uygulamada kimliğin arka yüzünü kameraya gösterin, ardından kartı telefona dokundurun.</div><div class="nfc-code">${esc(code)}</div><div class="addon-actions" style="margin:12px 0"><button type="button" class="btn btn-primary" id="openNfcHelper">ASİL NFC UYGULAMASINI AÇ</button></div><div class="summary-row"><span>Durum</span><strong id="nfcPairState">Telefon bekleniyor…</strong></div><div class="notice"><strong>PC kullanımı:</strong> Kod yedek yöntem olarak burada kalır. Telefonda aynı Kuyumcu Pro sayfasını açıp NFC işlemini başlattığınızda uygulama otomatik açılır. <strong>Not:</strong> Çip aktarımı resmi EKDS doğrulaması değildir.</div>`,null,'Kapat');
-      const launch=()=>{window.location.href=deepLink;};
+      const launch=()=>{
+        if(session) safeSessionSet({id:session.id,name:session.name,role:session.role});
+        safeRouteSet('compliance');
+        safeNfcReturnSet({
+          code,
+          url,
+          recordId:String(recordId||''),
+          route:'compliance',
+          session:session?{id:session.id,name:session.name,role:session.role}:null,
+          createdAt:Date.now(),
+          expiresAt:Date.now()+11*60*1000
+        });
+        window.location.href=deepLink;
+      };
       document.getElementById('openNfcHelper')?.addEventListener('click',launch);
       if(/Android/i.test(navigator.userAgent))setTimeout(launch,350);
       let tries=0;
