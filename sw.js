@@ -1,4 +1,4 @@
-const C='asil-v6-42-masak-review-explain-20260928';
+const C='asil-v6-43-ios-nfc-helper-20260928';
 self.addEventListener('install',e=>{
   self.skipWaiting();
   e.waitUntil(caches.open(C).then(c=>c.addAll(['./','./index.html'])));
