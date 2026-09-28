@@ -1,4 +1,4 @@
-const C='asil-v6-38-nfc-session-route-20260927';
+const C='asil-v6-39-kyc-print-masak-sync-20260928';
 self.addEventListener('install',e=>{
   self.skipWaiting();
   e.waitUntil(caches.open(C).then(c=>c.addAll(['./','./index.html'])));
