@@ -823,6 +823,22 @@ body[data-ui-mode="pc"] #logoutBtn{font-size:16px}
   body[data-ui-mode="tablet"] #logoutBtn{font-size:15px}
 }
 
+/* Genel yazı büyütme + yazı rengi belirginleştirme */
+@media (min-width:821px){
+  body[data-ui-mode="pc"] .app-shell{width:111.111111%;min-height:111.111111vh;transform:scale(.9);transform-origin:top left}
+  body[data-ui-mode="pc"] .sidebar{height:111.111111vh}
+}
+body[data-theme="light"]{--text:#101518;--muted:#333c41}
+body[data-theme="light"] .labelled label,
+body[data-theme="light"] .field label{color:#1d262b;font-weight:700}
+body[data-theme="light"] .metric .foot,
+body[data-theme="light"] .kyc-source{color:#3a444a}
+body[data-theme="dark"]{--muted:#c4cad2}
+body[data-theme="dark"] .labelled label,
+body[data-theme="dark"] .field label{color:#e2e6eb;font-weight:700}
+body[data-theme="dark"] .metric .foot,
+body[data-theme="dark"] .table th{color:#c9cfd7}
+
 </style>
 </head>
 <body>
