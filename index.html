@@ -798,6 +798,31 @@ body[data-ui-mode="pc"] .user-chip .muted{font-size:13px!important}
 .watchlist-box{display:flex;gap:10px;align-items:end;flex-wrap:wrap}.watchlist-box .labelled{min-width:220px;flex:1}
 .kyc-source{font-size:12px;color:var(--muted);margin-top:4px}
 
+/* Menü yazı boyutu büyütme (yalnızca sol menü) */
+body[data-ui-mode="pc"] .sidebar-brand strong{font-size:18px}
+body[data-ui-mode="pc"] .sidebar-brand small{font-size:14px}
+body[data-ui-mode="pc"] .nav-search input{font-size:16px;min-height:46px}
+body[data-ui-mode="pc"] .nav button{font-size:17px;min-height:50px}
+body[data-ui-mode="pc"] .nav .ico{font-size:20px;width:26px}
+body[data-ui-mode="pc"] .user-chip strong{font-size:16px}
+body[data-ui-mode="pc"] .user-chip .muted{font-size:14px!important}
+body[data-ui-mode="pc"] #logoutBtn{font-size:16px}
+@media (min-width:650px){
+  body[data-ui-mode="tablet"] .app-shell{grid-template-columns:116px minmax(0,1fr)}
+  body[data-ui-mode="tablet"] .nav button{font-size:13.5px;line-height:1.15;min-height:70px;font-weight:650}
+  body[data-ui-mode="tablet"] .nav .ico{font-size:23px}
+  body[data-ui-mode="tablet"] #logoutBtn{font-size:13px}
+}
+@media (max-width:720px){
+  body[data-ui-mode="tablet"] .app-shell{grid-template-columns:1fr}
+  body[data-ui-mode="tablet"] .nav button{font-size:16px;min-height:52px;line-height:1.2}
+  body[data-ui-mode="tablet"] .nav .ico{font-size:19px;width:24px}
+  body[data-ui-mode="tablet"] .nav-search input{font-size:16px;min-height:44px}
+  body[data-ui-mode="tablet"] .sidebar-brand strong{font-size:17px}
+  body[data-ui-mode="tablet"] .sidebar-brand small{font-size:13px}
+  body[data-ui-mode="tablet"] #logoutBtn{font-size:15px}
+}
+
 </style>
 </head>
 <body>
