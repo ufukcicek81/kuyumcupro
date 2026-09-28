@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101113" />
-  <meta name="description" content="Asil Kuyumcu Pro V6.38 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
+  <meta name="description" content="Asil Kuyumcu Pro V6.39 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.38</title>
+  <title>Asil Kuyumcu Pro V6.39</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -995,7 +995,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     try{
       if(typeof ensureV5State==='function') ensureV5State();
       if(typeof reconcileTransactionLedgerV5==='function') reconcileTransactionLedgerV5();
-      state.meta=state.meta||{}; state.meta.updatedAt=now(); state.meta.appVersion='6.38';
+      state.meta=state.meta||{}; state.meta.updatedAt=now(); state.meta.appVersion='6.39';
       localStorage.setItem(LS_KEY, JSON.stringify(state));
     } catch { /* Yerel dosya modunda depolama engellense bile uygulama çalışmaya devam eder. */ }
     if(cloudInitializedV5 && !cloudApplyingV5 && state?.cloudSync?.enabled && typeof scheduleCloudPushV5==='function') scheduleCloudPushV5();
@@ -1691,7 +1691,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v6.38</small></div></div>
+        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v6.39</small></div></div>
         <div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off"></div><div class="nav">${navItems.map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div>
         <div class="sidebar-bottom">
           <div class="user-chip"><div class="avatar">${esc(session.name.split(' ').map(x=>x[0]).slice(0,2).join(''))}</div><div><strong>${esc(session.name)}</strong><div class="muted" style="font-size:12px">${esc(session.role)}</div></div></div>
@@ -4743,7 +4743,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
 
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion='6.38';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
+    state.meta=state.meta||{};state.meta.appVersion='6.39';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
@@ -4861,6 +4861,8 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   const MASAK_WATCHLIST_LOCAL_KEY='asil_kuyumcu_masak_watchlist_v1';
   let identityRecords=[];
   let masakWatchlist=[];
+  let masakOfficialSyncBusy=false;
+  let masakOfficialAutoTried=false;
   let bankFeedMoves=[];
   let invoiceView='sales';
 
@@ -4898,7 +4900,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     state.invoiceSettings.companyTitle=state.invoiceSettings.companyTitle||state.settings.companyName||'ASİL KUYUMCULUK';
     state.invoiceSettings.defaultDocumentType=state.invoiceSettings.defaultDocumentType||'AUTO';
     if(!Array.isArray(state.invoiceRecords))state.invoiceRecords=[];
-    state.meta=state.meta||{};state.meta.appVersion='6.38';
+    state.meta=state.meta||{};state.meta.appVersion='6.39';
   }
   function maskIdNo(v){v=String(v||'').replace(/\D/g,'');if(v.length<5)return v||'—';return v.slice(0,2)+'*****'+v.slice(-2);}
   function identityById(id){return identityRecords.find(x=>x.id===id)||null;}
@@ -4936,10 +4938,115 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   async function fileToDataUrl(file){return await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=()=>reject(r.error);r.readAsDataURL(file);});}
   async function dataUrlToFile(dataUrl,name='chip-face.jpg'){const r=await fetch(dataUrl);const b=await r.blob();return new File([b],name,{type:b.type||'image/jpeg'});}
   function riskDetail(id){const r=identityById(id);if(!r)return;const ms=Array.isArray(r.riskMatches)?r.riskMatches:[];modal(`Risk Sonucu — ${esc(r.fullName||'')}`,`<div class="summary-row"><span>Sonuç</span><strong><span class="badge ${riskBadge(r)}">${esc(r.riskStatus||'TARANMADI')}</span></strong></div><div class="summary-row"><span>Kontrol zamanı</span><strong>${r.riskCheckedAt?trDate(r.riskCheckedAt):'—'}</strong></div><div class="summary-row"><span>Kaynak</span><strong>${esc(r.riskProvider||'—')}</strong></div>${r.riskMessage?`<div class="notice" style="margin:10px 0">${esc(r.riskMessage)}</div>`:''}<div style="margin-top:12px">${ms.map(m=>`<div class="${m.status==='EŞLEŞME'?'risk-hit':'risk-review'}"><strong>${esc(m.caption||m.name||'Olası eşleşme')}</strong><br><small>Kaynak: ${esc(m.source||m.provider||'—')} · Skor: ${m.score!=null?Math.round(Number(m.score)*100)+'%':'—'}${Array.isArray(m.topics)&&m.topics.length?' · '+esc(m.topics.join(', ')):''}</small>${m.birthDate?`<br><small>Doğum: ${esc(m.birthDate)}</small>`:''}</div>`).join('')||'<div class="risk-clean"><strong>Eşleşme kaydı yok.</strong></div>'}</div>`,null,'Kapat');}
+
+  function identityDetail(id){
+    const r=identityById(id);if(!r)return;
+    const no=r.personType==='Tüzel Kişi'?(r.vkn||''):(r.tckn||'');
+    const row=(label,value)=>`<div class="summary-row"><span>${esc(label)}</span><strong style="text-align:right;white-space:normal">${esc(value||'—')}</strong></div>`;
+    const body=`<div class="notice"><strong>NFC ile gelen bilgiler aşağıdadır.</strong> Yazdırmadan önce kontrol edin; eksik veya yanlış alan varsa <b>Düzenle / Tamamla</b> ile düzeltin.</div>
+      <div style="margin-top:12px">
+        ${row('Ad Soyad / Ünvan',r.fullName)}
+        ${row(r.personType==='Tüzel Kişi'?'VKN':'T.C. Kimlik No',no)}
+        ${row('Kimlik Türü',r.documentType)}
+        ${row('Belge / Seri No',r.documentNo)}
+        ${row('Doğum Tarihi',r.birthDate)}
+        ${row('Doğum Yeri',r.birthPlace)}
+        ${row('Anne Adı',r.motherName)}
+        ${row('Baba Adı',r.fatherName)}
+        ${row('Cinsiyet',r.gender)}
+        ${row('Uyruk',r.nationality)}
+        ${row('Son Geçerlilik',r.documentExpiry)}
+        ${row('Telefon',r.phone)}
+        ${row('Meslek',r.occupation)}
+        ${row('Adres',r.address)}
+        ${row('NFC Okuma',r.nfcRead?('EVET · '+(r.nfcReadAt?trDate(r.nfcReadAt):'')):'Hayır')}
+        ${row('Kimlik Kontrolü',r.verified?'Doğrulandı / asıl belge görüldü':'Henüz doğrulanmadı')}
+        ${row('Islak İmza',r.wetSignatureObtained?'Alındı':'Henüz alınmadı')}
+        ${row('Risk Sonucu',r.riskStatus||'TARANMADI')}
+      </div>
+      <div class="addon-actions" style="margin-top:16px">
+        <button type="button" class="btn btn-primary" id="kycDetailEdit">DÜZENLE / TAMAMLA</button>
+        <button type="button" class="btn btn-success" id="kycDetailPrint">YAZDIR / İMZA AL</button>
+        <button type="button" class="btn btn-outline" id="kycDetailRisk">MASAK RİSK TARA</button>
+        ${r.hasSignedForm?'<button type="button" class="btn btn-outline" id="kycDetailSigned">İMZALI BELGEYİ GÖR</button>':''}
+      </div>`;
+    modal('Kimlik Bilgilerini Kontrol Et — '+esc(r.fullName||'Kayıt'),body,null,'Kapat');
+    document.getElementById('kycDetailEdit')?.addEventListener('click',()=>{closeModal();openIdentityModal(id);});
+    document.getElementById('kycDetailPrint')?.addEventListener('click',()=>printIdentityForm(id));
+    document.getElementById('kycDetailRisk')?.addEventListener('click',()=>{closeModal();screenIdentityRecord(id);});
+    document.getElementById('kycDetailSigned')?.addEventListener('click',()=>viewKycFile(id,'signed'));
+  }
+
+  function printIdentityForm(id){
+    const r=identityById(id);if(!r)return;
+    const no=r.personType==='Tüzel Kişi'?(r.vkn||''):(r.tckn||'');
+    const company=state.settings?.companyName||'ASİL KUYUMCULUK';
+    const risk=r.riskStatus||'TARANMADI';
+    const fields=[
+      ['Ad Soyad / Ünvan',r.fullName],['Kişi Tipi',r.personType||'Gerçek Kişi'],
+      [r.personType==='Tüzel Kişi'?'VKN':'T.C. Kimlik No',no],['Kimlik Türü',r.documentType],
+      ['Belge / Seri No',r.documentNo],['Doğum Tarihi',r.birthDate],['Doğum Yeri',r.birthPlace],
+      ['Anne Adı',r.motherName],['Baba Adı',r.fatherName],['Cinsiyet',r.gender],['Uyruk',r.nationality],
+      ['Son Geçerlilik',r.documentExpiry],['Telefon',r.phone],['E-posta',r.email],['Meslek',r.occupation],
+      ['Adres',r.address],['NFC Okuma',r.nfcRead?'Evet':'Hayır'],['Risk Taraması',risk],
+      ['Risk Kontrol Tarihi',r.riskCheckedAt?trDate(r.riskCheckedAt):'—'],['Kontrol Eden',r.verifiedBy||session?.name||'—']
+    ];
+    const w=window.open('','_blank');
+    if(!w)return toast('Yazdırma penceresi açılamadı. Tarayıcı açılır pencere iznini kontrol edin.','err');
+    const rows=fields.map(([a,b])=>`<tr><th>${esc(a)}</th><td>${esc(b||'—')}</td></tr>`).join('');
+    w.document.open();
+    w.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Kimlik Tespit Formu - ${esc(r.fullName||'')}</title><style>
+      @page{size:A4;margin:12mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#111;margin:0;font-size:11.5px}.head{text-align:center;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:12px}.head h1{font-size:18px;margin:4px 0}.head h2{font-size:13px;margin:0;font-weight:600}.meta{display:flex;justify-content:space-between;gap:12px;margin-bottom:10px;font-size:10px}.tag{border:1px solid #333;padding:5px 7px;border-radius:4px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #555;padding:6px 7px;vertical-align:top}th{width:31%;text-align:left;background:#f1f1f1}td{font-weight:600}.notice{margin-top:12px;border:1px solid #777;padding:9px;line-height:1.45}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:24px}.sig{height:105px;border:1px solid #777;padding:8px;text-align:center}.sig strong{display:block;margin-bottom:10px}.footer{margin-top:12px;font-size:9px;color:#444;line-height:1.35}.no-print{margin:0 0 10px;text-align:right}.no-print button{padding:8px 14px;font-weight:700}@media print{.no-print{display:none}}
+    </style></head><body><div class="no-print"><button onclick="window.print()">YAZDIR</button></div>
+      <div class="head"><h1>${esc(company)}</h1><h2>MÜŞTERİ TANIMA VE KİMLİK TESPİT TUTANAĞI</h2></div>
+      <div class="meta"><span class="tag">Kayıt No: ${esc(r.id)}</span><span class="tag">Düzenleme: ${esc(new Date().toLocaleString('tr-TR'))}</span><span class="tag">Risk: ${esc(risk)}</span></div>
+      <table>${rows}</table>
+      <div class="notice">Yukarıdaki bilgilerin tarafıma ait olduğunu, ibraz ettiğim kimlik belgesi ve beyanım esas alınarak kaydedildiğini; bilgilerde eksiklik veya değişiklik olması halinde işletmeye bildireceğimi beyan ederim.</div>
+      <div class="signatures"><div class="sig"><strong>MÜŞTERİ / İŞLEM YAPAN İMZASI</strong><br><br>Ad Soyad: ${esc(r.fullName||'')}</div><div class="sig"><strong>KONTROL EDEN PERSONEL İMZASI</strong><br><br>Ad Soyad: ${esc(session?.name||r.verifiedBy||'')}</div></div>
+      <div class="footer">Bu çıktı işletmenin kimlik tespit ve iç kontrol kaydıdır. NFC çip aktarımı resmi EKDS sonucu değildir. Yaptırım listesi sonucu, sorgunun yapıldığı tarihte sistemde bulunan resmî/bağlı kaynaklara göre kayıt altına alınır.</div>
+      <script>setTimeout(()=>window.print(),250)<\/script></body></html>`);
+    w.document.close();
+  }
+
+  async function syncOfficialMasakLists(silent=false){
+    if(masakOfficialSyncBusy)return;
+    masakOfficialSyncBusy=true;
+    try{
+      if(!silent)toast('Resmî MASAK listeleri güncelleniyor…');
+      const base=location.hostname.endsWith('vercel.app')?location.origin:'https://kuyumcuproo.vercel.app';
+      const res=await fetch(base+'/api/masak?ts='+Date.now(),{cache:'no-store'});
+      const data=await res.json().catch(()=>({}));
+      if(!res.ok||data.ok===false)throw new Error(data.message||('HTTP '+res.status));
+      if(!Array.isArray(data.records)||!data.records.length)throw new Error('Resmî listeden kayıt alınamadı'+(Array.isArray(data.warnings)&&data.warnings.length?': '+data.warnings[0]:''));
+      const manual=masakWatchlist.filter(x=>x.officialAuto!==true);
+      const seen=new Set(manual.map(x=>`${normalizeRiskText(x.name)}|${x.idNo||''}|${x.birthDate||''}|${x.source||''}`));
+      const fresh=[];
+      for(const x of data.records){
+        const rec={name:String(x.name||'').trim(),birthDate:String(x.birthDate||'').trim(),idNo:String(x.idNo||'').trim(),note:String(x.note||'').trim(),source:String(x.source||'MASAK Resmî Liste'),officialAuto:true,syncedAt:data.fetchedAt||now()};
+        if(!rec.name)continue;
+        const key=`${normalizeRiskText(rec.name)}|${rec.idNo}|${rec.birthDate}|${rec.source}`;
+        if(seen.has(key))continue;seen.add(key);fresh.push(rec);
+      }
+      masakWatchlist=[...manual,...fresh];
+      saveMasakWatchlist();
+      state.complianceSettings.masakOfficialSyncAt=data.fetchedAt||now();
+      state.complianceSettings.masakOfficialRecordCount=fresh.length;
+      state.complianceSettings.masakOfficialFiles=Array.isArray(data.files)?data.files.map(x=>({source:x.source,url:x.url,rows:x.rows})).slice(0,20):[];
+      save();
+      render();
+      toast(`Resmî MASAK listesi güncellendi: ${fresh.length} kayıt`,'ok');
+    }catch(e){
+      state.complianceSettings.masakOfficialLastError=String(e?.message||e);
+      save();
+      if(!silent)toast('MASAK listesi güncellenemedi: '+String(e?.message||e),'err');
+    }finally{
+      masakOfficialSyncBusy=false;
+    }
+  }
   async function importNfcPayload(payload,recordId=''){
     const id=recordId||uid('KYC');let r=identityById(id);if(!r){r={id,createdAt:now(),riskStatus:'TARANMADI'};identityRecords.unshift(r);}Object.assign(r,{personType:'Gerçek Kişi',fullName:payload.fullName||r.fullName||'',tckn:String(payload.tckn||r.tckn||'').replace(/\D/g,''),documentType:'T.C. Kimlik Kartı',documentNo:payload.documentNumber||payload.documentNo||r.documentNo||'',birthDate:payload.birthDate||r.birthDate||'',documentExpiry:payload.expiryDate||r.documentExpiry||'',nationality:payload.nationality||r.nationality||'T.C.',gender:payload.sex||r.gender||'',birthPlace:payload.birthPlace||r.birthPlace||'',occupation:payload.occupation||r.occupation||'',address:payload.address||r.address||'',phone:payload.phone||r.phone||'',mrzCameraRead:payload.mrzCameraRead===true||r.mrzCameraRead===true,nfcRead:true,nfcReadAt:now(),nfcReader:payload.reader||'Android NFC Helper',nfcChipProtocol:payload.protocol||'ICAO NFC',verified:false,updatedAt:now()});
     if(payload.faceImageBase64){try{const f=await dataUrlToFile(payload.faceImageBase64);await kycFilePut(id,'chipFace',f);r.hasChipFace=true;}catch{}}
-    saveIdentityRecords();audit(`${r.fullName||'Yeni müşteri'} NFC kimlik verisi aktarıldı`,'Kimlik/MASAK');closeModal();render();setTimeout(()=>openIdentityModal(id),30);
+    saveIdentityRecords();audit(`${r.fullName||'Yeni müşteri'} NFC kimlik verisi aktarıldı`,'Kimlik/MASAK');closeModal();render();setTimeout(()=>identityDetail(id),60);
   }
   async function startNfcPairing(recordId=''){
     const url=String(state.complianceSettings.nfcBridgeUrl||state.complianceSettings.riskProxyUrl||'').trim();
@@ -5059,8 +5166,17 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       <div class="notice sensitive-note"><strong>Kimlik belgesi:</strong> Ön/arka görüntü zorunlu alan değildir; gerekli kimlik bilgilerinin kaydı ve teyidi esastır. Görseller denetim izi için eklenebilir. <strong>İmza:</strong> gerçek kişi kaydında imza örneği ayrıca takip edilir. <strong>NFC:</strong> Android yardımcı uygulama çip verisini aktarır; resmi EKDS sonucu üretmez.</div>
       <div class="addon-grid" style="margin-top:16px"><div class="addon-kpi"><small>Kimlik Tespit Eşiği</small><strong>${money(threshold)}</strong></div><div class="addon-kpi"><small>Tamamlanan Kayıt</small><strong>${complete}</strong></div><div class="addon-kpi"><small>İnceleme</small><strong>${review}</strong></div><div class="addon-kpi"><small>Risk Eşleşmesi</small><strong>${matches}</strong></div></div>
       <div class="card" style="margin-top:16px"><div class="section-head"><h3>Risk + NFC Ayarları</h3><span>Satış ekranına bağlı</span></div><div class="form-grid"><div class="labelled"><label>Kimlik Tespiti Eşiği (TL)</label><input class="input" id="masakThreshold" type="number" min="0" step="1000" value="${threshold}"></div><div class="labelled"><label>Kimlik Yoksa Satışı Engelle</label><select class="select" id="masakBlock"><option value="1" ${state.complianceSettings.blockSaleWithoutIdentity!==false?'selected':''}>Evet</option><option value="0" ${state.complianceSettings.blockSaleWithoutIdentity===false?'selected':''}>Hayır</option></select></div><div class="labelled"><label>Risk Eşleşmesinde Satışı Engelle</label><select class="select" id="riskBlock"><option value="1" ${state.complianceSettings.blockSaleOnRiskMatch!==false?'selected':''}>Evet</option><option value="0" ${state.complianceSettings.blockSaleOnRiskMatch===false?'selected':''}>Hayır</option></select></div><div class="labelled span-2"><label>Risk Tarama Worker URL</label><input class="input" id="riskProxyUrl" placeholder="https://...workers.dev" value="${esc(state.complianceSettings.riskProxyUrl||'')}"></div><div class="labelled span-2"><label>NFC Köprü Worker URL</label><input class="input" id="nfcBridgeUrl" placeholder="Aynı Worker URL kullanılabilir" value="${esc(state.complianceSettings.nfcBridgeUrl||'')}"></div><div class="labelled span-2"><label>Risk Servisi Etiketi</label><input class="input" id="riskProviderLabel" value="${esc(state.complianceSettings.riskProviderLabel||'')}"></div><div class="labelled span-4" style="align-items:flex-end"><button class="btn btn-primary" id="saveMasakSettings">Ayarları Kaydet</button></div></div></div>
-      <div class="card" style="margin-top:16px"><div class="section-head"><h3>Resmî MASAK Liste Yedeği</h3><span>${masakWatchlist.length} satır</span></div><div class="watchlist-box"><div class="labelled"><label>MASAK sitesinden indirdiğiniz CSV dosyaları</label><input id="masakCsvFiles" class="input" type="file" accept=".csv,text/csv,text/plain" multiple></div><button class="btn btn-primary" id="importMasakCsv">CSV'LERİ İÇE AKTAR</button><button class="btn btn-outline" id="clearMasakCsv">Listeyi Temizle</button></div><div class="notice" style="margin-top:12px">Bu liste cihazda tutulur ve ücretsiz yerel eşleştirme sağlar. Gelişmiş PEP/yaptırım taraması için Worker üzerinde OpenSanctions API anahtarı kullanılabilir.</div></div>
-      <div class="card" style="margin-top:16px"><div class="section-head"><h3>MASAK Müşteri Kayıtları</h3><span>${records.length} bağımsız müşteri</span></div><div class="toolbar"><input class="input search grow" id="kycSearch" placeholder="Ad soyad, telefon, TCKN/VKN veya belge no ara..."><select class="select" id="kycStatus"><option value="">Tüm durumlar</option><option value="ok">Tamam</option><option value="missing">Eksik</option><option value="risk">Risk / inceleme</option></select></div><div class="table-wrap"><table class="table" id="kycTable"><thead><tr><th>Müşteri</th><th>Kimlik / Vergi No</th><th>Belge / Kaynak</th><th>Görseller</th><th>Risk</th><th>Son Kontrol</th><th>İşlem</th></tr></thead><tbody>${records.map(r=>{const ok=identityComplete(r),no=r.personType==='Tüzel Kişi'?r.vkn:r.tckn,hay=[r.fullName,r.phone,no,r.documentNo].filter(Boolean).join(' ').toLocaleLowerCase('tr-TR'),status=(!ok?'missing':(['EŞLEŞME','İNCELEME'].includes(r.riskStatus)?'risk':'ok'));return `<tr data-kyc-row data-search="${esc(hay)}" data-status="${status}"><td><strong>${esc(r.fullName||'İsimsiz')}</strong><br><small>${esc(r.phone||'')} · ${esc(r.personType||'Gerçek Kişi')}</small></td><td>${maskIdNo(no)}</td><td>${esc(r.documentType||'—')} ${r.documentNo?`· ${esc(r.documentNo)}`:''}<div class="kyc-source">${r.nfcRead?'NFC çip aktarımı · ':''}${esc(r.nfcReader||'')}</div></td><td><span class="badge ${r.hasIdFront?'green':'gray'}">ÖN ${r.hasIdFront?'✓':'—'}</span> <span class="badge ${r.hasIdBack?'green':'gray'}">ARKA ${r.hasIdBack?'✓':'—'}</span> <span class="badge ${r.hasChipFace?'green':'gray'}">ÇİP FOTO ${r.hasChipFace?'✓':'—'}</span></td><td><span class="badge ${riskBadge(r)}">${esc(r.riskStatus||'TARANMADI')}</span>${r.riskCheckedAt?`<br><small>${trDate(r.riskCheckedAt)}</small>`:''}</td><td>${r.verifiedAt?trDate(r.verifiedAt):'—'}<br><span class="badge ${ok?'green':'red'}">${ok?'TAMAM':'EKSİK'}</span></td><td><div class="addon-actions"><button class="btn btn-outline" data-kyc-edit="${r.id}">Düzenle</button><button class="btn btn-outline" data-kyc-nfc="${r.id}">NFC Yenile</button><button class="btn btn-outline" data-kyc-risk="${r.id}">Risk Tara</button>${r.riskCheckedAt?`<button class="btn btn-outline" data-kyc-riskdetail="${r.id}">Sonuç</button>`:''}</div></td></tr>`}).join('')||'<tr><td colspan="7">Henüz MASAK müşterisi kaydı yok.</td></tr>'}</tbody></table></div></div>`;
+      <div class="card" style="margin-top:16px"><div class="section-head"><h3>Resmî MASAK Yaptırım / Dondurma Listeleri</h3><span>${masakWatchlist.length} satır</span></div>
+        <div class="watchlist-box">
+          <button class="btn btn-primary" id="syncOfficialMasak">RESMÎ MASAK LİSTELERİNİ GÜNCELLE</button>
+          <span class="badge ${state.complianceSettings.masakOfficialSyncAt?'green':'gold'}">${state.complianceSettings.masakOfficialSyncAt?'Son güncelleme: '+esc(trDate(state.complianceSettings.masakOfficialSyncAt)):'Henüz otomatik güncellenmedi'}</span>
+          <span class="badge blue">Otomatik kayıt: ${Number(state.complianceSettings.masakOfficialRecordCount||0)}</span>
+        </div>
+        <div class="notice" style="margin-top:12px"><strong>Otomatik kaynaklar:</strong> 6415/5 BMGK listeleri, 6415/7 iç dondurma kararları ve 7262/3A-3B KİSYF listeleri. Program resmî MASAK sayfalarındaki CSV dosyalarını Vercel ara servisi üzerinden alır ve yerel sorgu listesine işler.</div>
+        ${state.complianceSettings.masakOfficialLastError?`<div class="notice" style="margin-top:10px"><strong>Son güncelleme uyarısı:</strong> ${esc(state.complianceSettings.masakOfficialLastError)}</div>`:''}
+        <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:700">Elle CSV yükleme / yedek yöntem</summary><div class="watchlist-box" style="margin-top:10px"><div class="labelled"><label>MASAK sitesinden indirdiğiniz CSV dosyaları</label><input id="masakCsvFiles" class="input" type="file" accept=".csv,text/csv,text/plain" multiple></div><button class="btn btn-outline" id="importMasakCsv">CSV'LERİ İÇE AKTAR</button><button class="btn btn-outline" id="clearMasakCsv">Listeyi Temizle</button></div></details>
+      </div>
+      <div class="card" style="margin-top:16px"><div class="section-head"><h3>MASAK Müşteri Kayıtları</h3><span>${records.length} bağımsız müşteri</span></div><div class="toolbar"><input class="input search grow" id="kycSearch" placeholder="Ad soyad, telefon, TCKN/VKN veya belge no ara..."><select class="select" id="kycStatus"><option value="">Tüm durumlar</option><option value="ok">Tamam</option><option value="missing">Eksik</option><option value="risk">Risk / inceleme</option></select></div><div class="table-wrap"><table class="table" id="kycTable"><thead><tr><th>Müşteri</th><th>Kimlik / Vergi No</th><th>Belge / Kaynak</th><th>Görseller</th><th>Risk</th><th>Son Kontrol</th><th>İşlem</th></tr></thead><tbody>${records.map(r=>{const ok=identityComplete(r),no=r.personType==='Tüzel Kişi'?r.vkn:r.tckn,hay=[r.fullName,r.phone,no,r.documentNo].filter(Boolean).join(' ').toLocaleLowerCase('tr-TR'),status=(!ok?'missing':(['EŞLEŞME','İNCELEME'].includes(r.riskStatus)?'risk':'ok'));return `<tr data-kyc-row data-search="${esc(hay)}" data-status="${status}"><td><strong>${esc(r.fullName||'İsimsiz')}</strong><br><small>${esc(r.phone||'')} · ${esc(r.personType||'Gerçek Kişi')}</small></td><td>${maskIdNo(no)}</td><td>${esc(r.documentType||'—')} ${r.documentNo?`· ${esc(r.documentNo)}`:''}<div class="kyc-source">${r.nfcRead?'NFC çip aktarımı · ':''}${esc(r.nfcReader||'')}</div></td><td><span class="badge ${r.hasIdFront?'green':'gray'}">ÖN ${r.hasIdFront?'✓':'—'}</span> <span class="badge ${r.hasIdBack?'green':'gray'}">ARKA ${r.hasIdBack?'✓':'—'}</span> <span class="badge ${r.hasChipFace?'green':'gray'}">ÇİP FOTO ${r.hasChipFace?'✓':'—'}</span></td><td><span class="badge ${riskBadge(r)}">${esc(r.riskStatus||'TARANMADI')}</span>${r.riskCheckedAt?`<br><small>${trDate(r.riskCheckedAt)}</small>`:''}</td><td>${r.verifiedAt?trDate(r.verifiedAt):'—'}<br><span class="badge ${ok?'green':'red'}">${ok?'TAMAM':'EKSİK'}</span></td><td><div class="addon-actions"><button class="btn btn-primary" data-kyc-detail="${r.id}">Detay / Kontrol</button><button class="btn btn-success" data-kyc-print="${r.id}">Yazdır</button><button class="btn btn-outline" data-kyc-edit="${r.id}">Düzenle</button><button class="btn btn-outline" data-kyc-nfc="${r.id}">NFC Yenile</button><button class="btn btn-outline" data-kyc-risk="${r.id}">Risk Tara</button>${r.riskCheckedAt?`<button class="btn btn-outline" data-kyc-riskdetail="${r.id}">Sonuç</button>`:''}</div></td></tr>`}).join('')||'<tr><td colspan="7">Henüz MASAK müşterisi kaydı yok.</td></tr>'}</tbody></table></div></div>`;
   }
 
   function openIdentityModal(recordId=''){
@@ -5095,7 +5211,11 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
 
   function bindComplianceV620(){
     document.getElementById('newIdentityRecord')?.addEventListener('click',()=>openIdentityModal());document.getElementById('startNfcNew')?.addEventListener('click',()=>startNfcPairing());
+    document.querySelectorAll('[data-kyc-detail]').forEach(b=>b.addEventListener('click',()=>identityDetail(b.dataset.kycDetail)));
+    document.querySelectorAll('[data-kyc-print]').forEach(b=>b.addEventListener('click',()=>printIdentityForm(b.dataset.kycPrint)));
     document.querySelectorAll('[data-kyc-edit]').forEach(b=>b.addEventListener('click',()=>openIdentityModal(b.dataset.kycEdit)));document.querySelectorAll('[data-kyc-nfc]').forEach(b=>b.addEventListener('click',()=>startNfcPairing(b.dataset.kycNfc)));document.querySelectorAll('[data-kyc-risk]').forEach(b=>b.addEventListener('click',()=>screenIdentityRecord(b.dataset.kycRisk)));document.querySelectorAll('[data-kyc-riskdetail]').forEach(b=>b.addEventListener('click',()=>riskDetail(b.dataset.kycRiskdetail)));
+    document.getElementById('syncOfficialMasak')?.addEventListener('click',()=>syncOfficialMasakLists(false));
+    if(!masakOfficialAutoTried && (!state.complianceSettings.masakOfficialSyncAt || Date.now()-new Date(state.complianceSettings.masakOfficialSyncAt).getTime()>24*60*60*1000)){masakOfficialAutoTried=true;setTimeout(()=>syncOfficialMasakLists(true),350);}
     document.getElementById('saveMasakSettings')?.addEventListener('click',()=>{state.complianceSettings.identityThresholdTl=Math.max(0,Number(document.getElementById('masakThreshold').value||0));state.complianceSettings.blockSaleWithoutIdentity=document.getElementById('masakBlock').value==='1';state.complianceSettings.blockSaleOnRiskMatch=document.getElementById('riskBlock').value==='1';state.complianceSettings.riskProxyUrl=document.getElementById('riskProxyUrl').value.trim();state.complianceSettings.nfcBridgeUrl=document.getElementById('nfcBridgeUrl').value.trim();state.complianceSettings.riskProviderLabel=document.getElementById('riskProviderLabel').value.trim();save();toast('Kimlik, risk ve NFC ayarları kaydedildi');render();});
     document.getElementById('importMasakCsv')?.addEventListener('click',async()=>{const fs=[...(document.getElementById('masakCsvFiles')?.files||[])];if(!fs.length)return toast('CSV dosyası seçin','err');let n=0;try{for(const f of fs)n+=importMasakCsvText(await f.text(),f.name);toast(`${n} yeni MASAK liste kaydı eklendi`);render();}catch(e){toast('Liste içe aktarılamadı: '+String(e?.message||e),'err');}});document.getElementById('clearMasakCsv')?.addEventListener('click',()=>{if(!confirm('Yerel MASAK listesini temizlemek istiyor musunuz?'))return;masakWatchlist=[];saveMasakWatchlist();render();toast('Yerel MASAK listesi temizlendi');});
     const f=()=>{const q=(document.getElementById('kycSearch')?.value||'').toLocaleLowerCase('tr-TR'),st=document.getElementById('kycStatus')?.value||'';document.querySelectorAll('[data-kyc-row]').forEach(r=>r.style.display=(!q||String(r.dataset.search||'').includes(q))&&(!st||r.dataset.status===st)?'':'none');};document.getElementById('kycSearch')?.addEventListener('input',f);document.getElementById('kycStatus')?.addEventListener('change',f);
