@@ -10,7 +10,7 @@
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.44</title>
+  <title>Asil Kuyumcu Pro V6.45</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -840,6 +840,82 @@ body[data-theme="dark"] .metric .foot,
 body[data-theme="dark"] .table th{color:#c9cfd7}
 
 </style>
+<style id="simple-interface-v645">
+/* v6.45 — readable horizontal workspace; business and print logic unchanged */
+@media screen {
+body[data-theme="light"]{--bg:#f7f7f5;--panel:#fff;--panel-2:#f5f5f2;--panel-3:#eeefec;--line:#dcdedb;--text:#242a31;--muted:#626b76;--gold:#af8b32;--gold-2:#8a661d;--green:#147c4c;--red:#c73940;--shadow:0 12px 36px #18202b12;background:var(--bg);color:var(--text)}
+body[data-ui-mode] {font-size:16px;line-height:1.45}
+body[data-ui-mode] .app-shell{display:block!important;width:100%!important;min-height:100vh!important;transform:none!important;zoom:1!important}
+body[data-ui-mode] .sidebar{position:relative!important;left:auto!important;top:auto!important;width:100%!important;height:auto!important;padding:12px 24px 0!important;box-shadow:none!important;border:0!important;border-bottom:1px solid var(--line)!important;background:var(--panel)!important;z-index:25}
+.simple-brand-row{display:flex;align-items:center;justify-content:space-between;gap:16px}
+body[data-ui-mode] .sidebar-brand{padding:0 0 14px!important;justify-content:flex-start!important;gap:14px}
+body[data-ui-mode] .sidebar-brand>div:last-child{display:block!important}
+body[data-ui-mode] .sidebar-brand strong{font-size:25px!important;letter-spacing:.015em;color:var(--text)!important}
+.sidebar-brand em{font-style:normal;color:var(--gold)}
+body[data-ui-mode] .sidebar-brand .logo{width:48px;height:48px;background:#af8b3210;color:var(--gold-2);border:1px solid var(--gold);border-radius:10px}
+body[data-ui-mode] .sidebar-brand small{font-size:14px!important}.ui-version{margin-left:12px}
+.simple-account{display:flex;align-items:center;gap:14px;font-size:14px}
+body[data-ui-mode] .nav{display:flex!important;flex-direction:row!important;gap:0;padding:0;overflow:visible!important;border:1px solid var(--line);border-radius:10px 10px 0 0;background:var(--panel-2)}
+body[data-ui-mode] .nav>button,body[data-ui-mode] .more-nav>summary{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:9px;min-height:60px!important;padding:12px!important;font-size:17px!important;font-weight:750;white-space:nowrap;border:0;border-right:1px solid var(--line);border-radius:0;margin:0;background:transparent;color:var(--text);box-shadow:none}
+body[data-ui-mode] .nav button.active{background:var(--gold)!important;color:white!important;box-shadow:none!important}
+body[data-ui-mode] .nav .ico{display:inline!important;font-size:23px!important;width:auto!important}
+.more-nav{position:relative;flex:1}.more-nav summary{cursor:pointer;list-style:none}.more-nav summary::-webkit-details-marker{display:none}
+.more-nav-panel{position:absolute;right:0;top:100%;width:310px;max-height:70vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:0 0 12px 12px;box-shadow:var(--shadow);padding:10px;z-index:35}
+body[data-ui-mode] .more-nav-panel button{font-size:15px!important;min-height:44px!important;border:0!important;background:transparent;color:var(--text)}
+body[data-ui-mode] .nav-search{display:block!important}.nav-search input{width:100%}
+body[data-ui-mode] .topbar{position:relative!important;top:auto;height:auto!important;min-height:52px;gap:12px;flex-wrap:wrap;padding:8px 24px;background:var(--panel)!important;color:var(--text);backdrop-filter:none}
+body[data-ui-mode] .topbar .market-ticker,body[data-ui-mode] .topbar .market-ticker strong{color:var(--text)}
+body[data-ui-mode] .topbar .market-ticker .negative{color:var(--red)!important}body[data-ui-mode] .topbar .market-ticker .positive{color:var(--green)!important}
+body[data-ui-mode] .market-ticker{display:flex;flex-wrap:wrap;gap:14px;font-size:14px}
+.topbar .user-label,.topbar-right>.badge{display:none}.mobile-menu,.mobile-overlay{display:none!important}
+body[data-ui-mode] .content{max-width:1800px!important;padding:20px 24px!important;margin:0 auto!important}
+body[data-ui-mode] .card{padding:18px;border-radius:12px;box-shadow:none;background:var(--panel);border-color:var(--line)}
+body[data-ui-mode] .input,body[data-ui-mode] .select,body[data-ui-mode] .textarea{min-height:46px;font-size:17px;padding:10px 12px;border-radius:8px}
+body[data-theme="light"] .input,body[data-theme="light"] .select,body[data-theme="light"] .textarea,body[data-theme="light"] .period-select{background:white;color:var(--text);border-color:#cdd1cf}
+body[data-ui-mode] .btn{min-height:44px;font-size:16px;border-radius:8px;padding:10px 14px}
+body[data-theme="light"] .btn-outline{background:#fff;border-color:var(--line);color:var(--text)}
+body[data-theme="light"] .btn-primary{background:#af8b32;border:1px solid #9a7828;color:#fff}
+body[data-ui-mode] .labelled label,body[data-ui-mode] .field label{font-size:15px;font-weight:700;color:var(--text)}
+body[data-ui-mode] .table th,body[data-ui-mode] .table td{font-size:16px;padding:13px 12px;line-height:1.4;font-variant-numeric:tabular-nums}
+body[data-theme="light"] .table th{background:#f0f1ee;color:#333b44;border-color:var(--line)}body[data-theme="light"] .table td{background:white;border-color:var(--line)}body[data-theme="light"] .table tr:hover td{background:#fbf7ed}
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #427ac0!important;outline-offset:2px}button:disabled{opacity:.48;cursor:not-allowed}
+.simple-operation-bar{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:16px 0 20px}
+.simple-operation{display:flex;flex-direction:column;align-items:flex-start;gap:2px;border:1px solid var(--line);border-radius:10px;padding:14px 24px;min-height:86px;color:var(--text);background:var(--panel-2)}
+.simple-operation b{font-size:27px}.simple-operation span{font-size:15px}.simple-operation.sale{background:#148350;color:#fff;border-color:#148350}.simple-operation.buy{background:#d74448;color:#fff;border-color:#d74448}
+body[data-ui-mode] .sale-head-grid{grid-template-columns:minmax(0,1.1fr) 120px 180px minmax(0,1.5fr)!important;gap:14px}
+body[data-ui-mode] .sale-quick-inline{grid-template-columns:95px 1fr!important;margin-top:14px}
+body[data-ui-mode] .sale-compact-actions{grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:8px}
+body[data-ui-mode] .trade-actions .buy{background:#fff1f1!important;color:#b52c35!important;border:1px solid #efc4c7!important}body[data-ui-mode] .trade-actions .sell{background:#edf8f1!important;color:#126a40!important;border:1px solid #c4e3d1!important}
+body[data-ui-mode] .sale-layout{display:grid!important;grid-template-columns:minmax(0,1.6fr) minmax(300px,1fr)!important;gap:16px}
+.sale-main-stack{display:contents!important}.sale-product-card{grid-column:1/-1}
+body[data-ui-mode] .sale-summary{position:static!important;top:auto!important;width:auto!important;min-width:0;background:var(--panel)}
+body[data-ui-mode] .sale-unified-editor{grid-template-columns:minmax(140px,1.4fr) 85px 65px 65px minmax(115px,1fr) minmax(115px,1fr) minmax(100px,1fr) 70px!important}
+body[data-ui-mode] .sale-unified-editor .wide{grid-column:auto!important}
+body[data-ui-mode] .pusula-sales-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))!important;background:transparent!important;border:0;padding:0;gap:10px}
+body[data-ui-mode] .pusula-sales-tabs .btn{min-height:58px;font-size:17px;border:1px solid var(--line);background:var(--panel-2);color:var(--text)}
+body[data-theme="light"] .pusula-sales-tabs .btn:first-child{background:#faf3df;border-color:#be9a45;color:#795813}
+body[data-ui-mode] .sale-summary .summary-row.total{font-size:24px;padding:12px 0}body[data-ui-mode] .sale-summary .summary-row.total strong{font-size:30px}
+body[data-ui-mode] #finalizeSale{min-height:58px;font-size:21px}
+body[data-ui-mode] .sale-product-card .table{min-width:900px!important}.sale-product-card .table-wrap{max-height:350px}
+body[data-ui-mode] .sale-inline-help{font-size:12px}.sales-extra-note{line-height:1.6}
+body[data-theme="light"] .empty-state strong{color:var(--text)}
+@media(max-width:1100px){body[data-ui-mode] .nav>button,body[data-ui-mode] .more-nav>summary{font-size:14px!important;min-height:52px!important;padding:8px!important}body[data-ui-mode] .nav .ico{font-size:18px!important}body[data-ui-mode] .sale-head-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}body[data-ui-mode] .sale-unified-editor{grid-template-columns:repeat(4,minmax(0,1fr))!important}body[data-ui-mode] .sale-compact-actions{grid-template-columns:repeat(3,minmax(0,1fr))!important}.topbar-right{flex-wrap:wrap}}
+@media(max-width:700px){body[data-ui-mode] .sidebar{padding:10px 12px 0!important}body[data-ui-mode] .sidebar-brand strong{font-size:19px!important}.simple-account>span{display:none}body[data-ui-mode] .nav{flex-wrap:wrap}body[data-ui-mode] .nav>button{flex:1 0 30%}body[data-ui-mode] .more-nav{flex:1 0 100%}.more-nav-panel{left:0;right:0;width:100%}body[data-ui-mode] .content{padding:14px 12px!important}body[data-ui-mode] .topbar{padding:8px 12px}.simple-operation{padding:12px;min-height:74px}.simple-operation b{font-size:22px}.simple-operation span{font-size:12px}.simple-operation-bar{gap:8px}body[data-ui-mode] .sale-layout{grid-template-columns:1fr!important}body[data-ui-mode] .sale-head-grid{grid-template-columns:1fr 1fr!important}.sale-head-grid>div:first-child,.sale-head-grid>div:last-child{grid-column:1/-1!important}body[data-ui-mode] .sale-unified-editor{grid-template-columns:repeat(2,minmax(0,1fr))!important}body[data-ui-mode] .sale-quick-inline{grid-template-columns:1fr!important}.simple-brand-row{gap:6px}.sale-head-row{align-items:flex-start;flex-wrap:wrap}}
+}
+
+@media screen and (min-width:1101px){
+body[data-ui-mode] .sidebar{padding-top:8px!important}.simple-brand-row .sidebar-brand{padding-bottom:8px!important}
+body[data-ui-mode] .nav>button,body[data-ui-mode] .more-nav>summary{min-height:52px!important}
+body[data-ui-mode] .content{padding-top:14px!important}.sales-shell{gap:10px}
+body[data-ui-mode] .sale-head-card{padding:12px 18px}.sale-head-row{margin-bottom:6px}.sale-title-block p{display:none}.simple-operation-bar{margin:10px 0 12px}.simple-operation{min-height:70px;padding:9px 20px}.simple-operation b{font-size:24px}
+body[data-ui-mode] .sale-unified-editor>*{grid-column:auto!important;grid-row:auto!important}
+body[data-ui-mode] .sale-unified-editor{margin-bottom:4px}.sale-entry-status:has(>span:only-child){display:none}
+body[data-ui-mode] .sale-product-card{padding:12px 18px}.sale-product-card .section-head{margin-bottom:6px}.sale-product-card .empty-state{padding:10px!important}.sale-product-card .empty-state strong{margin-bottom:0}
+body[data-ui-mode] .sale-summary .summary-row{padding:5px 0}.sale-summary .sale-note-box{margin-top:6px;padding-top:6px}
+body[data-ui-mode] .sale-summary .summary-row.total{padding:8px 0}
+body[data-ui-mode] .sale-payment-card .sales-extra-note{font-size:12px;margin-top:8px}
+}
+</style>
 </head>
 <body>
   <div id="app"></div>
@@ -990,12 +1066,14 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   reconcileTransactionLedgerV5();
   save();
   let uiMode = state.settings.uiMode || 'pc';
-  let theme = state.settings.theme || 'dark';
+  // Apply the selected bright interface once, then respect future theme choices.
+  if(state.settings.interfaceVersion !== '6.45'){state.settings.theme='light';state.settings.interfaceVersion='6.45';}
+  let theme = state.settings.theme || 'light';
   const pendingNfcReturnAtBoot = safeNfcReturnGet();
   let session = safeSessionGet();
   // Normal uygulama açılışı her zaman ana sayfadan başlar.
   // Yalnızca aktif bir NFC dönüşü varsa kullanıcı kaldığı Kimlik/MASAK ekranına geri alınır.
-  let route = session ? (pendingNfcReturnAtBoot?.route || 'dashboard') : 'dashboard';
+  let route = session ? (pendingNfcReturnAtBoot?.route || 'sales') : 'dashboard';
   let saleDraft = newSaleDraft();
   let purchaseDraft = newPurchaseDraft();
   let mobileOpen = false;
@@ -1723,7 +1801,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       state.settings.uiMode = uiMode; state.settings.theme = theme; applyUiMode(); applyTheme(); save();
       session = {id:user.id,name:user.name,role:user.role}; safeSessionSet(session);
       audit(`${state.activePeriod} dönemine giriş yapıldı`,'Giriş');
-      render();
+      route='sales'; render();
     });
   }
 
@@ -1734,12 +1812,9 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU</strong><small>PRO v6.44</small></div></div>
-        <div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off"></div><div class="nav">${navItems.map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div>
-        <div class="sidebar-bottom">
-          <div class="user-chip"><div class="avatar">${esc(session.name.split(' ').map(x=>x[0]).slice(0,2).join(''))}</div><div><strong>${esc(session.name)}</strong><div class="muted" style="font-size:12px">${esc(session.role)}</div></div></div>
-          <button class="btn btn-outline" id="logoutBtn" style="width:100%">Çıkış</button>
-        </div>
+        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.45</span></small></div></div><div class="simple-account"><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
+        <nav class="nav" aria-label="Ana menü">${['sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={sales:'İşlem Merkezi',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
+        <details class="more-nav" ${!['sales','customers','stocks','finance','repairs','reports'].includes(route)?'open':''}><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
       </aside>
       <div class="mobile-overlay ${mobileOpen?'show':''}" id="mobileOverlay"></div>
       <main class="main">
@@ -2049,7 +2124,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const standalone=standaloneTradeInState();
     const saleCur=String(saleDraft.saleCurrency||'TL').toUpperCase(),saleRate=saleCurrencyRate(saleCur),currentCustomer=state.customers.find(c=>c.id===saleDraft.customerId)||state.customers.find(c=>c.id==='CASH');
     const hasPrimaryAction=Boolean(saleDraft.lines.length||(saleDraft.returnItems||[]).length||standalone.active);
-    const primaryLabel=saleDraft.lines.length?'Satış Onayla':((saleDraft.returnItems||[]).length?'İade İşlemini Onayla':(standalone.active?'Altın / Ziynet Alışını Onayla':'Satış Onayla'));
+    const primaryLabel='İşlem Özeti →';
     const entry=saleDraft.entrySelection||null;
     const barcodeItem=entry?.type==='barcode'?state.stocks.find(x=>x.id===entry.id):null;
     const openItem=entry?.type==='open'?(state.openStocks||[]).find(x=>x.id===entry.id):null;
@@ -2068,10 +2143,10 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     return `<div class="sales-shell">
       <div class="card sale-head-card">
         <div class="sale-head-row">
-          <div class="sale-title-block"><h1>Satış</h1><p>Tek ekran satış akışı · Enter ile ilerle</p></div>
+          <div class="sale-title-block"><h1>İşlem Merkezi</h1><p>Ürünü seç → Ödemeyi ekle → Özeti kontrol et</p></div>
           <div class="sale-head-actions"><button class="btn btn-outline" id="saleHistory">Satış Geçmişi</button><button class="btn btn-outline" id="resetSale">Yeni Fiş</button></div>
         </div>
-        <div class="form-grid sale-head-grid">
+        <div class="simple-operation-bar"><button class="simple-operation sale" id="simpleSaleFocus"><b>Satış</b><span>Müşteriye satış yap</span></button><button class="simple-operation buy" data-special-trade="Ziynet Alış"><b>Alış</b><span>Müşteriden altın / ziynet al</span></button><button class="simple-operation swap" data-pay="Altın / Ziynet"><b>Takas</b><span>Altını satışa mahsup et</span></button></div><div class="form-grid sale-head-grid">
           <div class="labelled span-2"><label>Cari Ara / Müşteri - Toptancı</label><input class="input" id="saleCustomerSearch" list="saleCustomerList" value="${esc(currentCustomer?.name||'PEŞİN MÜŞTERİ')}" autocomplete="off" placeholder="İsim yaz: İPEK KUYUMCULUK"><datalist id="saleCustomerList">${saleCustomerCandidates().map(c=>`<option value="${esc(c.name)}">${esc(c.code||'')} · ${esc(c.type||'')}</option>`).join('')}</datalist><small class="sale-inline-help">İsmin birkaç harfini yazıp Enter'a basın · Seçili: ${esc(currentCustomer?.type||'Müşteri')}</small></div>
           <div class="labelled"><label>Satış Cinsi</label><select class="select" id="saleCurrency">${paymentCurrencyOptions().map(x=>`<option ${saleCur===x?'selected':''}>${x}</option>`).join('')}</select></div>
           <div class="labelled"><label>Satan Eleman</label><select class="select" id="salePerson"><option value="">Seçiniz</option>${state.users.filter(u=>u.permissions?.canSell!==false).map(u=>`<option ${saleDraft.salesperson===u.name?'selected':''}>${esc(u.name)}</option>`).join('')}</select></div>
@@ -3190,6 +3265,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const saleCurEl=document.getElementById('saleCurrency');saleCurEl?.addEventListener('change',e=>{saleDraft.saleCurrency=e.target.value;saleDraft.entrySelection=null;saleDraft.entryQuery='';render();setTimeout(()=>focusAndSelect(document.getElementById('saleProductSearch')),0);});
     const person=document.getElementById('salePerson'); person?.addEventListener('change',e=>saleDraft.salesperson=e.target.value);
     document.getElementById('resetSale')?.addEventListener('click',()=>{saleDraft=newSaleDraft();render();});
+    document.getElementById('simpleSaleFocus')?.addEventListener('click',()=>focusAndSelect(document.getElementById('saleProductSearch')));
     document.getElementById('saleHistory')?.addEventListener('click',openSalesHistory);
 
     const search=document.getElementById('saleProductSearch');
