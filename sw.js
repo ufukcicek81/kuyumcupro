@@ -1,4 +1,4 @@
-const C='asil-v6-40-kvkk-a4-signature-20260928';
+const C='asil-v6-40b-kvkk-a4-signature-20260928';
 self.addEventListener('install',e=>{
   self.skipWaiting();
   e.waitUntil(caches.open(C).then(c=>c.addAll(['./','./index.html'])));
