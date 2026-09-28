@@ -5433,7 +5433,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     var p=receiptPrinterV644(),w=Math.max(58,Math.min(100,Number(p.widthMm||80)));
     var printWidth=w>=80?70:46;
     var company=state.settings.companyName||'ASİL KUYUMCULUK',branch=state.settings.branch||'';
-    var css='@page{size:'+w+'mm auto;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif}.receipt{width:'+printWidth+'mm;max-width:100%;padding:3mm 1mm;overflow-wrap:anywhere;font-size:11px;line-height:1.25}.center{text-align:center}.brand{font-size:17px;font-weight:900;letter-spacing:.3px}.branch{font-size:10px;margin-top:2px}.dash{border-top:1px dashed #000;margin:6px 0}.title{font-size:14px;font-weight:900;text-align:center;margin:5px 0}.rp{display:table;table-layout:fixed;width:100%;padding:2px 0}.rp>*{display:table-cell;vertical-align:top;overflow-wrap:anywhere;word-wrap:break-word;word-break:break-word}.rp span:first-child{color:#222;width:40%;padding-right:5px}.rp b,.rp span:last-child{text-align:right;width:60%}.items{width:100%;table-layout:fixed;border-collapse:collapse;margin-top:4px}.items th,.items td{font-size:10px;padding:3px 1px;border-bottom:1px dotted #999;vertical-align:top}.items th{text-align:left}.items .num{text-align:right}.total{font-size:13px;font-weight:900}.note{font-size:9px;margin-top:7px}.sign{display:flex;justify-content:space-between;gap:12px;margin-top:16px}.sign div{width:48%;border-top:1px solid #000;padding-top:3px;text-align:center;font-size:9px}';
+    var css='@page{size:'+w+'mm auto;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif}.receipt{width:'+printWidth+'mm;max-width:100%;padding:3mm 1mm;overflow-wrap:anywhere;font-size:11px;line-height:1.25}.center{text-align:center}.brand{font-size:17px;font-weight:900;letter-spacing:.3px}.branch{font-size:10px;margin-top:2px}.dash{border-top:1px dashed #000;margin:6px 0}.title{font-size:14px;font-weight:900;text-align:center;margin:5px 0}.rp{display:block;width:100%;padding:3px 0}.rp>*{display:block;max-width:100%;white-space:normal;overflow-wrap:anywhere;word-wrap:break-word;word-break:break-word}.rp span:first-child{color:#222;font-size:9px}.rp b,.rp span:last-child{text-align:left;width:100%}.items{width:100%;table-layout:fixed;border-collapse:collapse;margin-top:4px}.items th,.items td{font-size:10px;padding:3px 1px;border-bottom:1px dotted #999;vertical-align:top}.items th{text-align:left}.items .num{text-align:right}.total{font-size:13px;font-weight:900}.note{font-size:9px;margin-top:7px}.sign{display:flex;justify-content:space-between;gap:12px;margin-top:16px}.sign div{width:48%;border-top:1px solid #000;padding-top:3px;text-align:center;font-size:9px}';
     return '<!doctype html><html lang="tr"><head><meta charset="utf-8"><style>'+css+'</style></head><body><div class="receipt"><div class="center brand">'+esc(company)+'</div>'+(branch?'<div class="center branch">'+esc(branch)+'</div>':'')+'<div class="dash"></div><div class="title">'+esc(title)+'</div>'+receiptPairV644('Belge',docNo||'-',true)+receiptPairV644('Tarih',trDate(date||now()),false)+(party?receiptPairV644('Cari / Müşteri',party,false):'')+'<div class="dash"></div>'+body+'<div class="dash"></div><div class="note center">'+esc(footer||'Bilgi fişidir. Mali değeri olan belge yerine geçmez.')+'</div></div></body></html>';
   }
   async function browserPrintReceiptV644(html){
@@ -5459,7 +5459,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     if(p.mode==='qz'){
       try{
         var q=await qzConnect(),name=await findReceiptPrinterV644(q);
-        var cfg=q.configs.create(name,{units:'mm',margins:{top:0,right:0,bottom:0,left:0},copies:1,colorType:'grayscale',scaleContent:true});
+        var cfg=q.configs.create(name,{units:'mm',margins:{top:0,right:0,bottom:0,left:0},copies:1,colorType:'grayscale',scaleContent:false});
         var jobs=[];for(var i=0;i<copies;i++)jobs.push({type:'pixel',format:'html',flavor:'plain',data:html});
         await q.print(cfg,jobs);
         audit((label||'Fiş')+' yazdırıldı · '+name,'Fiş');
@@ -5584,7 +5584,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       var old={mode:p.mode,printerName:p.printerName,widthMm:p.widthMm,copies:p.copies};
       try{
         p.mode=document.getElementById('rpMode').value;p.printerName=document.getElementById('rpName').value;p.widthMm=Number(document.getElementById('rpWidth').value||80);p.copies=1;
-        await printReceiptHtmlV644(receiptDocV644('TEST FİŞİ','TEST-'+Date.now(),now(),'','<div class="center"><b>ACLAS / FİŞ YAZICISI TESTİ</b><br>Asil Kuyumcu Pro V6.44</div>','Test baskısı'),'Test fişi');
+        await printReceiptHtmlV644(receiptDocV644('TEST FİŞİ','TEST-'+Date.now(),now(),'','<div class="center"><b>ACLAS / FİŞ YAZICISI TESTİ</b><br>Asil Kuyumcu Pro · Fiş düzeni 2</div>','Test baskısı'),'Test fişi');
       }finally{Object.assign(p,old);}
     });
   }
