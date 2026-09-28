@@ -3,6 +3,9 @@
   "functions": {
     "api/nfc.js": {
       "maxDuration": 10
+    },
+    "api/masak.js": {
+      "maxDuration": 20
     }
   },
   "headers": [
@@ -12,6 +15,14 @@
         {"key":"Access-Control-Allow-Origin","value":"*"},
         {"key":"Access-Control-Allow-Headers","value":"Content-Type, Authorization"},
         {"key":"Access-Control-Allow-Methods","value":"GET, POST, OPTIONS"}
+      ]
+    },
+    {
+      "source": "/api/masak",
+      "headers": [
+        {"key":"Access-Control-Allow-Origin","value":"*"},
+        {"key":"Access-Control-Allow-Headers","value":"Content-Type"},
+        {"key":"Access-Control-Allow-Methods","value":"GET, OPTIONS"}
       ]
     }
   ]
