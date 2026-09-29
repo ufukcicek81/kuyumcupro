@@ -10,7 +10,7 @@
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.54</title>
+  <title>Asil Kuyumcu Pro V6.55</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -1889,7 +1889,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.54</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
+        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.55</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
         <nav class="nav" aria-label="Ana menü">${['dashboard','sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={dashboard:'Ana Menü',sales:'Satış',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
         <details class="more-nav"><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['dashboard','sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
       </aside>
@@ -2177,7 +2177,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function normalizeOpenAccountRoundingV653(){
     const pays=saleDraft.payments||[];
     if(pays.length!==1)return;
-    const p=pays[0];if(p.type!=='Açık Hesap'||String(p.currency||'').toUpperCase()!=='HAS')return;
+    const p=pays[0];if(p.type!=='Açık Hesap'||p.cariDirection==='credit'||Number(p.amount||0)<0||String(p.currency||'').toUpperCase()!=='HAS')return;
     const gross=roundSaleTlV653((saleDraft.lines||[]).reduce((a,l)=>a+Number(l.total||0),0));
     const net=roundSaleTlV653(gross+Number(saleDraft.commission||0)-Number(saleDraft.discount||0)-Number(saleDraft.returns||0));
     const diff=roundSaleTlV653(net-Number(p.amount||0)),rate=Math.max(.000001,Number(state.prices.has?.sell||1));
@@ -2190,11 +2190,11 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     }
   }
   function salePaymentSummaryV654(p){
-    const type=String(p?.type||'Ödeme'),unit=String(p?.currency||'TL').toUpperCase(),tl=Math.abs(Number(p?.amount||0)),native=Math.abs(Number(p?.nativeAmount??p?.amount??0));
+    const type=String(p?.type||'Ödeme'),unit=String(p?.currency||'TL').toUpperCase(),tl=Math.abs(Number(p?.amount||0)),native=Math.abs(Number(p?.nativeAmount??p?.amount??0)),credit=type==='Açık Hesap'&&(p?.cariDirection==='credit'||Number(p?.amount||0)<0),prefix=credit?'Cari Borç Mahsubu':'Açık Hesap';
     if(type==='Açık Hesap'){
-      if(unit==='HAS')return `Açık Hesap: ${native.toLocaleString('tr-TR',{minimumFractionDigits:3,maximumFractionDigits:6})} HAS · ${money(tl)}`;
-      if(unit==='TL')return `Açık Hesap: ${money(native)}`;
-      return `Açık Hesap: ${native.toLocaleString('tr-TR',{maximumFractionDigits:4})} ${unit} · ${money(tl)}`;
+      if(unit==='HAS')return `${prefix}: ${native.toLocaleString('tr-TR',{minimumFractionDigits:3,maximumFractionDigits:6})} HAS · ${money(tl)}`;
+      if(unit==='TL')return `${prefix}: ${money(native)}`;
+      return `${prefix}: ${native.toLocaleString('tr-TR',{maximumFractionDigits:4})} ${unit} · ${money(tl)}`;
     }
     if(type==='Altın / Ziynet')return `${type}: ${qty(Math.abs(Number(p?.hasAmount||0)))} HAS · ${money(tl)}`;
     return `${type}: ${unit==='TL'?money(native):native.toLocaleString('tr-TR',{maximumFractionDigits:4})+' '+unit}`;
@@ -2243,13 +2243,23 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       ||null;
   }
 
+  function cariCollectionStateV655(){
+    const noItems=!saleDraft.lines.length&&!(saleDraft.returnItems||[]).length;
+    const receipts=(saleDraft.payments||[]).filter(p=>p.type!=='Açık Hesap'&&Number(p.amount||0)>0);
+    const credits=(saleDraft.payments||[]).filter(p=>p.type==='Açık Hesap'&&(p.cariDirection==='credit'||Number(p.amount||0)<0));
+    const receivedTl=roundSaleTlV653(receipts.reduce((a,p)=>a+Math.abs(Number(p.amount||0)),0));
+    const creditedTl=roundSaleTlV653(credits.reduce((a,p)=>a+Math.abs(Number(p.amount||0)),0));
+    const difference=roundSaleTlV653(receivedTl-creditedTl);
+    return {active:noItems&&receipts.length>0&&credits.length>0,receipts,credits,receivedTl,creditedTl,difference};
+  }
   function standaloneTradeInState(){
     const noSaleLines=!saleDraft.lines.length&&!(saleDraft.returnItems||[]).length;
+    const hasCariCredit=(saleDraft.payments||[]).some(p=>p.type==='Açık Hesap'&&(p.cariDirection==='credit'||Number(p.amount||0)<0));
     const tradeIns=(saleDraft.payments||[]).filter(p=>p.type==='Altın / Ziynet'&&Number(p.amount||0)>0);
-    const payouts=(saleDraft.payments||[]).filter(p=>Number(p.amount||0)<0);
+    const payouts=(saleDraft.payments||[]).filter(p=>p.type!=='Açık Hesap'&&Number(p.amount||0)<0);
     const received=tradeIns.reduce((a,p)=>a+Math.abs(Number(p.amount||0)),0);
     const paid=payouts.reduce((a,p)=>a+Math.abs(Number(p.amount||0)),0);
-    return {active:noSaleLines&&tradeIns.length>0,tradeIns,payouts,received,paid,difference:received-paid};
+    return {active:noSaleLines&&!hasCariCredit&&tradeIns.length>0,tradeIns,payouts,received,paid,difference:received-paid};
   }
 
   function openStockSaleDefaultPrice(o,amount){
@@ -2322,7 +2332,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
             <div class="pusula-sales-tabs">
               ${['Nakit','Havale / EFT','Altın / Ziynet','Kredi Kartı','İskonto','Açık Hesap','Ödeme','Komisyon','İade',...(currentCustomer?.type==='Toptancı'?['Toptancı İade']:[])].map(x=>`<button class="btn" data-pay="${x}" ${x==='Altın / Ziynet'?'title="Müşteriden altın/ziynet alıp satışa mahsup eder; satış yoksa alış işlemi olarak çalışır"':''}>${x}</button>`).join('')}
             </div>
-            ${saleDraft.payments.length?`<div class="table-wrap" style="margin-top:10px"><table class="table" style="min-width:700px"><thead><tr><th>#</th><th>Tutar</th><th>İşlem</th><th>Detay</th><th></th></tr></thead><tbody>${saleDraft.payments.map((p,i)=>`<tr><td>${i+1}</td><td class="num">${p.type==='Açık Hesap'&&String(p.currency||'TL').toUpperCase()!=='TL'?`${qty(Math.abs(Number(p.nativeAmount||0)))} ${esc(String(p.currency||''))}`:money(Math.abs(p.amount))}</td><td>${p.amount<0?'Ödeme':'Tahsilat / Mahsup'}</td><td>${esc(p.type)} · ${esc(p.detail||p.currency||'TL')}</td><td><button class="btn btn-danger" data-remove-pay="${i}">Sil</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="muted" style="padding-top:10px">Henüz ödeme/takas eklenmedi.</div>'}${(saleDraft.returnItems||[]).length?`<div class="table-wrap" style="margin-top:8px"><table class="table" style="min-width:700px"><thead><tr><th>İade</th><th>Miktar</th><th>Kaynak</th><th class="num">Mahsup Tutarı</th><th></th></tr></thead><tbody>${(saleDraft.returnItems||[]).map((r,i)=>`<tr><td><strong>${esc(r.itemName||'Ürün')}</strong><br><small>${esc(r.itemCode||'')}</small></td><td>${qty(r.quantity||1)} ${esc(r.unit||'')}</td><td>${r.kind==='barcode'?`Eski satış ${esc(r.originalSaleDoc||'')}`:'Barkodsuz stok'}</td><td class="num"><strong>-${money(r.amount||0)}</strong></td><td><button class="btn btn-danger" data-remove-return="${i}">Sil</button></td></tr>`).join('')}</tbody></table></div>`:''}
+            ${saleDraft.payments.length?`<div class="table-wrap" style="margin-top:10px"><table class="table" style="min-width:700px"><thead><tr><th>#</th><th>Tutar</th><th>İşlem</th><th>Detay</th><th></th></tr></thead><tbody>${saleDraft.payments.map((p,i)=>`<tr><td>${i+1}</td><td class="num">${p.type==='Açık Hesap'&&String(p.currency||'TL').toUpperCase()!=='TL'?`${qty(Math.abs(Number(p.nativeAmount||0)))} ${esc(String(p.currency||''))}`:money(Math.abs(p.amount))}</td><td>${p.type==='Açık Hesap'&&(p.cariDirection==='credit'||Number(p.amount||0)<0)?'Cari Borç Mahsubu':(p.amount<0?'Ödeme':'Tahsilat / Mahsup')}</td><td>${esc(p.type)} · ${esc(p.detail||p.currency||'TL')}</td><td><button class="btn btn-danger" data-remove-pay="${i}">Sil</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="muted" style="padding-top:10px">Henüz ödeme/takas eklenmedi.</div>'}${(saleDraft.returnItems||[]).length?`<div class="table-wrap" style="margin-top:8px"><table class="table" style="min-width:700px"><thead><tr><th>İade</th><th>Miktar</th><th>Kaynak</th><th class="num">Mahsup Tutarı</th><th></th></tr></thead><tbody>${(saleDraft.returnItems||[]).map((r,i)=>`<tr><td><strong>${esc(r.itemName||'Ürün')}</strong><br><small>${esc(r.itemCode||'')}</small></td><td>${qty(r.quantity||1)} ${esc(r.unit||'')}</td><td>${r.kind==='barcode'?`Eski satış ${esc(r.originalSaleDoc||'')}`:'Barkodsuz stok'}</td><td class="num"><strong>-${money(r.amount||0)}</strong></td><td><button class="btn btn-danger" data-remove-return="${i}">Sil</button></td></tr>`).join('')}</tbody></table></div>`:''}
             <div class="sales-extra-note">Klavye akışı: Stok kodu → Enter · Fiyat → Enter · Not → Enter · Ekle → Enter · Ödeme tipi → Enter · Satış Onayla → Enter</div>
           </div>
         </div>
@@ -3790,24 +3800,28 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     }
     if(type==='Açık Hesap'){
       if(saleDraft.customerId==='CASH')return toast('Açık hesap için cari müşteri seçin','err');
-      const remain=Math.max(0,t.remain),saleCur=String(saleDraft.saleCurrency||'TL').toUpperCase();
-      if(remain<=0)return toast('Açık hesaba aktarılacak bakiye yok','err');
-      const tlRate=unit=>unit==='HAS'?Math.max(.000001,Number(state.prices.has?.sell||1)):unit==='TL'?1:Math.max(.000001,saleCurrencyRate(unit));
-      const initialUnit=saleCur==='HAS'?'HAS':'TL',initial=remain/tlRate(initialUnit);
-      modal('Açık Hesap',`<div class="form-grid"><div class="labelled"><label>Açık Hesap Birimi</label><select id="ohUnit" class="select"><option value="TL" ${initialUnit==='TL'?'selected':''}>TL</option><option value="HAS" ${initialUnit==='HAS'?'selected':''}>HAS</option></select></div><div class="labelled span-2"><label id="ohAmountLabel">Açık Hesaba Yazılacak ${initialUnit}</label><input id="ohNative" class="input" type="number" step="0.000001" data-full-balance="1" value="${initial.toFixed(initialUnit==='TL'?2:6)}"></div><div class="labelled"><label>TL Karşılığı</label><input id="ohTl" class="input" readonly value="${remain.toFixed(2)}"></div><div class="notice span-4"><strong>Kalanın tamamı varsayılan olarak açık hesaba aktarılır.</strong> HAS seçilirse cari borç HAS olarak yazılır; TL tarafında 1–2 TL küsür bakiye bırakılmaz. İstersen miktarı elle değiştirip kısmi açık hesap da yapabilirsin.</div></div>`,()=>{
-        const unit=document.getElementById('ohUnit').value,amountEl=document.getElementById('ohNative'),rate=tlRate(unit),full=amountEl.dataset.fullBalance==='1',currentRemain=Math.max(0,saleTotals().remain);
-        let n=Number(amountEl.value||0);if(n<=0)return toast('Açık hesap miktarı girin','err');
-        let tl=roundSaleTlV653(n*rate);
-        if(full){tl=currentRemain;n=currentRemain/rate;}
-        else if(Math.abs(currentRemain-tl)<.01){tl=currentRemain;n=currentRemain/rate;}
-        saleDraft.payments.push({type:'Açık Hesap',amount:tl,nativeAmount:n,currency:unit,detail:`${n.toLocaleString('tr-TR',{minimumFractionDigits:unit==='TL'?2:3,maximumFractionDigits:unit==='TL'?2:6})} ${unit} açık hesap`,fullBalance:full});
+      const customer=state.customers.find(c=>c.id===saleDraft.customerId),remain=roundSaleTlV653(t.remain),isCredit=remain<-.01,transferTl=Math.abs(remain);
+      if(transferTl<=.01)return showBigErrorV654('Açık hesaba aktarılacak bakiye yok');
+      const preferred=isCredit&&Number(customer?.hasBalance||0)>0?'HAS':String(saleDraft.saleCurrency||'TL').toUpperCase();
+      const choices=paymentCurrencyOptions(),defaultCur=choices.includes(preferred)?preferred:'TL';
+      const rateFor=cur=>cur==='TL'?1:currencyTlRate(cur,'sell');
+      modal(isCredit?'Tahsilatı Cari Borcuna Mahsup Et':'Açık Hesap',`<div class="form-grid">
+        <div class="labelled span-2"><label>Cari Hesap</label><input class="input" value="${esc(customer?.name||'')}" readonly></div>
+        <div class="labelled"><label>Cari Birimi</label><select id="ohCur" class="select">${choices.map(x=>`<option ${x===defaultCur?'selected':''}>${x}</option>`).join('')}</select></div>
+        <div class="labelled"><label id="ohAmountLabel">${isCredit?'Borçtan Düşülecek':'Açık Hesaba Yazılacak'} ${esc(defaultCur)}</label><input id="ohNative" class="input" type="number" inputmode="decimal" step="0.001"></div>
+        <div class="labelled"><label>TL Karşılığı</label><input id="ohTl" class="input" readonly value="${transferTl.toFixed(2)}"></div>
+        <div class="labelled"><label>Kur</label><input id="ohRate" class="input" readonly></div>
+        <div class="notice span-4" id="ohHint"></div>
+      </div>`,()=>{
+        const cur=String(document.getElementById('ohCur').value||'TL').toUpperCase(),n=Math.abs(Number(document.getElementById('ohNative').value||0)),rate=Math.max(.000001,rateFor(cur)),tl=roundSaleTlV653(n*rate);
+        if(n<=0||tl<=0)return toast('Açık hesap miktarı girin','err');
+        if(Math.abs(tl-transferTl)>.02)return toast(`Aktarılacak bakiye ${money(transferTl)}. Tutarı tam bakiye olarak bırakın.`,'err');
+        saleDraft.payments.push({type:'Açık Hesap',amount:isCredit?-transferTl:transferTl,nativeAmount:n,currency:cur,cariDirection:isCredit?'credit':'debit',detail:isCredit?`${qty(n)} ${cur} cari borcundan mahsup · ${money(transferTl)} tahsilat`:`${qty(n)} ${cur} açık hesap · tam bakiye`,fullBalance:true});
         closeModal();render();
-      },'KALANIN TAMAMINI AÇIK HESABA YAZ');
-      const unitEl=document.getElementById('ohUnit'),amountEl=document.getElementById('ohNative'),tlEl=document.getElementById('ohTl'),label=document.getElementById('ohAmountLabel');
-      const sync=()=>{const unit=unitEl.value,rate=tlRate(unit),currentRemain=Math.max(0,saleTotals().remain);amountEl.dataset.fullBalance='1';amountEl.value=(currentRemain/rate).toFixed(unit==='TL'?2:6);tlEl.value=currentRemain.toFixed(2);label.textContent=`Açık Hesaba Yazılacak ${unit}`;};
-      unitEl.addEventListener('change',sync);
-      amountEl.addEventListener('input',()=>{amountEl.dataset.fullBalance='0';tlEl.value=roundSaleTlV653(Number(amountEl.value||0)*tlRate(unitEl.value)).toFixed(2);});
-      setTimeout(()=>focusAndSelect(amountEl),0);return;
+      },isCredit?'CARİ BORCUNDAN DÜŞ':'AÇIK HESABA YAZ');
+      const curEl=document.getElementById('ohCur'),nativeEl=document.getElementById('ohNative'),rateEl=document.getElementById('ohRate'),hint=document.getElementById('ohHint'),label=document.getElementById('ohAmountLabel');
+      const sync=()=>{const cur=String(curEl.value||'TL').toUpperCase(),rate=Math.max(.000001,rateFor(cur)),native=transferTl/rate;rateEl.value=rate.toFixed(cur==='TL'?2:4);nativeEl.value=native.toFixed(cur==='TL'?2:cur==='HAS'?6:4);label.textContent=`${isCredit?'Borçtan Düşülecek':'Açık Hesaba Yazılacak'} ${cur}`;hint.innerHTML=isCredit?`<strong>TAHSİLAT MAHSUBU:</strong> ${money(transferTl)} tahsilat seçili carinin <b>${cur}</b> borcundan ${qty(native)} ${cur} olarak düşülecek.`:`<strong>AÇIK HESAP:</strong> ${money(transferTl)} bakiye cariye ${qty(native)} ${cur} BORÇ yazılacak.`;};
+      curEl?.addEventListener('change',sync);sync();setTimeout(()=>focusAndSelect(nativeEl),0);return;
     }
     if(type==='Komisyon'){
       modal('Komisyon',`<div class="form-grid"><div class="labelled"><label>Komisyon Tutarı</label><input id="comAmount" class="input" type="number" step="0.01" value="${Number(saleDraft.commission||0)}"></div><div class="labelled"><label>Oran %</label><input id="comRate" class="input" type="number" step="0.01" value="0"></div><div class="labelled span-2"><label>Gelir Hesabı</label><select id="comAccount" class="select">${state.accountingAccounts.filter(x=>x.accountingNature==='Gelir').map(x=>`<option>${esc(x.name)}</option>`).join('')}</select></div></div>`,()=>{saleDraft.commission=Math.max(0,Number(document.getElementById('comAmount').value||0));closeModal();render();},'KOMİSYON EKLE');const gross=saleDraft.lines.reduce((a,l)=>a+Number(l.total||0),0),a=document.getElementById('comAmount'),r=document.getElementById('comRate');r.addEventListener('input',()=>a.value=(gross*Number(r.value||0)/100).toFixed(2));return;
@@ -3817,9 +3831,14 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
 
   function openSaleConfirm(){
-    const t=saleTotals(),standalone=standaloneTradeInState();
+    const t=saleTotals(),collection=cariCollectionStateV655(),standalone=standaloneTradeInState();
     if(!saleDraft.salesperson&&((saleDraft.returnItems||[]).length||standalone.active))saleDraft.salesperson=session?.name||'Yönetici';
     if(!saleDraft.salesperson)return toast('Satan elemanı seçin','err');
+    if(collection.active){
+      if(Math.abs(collection.difference)>.01)return toast(`Tahsilat ile cari mahsup eşleşmiyor. Fark: ${money(collection.difference)}`,'err');
+      const cust=state.customers.find(c=>c.id===saleDraft.customerId),creditText=collection.credits.map(salePaymentSummaryV654).join(' + ');
+      return modal('Cari Tahsilat Özeti',`<div class="summary-row"><span>Cari</span><strong>${esc(cust?.name||'')}</strong></div><div class="summary-row"><span>Tahsilat</span><strong>${money(collection.receivedTl)}</strong></div><div class="summary-row"><span>Cari Borcundan Düşülecek</span><strong class="gold">${esc(creditText)}</strong></div><div class="summary-row total"><span>Kalan Fark</span><strong class="positive">${money(Math.abs(collection.difference))}</strong></div><div class="notice" style="margin-top:10px"><strong>Onayda:</strong> Nakit/banka tahsilatı ilgili hesaba girecek; altın/hurda tahsilatı stoğa girecek ve aynı tutar seçili carinin borcundan düşülecek.</div>`,()=>finalizeSale(),'TAHSİLATI ONAYLA');
+    }
     if(Math.abs(t.net)<=0.01&&!saleDraft.lines.length&&!(saleDraft.returnItems||[]).length&&!standalone.active)return toast('Satış, iade veya altın/ziynet alış işlemi yok','err');
     if(standalone.active){
       if(Math.abs(standalone.difference)>.01){
@@ -3832,8 +3851,8 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     if(t.remain<-.01)return toast('Müşteriye ödeme farkı var. Ödeme sekmesinden kasa çıkışı ekleyin.','err');
     if(t.remain>.01 && saleDraft.customerId==='CASH')return toast('Ödenecek tutar kapanmadı. Nakit/kart/takas ekleyin veya cari müşteri seçin.','err');
     const cust=state.customers.find(c=>c.id===saleDraft.customerId);
-    const saleCur=String(saleDraft.saleCurrency||'TL').toUpperCase(),remainNative=saleNativeFromTl(Math.max(0,t.remain),saleCur),belowLines=(saleDraft.lines||[]).filter(l=>belowCostInfo(l.saleHas,l.costHas).isBelow),belowLoss=belowLines.reduce((a,l)=>a+belowCostInfo(l.saleHas,l.costHas).lossHas,0),openAccountText=openAccountSummaryV654();
-    modal('Satış Özeti',`<div class="summary-row"><span>Cari</span><strong>${esc(cust?.name||'')}</strong></div><div class="summary-row"><span>Satan Eleman</span><strong>${esc(saleDraft.salesperson)}</strong></div><div class="summary-row"><span>Satış Cinsi</span><strong>${saleCur}</strong></div><div class="summary-row"><span>İşlem</span><strong>${saleDraft.lines.length} satış · ${(saleDraft.returnItems||[]).length} iade</strong></div><div class="summary-row"><span>İskonto / İade</span><strong>${money(Number(saleDraft.discount||0)+Number(saleDraft.returns||0))}</strong></div><div class="summary-row"><span>Komisyon</span><strong>${money(saleDraft.commission||0)}</strong></div>${belowLines.length?`<div class="summary-row"><span>⚠ Maliyet Altı</span><strong class="negative">${belowLines.length} kalem · -${qty(belowLoss)} HAS</strong></div>`:''}<div class="summary-row"><span>Karşılıklar</span><strong>${esc(saleDraft.payments.map(salePaymentSummaryV654).join(' + ')||'Yok')}</strong></div><div class="summary-row total"><span>${saleDraft.lines.length?'Net Satış':'Net İade'}</span><strong>${saleCur==='TL'?money(t.net):saleNativeLabel(saleNativeFromTl(t.net,saleCur),saleCur)+' · '+money(t.net)}</strong></div><div class="summary-row"><span>${openAccountText?'Açık Hesaba Aktarılacak':(t.remain>0&&saleDraft.customerId!=='CASH'?'Açık Hesaba Yazılacak':'Kalan Cari')}</span><strong class="${openAccountText?'gold':(t.remain>0?'negative':'positive')}">${openAccountText?esc(openAccountText):(saleCur==='TL'?money(Math.max(0,t.remain)):saleNativeLabel(remainNative,saleCur))}</strong></div>${t.remain>0&&saleDraft.customerId!=='CASH'?'<div class="notice" style="margin-top:8px"><strong>Otomatik açık hesap:</strong> Onayda kalan tutar seçili cariye satış cinsinde BORÇ yazılacak.</div>':''}`,()=>finalizeSale(),'SATIŞ ONAYLA');
+    const saleCur=String(saleDraft.saleCurrency||'TL').toUpperCase(),remainNative=saleNativeFromTl(Math.max(0,t.remain),saleCur),belowLines=(saleDraft.lines||[]).filter(l=>belowCostInfo(l.saleHas,l.costHas).isBelow),belowLoss=belowLines.reduce((a,l)=>a+belowCostInfo(l.saleHas,l.costHas).lossHas,0),openAccountText=openAccountSummaryV654(),hasCariCredit=(saleDraft.payments||[]).some(p=>p.type==='Açık Hesap'&&(p.cariDirection==='credit'||Number(p.amount||0)<0));
+    modal('Satış Özeti',`<div class="summary-row"><span>Cari</span><strong>${esc(cust?.name||'')}</strong></div><div class="summary-row"><span>Satan Eleman</span><strong>${esc(saleDraft.salesperson)}</strong></div><div class="summary-row"><span>Satış Cinsi</span><strong>${saleCur}</strong></div><div class="summary-row"><span>İşlem</span><strong>${saleDraft.lines.length} satış · ${(saleDraft.returnItems||[]).length} iade</strong></div><div class="summary-row"><span>İskonto / İade</span><strong>${money(Number(saleDraft.discount||0)+Number(saleDraft.returns||0))}</strong></div><div class="summary-row"><span>Komisyon</span><strong>${money(saleDraft.commission||0)}</strong></div>${belowLines.length?`<div class="summary-row"><span>⚠ Maliyet Altı</span><strong class="negative">${belowLines.length} kalem · -${qty(belowLoss)} HAS</strong></div>`:''}<div class="summary-row"><span>Karşılıklar</span><strong>${esc(saleDraft.payments.map(salePaymentSummaryV654).join(' + ')||'Yok')}</strong></div><div class="summary-row total"><span>${saleDraft.lines.length?'Net Satış':'Net İade'}</span><strong>${saleCur==='TL'?money(t.net):saleNativeLabel(saleNativeFromTl(t.net,saleCur),saleCur)+' · '+money(t.net)}</strong></div><div class="summary-row"><span>${openAccountText?(hasCariCredit?'Cari Borcundan Düşülecek':'Açık Hesaba Aktarılacak'):(t.remain>0&&saleDraft.customerId!=='CASH'?'Açık Hesaba Yazılacak':'Kalan Cari')}</span><strong class="${openAccountText?'gold':(t.remain>0?'negative':'positive')}">${openAccountText?esc(openAccountText):(saleCur==='TL'?money(Math.max(0,t.remain)):saleNativeLabel(remainNative,saleCur))}</strong></div>${t.remain>0&&saleDraft.customerId!=='CASH'?'<div class="notice" style="margin-top:8px"><strong>Otomatik açık hesap:</strong> Onayda kalan tutar seçili cariye satış cinsinde BORÇ yazılacak.</div>':''}`,()=>finalizeSale(),'SATIŞ ONAYLA');
   }
 
 
@@ -3872,14 +3891,14 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
 
   function finalizeSale(){
-    const standalone=standaloneTradeInState();if(standalone.active)return finalizeStandaloneTradeInPurchase();
+    const collection=cariCollectionStateV655(),standalone=standaloneTradeInState();if(standalone.active&&!collection.active)return finalizeStandaloneTradeInPurchase();
     const t=saleTotals(),hasBuyRateAtSale=Number(state.prices.has?.buy||1),hasSellRateAtSale=Number(state.prices.has?.sell||hasBuyRateAtSale),returnedCostHas=(saleDraft.returnItems||[]).reduce((a,r)=>a+Number(r.costHas||0),0),costHas=saleDraft.lines.reduce((a,l)=>a+Number(l.costHas||0),0)-returnedCostHas,cost=costHas*hasBuyRateAtSale,docNo=saleDraft.editingDocNo||nextDocNo('SAT',state.sales),id=saleDraft.editingOriginalId||uid('SAT'),customer=state.customers.find(c=>c.id===saleDraft.customerId);
     if(!customer)return toast('Cari hesap bulunamadı','err');
     if(t.remain>.01&&customer.id!=='CASH'){
       const cur=String(saleDraft.saleCurrency||'TL').toUpperCase(),native=t.remain/Math.max(.000001,saleCurrencyRate(cur));
       saleDraft.payments.push({type:'Açık Hesap',amount:t.remain,nativeAmount:native,currency:cur,detail:`Kalan ${qty(native)} ${cur} otomatik açık hesap`,automatic:true});
     }
-    state.sales.unshift({id,docNo,period:state.activePeriod,date:now(),customerId:saleDraft.customerId,masakIdentityId:saleDraft.masakIdentityId||'',salesperson:saleDraft.salesperson,lines:clone(saleDraft.lines),payments:clone(saleDraft.payments),returnItems:clone(saleDraft.returnItems||[]),discount:Number(saleDraft.discount||0),commission:Number(saleDraft.commission||0),returns:Number(saleDraft.returns||0),total:t.net,cost,costHas,revenueHas:t.net/hasSellRateAtSale,profitHas:(t.net/hasSellRateAtSale)-costHas,hasBuyRateAtSale,hasSellRateAtSale,saleCurrency:String(saleDraft.saleCurrency||'TL'),note:String(saleDraft.note||'').trim(),status:'Tamamlandı'});
+    state.sales.unshift({id,docNo,period:state.activePeriod,date:now(),transactionKind:collection.active?'Cari Tahsilat':'Satış',customerId:saleDraft.customerId,masakIdentityId:saleDraft.masakIdentityId||'',salesperson:saleDraft.salesperson,lines:clone(saleDraft.lines),payments:clone(saleDraft.payments),returnItems:clone(saleDraft.returnItems||[]),discount:Number(saleDraft.discount||0),commission:Number(saleDraft.commission||0),returns:Number(saleDraft.returns||0),total:t.net,cost,costHas,revenueHas:t.net/hasSellRateAtSale,profitHas:(t.net/hasSellRateAtSale)-costHas,hasBuyRateAtSale,hasSellRateAtSale,saleCurrency:String(saleDraft.saleCurrency||'TL'),note:String(saleDraft.note||'').trim(),status:'Tamamlandı'});
 
     saleDraft.lines.forEach(l=>{
       if(l.sourceType==='open'){
@@ -3903,7 +3922,9 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
         addTradeInToStock(p);state.financeMoves.unshift({id:uid('FIN'),period:state.activePeriod,date:now(),direction:'Giriş',type:'Altın / Ziynet Takas',accountKind:'Stok',accountId:'TAKAS',accountName:'Stok / Takas',amount:Number(p.amount||0),accountAmount:Number(p.hasAmount||0),accountCurrency:'HAS',tlAmount:Number(p.amount||0),customer:customer.name,description:p.detail,user:session.name,sourceDocNo:docNo,tradeType:'Takas',sourceCategory:'Takas / Altın Ziynet'});return;
       }
       if(p.type==='Açık Hesap'){
-        applyCariBalance(customer,p.currency||'TL',Number(p.nativeAmount||0),0);state.customerMoves.unshift({id:uid('CM'),customerId:customer.id,period:state.activePeriod,date:now(),type:'SATIŞ / AÇIK HESAP',unit:p.currency||'TL',debit:Number(p.nativeAmount||0),credit:0,description:`${docNo} · ${p.detail||''}`,user:session.name,sourceType:'sale',sourceId:id,sourceDocNo:docNo});return;
+        const native=Math.abs(Number(p.nativeAmount||0)),isCredit=p.cariDirection==='credit'||Number(p.amount||0)<0,unit=String(p.currency||'TL').toUpperCase();
+        applyCariBalance(customer,unit,isCredit?0:native,isCredit?native:0);
+        state.customerMoves.unshift({id:uid('CM'),customerId:customer.id,period:state.activePeriod,date:now(),type:isCredit?'TAHSİLAT / CARİ BORÇ MAHSUBU':'SATIŞ / AÇIK HESAP',unit,debit:isCredit?0:native,credit:isCredit?native:0,sourceUnit:unit,sourceAmount:native,sourceRate:currencyTlRate(unit,'sell'),counterEnabled:unit!=='TL',counterUnit:'TL',counterAmount:Math.abs(Number(p.amount||0)),counterRate:1,description:`${docNo} · ${p.detail||''}`,user:session.name,sourceType:isCredit?'cariCollection':'sale',sourceId:id,sourceDocNo:docNo});return;
       }
       const a=accountByKey(p.accountKey);if(!a.account)return;const native=Number(p.nativeAmount??p.amount??0),outgoing=Number(p.amount||0)<0;
       if(p.type==='Kredi Kartı'&&a.kind==='Banka'){
@@ -3920,7 +3941,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       applyCariBalance(customer,cur,nativeRemain,0);
       state.customerMoves.unshift({id:uid('CM'),customerId:customer.id,period:state.activePeriod,date:now(),type:'SATIŞ / AÇIK HESAP',unit:cur,debit:nativeRemain,credit:0,sourceUnit:cur,sourceAmount:nativeRemain,sourceRate:saleCurrencyRate(cur),counterEnabled:cur!=='TL',counterUnit:'TL',counterAmount:t.remain,counterRate:1,description:`${docNo} kalan satış bakiyesi · ${qty(nativeRemain)} ${cur}`,user:session.name,sourceType:'sale',sourceId:id,sourceDocNo:docNo});
     }
-    audit(`${docNo} numaralı ${money(t.net)} satış/takas tamamlandı`,'Satış');saleDraft=newSaleDraft();closeModal();toast(`${docNo} satış tamamlandı`);save();render();
+    audit(collection.active?`${docNo} cari tahsilat / borç mahsubu tamamlandı · ${money(collection.receivedTl)}`:`${docNo} numaralı ${money(t.net)} satış/takas tamamlandı`,collection.active?'Cari':'Satış');saleDraft=newSaleDraft();closeModal();toast(collection.active?`${docNo} cari tahsilat tamamlandı`:`${docNo} satış tamamlandı`);save();render();
   }
 
   function bindPurchases(){
@@ -5224,7 +5245,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
 
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion='6.54';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
+    state.meta=state.meta||{};state.meta.appVersion='6.55';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
