@@ -10,7 +10,7 @@
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.45</title>
+  <title>Asil Kuyumcu Pro V6.46</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -916,6 +916,77 @@ body[data-ui-mode] .sale-summary .summary-row.total{padding:8px 0}
 body[data-ui-mode] .sale-payment-card .sales-extra-note{font-size:12px;margin-top:8px}
 }
 </style>
+
+<style id="compact-workspace-v646">
+@media screen {
+.home-menu{display:grid;grid-template-columns:235px minmax(0,1fr);gap:28px;max-width:1500px;margin:8px auto 0}.home-categories{display:flex;flex-direction:column;gap:8px}.home-categories h2{font-size:17px;margin:0 0 10px}.home-categories .btn{display:flex;justify-content:space-between;text-align:left}.home-search{display:grid;gap:6px;margin-top:12px;font-size:14px}.home-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;gap:12px}.home-heading h1{font-size:25px;margin:0}.home-heading p{margin:5px 0;color:var(--muted)}.home-heading>span{color:var(--muted);font-size:14px}.home-tiles{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px}.home-tile{min-height:114px;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--text);padding:14px 8px}.home-tile:hover{border-color:var(--gold);background:var(--panel-2)}.home-tile-icon{font-size:25px;color:var(--gold-2)}.home-tile strong{font-size:15px;font-weight:650}.home-tile small{position:absolute;top:7px;right:8px;font-size:11px;color:var(--muted)}.home-tile.featured{border:2px solid var(--gold);background:#b08b3212}.home-tile.buy .home-tile-icon{color:var(--red)}.home-tile.sell .home-tile-icon{color:var(--green)}.home-footer{margin-top:24px;border-top:1px solid var(--line);padding-top:14px;color:var(--muted);display:flex;justify-content:space-between;font-size:12px}
+body[data-screen="dashboard"] .nav{display:none!important}
+body[data-screen="sales"] .nav{display:none!important}
+body[data-screen="sales"] .sidebar-brand small{display:none}
+body[data-screen="sales"] .sidebar-brand strong{font-size:20px!important}
+body[data-screen="sales"] .sidebar-brand .logo{width:34px!important;height:34px!important}
+body[data-screen="sales"] .sidebar-brand{padding:0!important}
+body[data-screen="sales"] .sidebar{padding:7px 14px!important}
+body[data-screen="sales"] .topbar{min-height:38px!important;padding:4px 14px!important}
+body[data-screen="sales"] .topbar .period-select{min-height:30px;padding:4px 8px;font-size:13px}
+body[data-screen="sales"] .topbar .mode-btn,body[data-screen="sales"] .topbar .theme-btn{min-height:26px;font-size:11px;padding:4px 6px}
+body[data-screen="sales"] .topbar .mode-switch,body[data-screen="sales"] .topbar .theme-switch{padding:2px}
+body[data-screen="sales"] .topbar .market-ticker{font-size:12px;gap:12px}
+body[data-screen="sales"] .content{padding:8px 12px!important;max-width:none!important}
+body[data-screen="sales"] .sale-head-card{padding:8px 10px!important}
+body[data-screen="sales"] .sale-head-grid{display:grid!important;grid-template-columns:minmax(220px,1fr) 100px minmax(300px,1.4fr)!important;gap:12px}
+body[data-screen="sales"] .sale-head-grid .labelled{grid-column:auto!important}
+body[data-screen="sales"] .sale-head-grid #saleProductSearch{font-weight:650}
+body[data-screen="sales"] .btn{font-size:14px;min-height:34px;padding:6px 9px;border-radius:5px}
+body[data-screen="sales"] .input,body[data-screen="sales"] .select{font-size:15px;min-height:34px;padding:5px 8px;border-radius:5px}
+body[data-screen="sales"] .labelled{gap:3px}
+body[data-screen="sales"] .labelled label{font-size:13px!important}
+body[data-screen="sales"] .section-head{margin-bottom:6px!important}
+body[data-screen="sales"] .section-head h3{font-size:15px!important}
+body[data-screen="sales"] .section-head span{font-size:12px!important}
+body[data-screen="sales"] .compact-sale-workspace{display:grid!important;grid-template-columns:minmax(0,1fr) 250px!important;gap:8px!important;min-height:0}
+.compact-sale-main{display:flex;flex-direction:column;gap:8px;min-width:0;min-height:0}
+.compact-sale-side{display:flex;flex-direction:column;gap:8px;min-width:0;min-height:0;overflow:auto}
+body[data-screen="sales"] .sale-head-actions{display:flex;flex-wrap:wrap;gap:5px}
+body[data-screen="sales"] .sale-head-actions .btn{flex:1;white-space:nowrap;font-size:12px}
+body[data-screen="sales"] .sale-quick-inline{display:block!important;margin:0!important}
+body[data-screen="sales"] .sale-quick-inline .mini-label{display:none}
+body[data-screen="sales"] .sale-compact-actions{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:5px!important}
+body[data-screen="sales"] .sale-compact-actions .btn{min-height:30px;font-size:12px!important;padding:4px}
+body[data-screen="sales"] .sale-product-card,body[data-screen="sales"] .sale-payment-card{padding:8px!important;min-height:0;min-width:0;display:flex;flex-direction:column;gap:0}
+body[data-screen="sales"] .sale-product-card{flex:1}
+body[data-screen="sales"] .sale-product-card>.section-head{display:none}
+body[data-screen="sales"] .sale-unified-editor{grid-template-columns:minmax(115px,1.4fr) 70px 48px 55px minmax(95px,1fr) minmax(100px,1fr) minmax(85px,.8fr) 50px!important;gap:5px!important;margin-bottom:5px}
+body[data-screen="sales"] .sale-unified-editor>*{grid-column:auto!important;grid-row:auto!important;min-width:0!important}
+body[data-screen="sales"] .sale-unified-editor input{width:100%;min-width:0!important}
+body[data-screen="sales"] .sale-unified-editor label{white-space:nowrap;font-size:12px!important}
+body[data-screen="sales"] .sale-entry-status{margin:0 0 4px;font-size:12px}
+.compact-sale-lines{flex:1;min-height:80px;overflow:auto;border:1px solid var(--line);border-radius:5px;background:var(--panel-2)}
+body[data-screen="sales"] .compact-sale-lines .table-wrap{max-height:none!important;margin:0!important;border:0;overflow:visible}
+body[data-screen="sales"] .sale-product-card .table{min-width:840px!important}
+body[data-screen="sales"] .table th,body[data-screen="sales"] .table td{font-size:13px!important;padding:7px!important}
+body[data-screen="sales"] .table th{z-index:1}
+body[data-screen="sales"] .sale-cost-mini,body[data-screen="sales"] .table small{font-size:11px!important}
+.compact-product-details{font-size:12px;margin-bottom:5px;max-height:100px;overflow:auto}.compact-product-details summary{cursor:pointer;color:var(--muted)}
+body[data-screen="sales"] .sale-stock-preview{margin:4px 0}.sale-stock-preview .metric{min-height:0!important}
+body[data-screen="sales"] .sale-payment-card{flex:0 0 180px;overflow:hidden}
+body[data-screen="sales"] .pusula-sales-tabs{grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:4px!important}
+body[data-screen="sales"] .pusula-sales-tabs .btn{min-height:30px!important;font-size:13px!important;padding:4px!important;white-space:normal}
+.compact-payment-records{flex:1;min-height:0;overflow:auto;margin-top:5px}.compact-payment-records .table-wrap{max-height:none!important;margin:0!important;overflow:visible}.compact-payment-records .muted{font-size:12px!important;padding-top:4px!important}
+body[data-screen="sales"] .sale-summary{padding:9px!important;margin-top:auto;flex-shrink:0}
+body[data-screen="sales"] .sale-summary .section-head{display:none}
+body[data-screen="sales"] .sale-summary .summary-row{font-size:13px!important;padding:4px 0!important;gap:8px}
+body[data-screen="sales"] .sale-summary .summary-row.total{font-size:17px!important;padding:6px 0!important}
+body[data-screen="sales"] .sale-summary .summary-row.total strong{font-size:22px!important}
+body[data-screen="sales"] .sale-note-box{margin-top:4px;padding-top:5px}
+body[data-screen="sales"] .sale-note-box label{font-size:12px}
+body[data-screen="sales"] #finalizeSale{min-height:40px;font-size:17px;margin-top:8px!important}
+@media(min-width:1100px) and (min-height:650px){body[data-screen="sales"] .app-shell{height:100dvh!important;min-height:0!important;display:flex!important;flex-direction:column}body[data-screen="sales"] .main{display:flex;flex:1;flex-direction:column;min-height:0}body[data-screen="sales"] .content{flex:1;min-height:0;width:100%}body[data-screen="sales"] .sales-shell{height:100%;min-height:0;display:flex;flex-direction:column;gap:8px}body[data-screen="sales"] .sale-head-card{flex-shrink:0}body[data-screen="sales"] .compact-sale-workspace{flex:1}}
+@media(max-width:1200px){.home-tiles{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.home-tile{min-height:90px}.home-menu{gap:18px;grid-template-columns:210px 1fr}}
+@media(max-width:1099px){body[data-screen="sales"] .compact-sale-workspace{grid-template-columns:1fr!important}.compact-sale-side{display:grid;grid-template-columns:1fr 1fr;overflow:visible}.compact-sale-side .sale-summary{grid-column:2;grid-row:1/4}.compact-sale-lines{max-height:300px;min-height:160px}body[data-screen="sales"] .sale-unified-editor{grid-template-columns:repeat(4,minmax(0,1fr))!important}body[data-screen="sales"] .sale-payment-card{flex-basis:190px}}
+@media(max-width:700px){.home-menu{grid-template-columns:1fr}.home-categories{display:grid;grid-template-columns:1fr 1fr;gap:6px}.home-categories h2,.home-search{grid-column:1/-1}.home-tiles{grid-template-columns:repeat(3,minmax(0,1fr))}.home-heading{margin-top:12px}.home-footer span{display:none}body[data-screen="sales"] .sale-head-grid{grid-template-columns:1fr 90px!important}body[data-screen="sales"] .sale-head-grid>.labelled:last-child{grid-column:1/-1!important}.compact-sale-side{display:flex}body[data-screen="sales"] .sale-unified-editor{grid-template-columns:repeat(2,minmax(0,1fr))!important}body[data-screen="sales"] .pusula-sales-tabs{grid-template-columns:repeat(3,minmax(0,1fr))!important}body[data-screen="sales"] .sale-payment-card{flex-basis:240px}.home-tile strong{font-size:13px}.home-tile{min-height:90px}.home-heading p{font-size:13px}}
+}
+</style>
 </head>
 <body>
   <div id="app"></div>
@@ -1073,7 +1144,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   let session = safeSessionGet();
   // Normal uygulama açılışı her zaman ana sayfadan başlar.
   // Yalnızca aktif bir NFC dönüşü varsa kullanıcı kaldığı Kimlik/MASAK ekranına geri alınır.
-  let route = session ? (pendingNfcReturnAtBoot?.route || 'sales') : 'dashboard';
+  let route = session ? (pendingNfcReturnAtBoot?.route || 'dashboard') : 'dashboard';
   let saleDraft = newSaleDraft();
   let purchaseDraft = newPurchaseDraft();
   let mobileOpen = false;
@@ -1762,7 +1833,9 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     safeSessionSet(session);
     safeRouteSet(route);
     state.currentUser=state.users.find(x=>x.id===session?.id)||state.users[0]||null;
+    document.body.dataset.screen=route;
     app.innerHTML = shell(renderPage(route));
+    arrangeCompactSalesV646();
     bindShell();
     bindPage(route);
   }
@@ -1801,7 +1874,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       state.settings.uiMode = uiMode; state.settings.theme = theme; applyUiMode(); applyTheme(); save();
       session = {id:user.id,name:user.name,role:user.role}; safeSessionSet(session);
       audit(`${state.activePeriod} dönemine giriş yapıldı`,'Giriş');
-      route='sales'; render();
+      route='dashboard'; render();
     });
   }
 
@@ -1812,9 +1885,9 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.45</span></small></div></div><div class="simple-account"><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
-        <nav class="nav" aria-label="Ana menü">${['sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={sales:'İşlem Merkezi',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
-        <details class="more-nav" ${!['sales','customers','stocks','finance','repairs','reports'].includes(route)?'open':''}><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
+        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.46</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
+        <nav class="nav" aria-label="Ana menü">${['dashboard','sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={dashboard:'Ana Menü',sales:'Satış',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
+        <details class="more-nav"><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['dashboard','sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
       </aside>
       <div class="mobile-overlay ${mobileOpen?'show':''}" id="mobileOverlay"></div>
       <main class="main">
@@ -1849,6 +1922,32 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
 
   function pageDashboard(){
+    const groups=[['customers','Cari Hesap İşlemleri'],['stocks','Stok İşlemleri'],['reports','Raporlar'],['finance','Kasa / Banka'],['parameters','Sistem Ayarları'],['definitions','Tanımlamalar'],['backup','Yedek / Sistem']];
+    const items=[['sales','▣','Satış İşlemleri','F2'],['customers','◎','Cari Hesaplar','F3'],['stocks','◇','Stok Yönetimi','F4'],['prices','⇄','Altın Fiyatları',''],['finance','₺','Kasa / Banka',''],['repairs','⌁','Tamir / Servis',''],['trade:Ziynet Alış','↓','Ziynet Alış',''],['trade:Ziynet Satış','↑','Ziynet Satış',''],['trade:Hurda Alış','↓','Hurda Alış',''],['trade:Hurda Satış','↑','Hurda Satış',''],['trade:Döviz Alış','↓','Döviz Alış',''],['trade:Döviz Satış','↑','Döviz Satış',''],['banking','▤','Banka Hareketleri',''],['invoices','▧','Fatura İşlemleri',''],['compliance','◉','Kimlik / MASAK',''],['count','▦','Stok Sayımı',''],['reports','≡','Raporlar','F8'],['operations','◈','Diğer İşlemler','']];
+    return `<div class="home-menu"><aside class="home-categories"><h2>İşlem Menüsü</h2>${groups.map(([r,t])=>`<button class="btn btn-outline" data-go="${r}">${t}<span>›</span></button>`).join('')}<label class="home-search"><span>Menü Ara</span><input id="homeMenuSearch" class="input" placeholder="İşlem adı yazın..."></label></aside><section class="home-shortcuts"><div class="home-heading"><div><h1>Ana Menü</h1><p>Yapmak istediğiniz işlemi seçin.</p></div><span>${new Date().toLocaleDateString('tr-TR')}</span></div><div class="home-tiles">${items.map(([r,i,t,k])=>`<button class="home-tile ${r==='sales'?'featured':''} ${r.endsWith('Alış')?'buy':r.endsWith('Satış')?'sell':''}" ${r.startsWith('trade:')?`data-home-trade="${r.slice(6)}"`:`data-go="${r}"`} data-home-label="${esc(t.toLocaleLowerCase('tr-TR'))}"><span class="home-tile-icon">${i}</span><strong>${t}</strong>${k?`<small>${k}</small>`:''}</button>`).join('')}</div><div id="homeNoResults" class="hidden">Eşleşen işlem yok.</div><footer class="home-footer">ASİL KUYUMCU PRO <span>Satış · Stok · Cari · Tamir</span></footer></section></div>`;
+  }
+  function arrangeCompactSalesV646(){
+    if(route!=='sales')return;
+    const root=document.querySelector('.sales-shell');if(!root)return;
+    const head=root.querySelector('.sale-head-card'),product=root.querySelector('.sale-product-card'),payment=root.querySelector('.sale-payment-card'),summary=root.querySelector('.sale-summary');
+    const side=document.createElement('aside');side.className='compact-sale-side';
+    const person=root.querySelector('#salePerson')?.closest('.labelled');if(person)side.append(person);
+    const actions=root.querySelector('.sale-head-actions');if(actions)side.append(actions);
+    const quick=root.querySelector('.sale-quick-inline');if(quick)side.append(quick);
+    if(summary)side.append(summary);
+    const area=root.querySelector('.sale-layout');area.classList.add('compact-sale-workspace');area.replaceChildren();
+    const main=document.createElement('div');main.className='compact-sale-main';main.append(product,payment);area.append(main,side);
+    head.querySelector('.simple-operation-bar')?.remove();head.querySelector('.sale-head-row')?.remove();
+    head.querySelectorAll('.sale-inline-help').forEach(e=>e.remove());
+    const status=product.querySelector('.sale-entry-status');if(status&&!saleDraft.entrySelection)status.remove();
+    const preview=product.querySelector('.sale-stock-preview');if(preview){const details=document.createElement('details');details.className='compact-product-details';details.innerHTML='<summary>Ürün bilgisi / maliyet</summary>';preview.replaceWith(details);details.append(preview);}
+    const wrap=document.createElement('div');wrap.className='compact-sale-lines';
+    [...product.children].filter(e=>e.classList.contains('table-wrap')||e.classList.contains('empty-state')).forEach(e=>wrap.append(e));product.append(wrap);
+    payment.querySelector('.sales-extra-note')?.remove();
+    const records=document.createElement('div');records.className='compact-payment-records';
+    [...payment.children].filter(e=>!e.classList.contains('section-head')&&!e.classList.contains('pusula-sales-tabs')).forEach(e=>records.append(e));payment.append(records);
+  }
+  function pageDashboardReportsV645(){
     const today = new Date().toDateString();
     const salesToday = activeSales().filter(s=>new Date(s.date).toDateString()===today && s.status==='Tamamlandı');
     const turnover = salesToday.reduce((a,s)=>a+s.total,0);
@@ -2969,6 +3068,8 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     bindMobileKeyboardViewport();
     document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{route=b.dataset.go;render();}));
     if(r==='dashboard'){
+      document.querySelectorAll('[data-home-trade]').forEach(b=>b.addEventListener('click',()=>openSpecialTrade(b.dataset.homeTrade)));
+      document.getElementById('homeMenuSearch')?.addEventListener('input',e=>{const q=e.target.value.toLocaleLowerCase('tr-TR').trim();let count=0;document.querySelectorAll('[data-home-label]').forEach(b=>{const show=!q||b.dataset.homeLabel.includes(q);b.classList.toggle('hidden',!show);if(show)count++;});document.getElementById('homeNoResults')?.classList.toggle('hidden',count>0);});
       const q=document.getElementById('quickSale'); if(q) q.addEventListener('click',()=>{route='sales';render();});
     }
     if(r==='sales'){ bindSales(); bindEnterAsTab('.content'); }
