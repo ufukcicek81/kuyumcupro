@@ -1187,7 +1187,8 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     try{
       if(typeof ensureV5State==='function') ensureV5State();
       if(typeof reconcileTransactionLedgerV5==='function') reconcileTransactionLedgerV5();
-      state.meta=state.meta||{}; state.meta.updatedAt=now(); state.meta.appVersion='6.43';
+      state.meta=state.meta||{}; state.meta.updatedAt=now(); state.meta.appVersion='6.48';
+      if(typeof syncSystemParametersV648==='function')syncSystemParametersV648();
       localStorage.setItem(LS_KEY, JSON.stringify(state));
     } catch { /* Yerel dosya modunda depolama engellense bile uygulama çalışmaya devam eder. */ }
     if(cloudInitializedV5 && !cloudApplyingV5 && state?.cloudSync?.enabled && typeof scheduleCloudPushV5==='function') scheduleCloudPushV5();
@@ -1879,13 +1880,13 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
 
   const navItems = [
-    ['dashboard','⌂','Ana Panel'],['sales','▣','Satış'],['operations','◈','İşlem Merkezi'],['purchases','⇩','Altın Giriş / Alış'],['stocks','◇','Stok Yönetimi'],['customers','◎','Cari Hesaplar'],['finance','₺','Kasa / Finans'],['scrap','◆','Altın / Ziynet'],['prices','⇄','Fiyat & Kur'],['count','▦','Sayım'],['parameters','⚙','Sistem Ayarları'],['definitions','▤','Tanımlamalar'],['reports','≡','Raporlar'],['backup','↻','Yedek / Sistem']
+    ['dashboard','⌂','Ana Panel'],['sales','▣','Satış'],['operations','◈','İşlem Merkezi'],['purchases','⇩','Altın Giriş / Alış'],['stocks','◇','Stok Yönetimi'],['customers','◎','Cari Hesaplar'],['finance','₺','Kasa / Finans'],['scrap','◆','Altın / Ziynet'],['prices','⇄','Fiyat & Kur'],['count','▦','Sayım'],['personnel','♙','Personel'],['parameters','⚙','Sistem Ayarları'],['definitions','▤','Tanımlamalar'],['reports','≡','Raporlar'],['backup','↻','Yedek / Sistem']
   ];
 
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.47</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
+        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.48</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
         <nav class="nav" aria-label="Ana menü">${['dashboard','sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={dashboard:'Ana Menü',sales:'Satış',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
         <details class="more-nav"><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['dashboard','sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
       </aside>
@@ -1918,12 +1919,12 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
 
   function renderPage(r){
-    if(r==='sales') return pageSales(); if(r==='operations') return pageOperationsV5(); if(r==='purchases') return pagePurchases(); if(r==='stocks') return pageStocks(); if(r==='customers') return pageCustomers(); if(r==='finance') return pageFinance(); if(r==='scrap') return pageScrap(); if(r==='prices') return pagePrices(); if(r==='count') return pageCount(); if(r==='parameters') return pageParameters(); if(r==='definitions') return pageDefinitions(); if(r==='reports') return pageReports(); if(r==='backup') return pageBackup(); return pageDashboard();
+    if(r==='sales') return pageSales(); if(r==='operations') return pageOperationsV5(); if(r==='purchases') return pagePurchases(); if(r==='stocks') return pageStocks(); if(r==='customers') return pageCustomers(); if(r==='finance') return pageFinance(); if(r==='scrap') return pageScrap(); if(r==='prices') return pagePrices(); if(r==='count') return pageCount(); if(r==='personnel') return pagePersonnelV648(); if(r==='parameters') return pageParameters(); if(r==='definitions') return pageDefinitions(); if(r==='reports') return pageReports(); if(r==='backup') return pageBackup(); return pageDashboard();
   }
 
   function pageDashboard(){
-    const groups=[['customers','Cari Hesap İşlemleri'],['stocks','Stok İşlemleri'],['reports','Raporlar'],['finance','Kasa / Banka'],['parameters','Sistem Ayarları'],['definitions','Tanımlamalar'],['backup','Yedek / Sistem']];
-    const items=[['sales','▣','Satış İşlemleri','F2'],['customers','◎','Cari Hesaplar','F3'],['stocks','◇','Stok Yönetimi','F4'],['prices','⇄','Altın Fiyatları',''],['finance','₺','Kasa / Banka',''],['repairs','⌁','Tamir / Servis',''],['trade:Ziynet Alış','↓','Ziynet Alış',''],['trade:Ziynet Satış','↑','Ziynet Satış',''],['trade:Hurda Alış','↓','Hurda Alış',''],['trade:Hurda Satış','↑','Hurda Satış',''],['trade:Döviz Alış','↓','Döviz Alış',''],['trade:Döviz Satış','↑','Döviz Satış',''],['banking','▤','Banka Hareketleri',''],['invoices','▧','Fatura İşlemleri',''],['compliance','◉','Kimlik / MASAK',''],['count','▦','Stok Sayımı',''],['reports','≡','Raporlar','F8'],['operations','◈','Diğer İşlemler','']];
+    const groups=[['customers','Cari Hesap İşlemleri'],['stocks','Stok İşlemleri'],['reports','Raporlar'],['finance','Kasa / Banka'],['personnel','Personel'],['parameters','Sistem Ayarları'],['definitions','Tanımlamalar'],['backup','Yedek / Sistem']];
+    const items=[['sales','▣','Satış İşlemleri','F2'],['customers','◎','Cari Hesaplar','F3'],['stocks','◇','Stok Yönetimi','F4'],['prices','⇄','Altın Fiyatları',''],['finance','₺','Kasa / Banka',''],['personnel','♙','Personel',''],['repairs','⌁','Tamir / Servis',''],['trade:Ziynet Alış','↓','Ziynet Alış',''],['trade:Ziynet Satış','↑','Ziynet Satış',''],['trade:Hurda Alış','↓','Hurda Alış',''],['trade:Hurda Satış','↑','Hurda Satış',''],['trade:Döviz Alış','↓','Döviz Alış',''],['trade:Döviz Satış','↑','Döviz Satış',''],['banking','▤','Banka Hareketleri',''],['invoices','▧','Fatura İşlemleri',''],['compliance','◉','Kimlik / MASAK',''],['count','▦','Stok Sayımı',''],['reports','≡','Raporlar','F8'],['operations','◈','Diğer İşlemler','']];
     return `<div class="home-menu"><aside class="home-categories"><h2>İşlem Menüsü</h2>${groups.map(([r,t])=>`<button class="btn btn-outline" data-go="${r}">${t}<span>›</span></button>`).join('')}<label class="home-search"><span>Menü Ara</span><input id="homeMenuSearch" class="input" placeholder="İşlem adı yazın..."></label></aside><section class="home-shortcuts"><div class="home-heading"><div><h1>Ana Menü</h1><p>Yapmak istediğiniz işlemi seçin.</p></div><span>${new Date().toLocaleDateString('tr-TR')}</span></div><div class="home-tiles">${items.map(([r,i,t,k])=>`<button class="home-tile ${r==='sales'?'featured':''} ${r.endsWith('Alış')?'buy':r.endsWith('Satış')?'sell':''}" ${r.startsWith('trade:')?`data-home-trade="${r.slice(6)}"`:`data-go="${r}"`} data-home-label="${esc(t.toLocaleLowerCase('tr-TR'))}"><span class="home-tile-icon">${i}</span><strong>${t}</strong>${k?`<small>${k}</small>`:''}</button>`).join('')}</div><div id="homeNoResults" class="hidden">Eşleşen işlem yok.</div><footer class="home-footer">ASİL KUYUMCU PRO <span>Satış · Stok · Cari · Tamir</span></footer></section></div>`;
   }
   function arrangeCompactSalesV646(){
@@ -2166,7 +2167,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
   function specialTradesTable(){
     const rows=state.tradeMoves.filter(x=>x.period===state.activePeriod).slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,12);
-    return `<div class="card" style="margin-top:16px"><div class="section-head"><h3>Ziynet / Hurda / Döviz İşlemleri</h3><span>${rows.length} son kayıt</span></div>${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Belge</th><th>Tarih</th><th>İşlem</th><th>Ürün / Döviz</th><th class="num">Miktar</th><th class="num">TL Toplam</th><th class="num">HAS Karş.</th><th>Karşılık / Mahsup</th><th>Hesap / Cari</th></tr></thead><tbody>${rows.map(x=>`<tr><td><strong>${esc(x.docNo)}</strong></td><td>${trDate(x.date)}</td><td><span class="badge ${x.side==='Satış'?'green':'red'}">${esc(x.tradeType)}</span></td><td>${esc(x.item)}</td><td class="num">${qty(x.quantity)} ${esc(x.unit)}</td><td class="num"><strong>${money(x.totalTL)}</strong></td><td class="num">${Number(x.totalHas||0)>0?qty(x.totalHas)+' HAS':'—'}</td><td>${esc(x.settlementLabel||x.settlementCurrency||'TL')} ${Number(x.settlementAmount||0)>0?`· ${qty(x.settlementAmount)} ${esc(x.settlementCurrency||'')}`:''}</td><td>${esc(x.accountName||x.customer||'')}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty-state"><strong>Henüz özel işlem yok</strong>Ziynet, hurda veya döviz alış/satış düğmelerinden işlem oluşturun.</div>'}</div>`;
+    return `<div class="card" style="margin-top:16px"><div class="section-head"><h3>Ziynet / Hurda / Döviz İşlemleri</h3><span>${rows.length} son kayıt</span></div>${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Belge</th><th>Tarih</th><th>İşlem</th><th>Ürün / Döviz</th><th class="num">Miktar</th><th class="num">TL Toplam</th><th class="num">HAS Karş.</th><th>Karşılık / Mahsup</th><th>Hesap / Cari</th></tr></thead><tbody>${rows.map(x=>`<tr><td><strong>${esc(x.docNo)}</strong></td><td>${trDate(x.date)}</td><td><span class="badge ${x.side==='Satış'?'green':'red'}">${esc(x.tradeType)}</span></td><td>${esc(x.item)}</td><td class="num">${qty(x.quantity)} ${esc(x.unit)}</td><td class="num"><strong>${money(x.totalTL)}</strong></td><td class="num">${String(x.tradeType||'').startsWith('Döviz')?'—':(Number(x.totalHas||0)>0?qty(x.totalHas)+' HAS':'—')}</td><td>${esc(x.settlementLabel||x.settlementCurrency||'TL')} ${Number(x.settlementAmount||0)>0?`· ${qty(x.settlementAmount)} ${esc(x.settlementCurrency||'')}`:''}</td><td>${esc(x.accountName||x.customer||'')}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty-state"><strong>Henüz özel işlem yok</strong>Ziynet, hurda veya döviz alış/satış düğmelerinden işlem oluşturun.</div>'}</div>`;
   }
 
   function saleTotals(){
@@ -2792,6 +2793,48 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       <div class="card" style="margin-top:16px"><div class="section-head"><h3>Sayım Geçmişi</h3><span>${history.length} oturum</span></div><div class="table-wrap"><table class="table"><thead><tr><th>Tarih</th><th>Durum</th><th>Mod</th><th class="num">Beklenen</th><th class="num">Sayılan</th><th class="num">Eksik</th><th class="num">Eşleşmeyen</th><th>Kullanıcı</th></tr></thead><tbody>${history.map(x=>`<tr><td>${trDate(x.date)}</td><td><span class="badge ${x.status==='Tamamlandı'?'green':'gold'}">${esc(x.status)}</span></td><td>${esc(x.mode)}</td><td class="num">${x.expectedIds.length}</td><td class="num">${x.countedIds.length}</td><td class="num">${Math.max(0,x.expectedIds.length-x.countedIds.length)}</td><td class="num">${x.extraCodes.length}</td><td>${esc(x.user)}</td></tr>`).join('')||'<tr><td colspan="8">Henüz sayım yok.</td></tr>'}</tbody></table></div></div>`;
   }
 
+  function syncSystemParametersV648(){
+    state.settings=state.settings||{};state.printerSettings=state.printerSettings||{};
+    const val=key=>state.systemParameters?.find(x=>x.key===key)?.value;
+    const yes=v=>['evet','1','true','yes'].includes(String(v??'').toLocaleLowerCase('tr-TR'));
+    const auto=val('autoGoldPrice'),fx=val('updateExchange');
+    if(auto!==undefined||fx!==undefined)state.settings.livePriceSync=(auto===undefined||yes(auto))&&(fx===undefined||yes(fx));
+    const mins=Number(val('exchangeUpdateMinutes'));if(Number.isFinite(mins)&&mins>0)state.settings.exchangeUpdateMinutes=mins;
+    const backup=val('backupEnabled');if(backup!==undefined)state.settings.backupEnabled=yes(backup);
+    const disableBarcode=val('disableBarcode');if(disableBarcode!==undefined)state.settings.disableBarcode=yes(disableBarcode);
+    const printer=String(val('barcodePrinter')||'').trim();if(printer&&printer!=='BarYaz')state.printerSettings.printerName=printer;
+    state.settings.parameterValues=Object.fromEntries((state.systemParameters||[]).map(x=>[x.key,x.value]));
+  }
+  function openPersonnelAddV648(){
+    modal('Personel Ekle',`<div class="form-grid"><div class="labelled span-2"><label>Ad Soyad</label><input id="perName" class="input" autocomplete="off"></div><div class="labelled"><label>Kullanıcı Adı</label><input id="perUser" class="input" autocomplete="off"></div><div class="labelled"><label>PIN / Şifre</label><input id="perPin" class="input" type="password" inputmode="numeric" value="1234"></div><div class="labelled span-2"><label>Görev</label><select id="perRole" class="select"><option>Satış Danışmanı</option><option>Yönetici</option></select></div><label class="permission-box"><input id="perCanPrice" type="checkbox"> Satış fiyatını değiştirebilir</label><label class="permission-box"><input id="perCanCost" type="checkbox"> Maliyet görebilir</label></div>`,()=>{
+      const name=document.getElementById('perName').value.trim(),username=document.getElementById('perUser').value.trim(),pin=document.getElementById('perPin').value.trim(),role=document.getElementById('perRole').value,admin=role==='Yönetici';
+      if(!name||!username||!pin)return toast('Ad soyad, kullanıcı adı ve şifre zorunlu','err');
+      if(state.users.some(u=>String(u.username||'').toLocaleLowerCase('tr-TR')===username.toLocaleLowerCase('tr-TR')))return toast('Bu kullanıcı adı zaten var','err');
+      state.users.push({id:uid('U'),username,name,role,pin,permissions:{canSell:true,canChangePrice:admin||Boolean(document.getElementById('perCanPrice').checked),canViewCost:admin||Boolean(document.getElementById('perCanCost').checked),canDelete:admin,canManageDefinitions:admin,canManageFinance:admin,canReturn:admin,canTransform:admin,canSupplierReturn:admin,canSettlePos:admin,canManageSpecial:admin,canClosePeriod:admin,canCloudSync:admin,canCancel:admin}});
+      state.definitions=state.definitions||{};state.definitions.users=Array.isArray(state.definitions.users)?state.definitions.users:[];if(!state.definitions.users.includes(name))state.definitions.users.push(name);
+      audit(`${name} personel olarak eklendi`,'Personel');closeModal();save();render();toast('Personel eklendi');
+    },'PERSONEL EKLE');
+  }
+  function removePersonnelV648(id){
+    const u=state.users.find(x=>x.id===id);if(!u)return;
+    if(id===session?.id)return toast('Aktif kullanıcı kaldırılamaz','err');
+    if(state.users.length<=1)return toast('Son kullanıcı kaldırılamaz','err');
+    const admins=state.users.filter(x=>/yönetici|admin/i.test(String(x.role||'')));
+    if(/yönetici|admin/i.test(String(u.role||''))&&admins.length<=1)return toast('Son yönetici kaldırılamaz','err');
+    if(!confirm(`${u.name} personelden kaldırılsın mı?`))return;
+    state.users=state.users.filter(x=>x.id!==id);
+    if(Array.isArray(state.definitions?.users))state.definitions.users=state.definitions.users.filter(x=>x!==u.name);
+    audit(`${u.name} personelden kaldırıldı`,'Personel');save();render();toast('Personel kaldırıldı');
+  }
+  function pagePersonnelV648(){
+    const rows=(state.users||[]).map(u=>`<tr><td><strong>${esc(u.name)}</strong><br><small>${esc(u.username)}</small></td><td><span class="badge ${/yönetici|admin/i.test(String(u.role||''))?'gold':'blue'}">${esc(u.role)}</span></td><td>${u.permissions?.canSell!==false?'Satış':''}${u.permissions?.canViewCost?' · Maliyet':''}${u.permissions?.canManageFinance?' · Finans':''}</td><td>${u.id===session?.id?'<span class="badge gold">Aktif kullanıcı</span>':`<button class="btn btn-danger" data-personnel-remove="${u.id}">Kaldır</button>`}</td></tr>`).join('');
+    return `<div class="page-title"><div><h1>Personel Yönetimi</h1><p>Programa giriş yapacak personeli ekle veya kaldır. Eski satış kayıtlarındaki personel adı silinmez.</p></div><button class="btn btn-primary" id="addPersonnel">+ PERSONEL EKLE</button></div><div class="card"><div class="table-wrap"><table class="table" style="min-width:720px"><thead><tr><th>Ad Soyad / Kullanıcı</th><th>Görev</th><th>Yetki Özeti</th><th>İşlem</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  }
+  function bindPersonnelV648(){
+    document.getElementById('addPersonnel')?.addEventListener('click',openPersonnelAddV648);
+    document.querySelectorAll('[data-personnel-remove]').forEach(b=>b.addEventListener('click',()=>removePersonnelV648(b.dataset.personnelRemove)));
+  }
+
   function pageParameters(){
     const groups=uniqueValues((state.systemParameters||[]).map(x=>x.group||'Diğer'));
     const user=state.users.find(x=>x.id===session?.id)||state.users[0];
@@ -3126,6 +3169,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     if(r==='scrap') bindScrap();
     if(r==='prices') bindPrices();
     if(r==='count') bindCount();
+    if(r==='personnel') bindPersonnelV648();
     if(r==='parameters') bindParameters();
     if(r==='definitions') bindDefinitions();
     if(r==='reports') bindReports();
@@ -3159,8 +3203,8 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     return (state.tradeMoves||[]).filter(x=>x.period===state.activePeriod&&String(x.tradeType||'')===String(tradeType||'')).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
   }
   function tradeHistoryInlineHtml(tradeType){
-    const rows=tradeHistoryRows(tradeType);
-    return `<div class="trade-history-bar"><button type="button" class="btn btn-outline" id="stHistoryToggle" tabindex="-1">Geçmiş (${rows.length})</button><span>${esc(tradeType)} kayıtlarını bu işlem ekranından kontrol edin.</span></div><div class="trade-history-panel" id="stHistoryPanel">${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Tarih</th><th>Belge</th><th>Ürün / Döviz</th><th class="num">Miktar</th><th class="num">Birim Fiyat / Kur</th><th class="num">Toplam TL</th><th class="num">HAS</th><th>Hesap / Cari</th></tr></thead><tbody>${rows.slice(0,60).map(x=>`<tr><td>${trDate(x.date)}</td><td><strong>${esc(x.docNo||'')}</strong></td><td>${esc(x.item||'')}</td><td class="num">${qty(x.quantity||0)} ${esc(x.unit||'')}</td><td class="num">${Number(x.unitPrice||0)?Number(x.unitPrice||0).toLocaleString('tr-TR',{maximumFractionDigits:4}):'—'}</td><td class="num"><strong>${money(x.totalTL||0)}</strong></td><td class="num">${Number(x.totalHas||0)?qty(x.totalHas)+' HAS':'—'}</td><td>${esc(x.customer||x.accountName||'')}</td></tr>`).join('')}</tbody></table></div>`:`<div class="trade-history-empty">${esc(tradeType)} için henüz kayıt yok.</div>`}</div>`;
+    const rows=tradeHistoryRows(tradeType),showHas=!String(tradeType||'').startsWith('Döviz');
+    return `<div class="trade-history-bar"><button type="button" class="btn btn-outline" id="stHistoryToggle" tabindex="-1">Geçmiş (${rows.length})</button><span>${esc(tradeType)} kayıtlarını bu işlem ekranından kontrol edin.</span></div><div class="trade-history-panel" id="stHistoryPanel">${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Tarih</th><th>Belge</th><th>Ürün / Döviz</th><th class="num">Miktar</th><th class="num">Birim Fiyat / Kur</th><th class="num">Toplam TL</th>${showHas?'<th class="num">HAS</th>':''}<th>Hesap / Cari</th></tr></thead><tbody>${rows.slice(0,60).map(x=>`<tr><td>${trDate(x.date)}</td><td><strong>${esc(x.docNo||'')}</strong></td><td>${esc(x.item||'')}</td><td class="num">${qty(x.quantity||0)} ${esc(x.unit||'')}</td><td class="num">${Number(x.unitPrice||0)?Number(x.unitPrice||0).toLocaleString('tr-TR',{maximumFractionDigits:4}):'—'}</td><td class="num"><strong>${money(x.totalTL||0)}</strong></td>${showHas?`<td class="num">${Number(x.totalHas||0)?qty(x.totalHas)+' HAS':'—'}</td>`:''}<td>${esc(x.customer||x.accountName||'')}</td></tr>`).join('')}</tbody></table></div>`:`<div class="trade-history-empty">${esc(tradeType)} için henüz kayıt yok.</div>`}</div>`;
   }
   function bindTradeHistoryInline(){
     const b=document.getElementById('stHistoryToggle'),p=document.getElementById('stHistoryPanel');
@@ -3982,6 +4026,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const x=state.stocks.find(s=>s.id===id);if(!x)return; modal(`Durum / Konum — ${esc(x.code)}`,`<div class="form-grid"><div class="labelled span-2"><label>Yeni Durum</label><select id="ssStatus" class="select">${state.definitions.stockStatuses.map(v=>`<option ${v===x.status?'selected':''}>${esc(v)}</option>`).join('')}</select></div><div class="labelled span-2"><label>Yeni Konum</label><select id="ssLocation" class="select">${state.definitions.stockLocations.map(v=>`<option ${v===x.location?'selected':''}>${esc(v)}</option>`).join('')}</select></div><div class="labelled span-4"><label>Açıklama</label><input id="ssDesc" class="input" placeholder="Transfer, tamir, rezervasyon açıklaması"></div></div>`,()=>{const oldStatus=x.status,oldLoc=x.location,newStatus=document.getElementById('ssStatus').value,newLoc=document.getElementById('ssLocation').value,desc=document.getElementById('ssDesc').value;x.status=newStatus;x.location=newLoc;let t='DURUM DEĞİŞİKLİĞİ';if(newStatus==='Tamirde')t='TAMİR GİRİŞ';else if(newStatus==='Rezerve')t='REZERVE';else if(newLoc!==oldLoc)t='TRANSFER';addStockMove(x,t,`${oldStatus} / ${oldLoc}`,`${newStatus} / ${newLoc}`,desc);audit(`${x.code}: ${oldStatus} → ${newStatus}`,'Stok');closeModal();save();render();},'Güncelle');
   }
   function openBarcodeFromOpenStock(openId){
+    if(state.settings?.disableBarcode)return toast('Sistem Parametreleri > Barkodlama Kapat = Evet. Barkodlama devre dışı.','err');
     const o=(state.openStocks||[]).find(x=>x.id===openId);if(!o)return toast('Açık stok bulunamadı','err');
     const available=Number(o.amount||0);if(available<=0)return toast('Açık stokta miktar kalmadı','err');
     const card=getStockCard(o.stockCardId)||state.stockCardsMaster.find(c=>String(c.productDefinition||c.name).toUpperCase()===String(o.name).toUpperCase());
@@ -4895,9 +4940,8 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     document.getElementById('saveSystemParameters')?.addEventListener('click',()=>{
       document.querySelectorAll('.param-value').forEach(el=>{const i=Number(el.dataset.paramIndex);if(state.systemParameters[i])state.systemParameters[i].value=el.value;});
       const user=state.users.find(x=>x.id===session?.id)||state.users[0]; user.permissions=user.permissions||{};user.permissions.canSell=document.getElementById('permSell')?.checked!==false;user.permissions.canChangePrice=Boolean(document.getElementById('permPrice')?.checked);user.permissions.canViewCost=Boolean(document.getElementById('permCost')?.checked);user.permissions.canManageFinance=Boolean(document.getElementById('permFinance')?.checked);user.permissions.canReturn=Boolean(document.getElementById('permReturn')?.checked);user.permissions.canTransform=Boolean(document.getElementById('permTransform')?.checked);user.permissions.canClosePeriod=Boolean(document.getElementById('permClosePeriod')?.checked);user.permissions.canCloudSync=Boolean(document.getElementById('permCloud')?.checked);
-      const auto=state.systemParameters.find(x=>x.key==='autoGoldPrice'); if(auto)state.settings.livePriceSync=String(auto.value).toLowerCase()!=='hayır'&&String(auto.value)!=='0';
-      const mins=state.systemParameters.find(x=>x.key==='exchangeUpdateMinutes'); if(mins&&Number(mins.value)>0)state.settings.exchangeUpdateMinutes=Number(mins.value);
-      audit('Sistem parametreleri güncellendi','Sistem');save();toast('Sistem parametreleri kaydedildi');render();
+      syncSystemParametersV648();
+      audit('Sistem parametreleri güncellendi ve uygulandı','Sistem');save();toast('Sistem parametreleri kaydedildi ve uygulandı');render();
     });
   }
 
@@ -5035,7 +5079,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
 
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion='6.43';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
+    state.meta=state.meta||{};state.meta.appVersion='6.48';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
@@ -5046,6 +5090,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     state.meta.lastDailyBackup=state.meta.lastDailyBackup||'';
     state.cloudSync=state.cloudSync||{enabled:true,lastStatus:'Bekliyor',lastPush:'',lastPull:'',endpoint:CLOUD_STATE_URL};
     state.cloudSync.endpoint=CLOUD_STATE_URL;
+    if(typeof syncSystemParametersV648==='function')syncSystemParametersV648();
     (state.users||[]).forEach(u=>{u.permissions=u.permissions||{};const admin=/yönetici|admin/i.test(String(u.role||''));[['canReturn',admin],['canTransform',admin],['canSupplierReturn',admin],['canSettlePos',admin],['canManageSpecial',admin],['canClosePeriod',admin],['canCloudSync',admin],['canCancel',admin]].forEach(([k,d])=>{if(typeof u.permissions[k]!=='boolean')u.permissions[k]=d;});});
   }
   function v5User(){return state.users.find(x=>x.id===session?.id)||state.users[0]||{permissions:{}};}
@@ -5092,7 +5137,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     try{const r=await fetch(`${CLOUD_BACKUP_BASE}.json?v=${Date.now()}`,{cache:'no-store'});if(!r.ok)return;const data=await r.json();if(!data||typeof data!=='object')return;const cut=Date.now()-30*86400000;const old=Object.entries(data).filter(([,v])=>new Date(v?.date||0).getTime()<cut).map(([k])=>k);for(const k of old.slice(0,80))await fetch(`${CLOUD_BACKUP_BASE}/${encodeURIComponent(k)}.json`,{method:'DELETE'});}catch(_){ }
   }
   async function autoDailyBackupV6(){
-    ensureV5State();if(!state.cloudSync?.enabled)return false;const day=new Date().toISOString().slice(0,10);if(state.meta.lastDailyBackup===day)return true;const ok=await cloudBackupV5('GÜNLÜK OTOMATİK');if(ok){state.meta.lastDailyBackup=day;try{localStorage.setItem(LS_KEY,JSON.stringify(state));}catch(_){}cleanupCloudBackupsV6();}return ok;
+    ensureV5State();if(!state.cloudSync?.enabled||state.settings?.backupEnabled===false)return false;const day=new Date().toISOString().slice(0,10);if(state.meta.lastDailyBackup===day)return true;const ok=await cloudBackupV5('GÜNLÜK OTOMATİK');if(ok){state.meta.lastDailyBackup=day;try{localStorage.setItem(LS_KEY,JSON.stringify(state));}catch(_){}cleanupCloudBackupsV6();}return ok;
   }
   async function initCloudSyncV5(){ensureV5State();await cloudPullV5(false);cloudInitializedV5=true;if(state.cloudSync.enabled){if(!state.cloudSync.lastPull)await cloudPushV5(false);try{cloudStreamV5?.close?.();cloudStreamV5=new EventSource(CLOUD_STATE_URL);cloudStreamV5.addEventListener('put',async ev=>{try{const p=JSON.parse(ev.data||'{}');if(p.path!=='/'||!p.data)return;const remote=p.data,rt=new Date(remote?.meta?.updatedAt||0).getTime(),lt=new Date(state?.meta?.updatedAt||0).getTime();if(rt>lt+1200){cloudApplyingV5=true;state=remote;ensureStateShape();ensureV5State();simplifyBankPosV55();ensureBankCariLinksV54();localStorage.setItem(LS_KEY,JSON.stringify(state));cloudApplyingV5=false;render();}}catch(_){}});}catch(_){}}await autoDailyBackupV6();}
 
