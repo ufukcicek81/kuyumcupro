@@ -10,7 +10,7 @@
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.51</title>
+  <title>Asil Kuyumcu Pro V6.52</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -475,7 +475,7 @@ body[data-theme="light"] .nav-search input{background:#f7f8fa;color:#18202a}body
 
 
 /* === V5.18 TEK KUTU OTOMATIK STOK TAMAMLAMA === */
-.sale-search-results{display:none!important}
+.sale-search-results{display:none}
 .sale-inline-help{display:block;margin-top:5px;font-size:11px;color:var(--muted);white-space:nowrap}
 
 /* === V2.9 ASİL CANLI FİYAT ENTEGRASYONU === */
@@ -1187,7 +1187,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     try{
       if(typeof ensureV5State==='function') ensureV5State();
       if(typeof reconcileTransactionLedgerV5==='function') reconcileTransactionLedgerV5();
-      state.meta=state.meta||{}; state.meta.updatedAt=now(); state.meta.appVersion='6.51';
+      state.meta=state.meta||{}; state.meta.updatedAt=now(); state.meta.appVersion='6.52';
       if(typeof syncSystemParametersV648==='function')syncSystemParametersV648();
       localStorage.setItem(LS_KEY, JSON.stringify(state));
     } catch { /* Yerel dosya modunda depolama engellense bile uygulama çalışmaya devam eder. */ }
@@ -1889,7 +1889,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.51</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
+        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.52</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
         <nav class="nav" aria-label="Ana menü">${['dashboard','sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={dashboard:'Ana Menü',sales:'Satış',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
         <details class="more-nav"><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['dashboard','sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
       </aside>
@@ -2230,7 +2230,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function pageSales(){
     const t=saleTotals();
     const standalone=standaloneTradeInState();
-    const saleCur=String(saleDraft.saleCurrency||'TL').toUpperCase(),saleRate=saleCurrencyRate(saleCur),currentCustomer=state.customers.find(c=>c.id===saleDraft.customerId)||state.customers.find(c=>c.id==='CASH'),customerType=String(saleDraft.customerType||currentCustomer?.type||'Müşteri');
+    const saleCur=String(saleDraft.saleCurrency||'TL').toUpperCase(),saleRate=saleCurrencyRate(saleCur),currentCustomer=state.customers.find(c=>c.id===saleDraft.customerId)||state.customers.find(c=>c.id==='CASH');
     const hasPrimaryAction=Boolean(saleDraft.lines.length||(saleDraft.returnItems||[]).length||standalone.active);
     const primaryLabel='İşlem Özeti →';
     const entry=saleDraft.entrySelection||null;
@@ -2255,11 +2255,10 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
           <div class="sale-head-actions"><button class="btn btn-outline" id="saleHistory">Satış Geçmişi</button><button class="btn btn-outline" id="resetSale">Yeni Fiş</button></div>
         </div>
         <div class="simple-operation-bar"><button class="simple-operation sale" id="simpleSaleFocus"><b>Satış</b><span>Müşteriye satış yap</span></button><button class="simple-operation buy" data-special-trade="Ziynet Alış"><b>Alış</b><span>Müşteriden altın / ziynet al</span></button><button class="simple-operation swap" data-pay="Altın / Ziynet"><b>Takas</b><span>Altını satışa mahsup et</span></button></div><div class="form-grid sale-head-grid">
-          <div class="labelled"><label>Cari Cinsi</label><select class="select" id="saleCustomerType">${['Müşteri','Toptancı','Özel'].map(x=>`<option ${customerType===x?'selected':''}>${x}</option>`).join('')}</select></div>
-          <div class="labelled span-2"><label>Cari Hesap</label><select class="select" id="saleCustomerSelect">${saleCustomerCandidates(customerType).map(c=>`<option value="${c.id}" ${c.id===currentCustomer?.id?'selected':''}>${esc(c.code?c.code+' · ':'')}${esc(c.name)}</option>`).join('')}</select><small class="sale-inline-help">Cari cinsine göre hesaplar süzülür. Açık hesap doğrudan seçilen cariye işlenir.</small></div>
+          <div class="labelled span-2"><label>Cari Hesap</label><select class="select" id="saleCustomerSelect">${saleCustomerCandidates('Tümü').map(c=>`<option value="${c.id}" ${c.id===currentCustomer?.id?'selected':''}>${esc(c.code?c.code+' · ':'')}${esc(c.name)}${c.type&&c.id!=='CASH'?' · '+esc(c.type):''}</option>`).join('')}</select><small class="sale-inline-help">Tüm cariler tek listede. Açık hesap doğrudan seçilen cariye işlenir.</small></div>
           <div class="labelled"><label>Satış Cinsi</label><select class="select" id="saleCurrency">${paymentCurrencyOptions().map(x=>`<option ${saleCur===x?'selected':''}>${x}</option>`).join('')}</select></div>
           <div class="labelled"><label>Satan Eleman</label><select class="select" id="salePerson"><option value="">Seçiniz</option>${state.users.filter(u=>u.permissions?.canSell!==false).map(u=>`<option ${saleDraft.salesperson===u.name?'selected':''}>${esc(u.name)}</option>`).join('')}</select></div>
-          <div class="labelled sale-search-wrap"><label>Stok Kodu / Barkod</label><input id="saleProductSearch" class="input" value="${esc(saleDraft.entryQuery||'')}" placeholder="C yaz = ÇEYREK · 34 · barkod için 1657 veya ALY1657" autocomplete="off"><small class="sale-inline-help">Yazdıkça en yakın stok aynı kutuda tamamlanır · Enter = seç</small></div>
+          <div class="labelled sale-search-wrap"><label>Stok Kodu / Barkod</label><input id="saleProductSearch" class="input" value="${esc(saleDraft.entryQuery||'')}" placeholder="22 yaz = eşleşen stokları listele · 1657 veya ALY1657" autocomplete="off"><small class="sale-inline-help">Yazdıkça eşleşen stoklar aşağıda sıralanır; tıklayarak veya ↑ ↓ + Enter ile seç.</small><div id="saleSearchResults" class="sale-search-results"></div></div>
         </div>
         <div class="sale-quick-inline"><span class="mini-label">Hızlı İşlem</span><div class="trade-actions sale-compact-actions"><button class="btn buy" data-special-trade="Ziynet Alış">Ziynet Alış</button><button class="btn sell" data-special-trade="Ziynet Satış">Ziynet Satış</button><button class="btn buy" data-special-trade="Hurda Alış">Hurda Alış</button><button class="btn sell" data-special-trade="Hurda Satış">Hurda Satış</button><button class="btn buy" data-special-trade="Döviz Alış">Döviz Alış</button><button class="btn sell" data-special-trade="Döviz Satış">Döviz Satış</button></div></div>
       </div>
@@ -3449,24 +3448,20 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     };
     return rows.slice().sort((a,b)=>score(a)-score(b)||String(a.label).localeCompare(String(b.label),'tr'))[0]||null;
   }
-  function applyInlineSaleAutocomplete(input){
-    if(!input)return null;
-    const typed=input.value||'';
-    if(!typed.trim())return null;
-    const item=bestInlineSaleSuggestion(typed);
-    if(!item)return null;
-    const completion=saleSuggestionText(item);
-    const typedKey=foldSaleSearchKey(typed);
-    const completionKey=foldSaleSearchKey(completion);
-    // Only inline-complete when the candidate begins with what the user typed.
-    if(!completionKey.startsWith(typedKey))return item;
-    const typedLen=typed.length;
-    input.value=completion;
-    try{input.setSelectionRange(Math.min(typedLen,completion.length),completion.length);}catch(_){ }
-    input.dataset.inlineSuggestionType=item.type;
-    input.dataset.inlineSuggestionId=item.id;
-    saleDraft.entryQuery=completion;
-    return item;
+  function renderSaleSearchDropdown(input){
+    const box=document.getElementById('saleSearchResults');if(!box||!input)return [];
+    const q=String(input.value||'').trim();
+    if(!q){box.classList.remove('show');box.innerHTML='';input.dataset.lookupIndex='0';return [];}
+    const rows=saleLookupSuggestions(q,30);
+    let idx=Number(input.dataset.lookupIndex||0);if(idx<0)idx=0;if(idx>=rows.length)idx=Math.max(0,rows.length-1);input.dataset.lookupIndex=String(idx);
+    box.innerHTML=rows.length?rows.map((r,i)=>`<div class="sale-search-item ${i===idx?'active':''}" data-sale-suggestion-type="${r.type}" data-sale-suggestion-id="${r.id}"><span class="badge ${r.type==='barcode'?'blue':'gold'}">${r.type==='barcode'?'BARKOD':'AÇIK'}</span><div class="sale-search-main"><strong>${esc(r.code?String(r.code)+' · ':'')}${esc(r.label||'')}</strong><small>${esc(r.meta||'')}</small></div><span class="sale-search-stock">${r.type==='barcode'?'1 adet':qty(Number(r.stock||0))}</span></div>`).join(''):`<div class="sale-search-item"><div class="sale-search-main"><strong>Eşleşen stok yok</strong><small>Başka kod veya ürün adı deneyin.</small></div></div>`;
+    box.classList.add('show');
+    box.querySelectorAll('[data-sale-suggestion-id]').forEach(el=>el.addEventListener('pointerdown',ev=>{ev.preventDefault();saleDraft.entrySelection={type:el.dataset.saleSuggestionType,id:el.dataset.saleSuggestionId};saleDraft.entryQuery=input.value.trim();render();setTimeout(()=>{const target=document.getElementById(el.dataset.saleSuggestionType==='open'?'saleEntryAmount':'saleEntryPrice');focusAndSelect(target);keepFieldAboveKeyboard(target,true);},70);}));
+    return rows;
+  }
+  function moveSaleSearchSelection(input,delta){
+    const rows=saleLookupSuggestions(input.value,30);if(!rows.length)return [];
+    let idx=Number(input.dataset.lookupIndex||0);idx=(idx+delta+rows.length)%rows.length;input.dataset.lookupIndex=String(idx);renderSaleSearchDropdown(input);return rows;
   }
   function chooseInlineSaleSuggestion(input){
     if(!input)return false;
@@ -3495,19 +3490,12 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       if(saleDraft.entrySelection?.type==='barcode')target=document.getElementById('saleEntryPrice');
       if(target&&document.activeElement===document.body)focusAndSelect(target);
     },0);
-    const customerTypeEl=document.getElementById('saleCustomerType'),customerSelectEl=document.getElementById('saleCustomerSelect');
-    customerTypeEl?.addEventListener('change',()=>{
-      saleDraft.customerType=customerTypeEl.value;
-      const rows=saleCustomerCandidates(saleDraft.customerType);
-      const next=saleDraft.customerType==='Müşteri'?(rows.find(x=>x.id==='CASH')||rows[0]):rows[0];
-      saleDraft.customerId=next?.id||'CASH';
-      render();setTimeout(()=>document.getElementById('saleCustomerSelect')?.focus(),0);
-    });
+    const customerSelectEl=document.getElementById('saleCustomerSelect');
     customerSelectEl?.addEventListener('change',()=>{
       const selectedCustomer=state.customers.find(c=>c.id===customerSelectEl.value);
       if(!selectedCustomer)return toast('Cari hesap bulunamadı','err');
       saleDraft.customerId=selectedCustomer.id;
-      saleDraft.customerType=selectedCustomer.type||saleDraft.customerType||'Müşteri';
+      saleDraft.customerType=selectedCustomer.type||'Müşteri';
       render();setTimeout(()=>focusAndSelect(document.getElementById('saleCurrency')),0);
     });
     const saleCurEl=document.getElementById('saleCurrency');saleCurEl?.addEventListener('change',e=>{saleDraft.saleCurrency=e.target.value;saleDraft.entrySelection=null;saleDraft.entryQuery='';render();setTimeout(()=>focusAndSelect(document.getElementById('saleProductSearch')),0);});
@@ -3518,19 +3506,24 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
 
     const search=document.getElementById('saleProductSearch');
     search?.addEventListener('input',e=>{
-      // Kullanıcı her harf yazdığında ayrı liste açma; en yakın ürünü aynı kutuda tamamla.
-      delete e.target.dataset.inlineSuggestionId;delete e.target.dataset.inlineSuggestionType;
       saleDraft.entryQuery=e.target.value;
-      applyInlineSaleAutocomplete(e.target);
+      e.target.dataset.lookupIndex='0';
+      renderSaleSearchDropdown(e.target);
     });
+    search?.addEventListener('focus',e=>{if(e.target.value.trim())renderSaleSearchDropdown(e.target);});
     search?.addEventListener('keydown',e=>{
-      if(e.key==='Escape'){e.preventDefault();e.target.value='';saleDraft.entryQuery='';delete e.target.dataset.inlineSuggestionId;delete e.target.dataset.inlineSuggestionType;return;}
+      if(e.key==='Escape'){e.preventDefault();e.target.value='';saleDraft.entryQuery='';document.getElementById('saleSearchResults')?.classList.remove('show');return;}
+      if(e.key==='ArrowDown'){e.preventDefault();moveSaleSearchSelection(e.target,1);return;}
+      if(e.key==='ArrowUp'){e.preventDefault();moveSaleSearchSelection(e.target,-1);return;}
       if(e.key!=='Enter')return;
       e.preventDefault();
       const v=e.target.value.trim();
       if(!v&&(saleDraft.lines.length||(saleDraft.returnItems||[]).length)){const t=saleTotals();const target=Math.abs(t.remain)<=0.01?document.getElementById('finalizeSale'):document.querySelector('[data-pay]');if(target){focusAndSelect(target);return;}}
       if(!v)return;
-      if(!chooseInlineSaleSuggestion(e.target))toast('Ürün bulunamadı. C = Çeyrek, 34 = 22 Bilezik; barkod için 1657 veya ALY1657 yazabilirsiniz.','err');
+      const rows=saleLookupSuggestions(v,30),idx=Math.min(Number(e.target.dataset.lookupIndex||0),Math.max(0,rows.length-1)),item=rows[idx];
+      if(item){saleDraft.entrySelection={type:item.type,id:item.id};saleDraft.entryQuery=v;render();setTimeout(()=>{const target=document.getElementById(item.type==='open'?'saleEntryAmount':'saleEntryPrice');focusAndSelect(target);keepFieldAboveKeyboard(target,true);},70);return;}
+      const found=findUnifiedSaleEntry(v);if(found){saleDraft.entrySelection=found;saleDraft.entryQuery=v;render();return;}
+      toast('Ürün bulunamadı. Örn. 22 yazınca ilgili stoklar listelenir.','err');
     });
 
     const calcEntryPayable=()=>{
@@ -3753,10 +3746,14 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     }
     if(type==='Açık Hesap'){
       if(saleDraft.customerId==='CASH')return toast('Açık hesap için cari müşteri seçin','err');
-      const remain=Math.max(0,t.remain),cur=String(saleDraft.saleCurrency||'TL').toUpperCase(),native=remain/Math.max(.000001,saleCurrencyRate(cur));
-      const decimals=cur==='TL'?2:3;
-      modal('Açık Hesap',`<div class="form-grid"><div class="labelled"><label>Satış / Cari Cinsi</label><input id="ohCur" class="input" value="${esc(cur)}" readonly></div><div class="labelled span-2"><label>Açık Hesaba Yazılacak ${esc(cur)}</label><input id="ohNative" class="input" type="number" step="0.001" value="${native.toFixed(decimals)}"></div><div class="notice span-4"><strong>${esc(cur)} SATIŞ:</strong> Cari hareket doğrudan ${esc(cur)} olarak yazılır. TL karşılığı bu ekranda gösterilmez.</div></div>`,()=>{const n=Number(document.getElementById('ohNative').value||0);if(n<=0)return toast('Açık hesap miktarı girin','err');const tl=n*saleCurrencyRate(cur);saleDraft.payments.push({type:'Açık Hesap',amount:tl,nativeAmount:n,currency:cur,detail:`${qty(n)} ${cur} açık hesap`});closeModal();render();},'AÇIK HESABA YAZ');
-      setTimeout(()=>focusAndSelect(document.getElementById('ohNative')),0);return;
+      const remain=Math.max(0,t.remain),saleCur=String(saleDraft.saleCurrency||'TL').toUpperCase();
+      const tlRate=unit=>unit==='HAS'?Math.max(.000001,Number(state.prices.has?.sell||1)):unit==='TL'?1:Math.max(.000001,saleCurrencyRate(unit));
+      const initialUnit=saleCur==='HAS'?'HAS':'TL',initial=remain/tlRate(initialUnit);
+      modal('Açık Hesap',`<div class="form-grid"><div class="labelled"><label>Açık Hesap Birimi</label><select id="ohUnit" class="select"><option value="TL" ${initialUnit==='TL'?'selected':''}>TL</option><option value="HAS" ${initialUnit==='HAS'?'selected':''}>HAS</option></select></div><div class="labelled span-2"><label id="ohAmountLabel">Açık Hesaba Yazılacak ${initialUnit}</label><input id="ohNative" class="input" type="number" step="0.001" value="${initial.toFixed(initialUnit==='TL'?2:3)}"></div><div class="labelled"><label>TL Karşılığı</label><input id="ohTl" class="input" readonly value="${remain.toFixed(2)}"></div><div class="notice span-4">Açık hesabı <strong>TL veya HAS</strong> olarak seçebilirsin. HAS seçilirse cari bakiyeye doğrudan HAS borcu yazılır.</div></div>`,()=>{const unit=document.getElementById('ohUnit').value,n=Number(document.getElementById('ohNative').value||0);if(n<=0)return toast('Açık hesap miktarı girin','err');const tl=n*tlRate(unit);saleDraft.payments.push({type:'Açık Hesap',amount:tl,nativeAmount:n,currency:unit,detail:`${qty(n)} ${unit} açık hesap`});closeModal();render();},'AÇIK HESABA YAZ');
+      const unitEl=document.getElementById('ohUnit'),amountEl=document.getElementById('ohNative'),tlEl=document.getElementById('ohTl'),label=document.getElementById('ohAmountLabel');
+      const sync=()=>{const unit=unitEl.value,rate=tlRate(unit),currentRemain=Math.max(0,saleTotals().remain);amountEl.value=(currentRemain/rate).toFixed(unit==='TL'?2:3);tlEl.value=currentRemain.toFixed(2);label.textContent=`Açık Hesaba Yazılacak ${unit}`;};
+      unitEl.addEventListener('change',sync);amountEl.addEventListener('input',()=>tlEl.value=(Number(amountEl.value||0)*tlRate(unitEl.value)).toFixed(2));
+      setTimeout(()=>focusAndSelect(amountEl),0);return;
     }
     if(type==='Komisyon'){
       modal('Komisyon',`<div class="form-grid"><div class="labelled"><label>Komisyon Tutarı</label><input id="comAmount" class="input" type="number" step="0.01" value="${Number(saleDraft.commission||0)}"></div><div class="labelled"><label>Oran %</label><input id="comRate" class="input" type="number" step="0.01" value="0"></div><div class="labelled span-2"><label>Gelir Hesabı</label><select id="comAccount" class="select">${state.accountingAccounts.filter(x=>x.accountingNature==='Gelir').map(x=>`<option>${esc(x.name)}</option>`).join('')}</select></div></div>`,()=>{saleDraft.commission=Math.max(0,Number(document.getElementById('comAmount').value||0));closeModal();render();},'KOMİSYON EKLE');const gross=saleDraft.lines.reduce((a,l)=>a+Number(l.total||0),0),a=document.getElementById('comAmount'),r=document.getElementById('comRate');r.addEventListener('input',()=>a.value=(gross*Number(r.value||0)/100).toFixed(2));return;
@@ -5173,7 +5170,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
 
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion='6.51';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
+    state.meta=state.meta||{};state.meta.appVersion='6.52';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
