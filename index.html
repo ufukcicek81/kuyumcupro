@@ -10,7 +10,7 @@
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.46</title>
+  <title>Asil Kuyumcu Pro V6.47</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -1885,7 +1885,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.46</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
+        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.47</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
         <nav class="nav" aria-label="Ana menü">${['dashboard','sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={dashboard:'Ana Menü',sales:'Satış',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
         <details class="more-nav"><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['dashboard','sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
       </aside>
@@ -5651,8 +5651,24 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     var p=receiptPrinterV644(),w=Math.max(58,Math.min(100,Number(p.widthMm||80)));
     var printWidth=w>=80?70:46;
     var company=state.settings.companyName||'ASİL KUYUMCULUK',branch=state.settings.branch||'';
-    var css='@page{size:'+w+'mm auto;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif}.receipt{width:'+printWidth+'mm;max-width:100%;padding:3mm 1mm;overflow-wrap:anywhere;font-size:11px;line-height:1.25}.center{text-align:center}.brand{font-size:17px;font-weight:900;letter-spacing:.3px}.branch{font-size:10px;margin-top:2px}.dash{border-top:1px dashed #000;margin:6px 0}.title{font-size:14px;font-weight:900;text-align:center;margin:5px 0}.rp{display:block;width:100%;padding:3px 0}.rp>*{display:block;max-width:100%;white-space:normal;overflow-wrap:anywhere;word-wrap:break-word;word-break:break-word}.rp span:first-child{color:#222;font-size:9px}.rp b,.rp span:last-child{text-align:left;width:100%}.items{width:100%;table-layout:fixed;border-collapse:collapse;margin-top:4px}.items th,.items td{font-size:10px;padding:3px 1px;border-bottom:1px dotted #999;vertical-align:top}.items th{text-align:left}.items .num{text-align:right}.total{font-size:13px;font-weight:900}.note{font-size:9px;margin-top:7px}.sign{display:flex;justify-content:space-between;gap:12px;margin-top:16px}.sign div{width:48%;border-top:1px solid #000;padding-top:3px;text-align:center;font-size:9px}';
-    return '<!doctype html><html lang="tr"><head><meta charset="utf-8"><style>'+css+'</style></head><body><div class="receipt">'+(p.logoData?'<div class="center"><img alt="Logo" style="display:block;max-width:48mm;max-height:18mm;margin:0 auto 2mm" src="'+esc(p.logoData)+'"></div>':'')+'<div class="center brand">'+esc(company)+'</div>'+(branch?'<div class="center branch">'+esc(branch)+'</div>':'')+(p.contactPhone?'<div class="center branch">Tel: '+esc(p.contactPhone)+'</div>':'')+(p.contactAddress?'<div class="center branch">'+esc(p.contactAddress)+'</div>':'')+'<div class="dash"></div><div class="title">'+esc(title)+'</div>'+receiptPairV644('Belge',docNo||'-',true)+receiptPairV644('Tarih',trDate(date||now()),false)+(party?receiptPairV644('Cari / Müşteri',party,false):'')+'<div class="dash"></div>'+body+'<div class="dash"></div><div class="note center">'+esc(footer||'Bilgi fişidir. Mali değeri olan belge yerine geçmez.')+'</div></div></body></html>';
+    var css='@page{size:'+w+'mm auto;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif}.receipt{width:'+printWidth+'mm;max-width:100%;padding:1.5mm 1mm;overflow-wrap:anywhere;font-size:11px;line-height:1.2}.center{text-align:center}.brand{font-size:14px;font-weight:900;letter-spacing:.3px}.branch{font-size:10px;margin-top:1px}.dash{border-top:1px dashed #000;margin:3px 0}.title{font-size:12px;font-weight:900;text-align:center;margin:3px 0}.rp{display:table;table-layout:fixed;width:100%;padding:1px 0;break-inside:avoid;page-break-inside:avoid}.rp>*{display:table-cell;vertical-align:top;white-space:normal;overflow-wrap:anywhere;word-wrap:break-word;word-break:break-word}.rp span:first-child{color:#222;font-size:10px;width:30%;padding-right:4px}.rp b,.rp span:last-child{text-align:left;width:70%}.rp span:first-child:after{content:":"}.items{width:100%;table-layout:fixed;border-collapse:collapse;margin-top:4px}.items th,.items td{font-size:10px;padding:3px 1px;border-bottom:1px dotted #999;vertical-align:top}.items th{text-align:left}.items .num{text-align:right}.total{font-size:13px;font-weight:900}.note{font-size:9px;margin-top:3px}.sign{display:flex;justify-content:space-between;gap:12px;margin-top:12px}.sign div{width:48%;border-top:1px solid #000;padding-top:3px;text-align:center;font-size:9px}';
+    return '<!doctype html><html lang="tr"><head><meta charset="utf-8"><style>'+css+'</style></head><body><div class="receipt">'+(p.logoData?'<div class="center"><img alt="Logo" style="display:block;max-width:28mm;max-height:10mm;margin:0 auto 1mm" src="'+esc(p.logoData)+'"></div>':'')+'<div class="center brand">'+esc(company)+'</div>'+(branch?'<div class="center branch">'+esc(branch)+'</div>':'')+(p.contactPhone?'<div class="center branch">Tel: '+esc(p.contactPhone)+'</div>':'')+(p.contactAddress?'<div class="center branch">'+esc(p.contactAddress)+'</div>':'')+'<div class="dash"></div><div class="title">'+esc(title)+'</div>'+receiptPairV644('Belge',docNo||'-',true)+receiptPairV644('Tarih',trDate(date||now()),false)+(party?receiptPairV644('Cari / Müşteri',party,false):'')+'<div class="dash"></div>'+body+'<div class="dash"></div><div class="note center">'+esc(footer||'Bilgi fişidir. Mali değeri olan belge yerine geçmez.')+'</div></div></body></html>';
+  }
+  async function sizeReceiptV647(html){
+    var frame=document.createElement('iframe');
+    frame.setAttribute('aria-hidden','true');frame.setAttribute('tabindex','-1');frame.setAttribute('sandbox','allow-same-origin');
+    frame.style.cssText='position:fixed;left:-10000px;top:0;width:100mm;height:1px;border:0;visibility:hidden';
+    document.body.appendChild(frame);
+    try{
+      var doc=frame.contentDocument;doc.open();doc.write(html);doc.close();
+      await Promise.all(Array.from(doc.images).map(function(img){return new Promise(function(resolve){if(img.complete)return resolve();var timer=setTimeout(resolve,2000);img.onload=img.onerror=function(){clearTimeout(timer);resolve();};});}));
+      if(doc.fonts&&doc.fonts.ready)await doc.fonts.ready;
+      var el=doc.querySelector('.receipt');if(!el)throw new Error('Fiş içeriği ölçülemedi');
+      var height=Math.max(45,Math.ceil(Math.max(el.scrollHeight,el.getBoundingClientRect().height)*25.4/96)+5);
+      var width=Math.max(58,Math.min(100,Number(receiptPrinterV644().widthMm||80)));
+      var pageCss='<style>@page{size:'+width+'mm '+height+'mm;margin:0}html,body{width:'+width+'mm;margin:0;padding:0}</style>';
+      return {html:html.replace('</head>',pageCss+'</head>'),width:width,height:height};
+    }finally{frame.remove();}
   }
   async function browserPrintReceiptV644(html){
     var w=window.open('','_blank','width=520,height=720');
@@ -5674,10 +5690,11 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
   async function printReceiptHtmlV644(html,label){
     var p=receiptPrinterV644(),copies=Math.max(1,Number(p.copies||1));
+    var sized=await sizeReceiptV647(html);html=sized.html;
     if(p.mode==='qz'){
       try{
         var q=await qzConnect(),name=await findReceiptPrinterV644(q);
-        var cfg=q.configs.create(name,{units:'mm',margins:{top:0,right:0,bottom:0,left:0},copies:1,colorType:'grayscale',scaleContent:false});
+        var cfg=q.configs.create(name,{units:'mm',size:{width:sized.width,height:sized.height},orientation:'portrait',margins:{top:0,right:0,bottom:0,left:0},copies:1,colorType:'grayscale',scaleContent:false});
         var jobs=[{type:'pixel',format:'html',flavor:'plain',data:html}];
         for(var i=0;i<copies;i++)await q.print(cfg,jobs);
         audit((label||'Fiş')+' yazdırıldı · '+name,'Fiş');
@@ -5757,8 +5774,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     var body='';
     body+=receiptPairV644('Telefon',x.phone||'',false);
     body+=receiptPairV644('Ürün Cinsi',x.itemType||'',true);
-    body+=receiptPairV644('Adet',qty(x.quantity||1),false);
-    body+=receiptPairV644('Ayar / Milyem',x.karat||'',false);
+    body+=receiptPairV644('Adet / Ayar',qty(x.quantity||1)+(x.karat?' / '+x.karat:''),false);
     if(Number(x.grossGram||0))body+=receiptPairV644('Brüt Gram',qty(x.grossGram)+' GR',false);
     if(Number(x.netGram||0))body+=receiptPairV644('Net Gram',qty(x.netGram)+' GR',false);
     if(x.stoneModel)body+=receiptPairV644('Taş / Model / Özellik',x.stoneModel,false);
@@ -5816,7 +5832,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       var old={mode:p.mode,printerName:p.printerName,widthMm:p.widthMm,copies:p.copies};
       try{
         p.mode=document.getElementById('rpMode').value;p.printerName=document.getElementById('rpName').value;p.widthMm=Number(document.getElementById('rpWidth').value||80);p.copies=1;
-        await printReceiptHtmlV644(receiptDocV644('TEST FİŞİ','TEST-'+Date.now(),now(),'','<div class="center"><b>ACLAS / FİŞ YAZICISI TESTİ</b><br>Asil Kuyumcu Pro · Fiş düzeni 2</div>','Test baskısı'),'Test fişi');
+        await printReceiptHtmlV644(receiptDocV644('TEST FİŞİ','TEST-'+Date.now(),now(),'','<div class="center"><b>ACLAS / FİŞ YAZICISI TESTİ</b><br>Asil Kuyumcu Pro · Kısa fiş v6.47</div>','Test baskısı'),'Test fişi');
       }finally{Object.assign(p,old);}
     });
   }
