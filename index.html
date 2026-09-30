@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101113" />
-  <meta name="description" content="Asil Kuyumcu Pro V6.75 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
+  <meta name="description" content="Asil Kuyumcu Pro V6.76 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.75</title>
+  <title>Asil Kuyumcu Pro V6.76</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -1252,7 +1252,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
         state.audits.unshift({id:uid('AUD'),date:now(),user:(typeof session!=='undefined'&&session?.name)||'Sistem',module:'Otomatik Kayıt',action:'Veri değişikliği kaydedildi · '+routeName+' · '+summary,kind:'OTOMATİK'});
         state.audits=state.audits.slice(0,5000);
       }
-      state.meta.appVersion='6.75';
+      state.meta.appVersion='6.76';
       if(typeof syncSystemParametersV648==='function')syncSystemParametersV648();
       localStorage.setItem(LS_KEY, JSON.stringify(state));
     } catch { /* Yerel dosya modunda depolama engellense bile uygulama çalışmaya devam eder. */ }
@@ -1966,7 +1966,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.75</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
+        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.76</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
         <nav class="nav" aria-label="Ana menü">${['dashboard','sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={dashboard:'Ana Menü',sales:'Satış',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
         <details class="more-nav"><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['dashboard','sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
       </aside>
@@ -3050,93 +3050,185 @@ function stockSummaryView(){
       <div class="notice" style="margin-bottom:12px"><strong>Eski / güncel ayrımı:</strong> DEVİR, AÇILIŞ, DV ve Pusula açılış hareketleri Eski / Devir kabul edilir.<br><strong>Tek silme merkezi:</strong> Manuel hareketler doğrudan geri alınır. SAT / AG gibi bağlı hareketlerde <b>Sil</b> derseniz kaynak satış veya altın giriş belgesi, ona bağlı cari/finans/stok kayıtlarıyla birlikte geri alınır. Satılmış ürünü içeren bir altın girişi silmeden önce ilgili satış silinmelidir.</div>
       <div class="table-wrap"><table class="table" id="allCariMovesTable" style="min-width:1180px"><thead><tr><th>Tarih</th><th>Cari</th><th>Kaynak</th><th>İşlem</th><th>Birim</th><th class="num">Borç</th><th class="num">Alacak</th><th>Belge</th><th>Açıklama</th><th>Kullanıcı</th><th>İşlem</th></tr></thead><tbody>${rows.map(x=>{const c=state.customers.find(k=>k.id===x.customerId);const doc=x.sourceDocNo||'';return `<tr data-search="${esc([c?.name,x.type,x.unit,doc,x.description,x.user].join(' ').toLowerCase())}" data-customer="${esc(x.customerId)}" data-customer-type="${esc(c?.type||'')}" data-type="${esc(x.type)}" data-unit="${esc(x.unit)}"><td>${trDate(x.date)}</td><td><strong>${esc(c?.name||'-')}</strong></td><td>${esc(x.type)}</td><td>${esc(x.unit)}</td><td class="num">${qty(x.debit)}</td><td class="num">${qty(x.credit)}</td><td>${doc?`<span class="badge gold">${esc(doc)}</span>`:'-'}</td><td>${esc(x.description)}</td><td>${esc(x.user)}</td><td><button class="btn btn-danger cari-delete" data-cari-all-delete="${x.id}">Sil</button></td></tr>`}).join('')||'<tr><td colspan="10">Cari hareketi yok.</td></tr>'}</tbody></table></div></div>`;
   }
-  const CARI_MAHSUP_EXCLUDES_V675=[
-    'BİROL KOTAN','SAMİ ÇİÇEK','SUZAN ÇİÇEK','EROL MEZARCI','NEZAHAT BAYRAM','OĞUZ TOYSHOP',
-    'ORES GÜMÜŞ','ÇELEBİ GÜMÜŞ','FİRUZE','İPEK KUYUMCULUK','KARDEŞLER KUYUMCULUK',
-    'MODERN KUYUMCULUK','NAMIK GÜMÜŞÇÜ','SAMİH İPEK','İŞ BANKASI','VAKIFBANK'
-  ];
-  function cariMahsupNormV675(v){
-    return String(v||'').toLocaleUpperCase('tr-TR').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+  const CARI_LEGACY_CLEAN_EXCLUDES_V676=["BİROL KOTAN","SAMİ ÇİÇEK","SUZAN CICEK","EROL MEZARCI","NEZAHAT BAYRAM","OGUZ TOYSHOP","CREO GÜMÜŞ","ÇELEBI GÜMÜŞ","FIRUZE","IPEK KUYUMCULUK","KARDEŞLER KUYUMCULUK","MODERN KUYUMCULUK","NAMıK GÜMÜŞÇÜ","SEMIH IPEK","İŞ BANKASI","VAKIFBANK"];
+
+  function cariLegacyNormV676(v){
+    return String(v||'').toLocaleUpperCase('tr-TR').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ı/g,'I').replace(/İ/g,'I').replace(/[^A-Z0-9]+/g,' ').replace(/\s+/g,' ').trim();
   }
-  function cariMahsupProtectedV675(c,lines){
-    if(!c||c.id==='CASH'||c.type==='Banka')return true;
-    const n=cariMahsupNormV675(c.name);
-    return (lines||[]).some(x=>{const p=cariMahsupNormV675(x);return p&&(n===p||n.includes(p)||p.includes(n));});
+
+  function cariLegacyProtectedV676(c,lines){
+    if(!c||c.id==='CASH'||c.type==='Banka'||c.type==='POS'||c.financeAccountId)return true;
+    const n=cariLegacyNormV676(c.name);
+    return (lines||[]).some(x=>{const p=cariLegacyNormV676(x);return p&&(n===p||n.includes(p)||p.includes(n));});
   }
-  function cariMahsupBalanceV675(c,u){
+
+  function cariLegacyBalanceV676(c,u){
     u=String(u||'TL').toUpperCase();
-    if(u==='TL')return Number(cariDisplayTlBalance(c)||0);
+    if(u==='TL')return Number(c.tlBalance||0);
     if(u==='HAS')return Number(c.hasBalance||0);
     return Number(c.otherBalances?.[u]||0);
   }
-  function buildCariMahsupPlanV675(lines){
-    const eligible=(state.customers||[]).filter(c=>!cariMahsupProtectedV675(c,lines));
-    const units=new Set(['TL','HAS']);
-    eligible.forEach(c=>Object.keys(c.otherBalances||{}).forEach(u=>units.add(String(u).toUpperCase())));
-    const plan=[],before=new Map(),after=new Map();
-    eligible.forEach(c=>{
-      const m={};
-      units.forEach(u=>{m[u]=cariMahsupBalanceV675(c,u);});
-      before.set(c.id,{...m});after.set(c.id,{...m});
+
+  function forceCariLegacyBalanceV676(c,u,v){
+    u=String(u||'TL').toUpperCase();v=Number(v||0);
+    const eps=u==='TL'?0.009:0.0004;
+    if(Math.abs(v)<=eps)v=0;
+    if(u==='TL')c.tlBalance=v;
+    else if(u==='HAS')c.hasBalance=v;
+    else{c.otherBalances=c.otherBalances||{};if(v===0)delete c.otherBalances[u];else c.otherBalances[u]=v;}
+  }
+
+  function rollbackWrongCariOffsetsV676(){
+    state.meta=state.meta||{};
+    if(Number(state.meta.wrongCariOffsetsRolledBackV676||0)>=1)return {changed:false,already:true,count:0};
+    const wrong=new Set(['cariMassOffsetV674','cariNetting']);
+    const all=Array.isArray(state.customerMoves)?state.customerMoves:[];
+    const bad=all.filter(m=>wrong.has(String(m.sourceType||'')));
+    let restored=0;
+    bad.forEach(m=>{
+      const c=(state.customers||[]).find(x=>String(x.id)===String(m.customerId));if(!c)return;
+      applyCariBalance(c,String(m.unit||'TL').toUpperCase(),Number(m.credit||0),Number(m.debit||0));
+      restored++;
     });
+    if(bad.length)state.customerMoves=all.filter(m=>!wrong.has(String(m.sourceType||'')));
+    state.meta.cariMassOffsetV674=1;
+    state.meta.wrongCariOffsetsRolledBackV676=1;
+    state.meta.wrongCariOffsetsRollbackV676={date:now(),removedMoves:bad.length,restoredMoves:restored};
+    if(bad.length){
+      state.audits=Array.isArray(state.audits)?state.audits:[];
+      state.audits.unshift({id:uid('AUD'),date:now(),user:'Sistem',module:'Cari',action:`Yanlış v6.74/v6.75 toplu mahsup geri alındı · ${bad.length} yapay hareket kaldırıldı · gerçek cari bakiyeleri geri getirildi.`,kind:'DÜZELTME'});
+    }
+    return {changed:bad.length>0,count:bad.length};
+  }
+
+  function buildCariLegacyCleanupPlanV676(lines){
+    const eligible=(state.customers||[]).filter(c=>!cariLegacyProtectedV676(c,lines));
+    const before=new Map(),after=new Map(),customers=new Map();
+    const units=new Set();
+    eligible.forEach(c=>{
+      const b=cariBalanceBreakdownV674(c),m={};
+      Object.entries(b.legacy||{}).forEach(([u,v])=>{
+        u=String(u||'TL').toUpperCase();v=Number(v||0);
+        if(Math.abs(v)>.000001){m[u]=v;units.add(u);}
+      });
+      if(Object.keys(m).length){before.set(c.id,m);after.set(c.id,{...m});customers.set(c.id,c);}
+    });
+    const pairs=[],totals={};
     [...units].forEach(unit=>{
-      const pos=eligible.map(c=>({c,remain:cariMahsupBalanceV675(c,unit)})).filter(x=>x.remain>.000001).sort((a,b)=>a.remain-b.remain);
-      const neg=eligible.map(c=>({c,remain:cariMahsupBalanceV675(c,unit)})).filter(x=>x.remain<-.000001).sort((a,b)=>Math.abs(a.remain)-Math.abs(b.remain));
+      const pos=[],neg=[];
+      before.forEach((m,id)=>{
+        const v=Number(m[unit]||0),c=customers.get(id);
+        if(v>.000001)pos.push({id,c,remain:v});
+        else if(v<-.000001)neg.push({id,c,remain:-v});
+      });
+      pos.sort((a,b)=>a.remain-b.remain);neg.sort((a,b)=>a.remain-b.remain);
       let i=0,j=0;
       while(i<pos.length&&j<neg.length){
-        const a=pos[i],b=neg[j],amount=Math.min(a.remain,-b.remain);
+        const p=pos[i],n=neg[j],amount=Math.min(p.remain,n.remain);
         if(amount>.000001){
-          plan.push({unit,amount,debtId:a.c.id,debtName:a.c.name,creditId:b.c.id,creditName:b.c.name});
-          a.remain-=amount;b.remain+=amount;
-          after.get(a.c.id)[unit]-=amount;
-          after.get(b.c.id)[unit]+=amount;
+          pairs.push({unit,amount,debtId:p.id,debtName:p.c.name,creditId:n.id,creditName:n.c.name});
+          after.get(p.id)[unit]=Number(after.get(p.id)[unit]||0)-amount;
+          after.get(n.id)[unit]=Number(after.get(n.id)[unit]||0)+amount;
+          p.remain-=amount;n.remain-=amount;
+          totals[unit]=Number(totals[unit]||0)+amount;
         }
-        if(a.remain<=.000001)i++;
-        if(b.remain>=-.000001)j++;
+        if(p.remain<=.000001)i++;
+        if(n.remain<=.000001)j++;
       }
     });
-    const hadBalance=c=>Object.values(before.get(c.id)||{}).some(v=>Math.abs(Number(v||0))>.000001);
-    const isZero=c=>Object.values(after.get(c.id)||{}).every(v=>Math.abs(Number(v||0))<=.000001);
-    const zeroed=eligible.filter(c=>hadBalance(c)&&isZero(c));
-    const totals={};
-    plan.forEach(x=>totals[x.unit]=Number(totals[x.unit]||0)+Number(x.amount||0));
-    return {plan,eligible,zeroed,totals};
+    const touchedIds=new Set();
+    pairs.forEach(x=>{touchedIds.add(x.debtId);touchedIds.add(x.creditId);});
+    let zeroedAccounts=0;
+    touchedIds.forEach(id=>{
+      const b=before.get(id)||{},a=after.get(id)||{};
+      const had=Object.values(b).some(v=>Math.abs(Number(v||0))>.000001);
+      const zero=Object.keys(b).every(u=>Math.abs(Number(a[u]||0))<=.000001);
+      if(had&&zero)zeroedAccounts++;
+    });
+    return {pairs,totals,before,after,customers,touchedIds,zeroedAccounts};
   }
-  function openCariMahsupV675(){
-    const defaults=CARI_MAHSUP_EXCLUDES_V675.join('\n');
-    modal('Cari Borç / Alacak Mahsup',`<div class="notice"><strong>Toplu mahsup:</strong> Aynı cinsteki borç ve alacak bakiyeleri birbirine eşleştirilir. Sıfırlanabilen cariler sıfırlanır; kalan fark olduğu yerde kalır.<br><small>Banka tipindeki hesaplar ve PEŞİN MÜŞTERİ otomatik korunur. Aşağıdaki fotoğraf listesindeki hesaplara da dokunulmaz.</small></div>
-      <div class="labelled" style="margin-top:12px"><label>Korunacak / mahsup edilmeyecek hesaplar</label><textarea id="cariMahsupExcludes" class="textarea" rows="9">${esc(defaults)}</textarea></div>
-      <div id="cariMahsupPreview" class="notice" style="margin-top:12px"></div>`,()=>{
-        const lines=(document.getElementById('cariMahsupExcludes')?.value||'').split(/\n+/).map(x=>x.trim()).filter(Boolean);
-        const p=buildCariMahsupPlanV675(lines);
-        if(!p.plan.length)return toast('Eşleştirilebilecek borç / alacak bulunamadı','err');
-        try{localStorage.setItem(LOCAL_EMERGENCY_BACKUP_KEY,JSON.stringify(state));}catch(_){}
-        const batch='MAHSUP-'+state.activePeriod+'-'+String(Date.now()).slice(-8);
-        p.plan.forEach((x,k)=>{
-          const borclu=state.customers.find(c=>c.id===x.debtId),alacakli=state.customers.find(c=>c.id===x.creditId);
-          if(!borclu||!alacakli)return;
-          applyCariBalance(borclu,x.unit,0,x.amount);
-          applyCariBalance(alacakli,x.unit,x.amount,0);
-          const ref=batch+'-'+String(k+1).padStart(3,'0');
-          state.customerMoves.unshift({id:uid('CM'),customerId:borclu.id,period:state.activePeriod,date:now(),code:'MHS',type:'CARİ MAHSUP',unit:x.unit,debit:0,credit:x.amount,description:`${ref} · ${alacakli.name} alacağı ile mahsup`,user:session.name,sourceType:'cariNetting',sourceDocNo:batch,counterCustomerId:alacakli.id});
-          state.customerMoves.unshift({id:uid('CM'),customerId:alacakli.id,period:state.activePeriod,date:now(),code:'MHS',type:'CARİ MAHSUP',unit:x.unit,debit:x.amount,credit:0,description:`${ref} · ${borclu.name} borcu ile mahsup`,user:session.name,sourceType:'cariNetting',sourceDocNo:batch,counterCustomerId:borclu.id});
+
+  async function applyCariLegacyCleanupV676(lines){
+    const p=buildCariLegacyCleanupPlanV676(lines);
+    if(!p.pairs.length)return {ok:false,msg:'Eşleştirilebilecek eski/devir borç ve alacak bulunamadı.'};
+    try{localStorage.setItem(LOCAL_EMERGENCY_BACKUP_KEY,JSON.stringify(state));}catch(_){}
+    if(state.cloudSync?.enabled)await cloudBackupV5('ESKİ BAKİYE TEMİZLİĞİ ÖNCESİ').catch(()=>false);
+    const batch='ESKI-TEMIZ-'+state.activePeriod+'-'+String(Date.now()).slice(-8);
+    const removeIds=new Set(),archiveMoves=[],archiveCustomers=[];
+    p.touchedIds.forEach(id=>{
+      const c=p.customers.get(id);if(!c)return;
+      archiveCustomers.push({id:c.id,name:c.name,tlBalance:Number(c.tlBalance||0),hasBalance:Number(c.hasBalance||0),otherBalances:{...(c.otherBalances||{})},openingBalances:{...(c.openingBalances||{})}});
+      const b=p.before.get(id)||{},a=p.after.get(id)||{};
+      Object.keys(b).forEach(unit=>{
+        const oldLegacy=Number(b[unit]||0),target=Math.abs(Number(a[unit]||0))<.000001?0:Number(a[unit]||0);
+        if(Math.abs(target-oldLegacy)<=.000001)return;
+        const oldCurrent=cariLegacyBalanceV676(c,unit);
+        forceCariLegacyBalanceV676(c,unit,oldCurrent+(target-oldLegacy));
+        c.openingBalances=c.openingBalances||{};
+        if(target===0)delete c.openingBalances[unit];else c.openingBalances[unit]=target;
+        (state.customerMoves||[]).forEach(m=>{
+          if(String(m.customerId)===String(c.id)&&String(m.unit||'TL').toUpperCase()===unit&&isLegacyCariMoveV674(m)){
+            removeIds.add(m.id);archiveMoves.push({...m});
+          }
         });
-        const detail=Object.entries(p.totals).map(([u,v])=>u==='TL'?money(v):qty(v)+' '+u).join(' · ');
-        audit(`${batch}: ${p.plan.length} eşleştirme · ${p.zeroed.length} cari tamamen sıfırlandı · ${detail}`,'Cari Mahsup');
-        closeModal();save();render();toast(`Mahsup tamamlandı: ${p.zeroed.length} cari sıfırlandı`,'ok');
-      },'MAHSUP ET');
-    const ta=document.getElementById('cariMahsupExcludes'),pv=document.getElementById('cariMahsupPreview');
+      });
+    });
+    state.customerMoves=(state.customerMoves||[]).filter(m=>!removeIds.has(m.id));
+    let seq=0;
+    p.touchedIds.forEach(id=>{
+      const c=p.customers.get(id);if(!c)return;
+      const a=p.after.get(id)||{};
+      Object.entries(a).forEach(([unit,targetRaw])=>{
+        const target=Math.abs(Number(targetRaw||0))<.000001?0:Number(targetRaw||0);
+        if(target===0)return;
+        seq++;
+        const old=archiveMoves.filter(m=>String(m.customerId)===String(c.id)&&String(m.unit||'TL').toUpperCase()===String(unit).toUpperCase()).sort((x,y)=>String(x.date||'').localeCompare(String(y.date||'')))[0];
+        state.customerMoves.unshift({
+          id:uid('CM'),customerId:c.id,period:state.activePeriod,date:old?.date||now(),code:'DV',type:'DEVİR / AÇILIŞ',unit:String(unit).toUpperCase(),
+          debit:target>0?target:0,credit:target<0?Math.abs(target):0,
+          description:'Eski bakiye temizliği sonrası kalan gerçek devir bakiyesi',user:'Sistem',
+          sourceType:'openingCleanupV676',sourceDocNo:`${batch}-${String(seq).padStart(3,'0')}`
+        });
+      });
+    });
+    state.meta=state.meta||{};
+    state.meta.cariLegacyCleanupArchivesV676=Array.isArray(state.meta.cariLegacyCleanupArchivesV676)?state.meta.cariLegacyCleanupArchivesV676:[];
+    state.meta.cariLegacyCleanupArchivesV676.push({batch,date:now(),customers:archiveCustomers,moves:archiveMoves,excluded:[...lines]});
+    if(state.meta.cariLegacyCleanupArchivesV676.length>3)state.meta.cariLegacyCleanupArchivesV676=state.meta.cariLegacyCleanupArchivesV676.slice(-3);
+    state.meta.lastCariLegacyCleanupV676={batch,date:now(),pairs:p.pairs.length,touchedAccounts:p.touchedIds.size,zeroedAccounts:p.zeroedAccounts,totals:p.totals};
+    state.audits=Array.isArray(state.audits)?state.audits:[];
+    state.audits.unshift({id:uid('AUD'),date:now(),user:session?.name||'Sistem',module:'Cari',action:`${batch}: yalnız eski/devir bakiyeleri temizlendi · ${p.pairs.length} eşleşme · ${p.zeroedAccounts} cari eski bakiyesi sıfırlandı · güncel işlemler korunmuştur.`,kind:'ESKİ BAKİYE TEMİZLİĞİ'});
+    save();
+    if(state.cloudSync?.enabled)await cloudPushV5(false).catch(()=>false);
+    return {ok:true,plan:p,batch};
+  }
+
+  function openCariLegacyCleanupV676(){
+    const defaults=CARI_LEGACY_CLEAN_EXCLUDES_V676.join('\n');
+    modal('Eski / Devir Bakiye Temizliği',`<div class="notice"><strong>Bu işlem yeni mahsup hareketi oluşturmaz.</strong> Yalnız geçmişten taşınmış DEVİR / AÇILIŞ / Pusula eski bakiyelerini aynı cins içinde birbirine karşı temizler. Güncel satış, tahsilat, hurda, banka ve diğer yeni işlemlere dokunmaz.<br><small>Örnek: 100 HAS eski borç + 100 HAS eski alacak → ikisi de 0. 100'e karşı 70 varsa 70 kapanır, 30 gerçek bakiye kalır. Bilanço net toplamı değişmez.</small></div>
+      <div class="labelled" style="margin-top:12px"><label>Kesinlikle dokunulmayacak hesaplar</label><textarea id="cariLegacyExcludesV676" class="textarea" rows="9">${esc(defaults)}</textarea></div>
+      <div id="cariLegacyPreviewV676" class="notice" style="margin-top:12px"></div>`,async()=>{
+        const lines=(document.getElementById('cariLegacyExcludesV676')?.value||'').split(/\n+/).map(x=>x.trim()).filter(Boolean);
+        const p=buildCariLegacyCleanupPlanV676(lines);
+        if(!p.pairs.length)return toast('Temizlenebilecek eski/devir bakiye eşleşmesi bulunamadı','err');
+        const amountText=Object.entries(p.totals).map(([u,v])=>u==='TL'?money(v):qty(v)+' '+u).join(' · ');
+        if(!confirm(`${p.pairs.length} eski bakiye eşleşmesi temizlenecek.\n${p.zeroedAccounts} hesabın eski bakiyesi tamamen sıfırlanacak.\nToplam: ${amountText}\n\nGüncel işlemler ve hariç listedeki hesaplar korunacak. Devam edilsin mi?`))return;
+        const r=await applyCariLegacyCleanupV676(lines);
+        if(!r.ok)return toast(r.msg,'err');
+        closeModal();render();toast(`Eski bakiye temizliği tamamlandı: ${r.plan.zeroedAccounts} hesap sıfırlandı`,'ok');
+      },'ESKİ BAKİYELERİ TEMİZLE');
+    const ta=document.getElementById('cariLegacyExcludesV676'),pv=document.getElementById('cariLegacyPreviewV676');
     const refresh=()=>{
-      const lines=(ta?.value||'').split(/\n+/).map(x=>x.trim()).filter(Boolean),p=buildCariMahsupPlanV675(lines);
-      const matched=(state.customers||[]).filter(c=>cariMahsupProtectedV675(c,lines)).filter(c=>c.id!=='CASH'&&c.type!=='Banka').map(c=>c.name);
+      const lines=(ta?.value||'').split(/\n+/).map(x=>x.trim()).filter(Boolean),p=buildCariLegacyCleanupPlanV676(lines);
       const amounts=Object.entries(p.totals).filter(([,v])=>Math.abs(Number(v||0))>.000001).map(([u,v])=>u==='TL'?money(v):qty(v)+' '+u).join(' · ')||'—';
-      if(pv)pv.innerHTML=`<strong>Önizleme:</strong> ${p.plan.length} mahsup eşleşmesi · <b>${p.zeroed.length} cari tamamen sıfırlanacak</b><br>Mahsup toplamı: ${esc(amounts)}<br><small>Fotoğraf listesinden sistemde eşleşen korumalı hesap: ${matched.length}. İşlem sadece aynı birim içinde yapılır (TL↔TL, HAS↔HAS vb.).</small>`;
+      const samples=p.pairs.slice(0,8).map(x=>`${x.debtName} ↔ ${x.creditName}: ${x.unit==='TL'?money(x.amount):qty(x.amount)+' '+x.unit}`).join('<br>');
+      if(pv)pv.innerHTML=`<strong>Önizleme:</strong> ${p.pairs.length} eski bakiye eşleşmesi · <b>${p.zeroedAccounts} hesabın eski bakiyesi tamamen kapanacak</b><br>Temizlenecek toplam: ${esc(amounts)}<br><strong>Bilanço net değişim: 0</strong><br><small>Güncel hareketlere dokunulmaz. ${samples?'<br><br>'+samples:''}</small>`;
     };
     ta?.addEventListener('input',refresh);refresh();
   }
 
   function pageCustomers(){
-    return `<div class="page-title"><div><h1>Cari Hesap İşlemleri</h1><p>Cari, kasa ve finans tek işlem motorunda bağlı çalışır. NT/NO işlemleri kasayı otomatik etkiler.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline ${cariView==='cards'?'active':''}" data-cari-view="cards">Cari Kartları</button><button class="btn btn-outline ${cariView==='moves'?'active':''}" data-cari-view="moves">Tüm Cari Hareketler</button><button class="btn btn-outline" id="cariNettingV675">⇄ Borç / Alacak Mahsup</button><button class="btn btn-primary" id="newCustomer">+ Cari Aç</button></div></div>
+    return `<div class="page-title"><div><h1>Cari Hesap İşlemleri</h1><p>Cari, kasa ve finans tek işlem motorunda bağlı çalışır. NT/NO işlemleri kasayı otomatik etkiler.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline ${cariView==='cards'?'active':''}" data-cari-view="cards">Cari Kartları</button><button class="btn btn-outline ${cariView==='moves'?'active':''}" data-cari-view="moves">Tüm Cari Hareketler</button><button class="btn btn-outline" id="cariLegacyCleanupV676">🧹 Eski Bakiye Temizliği</button><button class="btn btn-primary" id="newCustomer">+ Cari Aç</button></div></div>
       <div class="notice"><strong>Tek Cari İşlem Ekranı:</strong> ${CARI_MOVE_TYPES.map(x=>x.code).join(' · ')}. Tüm hareketler aynı ekranda Cins/Tutar/Kur → Karşılığı → BORÇ/ALACAK mantığıyla çalışır; altın ve hurda işlemlerinde stok alanları aynı ekranın içinde açılır.</div>
       ${cariView==='moves'?customerMovesCenterView():customerCardsView()}`;
   }
@@ -4956,7 +5048,7 @@ function stockSummaryView(){
 
   function bindCustomers(){
     document.getElementById('newCustomer')?.addEventListener('click',()=>openAccountCardModal());
-    document.getElementById('cariNettingV675')?.addEventListener('click',openCariMahsupV675);
+    document.getElementById('cariLegacyCleanupV676')?.addEventListener('click',openCariLegacyCleanupV676);
     document.querySelectorAll('[data-cari-view]').forEach(b=>b.addEventListener('click',()=>{cariView=b.dataset.cariView;render();}));
     document.querySelectorAll('[data-cari-move]').forEach(b=>b.addEventListener('click',()=>openCariMove(b.dataset.cariMove)));
     document.querySelectorAll('[data-cari-detail]').forEach(b=>b.addEventListener('click',()=>openCariDetail(b.dataset.cariDetail)));
@@ -5991,7 +6083,7 @@ function stockSummaryView(){
   }
 
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion='6.75';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
+    state.meta=state.meta||{};state.meta.appVersion='6.76';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
@@ -6237,16 +6329,10 @@ function stockSummaryView(){
       await cloudBackupV5('AÇILIŞ ÖNCESİ GÜVENLİK').catch(()=>false);
     }
     await cloudPullV5(false);
-    if(Number(state.meta?.cariMassOffsetV674||0)<1){
-      try{localStorage.setItem('asil_kuyumcu_pre_cari_offset_v674',JSON.stringify(state));}catch(_){}
-      await cloudBackupV5('TOPLU CARİ MAHSUP ÖNCESİ').catch(()=>false);
-      const offsetResult=applyCariMassOffsetV674();
-      if(offsetResult.changed){
-        save(true);
-        await cloudPushV5(false).catch(()=>false);
-      }else{
-        save(false);
-      }
+    const wrongCariRollbackV676=rollbackWrongCariOffsetsV676();
+    if(wrongCariRollbackV676.changed){
+      save(true);
+      await cloudPushV5(false).catch(()=>false);
     }
     const pinMigrated=await migrateLegacyPinsV664().catch(()=>false);
     if(pinMigrated)save(false);
@@ -6387,7 +6473,7 @@ function stockSummaryView(){
     state.invoiceSettings.companyTitle=state.invoiceSettings.companyTitle||state.settings.companyName||'ASİL KUYUMCULUK';
     state.invoiceSettings.defaultDocumentType=state.invoiceSettings.defaultDocumentType||'AUTO';
     if(!Array.isArray(state.invoiceRecords))state.invoiceRecords=[];
-    state.meta=state.meta||{};state.meta.appVersion='6.75';
+    state.meta=state.meta||{};state.meta.appVersion='6.76';
   }
   function maskIdNo(v){v=String(v||'').replace(/\D/g,'');if(v.length<5)return v||'—';return v.slice(0,2)+'*****'+v.slice(-2);}
   function identityById(id){return identityRecords.find(x=>x.id===id)||null;}
