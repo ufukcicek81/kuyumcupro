@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101113" />
-  <meta name="description" content="Asil Kuyumcu Pro V6.70 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
+  <meta name="description" content="Asil Kuyumcu Pro V6.71 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.70</title>
+  <title>Asil Kuyumcu Pro V6.71</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -1032,6 +1032,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   const toastRoot = document.getElementById('toast-root');
   const YEARS = Array.from({length: 16}, (_,i) => 2027 - i);
   const LS_KEY = 'asil_kuyumcu_pro_v4_real';
+  const LOCAL_EMERGENCY_BACKUP_KEY = 'asil_kuyumcu_pro_emergency_backup_v1';
   const DATA_REVISION = 'pusula-real-20260917-r2';
   const PUSULA_SUPPLIERS_V51=[{"code":"1136","name":"AHMET MURAT ÜRKER - GÜMÜŞ","balances":{"USD":-93.0}},{"code":"1046","name":"ALFA KUTU","balances":{"TL":2000.0}},{"code":"674","name":"AŞKıN ALYANS","balances":{"HAS":0.28}},{"code":"988","name":"BESAY KUYUMCULUK","balances":{"HAS":-1.4}},{"code":"998","name":"BURAK ÇELİK GÜMÜŞ","balances":{"USD":-125.43}},{"code":"483","name":"CARUZA","balances":{"HAS":-3.53}},{"code":"980","name":"CREO GÜMÜŞ","balances":{"USD":-93.42}},{"code":"1127","name":"ÇELEBI GÜMÜŞ","balances":{"USD":-759.88}},{"code":"1116","name":"FIRUZE","balances":{"HAS":0.06}},{"code":"900","name":"IPEK KUYUMCULUK","balances":{"HAS":-79.08}},{"code":"449","name":"KARDEŞLER KUYUMCULUK","balances":{"HAS":-9.16}},{"code":"358","name":"KONYALI SAAT","balances":{"TL":-1117.53}},{"code":"353","name":"LELY ALYANS","balances":{"HAS":-10.06}},{"code":"943","name":"MODERN KUYUMCULUK","balances":{"HAS":-10.26}},{"code":"1000","name":"NAMıK GÜMÜŞÇÜ","balances":{"USD":-8.85}},{"code":"1172","name":"NAZ GOLD","balances":{"HAS":-0.3}},{"code":"390","name":"NUR KUTU","balances":{"TL":-75.0}},{"code":"1051","name":"PLATıN SAKARYA","balances":{"HAS":0.04}},{"code":"360","name":"REVELLO","balances":{"USD":-310.0}},{"code":"901","name":"SEMIH IPEK","balances":{"HAS":-9.39}},{"code":"796","name":"SUN ALYANS","balances":{"HAS":-9.31}},{"code":"862","name":"TEMIZ TURK KUYUMCULUK","balances":{"HAS":-0.04}},{"code":"970","name":"UP WATCH","balances":{"TL":-798.9}},{"code":"984","name":"VITRIN ÜRÜNLERI","balances":{"22":1.67,"HAS":-21.48,"TL":-10430.0,"USD":-80.0}},{"code":"987","name":"YAŞAR GOLD","balances":{"HAS":-11.68}}];
   const SESSION_KEY = 'asil_kuyumcu_pro_session';
@@ -1176,12 +1177,10 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
 
   let state = load();
   ensureStateShape();
-  // Gerçek Pusula verisi sayım kontrolü. Harici data klasörü yüklenmese bile veri index içine gömülüdür.
-  if(state?.meta?.dataRevision !== DATA_REVISION || state.stocks.length < 1600 || state.customers.length < 80){
-    state = seedState();
-    ensureStateShape();
-    try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch {}
-  }
+  // Kullanıcı verisini sürüm/stok/cari sayısına bakarak ASLA sıfırlama.
+  // Güncelleme geldiğinde mevcut satış, cari, stok ve hareket kayıtları korunur.
+  state.meta=state.meta||{};
+  state.meta.dataRevision=state.meta.dataRevision||DATA_REVISION;
   ensureV5State();
   simplifyBankPosV55();
   ensureBankCariLinksV54();
@@ -1215,21 +1214,26 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       const raw = localStorage.getItem(LS_KEY);
       if(!raw){
         localStorage.setItem(LS_KEY, JSON.stringify(fresh));
-        try { localStorage.removeItem('asil_kuyumcu_pro_v1'); } catch {}
         return fresh;
       }
       const saved = JSON.parse(raw);
-      const realDataOk = saved?.meta?.dataRevision === DATA_REVISION
-        && Array.isArray(saved.stocks) && saved.stocks.length >= 1600
-        && Array.isArray(saved.customers) && saved.customers.length >= 80;
-      if(!realDataOk){
-        // V4.0 ve önceki deneme kayıtlarını bir kereye mahsus tamamen sıfırla.
-        localStorage.setItem(LS_KEY, JSON.stringify(fresh));
-        try { localStorage.removeItem('asil_kuyumcu_pro_v1'); } catch {}
-        return fresh;
-      }
+      if(!saved || typeof saved!=='object') throw new Error('Geçersiz yerel veri');
+      // Her açılışta mevcut verinin acil durum kopyasını tut.
+      // Bu kopya kod güncellemesinden etkilenmez ve mevcut veri bozulursa kurtarma için kalır.
+      try { localStorage.setItem(LOCAL_EMERGENCY_BACKUP_KEY, raw); } catch {}
       return saved;
     } catch {
+      // Ana kayıt okunamazsa önce acil durum kopyasını dene; onu da okuyamazsak ilk kurulum verisine dön.
+      try {
+        const emergency = localStorage.getItem(LOCAL_EMERGENCY_BACKUP_KEY);
+        if(emergency){
+          const recovered = JSON.parse(emergency);
+          if(recovered && typeof recovered==='object'){
+            localStorage.setItem(LS_KEY, emergency);
+            return recovered;
+          }
+        }
+      } catch {}
       try { localStorage.setItem(LS_KEY, JSON.stringify(fresh)); } catch {}
       return fresh;
     }
@@ -1238,7 +1242,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     try{
       if(typeof ensureV5State==='function') ensureV5State();
       if(typeof reconcileTransactionLedgerV5==='function') reconcileTransactionLedgerV5();
-      state.meta=state.meta||{}; if(touchUpdated)state.meta.updatedAt=now(); state.meta.appVersion='6.70';
+      state.meta=state.meta||{}; if(touchUpdated)state.meta.updatedAt=now(); state.meta.appVersion='6.71';
       if(typeof syncSystemParametersV648==='function')syncSystemParametersV648();
       localStorage.setItem(LS_KEY, JSON.stringify(state));
     } catch { /* Yerel dosya modunda depolama engellense bile uygulama çalışmaya devam eder. */ }
@@ -1963,7 +1967,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.70</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
+        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.71</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
         <nav class="nav" aria-label="Ana menü">${['dashboard','sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={dashboard:'Ana Menü',sales:'Satış',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
         <details class="more-nav"><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['dashboard','sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
       </aside>
@@ -3000,7 +3004,7 @@ function stockSummaryView(){
   function pageStocks(){
     const rows=state.stocks.filter(x=>x.period===state.activePeriod && x.status!=='Satıldı');
     let body=stockSummaryView(); if(stockView==='list') body=stockListView(rows); if(stockView==='cards') body=stockCardsView(); if(stockView==='labels') body=labelsView(rows); if(stockView==='moves') body=movementsView();
-    return `<div class="page-title"><div><h1>Stok Yönetimi</h1><p>Pusula düzeni: açık stok + barkodlu stok + hurda + kasa/POS tek merkezde.</p></div><span class="badge gold">V6.14 · Tüm Barkodlar + Kısa Kod Arama</span></div>${stockHeaderTabs()}${body}`;
+    return `<div class="page-title"><div><h1>Stok Yönetimi</h1><p>Pusula düzeni: açık stok + barkodlu stok + hurda + kasa/POS tek merkezde.</p></div><span class="badge gold">Tüm Barkodlar + Kısa Kod Arama</span></div>${stockHeaderTabs()}${body}`;
   }
 
   function customerCardsView(){
@@ -5729,7 +5733,7 @@ function stockSummaryView(){
     document.getElementById('dayCloseV6')?.addEventListener('click',openDayCloseV6);
     document.getElementById('exportReport')?.addEventListener('click',()=>{
       const r=reportStats(), sv=stockValuationReport(), aging=cariAgingReport(), expenses=reportExpenseGroups(), personnel=personnelProfitRows(r.sales), pos=managementPositionReport(), health=systemHealthReport();
-      const rows=[['ASIL KUYUMCU PRO V6.7 — HAS YÖNETİM RAPORU'],['Dönem',reportFilters.range==='month'?reportFilters.month:state.activePeriod],[],['ÖZET','HAS','TL'],['Satış Karşılığı',r.revenueHas.toFixed(4),r.revenueTl.toFixed(2)],['Satılan Mal Maliyeti',r.cogsHas.toFixed(4),(r.cogsHas*r.closeRate).toFixed(2)],['Brüt Kâr',r.grossHas.toFixed(4),(r.grossHas*r.closeRate).toFixed(2)],['Gider + POS',(r.expHas+r.feeHas).toFixed(4),(r.expTl+r.feeTl).toFixed(2)],['Döviz Gerçekleşen K/Z',r.realizedFxPlHas.toFixed(4),r.realizedFxPlTl.toFixed(2)],['NET KÂR',r.netHas.toFixed(4),r.adjustedTl.toFixed(2)],['Değerleme Farkı','',r.valuationDiff.toFixed(2)],[],['STOK DEĞERLEME','HAS'],['Barkodlu',sv.barcodeCost.toFixed(4)],['Açık/Barkodsuz',sv.openCost.toFixed(4)],['Hurda',sv.scrapCost.toFixed(4)],['Toplam',sv.totalCost.toFixed(4)],[],['YÖNETİM POZİSYONU','HAS'],['Fiziksel Altın',pos.sv.totalPhysical.toFixed(4)],['Cari HAS Net',Number(pos.cari.HAS||0).toFixed(4)],['Parasal Pozisyon HAS',pos.monetaryHas.toFixed(4)],['NET POZİSYON',pos.netHas.toFixed(4)],[],['SİSTEM SAĞLIĞI','Seviye','Açıklama'],...health.issues.map(x=>[x.title,x.level,x.detail]),[],['SATIŞLAR','Tarih','Belge','Müşteri','Personel','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS','Durum'],...r.sales.map(s=>['',trDate(s.date),s.docNo||s.id,state.customers.find(c=>c.id===s.customerId)?.name||'',s.salesperson,Number(s.total||0).toFixed(2),saleRevenueHas(s).toFixed(4),saleCostHas(s).toFixed(4),(saleRevenueHas(s)-saleCostHas(s)).toFixed(4),s.status]),[],['PERSONEL','Fiş','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS'],...personnel.map(x=>[x.name,x.count,x.salesTl.toFixed(2),x.revenueHas.toFixed(4),x.costHas.toFixed(4),x.profitHas.toFixed(4)]),[],['CARİ YAŞLANDIRMA','Tür','Bakiye','TL Eşdeğer','En Eski Gün'],...aging.details.map(x=>[x.name,x.type,x.parts,x.totalTl.toFixed(2),x.oldest]),[],['BANKA/POS GİDERLERİ','Hareket','TL'],...expenses.map(x=>[x.name,x.count,x.tl.toFixed(2)])];
+      const rows=[['ASIL KUYUMCU PRO V6.71 — HAS YÖNETİM RAPORU'],['Dönem',reportFilters.range==='month'?reportFilters.month:state.activePeriod],[],['ÖZET','HAS','TL'],['Satış Karşılığı',r.revenueHas.toFixed(4),r.revenueTl.toFixed(2)],['Satılan Mal Maliyeti',r.cogsHas.toFixed(4),(r.cogsHas*r.closeRate).toFixed(2)],['Brüt Kâr',r.grossHas.toFixed(4),(r.grossHas*r.closeRate).toFixed(2)],['Gider + POS',(r.expHas+r.feeHas).toFixed(4),(r.expTl+r.feeTl).toFixed(2)],['Döviz Gerçekleşen K/Z',r.realizedFxPlHas.toFixed(4),r.realizedFxPlTl.toFixed(2)],['NET KÂR',r.netHas.toFixed(4),r.adjustedTl.toFixed(2)],['Değerleme Farkı','',r.valuationDiff.toFixed(2)],[],['STOK DEĞERLEME','HAS'],['Barkodlu',sv.barcodeCost.toFixed(4)],['Açık/Barkodsuz',sv.openCost.toFixed(4)],['Hurda',sv.scrapCost.toFixed(4)],['Toplam',sv.totalCost.toFixed(4)],[],['YÖNETİM POZİSYONU','HAS'],['Fiziksel Altın',pos.sv.totalPhysical.toFixed(4)],['Cari HAS Net',Number(pos.cari.HAS||0).toFixed(4)],['Parasal Pozisyon HAS',pos.monetaryHas.toFixed(4)],['NET POZİSYON',pos.netHas.toFixed(4)],[],['SİSTEM SAĞLIĞI','Seviye','Açıklama'],...health.issues.map(x=>[x.title,x.level,x.detail]),[],['SATIŞLAR','Tarih','Belge','Müşteri','Personel','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS','Durum'],...r.sales.map(s=>['',trDate(s.date),s.docNo||s.id,state.customers.find(c=>c.id===s.customerId)?.name||'',s.salesperson,Number(s.total||0).toFixed(2),saleRevenueHas(s).toFixed(4),saleCostHas(s).toFixed(4),(saleRevenueHas(s)-saleCostHas(s)).toFixed(4),s.status]),[],['PERSONEL','Fiş','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS'],...personnel.map(x=>[x.name,x.count,x.salesTl.toFixed(2),x.revenueHas.toFixed(4),x.costHas.toFixed(4),x.profitHas.toFixed(4)]),[],['CARİ YAŞLANDIRMA','Tür','Bakiye','TL Eşdeğer','En Eski Gün'],...aging.details.map(x=>[x.name,x.type,x.parts,x.totalTl.toFixed(2),x.oldest]),[],['BANKA/POS GİDERLERİ','Hareket','TL'],...expenses.map(x=>[x.name,x.count,x.tl.toFixed(2)])];
       downloadText(rows.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(';')).join('\n'),`asil_yonetim_raporu_${reportFilters.range==='month'?reportFilters.month:state.activePeriod}.csv`,'text/csv;charset=utf-8');audit('Genişletilmiş HAS yönetim raporu dışa aktarıldı','Rapor');
     });
   }
@@ -5887,7 +5891,7 @@ function stockSummaryView(){
   }
 
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion='6.70';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
+    state.meta=state.meta||{};state.meta.appVersion='6.71';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
@@ -5970,7 +5974,7 @@ function stockSummaryView(){
         if(String(err?.message)==='CLOUD_KEY_INVALID'){state.cloudSync.lastStatus='Anahtar Hatalı';state.cloudSync.encrypted=true;if(manual)toast('Bulut anahtarı yanlış; veri açılamadı.','err');return false;}
         throw err;
       }
-      if(!remote||!Array.isArray(remote.stocks)||remote.stocks.length<1000){state.cloudSync.lastStatus='Geçersiz Bulut Verisi';return false;}
+      if(!remote||typeof remote!=='object'||!Array.isArray(remote.stocks)){state.cloudSync.lastStatus='Geçersiz Bulut Verisi';return false;}
       const rt=new Date(remote?.meta?.updatedAt||raw?.updatedAt||0).getTime(),lt=new Date(state?.meta?.updatedAt||0).getTime();
       const needsMigration=!encrypted;
       if(manual||force||rt>lt+1000){
@@ -6024,6 +6028,11 @@ function stockSummaryView(){
   }
   async function initCloudSyncV5(){
     ensureV5State();
+    // Güncelleme/açılış öncesi mevcut yerel durumu buluta güvenlik kopyası olarak bırak.
+    // Bulut kapalıysa veya anahtar yoksa sessizce atlanır.
+    if(state.cloudSync?.enabled && state.settings?.backupEnabled!==false && cloudKeyGetV664()){
+      await cloudBackupV5('AÇILIŞ ÖNCESİ GÜVENLİK').catch(()=>false);
+    }
     await cloudPullV5(false);
     const pinMigrated=await migrateLegacyPinsV664().catch(()=>false);
     if(pinMigrated){state.cloudSync=state.cloudSync||{};state.cloudSync.encryptionMigrationPending=true;save(false);}
@@ -6854,7 +6863,7 @@ function stockSummaryView(){
       var old={mode:p.mode,printerName:p.printerName,widthMm:p.widthMm,copies:p.copies};
       try{
         p.mode=document.getElementById('rpMode').value;p.printerName=document.getElementById('rpName').value;p.widthMm=Number(document.getElementById('rpWidth').value||80);p.copies=1;
-        await printReceiptHtmlV644(receiptDocV644('TEST FİŞİ','TEST-'+Date.now(),now(),'','<div class="center"><b>ACLAS / FİŞ YAZICISI TESTİ</b><br>Asil Kuyumcu Pro · Kısa fiş v6.47</div>','Test baskısı'),'Test fişi');
+        await printReceiptHtmlV644(receiptDocV644('TEST FİŞİ','TEST-'+Date.now(),now(),'','<div class="center"><b>ACLAS / FİŞ YAZICISI TESTİ</b><br>Asil Kuyumcu Pro · V6.71</div>','Test baskısı'),'Test fişi');
       }finally{Object.assign(p,old);}
     });
   }
