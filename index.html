@@ -3288,6 +3288,93 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     draw();
   }
 
+
+  function v660DateIn(iso,from,to){
+    const t=new Date(iso||0).getTime();
+    return t>=new Date(`${from}T00:00:00`).getTime()&&t<=new Date(`${to}T23:59:59.999`).getTime();
+  }
+  function v660Sales(from,to){
+    return dailySalesReportRowsV658(from,to,'');
+  }
+  function v660SimpleTable(head,rows){
+    return `<div class="table-wrap"><table class="table" style="min-width:980px"><thead><tr>${head.map((h,i)=>`<th class="${i>=head.length-3?'num':''}">${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.length?rows.map(r=>`<tr>${r.map((v,i)=>`<td class="${i>=head.length-3?'num':''}">${v}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${head.length}">Kayıt bulunamadı.</td></tr>`}</tbody></table></div>`;
+  }
+  function v660GroupSales(rows,keyFn,label){
+    const m=new Map();
+    rows.forEach(r=>{const k=keyFn(r)||'Belirsiz',x=m.get(k)||{name:k,count:0,qty:0,cost:0,sale:0,profit:0};x.count++;x.qty+=Number(r.amount||0);x.cost+=Number(r.costHas||0);x.sale+=Number(r.saleHas||0);x.profit+=Number(r.profitHas||0);m.set(k,x);});
+    const a=[...m.values()].sort((x,y)=>y.sale-x.sale);
+    return {title:label,html:v660SimpleTable([label.replace('Satış Raporu — ','').replace(' Raporu',''),'Satır','Miktar','Maliyet HAS','Satış HAS','Kâr HAS'],a.map(x=>[`<strong>${esc(x.name)}</strong>`,String(x.count),qty(x.qty),qty(x.cost),qty(x.sale),`<strong class="${x.profit>=0?'positive':'negative'}">${qty(x.profit)}</strong>`])),csv:[['Grup','Satır','Miktar','Maliyet HAS','Satış HAS','Kâr HAS'],...a.map(x=>[x.name,x.count,x.qty,x.cost,x.sale,x.profit])]};
+  }
+  function v660Report(type,from,to,extra=''){
+    const rows=v660Sales(from,to);
+    if(type==='sales_general'||type==='general_sales'||type==='sales_profit'){
+      const byDoc=new Map(); rows.forEach(r=>{const x=byDoc.get(r.saleId)||{date:r.date,doc:r.docNo,customer:r.customer,person:r.salesperson,cost:0,sale:0,profit:0};x.cost+=r.costHas;x.sale+=r.saleHas;x.profit+=r.profitHas;byDoc.set(r.saleId,x);});
+      const a=[...byDoc.values()],sale=a.reduce((s,x)=>s+x.sale,0),cost=a.reduce((s,x)=>s+x.cost,0),profit=sale-cost;
+      return {title:type==='sales_profit'?'Satış Kâr Raporu':type==='general_sales'?'Genel Satış Raporu':'Satış Raporu Genel',html:`<div class="grid grid-3" style="margin-bottom:12px">${metric('Satış',`${qty(sale)} HAS`,`${a.length} fiş`)}${metric('Maliyet',`${qty(cost)} HAS`,'')}${metric('Kâr',`${qty(profit)} HAS`,'',profit>=0?'positive':'negative')}</div>${v660SimpleTable(['Tarih','Fiş','Müşteri','Personel','Maliyet HAS','Satış HAS','Kâr HAS'],a.map(x=>[trDate(x.date),esc(x.doc),esc(x.customer),esc(x.person),qty(x.cost),qty(x.sale),`<strong class="${x.profit>=0?'positive':'negative'}">${qty(x.profit)}</strong>`]))}`,csv:[['Tarih','Fiş','Müşteri','Personel','Maliyet HAS','Satış HAS','Kâr HAS'],...a.map(x=>[trDate(x.date),x.doc,x.customer,x.person,x.cost,x.sale,x.profit])]};
+    }
+    if(type==='sales_detail'){
+      return {title:'Satış Raporu Detay',html:v660SimpleTable(['Tarih','Fiş','Ürün','Ayar','Miktar','Maliyet HAS','Satış HAS','Kâr HAS'],rows.map(r=>[trDate(r.date),esc(r.docNo),`<strong>${esc(r.name)}</strong>`,esc(r.karat),qty(r.amount),qty(r.costHas),qty(r.saleHas),`<strong class="${r.profitHas>=0?'positive':'negative'}">${qty(r.profitHas)}</strong>`])),csv:[['Tarih','Fiş','Ürün','Ayar','Miktar','Maliyet HAS','Satış HAS','Kâr HAS'],...rows.map(r=>[trDate(r.date),r.docNo,r.name,r.karat,r.amount,r.costHas,r.saleHas,r.profitHas])]};
+    }
+    if(type==='sales_summary'||type==='product_analysis')return v660GroupSales(rows,r=>`${r.code} · ${r.name}`,type==='product_analysis'?'Ürün Satış Analizi':'Satış Raporu Özet');
+    if(type==='sales_karat')return v660GroupSales(rows,r=>r.karat,'Satış Raporu — Ayar');
+    if(type==='sales_day')return v660GroupSales(rows,r=>String(r.date||'').slice(0,10),'Satış Gün Raporu');
+    if(type==='sales_producer'){
+      const rr=rows.map(r=>{const s=(state.sales||[]).find(x=>x.id===r.saleId),l=s?.lines?.[(r.lineNo||1)-1],st=(state.stocks||[]).find(x=>x.id===l?.stockId),op=(state.openStocks||[]).find(x=>x.id===l?.openStockId);return {...r,producer:st?.producer||st?.supplier||op?.supplier||'Belirsiz'};});
+      return v660GroupSales(rr,r=>r.producer,'Satış Raporu — Üreticiye Göre');
+    }
+    if(type==='gold_sales'){
+      const rr=rows.filter(r=>!/TAŞ|PIRLANTA|SAAT|GÜMÜŞ|ÇELİK/i.test(`${r.name} ${r.karat}`));
+      return v660GroupSales(rr,r=>`${r.karat} · ${r.name}`,'Altın Satış Raporu');
+    }
+    if(type==='balance_list'){
+      const a=[];(state.customers||[]).filter(c=>c.id!=='CASH').forEach(c=>[['TL',c.tlBalance],['HAS',c.hasBalance],...Object.entries(c.otherBalances||{})].forEach(([u,v])=>{v=Number(v||0);if(Math.abs(v)>.000001)a.push([c.code||'',c.name||'',u,v>=0?'Alacağımız':'Borcumuz',Math.abs(v)]);}));
+      return {title:'Bakiye Listesi',html:v660SimpleTable(['Kod','Hesap','Cins','Yön','Bakiye'],a.map(r=>[esc(r[0]),`<strong>${esc(r[1])}</strong>`,esc(r[2]),esc(r[3]),qty(r[4])])),csv:[['Kod','Hesap','Cins','Yön','Bakiye'],...a]};
+    }
+    if(type==='transaction'){
+      const a=[];(state.financeMoves||[]).filter(x=>v660DateIn(x.date,from,to)).forEach(x=>a.push([x.date,'Kasa/Banka',x.sourceDocNo||'',x.type||'',x.description||'']));(state.customerMoves||[]).filter(x=>v660DateIn(x.date,from,to)).forEach(x=>a.push([x.date,'Cari',x.sourceDocNo||'',x.type||'',x.description||'']));(state.tradeMoves||[]).filter(x=>v660DateIn(x.date,from,to)).forEach(x=>a.push([x.date,'Altın/Döviz',x.docNo||'',x.tradeType||'',x.item||'']));a.sort((x,y)=>String(y[0]).localeCompare(String(x[0])));
+      return {title:'İşlem Raporu',html:v660SimpleTable(['Tarih','Modül','Belge','İşlem','Açıklama'],a.map(r=>[trDate(r[0]),esc(r[1]),esc(r[2]),`<strong>${esc(r[3])}</strong>`,esc(r[4])])),csv:[['Tarih','Modül','Belge','İşlem','Açıklama'],...a.map(r=>[trDate(r[0]),...r.slice(1)])]};
+    }
+    if(type==='daily_inout'||type==='cash_inout'||type==='cash'){
+      const a=(state.financeMoves||[]).filter(x=>v660DateIn(x.date,from,to)&&(type==='daily_inout'||x.accountKind==='Kasa'));
+      if(type==='cash'){
+        const r=(state.cashAccounts||[]).map(k=>[k.name,k.currency,k.balance,a.filter(x=>x.accountId===k.id&&x.direction==='Giriş').reduce((s,x)=>s+Math.abs(Number(x.accountAmount??x.amount??0)),0),a.filter(x=>x.accountId===k.id&&x.direction==='Çıkış').reduce((s,x)=>s+Math.abs(Number(x.accountAmount??x.amount??0)),0)]);
+        return {title:'Kasa Raporu',html:v660SimpleTable(['Kasa','Cins','Bakiye','Giriş','Çıkış'],r.map(x=>[esc(x[0]),esc(x[1]),qty(x[2]),qty(x[3]),qty(x[4])])),csv:[['Kasa','Cins','Bakiye','Giriş','Çıkış'],...r]};
+      }
+      return {title:type==='daily_inout'?'Günlük Giriş Çıkış Raporu':'Nakit Giriş Çıkış Raporu',html:v660SimpleTable(['Tarih','Hesap','Yön','İşlem','Tutar','TL Karşılığı'],a.map(x=>[trDate(x.date),esc(x.accountName||''),esc(x.direction||''),esc(x.type||''),qty(x.accountAmount??x.amount??0),money(financeTlValue(x))])),csv:[['Tarih','Hesap','Yön','İşlem','Tutar','TL Karşılığı'],...a.map(x=>[trDate(x.date),x.accountName||'',x.direction||'',x.type||'',x.accountAmount??x.amount??0,financeTlValue(x)])]};
+    }
+    if(type==='fx'){
+      const a=(state.tradeMoves||[]).filter(x=>v660DateIn(x.date,from,to)&&String(x.tradeType||'').startsWith('Döviz'));
+      return {title:'Döviz Alış Satış Raporu',html:v660SimpleTable(['Tarih','Belge','İşlem','Döviz','Miktar','Kur','Toplam TL'],a.map(x=>[trDate(x.date),esc(x.docNo||''),esc(x.tradeType||''),esc(x.item||''),qty(x.quantity||0),Number(x.unitPrice||0).toLocaleString('tr-TR'),money(x.totalTL||0)])),csv:[['Tarih','Belge','İşlem','Döviz','Miktar','Kur','Toplam TL'],...a.map(x=>[trDate(x.date),x.docNo||'',x.tradeType||'',x.item||'',x.quantity||0,x.unitPrice||0,x.totalTL||0])]};
+    }
+    if(type==='expense'||type==='expense_yearly'){
+      const a=[];(state.expenses||[]).filter(x=>v660DateIn(x.date,from,to)).forEach(x=>a.push({date:x.date,title:x.title||'Gider',amount:Number(x.amount||0)}));(state.financeMoves||[]).filter(x=>v660DateIn(x.date,from,to)&&/gider|masraf|komisyon/i.test(String(x.type||x.sourceCategory||''))).forEach(x=>a.push({date:x.date,title:x.type||'Gider',amount:Math.abs(financeTlValue(x))}));
+      if(type==='expense_yearly'){const m=new Map();a.forEach(x=>{const k=String(x.date).slice(0,7),r=m.get(k)||{m:k,n:0,t:0};r.n++;r.t+=x.amount;m.set(k,r)});const z=[...m.values()];return {title:'Gider Raporu Yıllık',html:v660SimpleTable(['Ay','Kayıt','Toplam Gider'],z.map(x=>[esc(x.m),String(x.n),money(x.t)])),csv:[['Ay','Kayıt','Toplam Gider'],...z.map(x=>[x.m,x.n,x.t])]}};
+      return {title:'Gider Raporu',html:v660SimpleTable(['Tarih','Gider','Tutar'],a.map(x=>[trDate(x.date),esc(x.title),money(x.amount)])),csv:[['Tarih','Gider','Tutar'],...a.map(x=>[trDate(x.date),x.title,x.amount])]};
+    }
+    if(type==='account_statement'){
+      const c=(state.customers||[]).find(x=>x.id===extra),a=(state.customerMoves||[]).filter(x=>x.customerId===extra&&v660DateIn(x.date,from,to));
+      return {title:`Hesap Ekstresi${c?' — '+c.name:''}`,html:v660SimpleTable(['Tarih','Belge','İşlem','Cins','Borç','Alacak'],a.map(x=>[trDate(x.date),esc(x.sourceDocNo||''),esc(x.type||''),esc(x.unit||''),qty(x.debit||0),qty(x.credit||0)])),csv:[['Tarih','Belge','İşlem','Cins','Borç','Alacak'],...a.map(x=>[trDate(x.date),x.sourceDocNo||'',x.type||'',x.unit||'',x.debit||0,x.credit||0])]};
+    }
+    if(type==='open_position'){
+      const p=managementPositionReport(),c=p.cari||{},a=Object.entries(c).filter(([,v])=>Math.abs(Number(v||0))>.000001).map(([u,v])=>[u,Number(v)>=0?'Alacağımız':'Borcumuz',Math.abs(Number(v))]);
+      return {title:'Açık Pozisyon',html:`<div class="grid grid-3" style="margin-bottom:12px">${metric('Fiziksel Altın',`${qty(p.sv.totalPhysical)} HAS`,'')}${metric('Parasal Pozisyon',`${qty(Math.abs(p.monetaryHas))} HAS`,p.monetaryHas>=0?'Varlık':'Açık')}${metric('Net Pozisyon',`${qty(Math.abs(p.netHas))} HAS`,p.netHas>=0?'Net varlık':'Net açık')}</div>${v660SimpleTable(['Cins','Yön','Tutar'],a.map(x=>[esc(x[0]),esc(x[1]),qty(x[2])]))}`,csv:[['Cins','Yön','Tutar'],...a]};
+    }
+    if(type==='special'){
+      const s=stockValuationReport(),p=managementPositionReport();
+      return {title:'Pusula Özel Raporlar',html:`<div class="grid grid-3">${metric('Fiziksel Altın',`${qty(p.sv.totalPhysical)} HAS`,'')}${metric('Stok Maliyeti',`${qty(s.totalCost)} HAS`,'')}${metric('Net Pozisyon',`${qty(Math.abs(p.netHas))} HAS`,p.netHas>=0?'Varlık':'Açık')}</div>`,csv:[['Başlık','Değer'],['Fiziksel Altın',p.sv.totalPhysical],['Stok Maliyeti',s.totalCost],['Net Pozisyon',p.netHas]]};
+    }
+    return {title:'Rapor',html:'<div class="empty-state">Rapor bulunamadı.</div>',csv:[]};
+  }
+  function openPusulaReportV660(type){
+    if(type==='balance_sheet')return openBalanceSheet();
+    if(type==='patron')return openPatronReport();
+    const today=new Date().toISOString().slice(0,10),d=new Date(),first=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`,needs=type==='account_statement';
+    const opts=(state.customers||[]).filter(c=>c.id!=='CASH').sort((a,b)=>String(a.name).localeCompare(String(b.name),'tr')).map(c=>`<option value="${esc(c.id)}">${esc(c.code||'')} · ${esc(c.name)}</option>`).join('');
+    modal('Rapor',`<div class="card"><div class="form-grid"><div class="labelled"><label>Başlangıç</label><input id="prFrom" class="input" type="date" value="${first}"></div><div class="labelled"><label>Bitiş</label><input id="prTo" class="input" type="date" value="${today}"></div>${needs?`<div class="labelled span-2"><label>Hesap / Cari</label><select id="prExtra" class="select">${opts}</select></div>`:''}</div><div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-primary" id="prShow">Göster</button><button class="btn btn-outline" id="prCsv">CSV / Excel</button></div></div><div id="prResult" style="margin-top:14px"></div>`,null,'Kapat');
+    document.querySelector('#modalRoot .modal').style.width='min(1480px,98vw)';
+    let last=null; const draw=()=>{const f=document.getElementById('prFrom').value,t=document.getElementById('prTo').value,e=document.getElementById('prExtra')?.value||'';last=v660Report(type,f,t,e);document.getElementById('prResult').innerHTML=`<div class="page-title"><div><h1 style="font-size:22px">${esc(last.title)}</h1><p>${esc(f)} → ${esc(t)}</p></div></div>${last.html}`;};
+    document.getElementById('prShow').onclick=draw;['prFrom','prTo','prExtra'].forEach(id=>{const el=document.getElementById(id);if(el)el.onchange=draw;});document.getElementById('prCsv').onclick=()=>{if(!last)draw();if(!last?.csv?.length)return;downloadText(last.csv.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(';')).join('\n'),`${last.title.replace(/\s+/g,'_')}.csv`,'text/csv;charset=utf-8');};draw();
+  }
   function pageReports(){
     return `<div class="page-title"><div><h1>Raporlar</h1><p>Görmek istediğiniz raporu seçin. Bu ana ekranda bakiye, eksi değer veya teknik pozisyon gösterilmez.</p></div></div>
       <div class="grid grid-2" style="margin-top:18px;max-width:980px">
