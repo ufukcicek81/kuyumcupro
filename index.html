@@ -3006,6 +3006,35 @@ function stockSummaryView(){
     return `<div class="page-title"><div><h1>Stok Yönetimi</h1><p>Pusula düzeni: açık stok + barkodlu stok + hurda + kasa/POS tek merkezde.</p></div><span class="badge gold">Tüm Barkodlar + Kısa Kod Arama</span></div>${stockHeaderTabs()}${body}`;
   }
 
+  function normalizeCariFilterV674(v){
+    return String(v??'').toLocaleLowerCase('tr-TR').replace(/\s+/g,' ').trim();
+  }
+  function isLegacyCariMoveV674(m){
+    const code=String(m?.code||'').toLocaleUpperCase('tr-TR');
+    const type=String(m?.type||'').toLocaleUpperCase('tr-TR');
+    const src=String(m?.sourceType||'').toLocaleLowerCase('tr-TR');
+    const doc=String(m?.sourceDocNo||'').toLocaleUpperCase('tr-TR');
+    return code==='DV'||type.includes('DEVİR')||type.includes('AÇILIŞ')||src.startsWith('opening')||doc.startsWith('PUSULA-')||doc.includes('-ACILIS-')||doc.startsWith('OPEN-');
+  }
+  function cariBalanceBreakdownV674(c){
+    const moves=(state.customerMoves||[]).filter(m=>String(m.customerId)===String(c.id));
+    const units=new Set(['TL','HAS',...Object.keys(c.otherBalances||{}),...moves.map(m=>String(m.unit||'TL').toUpperCase())]);
+    const current={},moveTotal={},legacyMove={},unknown={},legacy={},recent={};
+    for(const u of units){current[u]=u==='TL'?Number(cariDisplayTlBalance(c)||0):u==='HAS'?Number(c.hasBalance||0):Number(c.otherBalances?.[u]||0);moveTotal[u]=0;legacyMove[u]=0;recent[u]=0;}
+    moves.forEach(m=>{const u=String(m.unit||'TL').toUpperCase(),delta=Number(m.debit||0)-Number(m.credit||0);if(!(u in current)){current[u]=0;moveTotal[u]=0;legacyMove[u]=0;recent[u]=0;}moveTotal[u]+=delta;if(isLegacyCariMoveV674(m))legacyMove[u]+=delta;else recent[u]+=delta;});
+    for(const u of Object.keys(current)){unknown[u]=Number(current[u]||0)-Number(moveTotal[u]||0);legacy[u]=Number(legacyMove[u]||0)+Number(unknown[u]||0);recent[u]=Number(current[u]||0)-Number(legacy[u]||0);}
+    const nz=o=>Object.values(o).some(v=>Math.abs(Number(v||0))>.000001);
+    const hasUnknown=nz(unknown),hasLegacy=nz(legacy),hasRecent=nz(recent),hasBalance=nz(current);
+    const vals=Object.values(current).filter(v=>Math.abs(Number(v||0))>.000001),pos=vals.some(v=>Number(v)>0),neg=vals.some(v=>Number(v)<0);
+    const balanceStatus=!hasBalance?'zero':pos&&neg?'mixed':pos?'debt':'credit';
+    let sourceStatus='clean',sourceLabel='Bakiyesiz';
+    if(c.type==='Banka'){sourceStatus='finance';sourceLabel='Finans hesabına bağlı';}else if(hasUnknown){sourceStatus='unknown';sourceLabel='Kaynağı belirsiz eski bakiye';}else if(hasLegacy){sourceStatus='legacy';sourceLabel='Devir / açılış bakiyesi var';}else if(hasRecent){sourceStatus='current';sourceLabel='Sadece güncel işlemler';}
+    return {moves,current,moveTotal,legacyMove,unknown,legacy,recent,hasUnknown,hasLegacy,hasRecent,hasBalance,balanceStatus,sourceStatus,sourceLabel};
+  }
+  function cariBalanceMapTextV674(map){
+    const rows=Object.entries(map||{}).filter(([,v])=>Math.abs(Number(v||0))>.000001);if(!rows.length)return '—';
+    return rows.slice(0,4).map(([u,v])=>{const n=Number(v||0),amount=u==='TL'?money(Math.abs(n)):qty(Math.abs(n))+' '+u;return amount+' '+(n>0?'Borç':'Alacak');}).join(' · ');
+  }
   function customerCardsView(){
     const types=['Tümü','Müşteri','Toptancı','Banka','Özel'];
     return `<div class="card" style="margin-top:14px"><div class="section-head"><h3>Cari Çağır</h3><span id="cariCardCount">${state.customers.length} cari</span></div><div class="filter-panel" style="grid-template-columns:minmax(260px,1fr) auto"><input id="cariCardSearch" class="input" autocomplete="off" placeholder="Cari / toptancı adı, hesap kodu, telefon veya tür yazın; Enter = Cari İşlem"><button class="btn btn-outline" id="cariCardClear">Temizle</button></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${types.map(t=>`<button class="btn ${cariTypeFilter===t?'btn-primary':'btn-outline'}" data-cari-type-filter="${t}">${t}</button>`).join('')}</div><div class="muted" style="margin-top:8px">Müşteriler ve <b>Toptancılar</b> aynı cari motorunda aranır; Toptancı filtresi Pusula tedarikçi hesaplarını gösterir.</div></div>
