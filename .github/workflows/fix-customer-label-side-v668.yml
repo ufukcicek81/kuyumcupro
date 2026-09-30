@@ -1,0 +1,59 @@
+name: Fix customer label side v6.68
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/fix-customer-label-side-v668.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Move customer names to opposite physical side
+        shell: python
+        run: |
+          from pathlib import Path
+
+          p=Path("index.html")
+          s=p.read_text(encoding="utf-8")
+
+          old1='left:46.1mm;top:.65mm;width:24.4mm;height:3.3mm;'
+          old2='left:46.1mm;top:5.05mm;width:24.4mm;height:3.3mm;'
+          new1='left:0.8mm;top:.65mm;width:21.2mm;height:3.3mm;'
+          new2='left:0.8mm;top:5.05mm;width:21.2mm;height:3.3mm;'
+
+          c1=s.count(old1)
+          c2=s.count(old2)
+          if c1 < 1 or c2 < 1:
+              raise SystemExit(f"customer name coordinates not found: {c1=}, {c2=}")
+
+          s=s.replace(old1,new1,1)
+          s=s.replace(old2,new2,1)
+
+          s=s.replace("Asil Kuyumcu Pro V6.67","Asil Kuyumcu Pro V6.68")
+          s=s.replace("v6.67</span>","v6.68</span>")
+          s=s.replace("state.meta.appVersion='6.67'","state.meta.appVersion='6.68'")
+
+          p.write_text(s,encoding="utf-8")
+
+          sw=Path("sw.js")
+          sws=sw.read_text(encoding="utf-8")
+          lines=sws.splitlines()
+          if lines and lines[0].startswith("const C="):
+              lines[0]="const C='asil-v6-68-customer-name-opposite-side-20260930';"
+              sw.write_text("\n".join(lines)+"\n",encoding="utf-8")
+
+      - name: Commit
+        run: |
+          git config user.name "ChatGPT Fix"
+          git config user.email "actions@users.noreply.github.com"
+          git add index.html sw.js
+          git commit -m "v6.68: müşteri isimlerini etiketin karşı tarafına al"
+          git push
