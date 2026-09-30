@@ -10,7 +10,7 @@
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.55</title>
+  <title>Asil Kuyumcu Pro V6.56</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -1187,7 +1187,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     try{
       if(typeof ensureV5State==='function') ensureV5State();
       if(typeof reconcileTransactionLedgerV5==='function') reconcileTransactionLedgerV5();
-      state.meta=state.meta||{}; state.meta.updatedAt=now(); state.meta.appVersion='6.54';
+      state.meta=state.meta||{}; state.meta.updatedAt=now(); state.meta.appVersion='6.56';
       if(typeof syncSystemParametersV648==='function')syncSystemParametersV648();
       localStorage.setItem(LS_KEY, JSON.stringify(state));
     } catch { /* Yerel dosya modunda depolama engellense bile uygulama çalışmaya devam eder. */ }
@@ -1889,7 +1889,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.55</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
+        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.56</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
         <nav class="nav" aria-label="Ana menü">${['dashboard','sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={dashboard:'Ana Menü',sales:'Satış',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
         <details class="more-nav"><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['dashboard','sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
       </aside>
@@ -2992,6 +2992,99 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const t=new Date(iso).getTime(), f=new Date(`${fromDate}T00:00:00`).getTime(), to=new Date(`${toDate}T23:59:59.999`).getTime();
     return Number.isFinite(t)&&t>=f&&t<=to;
   }
+
+  function reportRangeInsideV656(iso,fromDate,toDate){
+    const t=new Date(iso||0).getTime(),a=new Date(`${fromDate}T00:00:00`).getTime(),b=new Date(`${toDate}T23:59:59`).getTime();
+    return Number.isFinite(t)&&t>=a&&t<=b;
+  }
+  function reportUnitTlRateV656(unit,iso){
+    const u=String(unit||'TL').toUpperCase(),snap=nearestPriceSnapshot(iso||now());
+    if(u==='TL')return 1;
+    if(u==='HAS')return Number(snap?.hasBuy||state.prices.has?.buy||1);
+    const key={USD:'usdBuy',EUR:'eurBuy',GBP:'gbpBuy',CHF:'chfBuy',SAR:'sarBuy',CAD:'cadBuy'}[u];
+    return Number(key?snap?.[key]:0)||Number(state.prices[u.toLowerCase()]?.buy||1);
+  }
+  function reportToHasV656(unit,amount,iso){
+    const u=String(unit||'TL').toUpperCase(),n=Number(amount||0),hasRate=Number(nearestPriceSnapshot(iso||now())?.hasBuy||state.prices.has?.buy||1);
+    if(u==='HAS')return n;
+    if(u==='22'||u==='22K'||u==='22 K')return n*.93;
+    if(u==='24'||u==='24K'||u==='24 K')return n*1.002;
+    if(u==='14'||u==='14K'||u==='14 K')return n*.585;
+    return n*reportUnitTlRateV656(u,iso)/Math.max(.000001,hasRate);
+  }
+  function patronOpenStockRowsV656(fromDate,toDate){
+    const inside=iso=>reportRangeInsideV656(iso,fromDate,toDate),purchases=(state.purchases||[]).filter(p=>inside(p.date)),sales=activeSales().filter(s=>s.status==='Tamamlandı'&&inside(s.date));
+    const gold=[],ziynet=[],special=[];
+    (state.openStocks||[]).filter(o=>o.period===state.activePeriod).forEach(o=>{
+      const card=getStockCard(o.stockCardId),isZiynet=Boolean(card?.ziynet)||String(o.unit||'').toUpperCase()==='ADET',isSpecial=/ÖZEL|OZEL|PIRLANTA|TAŞLI/i.test(String(o.name||''));
+      const incoming=purchases.reduce((sum,p)=>sum+(p.lines||[]).filter(l=>l.stockCardId===o.stockCardId).reduce((a,l)=>a+(isZiynet?Number(l.count||0):Number(l.amount||0)),0),0);
+      const outgoing=sales.reduce((sum,s)=>sum+(s.lines||[]).filter(l=>l.openStockId===o.id).reduce((a,l)=>a+Number(l.qty??l.displayAmount??0),0),0);
+      const current=Number(o.amount||0),devir=current-incoming+outgoing,cost=openInventoryCostHas(o);
+      const row={name:o.name||card?.productDefinition||'Açık Stok',devir,incoming,outgoing,current,cost,unit:String(o.unit||'GR').toUpperCase()};
+      (isSpecial?special:(isZiynet?ziynet:gold)).push(row);
+    });
+    const barCurrent=activeStock().reduce((a,s)=>a+stockAmount(s),0);
+    const barIncoming=(state.stocks||[]).filter(s=>s.period===state.activePeriod&&reportRangeInsideV656(s.entryDate,fromDate,toDate)).reduce((a,s)=>a+stockAmount(s),0);
+    const barOutgoing=sales.reduce((a,s)=>a+(s.lines||[]).filter(l=>l.sourceType==='barcode').reduce((x,l)=>x+Number(l.weight||l.qty||0),0),0);
+    const barCost=activeStock().reduce((a,s)=>a+Number(s.costHas||0),0);
+    if(barCurrent||barIncoming||barOutgoing)gold.push({name:'BARKODLU / VİTRİN ÜRÜNÜ',devir:barCurrent-barIncoming+barOutgoing,incoming:barIncoming,outgoing:barOutgoing,current:barCurrent,cost:barCost,unit:'GR'});
+    return {gold:gold.sort((a,b)=>String(a.name).localeCompare(String(b.name),'tr')),ziynet:ziynet.sort((a,b)=>String(a.name).localeCompare(String(b.name),'tr')),special:special.sort((a,b)=>String(a.name).localeCompare(String(b.name),'tr'))};
+  }
+  function patronScrapRowsV656(fromDate,toDate){
+    const trades=(state.tradeMoves||[]).filter(x=>reportRangeInsideV656(x.date,fromDate,toDate));
+    return (state.scrapStocks||[]).filter(x=>x.period===state.activePeriod).map(s=>{
+      const name=String(s.name||s.item||s.code||'Hurda'),code=String(s.code||'');
+      const same=x=>String(x.itemCode||'')===code||normalizeInventoryName(x.item||'')===normalizeInventoryName(name);
+      const incoming=trades.filter(x=>x.tradeType==='Hurda Alış'&&same(x)).reduce((a,x)=>a+Number(x.quantity||0),0);
+      const outgoing=trades.filter(x=>x.tradeType==='Hurda Satış'&&same(x)).reduce((a,x)=>a+Number(x.quantity||0),0);
+      const current=Number(s.amount||0),devir=current-incoming+outgoing,cost=current*Number(s.unitCostHas||Number(s.milyem||0)/1000||0);
+      return {name,devir,incoming,outgoing,current,cost,unit:'GR'};
+    }).filter(x=>Math.abs(x.current)+Math.abs(x.incoming)+Math.abs(x.outgoing)>0.000001).sort((a,b)=>String(a.name).localeCompare(String(b.name),'tr'));
+  }
+  function patronAccountRowsV656(fromDate,toDate,kind){
+    const accounts=kind==='KASA'?(state.cashAccounts||[]):(state.bankAccounts||[]);
+    const moves=(state.financeMoves||[]).filter(m=>m.period===state.activePeriod&&reportRangeInsideV656(m.date,fromDate,toDate));
+    return accounts.map(a=>{
+      const unit=String(a.currency||'TL').toUpperCase(),prefix=kind==='KASA'?'Kasa':'Banka',related=moves.filter(m=>m.accountId===a.id||m.accountKey===`${prefix}:${a.id}`);
+      const incoming=related.filter(m=>m.direction==='Giriş').reduce((x,m)=>x+Math.abs(Number(m.accountAmount??m.amount??0)),0);
+      const outgoing=related.filter(m=>m.direction==='Çıkış').reduce((x,m)=>x+Math.abs(Number(m.accountAmount??m.amount??0)),0);
+      const current=Number(a.balance||0),devir=current-incoming+outgoing;
+      return {name:kind==='KASA'?unit:String(a.bank||a.name||'Banka'),devir,incoming,outgoing,current,cost:0,unit};
+    }).filter(x=>Math.abs(x.current)+Math.abs(x.incoming)+Math.abs(x.outgoing)>0.000001);
+  }
+  function patronPusulaDataV656(fromDate,toDate){
+    const r=patronProfitReport(fromDate,toDate),stocks=patronOpenStockRowsV656(fromDate,toDate),scrap=patronScrapRowsV656(fromDate,toDate),cash=patronAccountRowsV656(fromDate,toDate,'KASA'),banks=patronAccountRowsV656(fromDate,toDate,'BANKA');
+    const discountHas=r.sales.reduce((a,s)=>a+Number(s.discount||0)/Math.max(.000001,Number(s.hasSellRateAtSale||historicalHasRate(s.date,'sell')||1)),0);
+    const salesProfitHas=r.grossHas+discountHas,giderHas=r.expHas+r.feeHas,gelirHas=r.tradeProfitHas,kurHas=r.realizedFxPlHas,netHas=salesProfitHas-discountHas-giderHas+gelirHas+kurHas;
+    return {r,stocks,scrap,cash,banks,discountHas,salesProfitHas,giderHas,gelirHas,kurHas,netHas};
+  }
+  function patronPusulaTableV656(d){
+    const section=(title,rows)=>rows.length?`<tr><td colspan="6" style="font-weight:900;background:rgba(214,177,95,.12)">${esc(title)}</td></tr>${rows.map(x=>`<tr><td><strong>${esc(x.name)}</strong><small style="display:block;color:var(--muted)">${esc(x.unit)}</small></td><td class="num">${qty(x.devir)}</td><td class="num">${qty(x.incoming)}</td><td class="num">${qty(x.outgoing)}</td><td class="num"><strong>${qty(x.current)}</strong></td><td class="num">${x.cost?qty(x.cost)+' HAS':'—'}</td></tr>`).join('')}`:'';
+    return `<div class="notice"><strong>Pusula Patron Raporu düzeni:</strong> Devir + Giren − Çıkan = Kalan. Maliyet sütunu altın/hurda için HAS maliyetidir; kasa ve banka satırlarında para birimi korunur.</div><div class="table-wrap" style="margin-top:12px"><table class="table" style="min-width:850px"><thead><tr><th>TÜR</th><th class="num">DEVİR</th><th class="num">GİREN</th><th class="num">ÇIKAN</th><th class="num">KALAN</th><th class="num">MALİYET</th></tr></thead><tbody>${section('ALTIN STOĞU',d.stocks.gold)}${section('ÖZEL ÜRÜN',d.stocks.special)}${section('ZİYNET STOĞU',d.stocks.ziynet)}${section('HURDA STOĞU',d.scrap)}${section('KASA',d.cash)}${section('BANKA',d.banks)}</tbody></table></div><div class="card" style="margin-top:12px"><div class="table-wrap"><table class="table" style="min-width:620px"><thead><tr><th></th><th class="num">İSKONTO</th><th class="num">GELİR</th><th class="num">GİDER</th><th class="num">KÂR/ZARAR</th><th class="num">NET</th></tr></thead><tbody><tr><td><strong>${esc(d.r.fromDate)} → ${esc(d.r.toDate)}</strong></td><td class="num">${qty(d.discountHas)} HAS</td><td class="num">${qty(d.gelirHas)} HAS</td><td class="num">${qty(d.giderHas)} HAS</td><td class="num">${qty(d.salesProfitHas+d.kurHas)} HAS</td><td class="num"><strong class="${d.netHas>=0?'positive':'negative'}">${qty(d.netHas)} HAS</strong></td></tr></tbody></table></div></div>`;
+  }
+  function balanceRowsV656(toDate){
+    const rows=[],push=(group,unit,debt,recv)=>{debt=Number(debt||0);recv=Number(recv||0);if(Math.abs(debt)+Math.abs(recv)<.000001)return;rows.push({group,unit,debt,recv,debtHas:reportToHasV656(unit,debt,`${toDate}T23:59:59`),recvHas:reportToHasV656(unit,recv,`${toDate}T23:59:59`)});};
+    const groups=new Map();
+    (state.customers||[]).filter(c=>c.id!=='CASH'&&!['Kasa','Banka','POS'].includes(c.type)).forEach(c=>{
+      const g=String(c.type||'Müşteri').toLocaleUpperCase('tr-TR'),vals=[['TL',Number(c.tlBalance||0)],['HAS',Number(c.hasBalance||0)],...Object.entries(c.otherBalances||{}).map(([u,v])=>[String(u).toUpperCase(),Number(v||0)])];
+      vals.forEach(([u,v])=>{const k=`${g}|${u}`,x=groups.get(k)||{group:g,unit:u,debt:0,recv:0};if(v>=0)x.recv+=v;else x.debt+=Math.abs(v);groups.set(k,x);});
+    });
+    groups.forEach(x=>push(x.group,x.unit,x.debt,x.recv));
+    const accGroups=(list,g)=>{const m=new Map();list.forEach(a=>{const u=String(a.currency||'TL').toUpperCase(),v=Number(a.balance||0),x=m.get(u)||{debt:0,recv:0};if(v>=0)x.recv+=v;else x.debt+=Math.abs(v);m.set(u,x);});m.forEach((x,u)=>push(g,u,x.debt,x.recv));};
+    accGroups(state.cashAccounts||[],'KASA');accGroups(state.bankAccounts||[],'BANKA / POS');
+    const sv=stockValuationReport();push('BARKODLU ALTIN STOKU','HAS',0,sv.barcodeCost);
+    (state.openStocks||[]).filter(o=>o.period===state.activePeriod&&Math.abs(Number(o.amount||0))>.000001).forEach(o=>rows.push({group:`ALTIN STOĞU  ${o.name}`,unit:String(o.unit||'GR').toUpperCase(),debt:0,recv:Number(o.amount||0),debtHas:0,recvHas:openInventoryCostHas(o)}));
+    (state.scrapStocks||[]).filter(s=>s.period===state.activePeriod&&Math.abs(Number(s.amount||0))>.000001).forEach(s=>rows.push({group:String(s.name||'HURDA'),unit:'GR',debt:0,recv:Number(s.amount||0),debtHas:0,recvHas:Number(s.amount||0)*Number(s.unitCostHas||Number(s.milyem||0)/1000||0)}));
+    return rows;
+  }
+  function balancePusulaDataV656(fromDate,toDate){
+    const rows=balanceRowsV656(toDate),totalDebtHas=rows.reduce((a,x)=>a+Number(x.debtHas||0),0),totalRecvHas=rows.reduce((a,x)=>a+Number(x.recvHas||0),0),kurFarki=totalRecvHas-totalDebtHas,r=patronProfitReport(fromDate,toDate),discountHas=r.sales.reduce((a,s)=>a+Number(s.discount||0)/Math.max(.000001,Number(s.hasSellRateAtSale||historicalHasRate(s.date,'sell')||1)),0),salesProfit=r.grossHas+discountHas,gider=r.expHas+r.feeHas,gelir=r.tradeProfitHas,net=salesProfit-discountHas-gider+gelir+r.realizedFxPlHas,b=balanceSheetSnapshot(),equityHas=b.equity/Math.max(.000001,b.hasRate),capitalHas=equityHas-net;
+    return {rows,totalDebtHas,totalRecvHas,kurFarki,r,discountHas,salesProfit,gider,gelir,net,equityHas,capitalHas};
+  }
+  function balancePusulaTableV656(d,fromDate,toDate){
+    return `<div class="notice"><strong>Pusula bilanço mantığı:</strong> Pozitif cari/hesap bakiyesi <b>Alacağımız</b>, negatif bakiye <b>Borcumuz</b> tarafında gösterilir. Sağdaki iki sütun her satırın HAS karşılığıdır; böylece eksi değer yerine borç/alacak yönü açıkça görünür.</div><div class="table-wrap" style="margin-top:12px;max-height:58vh"><table class="table" style="min-width:900px"><thead><tr><th>Hesap Tanımı</th><th>Cins</th><th class="num">Borcumuz</th><th class="num">Alacağımız</th><th class="num">HAS Borcumuz</th><th class="num">HAS Alacağımız</th></tr></thead><tbody>${d.rows.map(x=>`<tr><td><strong>${esc(x.group)}</strong></td><td>${esc(x.unit)}</td><td class="num">${Math.abs(x.debt)>.000001?qty(x.debt):'—'}</td><td class="num">${Math.abs(x.recv)>.000001?qty(x.recv):'—'}</td><td class="num">${Math.abs(x.debtHas)>.000001?qty(x.debtHas):'—'}</td><td class="num">${Math.abs(x.recvHas)>.000001?qty(x.recvHas):'—'}</td></tr>`).join('')}<tr style="font-weight:900;background:rgba(214,177,95,.12)"><td>TOPLAM</td><td></td><td></td><td></td><td class="num">${qty(d.totalDebtHas)} HAS</td><td class="num">${qty(d.totalRecvHas)} HAS</td></tr></tbody></table></div><div class="grid grid-2" style="margin-top:12px"><div class="card"><div class="section-head"><h3>Kur / Pozisyon Farkı</h3><span>${esc(toDate)}</span></div><div class="summary-row total"><span>Alacak HAS − Borç HAS</span><strong class="${d.kurFarki>=0?'positive':'negative'}">${qty(d.kurFarki)} HAS</strong></div><div class="muted" style="font-size:11px">Bu değer toplam borç/alacak HAS farkıdır; tek başına dönem kârı değildir.</div></div><div class="card"><div class="section-head"><h3>${esc(fromDate)} → ${esc(toDate)}</h3><span>Dönem Kâr/Zarar</span></div><div class="summary-row"><span>Satış Kârı</span><strong>${qty(d.salesProfit)} HAS</strong></div><div class="summary-row"><span>İskonto</span><strong class="negative">-${qty(d.discountHas)} HAS</strong></div><div class="summary-row"><span>Gider</span><strong class="negative">-${qty(d.gider)} HAS</strong></div><div class="summary-row"><span>Gelir</span><strong class="positive">+${qty(d.gelir)} HAS</strong></div><div class="summary-row"><span>Döviz Kur Farkı</span><strong class="${d.r.realizedFxPlHas>=0?'positive':'negative'}">${qty(d.r.realizedFxPlHas)} HAS</strong></div><div class="summary-row total"><span>Net Kâr / Zarar</span><strong class="${d.net>=0?'positive':'negative'}">${qty(d.net)} HAS</strong></div></div></div><div class="card" style="margin-top:12px"><div class="summary-row"><span>Hesaplanan Dönem Başı Sermaye</span><strong>${qty(d.capitalHas)} HAS</strong></div><div class="summary-row"><span>Net Kâr / Zarar</span><strong class="${d.net>=0?'positive':'negative'}">${qty(d.net)} HAS</strong></div><div class="summary-row total"><span>Kalan / Net Öz Kaynak</span><strong class="${d.equityHas>=0?'positive':'negative'}">${qty(d.equityHas)} HAS</strong></div></div>`;
+  }
+
   function patronProfitReport(fromDate,toDate){
     const inside=iso=>explicitRangeInside(iso,fromDate,toDate);
     const sales=activeSales().filter(s=>s.status==='Tamamlandı'&&inside(s.date));
@@ -3047,11 +3140,11 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     audit(`${r.fromDate}-${r.toDate} patron raporu dışa aktarıldı`,'Rapor');
   }
   function openPatronReport(){
-    const today=new Date().toISOString().slice(0,10), d=new Date(), first=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
-    modal('Patron Raporu — Tarih Aralıklı Kâr / Zarar',`<div class="notice"><strong>Patron ekranı:</strong> İstediğiniz başlangıç ve bitiş tarihleri arasında gerçek HAS maliyetine göre kâr/zararı hesaplar. TL sonucu, bitiş tarihindeki HAS alış kuru ile değerlenir.</div><div class="form-grid" style="margin-top:12px"><div class="labelled"><label>Başlangıç Tarihi</label><input id="patronFrom" class="input" type="date" value="${first}"></div><div class="labelled"><label>Bitiş Tarihi</label><input id="patronTo" class="input" type="date" value="${today}"></div><div class="labelled"><label>&nbsp;</label><button class="btn btn-primary" id="patronCalc">RAPORU HESAPLA</button></div><div class="labelled"><label>&nbsp;</label><button class="btn btn-outline" id="patronExport">CSV / Excel Aktar</button></div></div><div id="patronResult" style="margin-top:14px"></div>`,null);
-    const modalEl=document.querySelector('#modalRoot .modal');if(modalEl)modalEl.style.width='min(1180px,96vw)';
+    const today=new Date().toISOString().slice(0,10),d=new Date(),first=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
+    modal('Patron Raporu — Pusula Düzeni',`<div class="form-grid"><div class="labelled"><label>Başlangıç Tarihi</label><input id="patronFrom" class="input" type="date" value="${first}"></div><div class="labelled"><label>Bitiş Tarihi</label><input id="patronTo" class="input" type="date" value="${today}"></div><div class="labelled"><label>&nbsp;</label><button class="btn btn-primary" id="patronCalc">GÖSTER</button></div><div class="labelled"><label>&nbsp;</label><button class="btn btn-outline" id="patronExport">CSV / Excel Aktar</button></div></div><div id="patronResult" style="margin-top:14px"></div>`,null);
+    const modalEl=document.querySelector('#modalRoot .modal');if(modalEl)modalEl.style.width='min(1240px,97vw)';
     let last=null;
-    const calc=()=>{const from=document.getElementById('patronFrom')?.value,to=document.getElementById('patronTo')?.value;if(!from||!to)return toast('Başlangıç ve bitiş tarihi seçin','err');if(from>to)return toast('Başlangıç tarihi bitiş tarihinden büyük olamaz','err');last=patronProfitReport(from,to);const box=document.getElementById('patronResult');if(box)box.innerHTML=patronReportResultHtml(last);};
+    const calc=()=>{const from=document.getElementById('patronFrom')?.value,to=document.getElementById('patronTo')?.value;if(!from||!to)return toast('Başlangıç ve bitiş tarihi seçin','err');if(from>to)return toast('Başlangıç tarihi bitiş tarihinden büyük olamaz','err');last=patronProfitReport(from,to);const p=patronPusulaDataV656(from,to),box=document.getElementById('patronResult');if(box)box.innerHTML=patronPusulaTableV656(p)+`<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:800">Detaylı kâr analizi</summary>${patronReportResultHtml(last)}</details>`;};
     document.getElementById('patronCalc')?.addEventListener('click',calc);
     document.getElementById('patronExport')?.addEventListener('click',()=>{if(!last)calc();if(last)downloadPatronReportCsv(last);});
     calc();
@@ -3074,14 +3167,11 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     return {date:now(),hasRate,sv,stockTl,liquidAssetsTl,receivablesTl,accountDebtTl,payablesTl,totalAssets,totalLiabilities,equity,receivables,payables,accountDetails};
   }
   function openBalanceSheet(){
-    const b=balanceSheetSnapshot(), toHas=tl=>Number(tl||0)/Math.max(1,b.hasRate);
-    modal('Yönetim Bilançosu',`<div class="notice"><strong>Yönetim bilançosu:</strong> Kuyumcu programındaki stok, kasa/banka ve cari bakiyelerinden anlık oluşturulur. Resmî vergi/muhasebe bilançosu değildir. Değerleme HAS alış ${money(b.hasRate)}.</div>
-      <div class="grid grid-2" style="margin-top:12px">
-        <div class="card"><div class="section-head"><h3>VARLIKLAR</h3><span>${trDate(b.date)}</span></div><div class="summary-row"><span>Altın / Ziynet / Hurda Stok Maliyeti</span><strong>${money(b.stockTl)}<br><small>${qty(b.sv.totalCost)} HAS</small></strong></div><div class="summary-row"><span>Kasa + Banka</span><strong>${money(b.liquidAssetsTl)}<br><small>${qty(toHas(b.liquidAssetsTl))} HAS</small></strong></div><div class="summary-row"><span>Cari Alacaklar</span><strong>${money(b.receivablesTl)}<br><small>${qty(toHas(b.receivablesTl))} HAS</small></strong></div><div class="summary-row total"><span>TOPLAM VARLIK</span><strong>${money(b.totalAssets)}<br><small>${qty(toHas(b.totalAssets))} HAS</small></strong></div></div>
-        <div class="card"><div class="section-head"><h3>BORÇLAR + ÖZ KAYNAK</h3><span>Denge</span></div><div class="summary-row"><span>Banka/Kasa Eksi Bakiyeler</span><strong>${money(b.accountDebtTl)}</strong></div><div class="summary-row"><span>Cari / Toptancı Borçları</span><strong>${money(b.payablesTl)}</strong></div><div class="summary-row"><span>Toplam Borç</span><strong>${money(b.totalLiabilities)}<br><small>${qty(toHas(b.totalLiabilities))} HAS</small></strong></div><div class="summary-row total"><span>NET ÖZ KAYNAK</span><strong class="${b.equity>=0?'positive':'negative'}">${money(b.equity)}<br><small>${qty(toHas(b.equity))} HAS</small></strong></div></div>
-      </div>
-      <div class="grid grid-2" style="margin-top:12px"><div class="card"><div class="section-head"><h3>En Yüksek Cari Alacaklar</h3><span>${b.receivables.length} hesap</span></div>${b.receivables.slice(0,12).map(x=>`<div class="summary-row"><span>${esc(x.name)} <small>${esc(x.type)}</small></span><strong>${money(x.tl)}</strong></div>`).join('')||'<div class="muted">Cari alacak yok.</div>'}</div><div class="card"><div class="section-head"><h3>En Yüksek Cari Borçlar</h3><span>${b.payables.length} hesap</span></div>${b.payables.slice(0,12).map(x=>`<div class="summary-row"><span>${esc(x.name)} <small>${esc(x.type)}</small></span><strong>${money(x.tl)}</strong></div>`).join('')||'<div class="muted">Cari borç yok.</div>'}</div></div>`,null);
-    const modalEl=document.querySelector('#modalRoot .modal');if(modalEl)modalEl.style.width='min(1100px,96vw)';
+    const today=new Date().toISOString().slice(0,10),d=new Date(),first=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
+    modal('Bilanço — Pusula Düzeni',`<div class="form-grid"><div class="labelled"><label>Başlangıç Tarihi</label><input id="balFrom" class="input" type="date" value="${first}"></div><div class="labelled"><label>Bitiş Tarihi</label><input id="balTo" class="input" type="date" value="${today}"></div><div class="labelled"><label>&nbsp;</label><button class="btn btn-primary" id="balCalc">GÖSTER</button></div></div><div id="balResult" style="margin-top:14px"></div>`,null);
+    const modalEl=document.querySelector('#modalRoot .modal');if(modalEl)modalEl.style.width='min(1260px,97vw)';
+    const calc=()=>{const from=document.getElementById('balFrom')?.value,to=document.getElementById('balTo')?.value;if(!from||!to)return toast('Başlangıç ve bitiş tarihi seçin','err');if(from>to)return toast('Başlangıç tarihi bitiş tarihinden büyük olamaz','err');const d=balancePusulaDataV656(from,to),b=balanceSheetSnapshot(),toHas=tl=>Number(tl||0)/Math.max(1,b.hasRate),box=document.getElementById('balResult');if(box)box.innerHTML=balancePusulaTableV656(d,from,to)+`<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:800">Yönetim bilançosu özeti</summary><div class="grid grid-2" style="margin-top:12px"><div class="card"><div class="section-head"><h3>VARLIKLAR</h3><span>${trDate(b.date)}</span></div><div class="summary-row"><span>Altın / Ziynet / Hurda Stok Maliyeti</span><strong>${money(b.stockTl)}<br><small>${qty(b.sv.totalCost)} HAS</small></strong></div><div class="summary-row"><span>Kasa + Banka</span><strong>${money(b.liquidAssetsTl)}<br><small>${qty(toHas(b.liquidAssetsTl))} HAS</small></strong></div><div class="summary-row"><span>Cari Alacaklar</span><strong>${money(b.receivablesTl)}<br><small>${qty(toHas(b.receivablesTl))} HAS</small></strong></div><div class="summary-row total"><span>TOPLAM VARLIK</span><strong>${money(b.totalAssets)}<br><small>${qty(toHas(b.totalAssets))} HAS</small></strong></div></div><div class="card"><div class="section-head"><h3>BORÇLAR + ÖZ KAYNAK</h3><span>Denge</span></div><div class="summary-row"><span>Banka/Kasa Eksi Bakiyeler</span><strong>${money(b.accountDebtTl)}</strong></div><div class="summary-row"><span>Cari / Toptancı Borçları</span><strong>${money(b.payablesTl)}</strong></div><div class="summary-row"><span>Toplam Borç</span><strong>${money(b.totalLiabilities)}<br><small>${qty(toHas(b.totalLiabilities))} HAS</small></strong></div><div class="summary-row total"><span>NET ÖZ KAYNAK</span><strong class="${b.equity>=0?'positive':'negative'}">${money(b.equity)}<br><small>${qty(toHas(b.equity))} HAS</small></strong></div></div></div></details>`;};
+    document.getElementById('balCalc')?.addEventListener('click',calc);calc();
   }
 
   function pageReports(){
@@ -5245,7 +5335,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
 
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion='6.55';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
+    state.meta=state.meta||{};state.meta.appVersion='6.56';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
