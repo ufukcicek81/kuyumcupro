@@ -1045,7 +1045,28 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   const ASIL_PRICE_SETTINGS_URL = 'https://asil-kuyumculuk-2feb6-default-rtdb.firebaseio.com/ayarlar.json';
   const CLOUD_STATE_URL = 'https://asil-kuyumculuk-2feb6-default-rtdb.firebaseio.com/kuyumcuProV5/state.json';
   const CLOUD_BACKUP_BASE = 'https://asil-kuyumculuk-2feb6-default-rtdb.firebaseio.com/kuyumcuProV5/backups';
+  const CLOUD_KEY_STORAGE = 'asil_kuyumcu_cloud_key_v1';
+  const CLOUD_DEVICE_STORAGE = 'asil_kuyumcu_cloud_device_v1';
+  const SESSION_ACTIVITY_KEY = 'asil_kuyumcu_session_activity_v1';
   var cloudInitializedV5=false, cloudApplyingV5=false, cloudPushTimerV5=null, cloudStreamV5=null;
+  var securityIdleTimerV664=null;
+  function bytesToB64UrlV664(bytes){let s='';for(const b of bytes)s+=String.fromCharCode(b);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
+  function b64UrlToBytesV664(value){let s=String(value||'').trim().replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';const raw=atob(s),out=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);return out;}
+  function cloudDeviceIdV664(){let id='';try{id=localStorage.getItem(CLOUD_DEVICE_STORAGE)||'';}catch(_){}if(!id){id='DEV-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10);try{localStorage.setItem(CLOUD_DEVICE_STORAGE,id);}catch(_){}}return id;}
+  function cloudKeyGetV664(){try{const k=String(localStorage.getItem(CLOUD_KEY_STORAGE)||'').trim();if(!k)return '';const b=b64UrlToBytesV664(k);return b.length===32?k:'';}catch(_){return '';}}
+  function cloudKeySetV664(value){const k=String(value||'').trim();const b=b64UrlToBytesV664(k);if(b.length!==32)throw new Error('Bulut anahtarı geçersiz. 32 baytlık Asil bulut anahtarı olmalı.');try{localStorage.setItem(CLOUD_KEY_STORAGE,k);}catch(_){throw new Error('Bulut anahtarı bu cihazda saklanamadı.');}return k;}
+  function cloudKeyEnsureV664(){let k=cloudKeyGetV664();if(k)return k;const b=crypto.getRandomValues(new Uint8Array(32));k=bytesToB64UrlV664(b);try{localStorage.setItem(CLOUD_KEY_STORAGE,k);}catch(_){}return k;}
+  async function cloudCryptoKeyV664(){const raw=b64UrlToBytesV664(cloudKeyEnsureV664());return crypto.subtle.importKey('raw',raw,{name:'AES-GCM'},false,['encrypt','decrypt']);}
+  async function cloudEncryptPayloadV664(obj){const iv=crypto.getRandomValues(new Uint8Array(12)),key=await cloudCryptoKeyV664(),plain=new TextEncoder().encode(JSON.stringify(obj)),enc=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},key,plain));return {format:'ASIL_CLOUD_AESGCM_V1',encrypted:true,alg:'AES-GCM',iv:bytesToB64UrlV664(iv),data:bytesToB64UrlV664(enc),updatedAt:obj?.meta?.updatedAt||new Date().toISOString(),deviceId:cloudDeviceIdV664()};}
+  async function cloudDecryptPayloadV664(env){if(!env?.encrypted||env?.format!=='ASIL_CLOUD_AESGCM_V1')return env;const local=cloudKeyGetV664();if(!local)throw new Error('CLOUD_KEY_REQUIRED');try{const key=await crypto.subtle.importKey('raw',b64UrlToBytesV664(local),{name:'AES-GCM'},false,['decrypt']),plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64UrlToBytesV664(env.iv)},key,b64UrlToBytesV664(env.data));return JSON.parse(new TextDecoder().decode(plain));}catch(_){throw new Error('CLOUD_KEY_INVALID');}}
+  async function pinHashV664(pin,saltValue=''){const salt=saltValue?b64UrlToBytesV664(saltValue):crypto.getRandomValues(new Uint8Array(16)),base=await crypto.subtle.importKey('raw',new TextEncoder().encode(String(pin||'')),'PBKDF2',false,['deriveBits']),bits=new Uint8Array(await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt,iterations:180000},base,256));return {pinHash:bytesToB64UrlV664(bits),pinSalt:bytesToB64UrlV664(salt)};}
+  async function verifyUserPinV664(user,pin){if(!user)return false;if(user.pinHash&&user.pinSalt){const x=await pinHashV664(pin,user.pinSalt),a=String(x.pinHash),b=String(user.pinHash);if(a.length!==b.length)return false;let d=0;for(let i=0;i<a.length;i++)d|=a.charCodeAt(i)^b.charCodeAt(i);return d===0;}return String(user.pin??'')===String(pin??'');}
+  async function setUserPinV664(user,pin){const x=await pinHashV664(pin);user.pinHash=x.pinHash;user.pinSalt=x.pinSalt;delete user.pin;return user;}
+  async function migrateLegacyPinsV664(){let changed=false;for(const u of (state.users||[])){if(u.pin&&!u.pinHash){await setUserPinV664(u,u.pin);changed=true;}}if(changed){try{localStorage.setItem(LS_KEY,JSON.stringify(state));}catch(_){}}return changed;}
+  function securityTimeoutMsV664(){return Math.max(5,Math.min(480,Number(state?.settings?.securityAutoLockMinutes||60)))*60000;}
+  function touchSecurityActivityV664(){if(!session)return;try{localStorage.setItem(SESSION_ACTIVITY_KEY,String(Date.now()));}catch(_){}clearTimeout(securityIdleTimerV664);securityIdleTimerV664=setTimeout(()=>{if(!session)return;session=null;safeSessionRemove();render();toast('Oturum güvenlik nedeniyle kilitlendi','warn');},securityTimeoutMsV664());}
+  function bindSecurityAutoLockV664(){if(document.documentElement.dataset.securityIdleBound==='1'){touchSecurityActivityV664();return;}document.documentElement.dataset.securityIdleBound='1';['pointerdown','keydown','touchstart'].forEach(ev=>document.addEventListener(ev,touchSecurityActivityV664,{passive:true}));touchSecurityActivityV664();}
+
   const LIVE_PRICE_INTERVAL_MS = 5000;
 
   const money = (n, cur='TL') => new Intl.NumberFormat('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2}).format(Number(n||0)) + ' ' + cur;
@@ -1217,7 +1238,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     try{
       if(typeof ensureV5State==='function') ensureV5State();
       if(typeof reconcileTransactionLedgerV5==='function') reconcileTransactionLedgerV5();
-      state.meta=state.meta||{}; state.meta.updatedAt=now(); state.meta.appVersion='6.56';
+      state.meta=state.meta||{}; state.meta.updatedAt=now(); state.meta.appVersion='6.64';
       if(typeof syncSystemParametersV648==='function')syncSystemParametersV648();
       localStorage.setItem(LS_KEY, JSON.stringify(state));
     } catch { /* Yerel dosya modunda depolama engellense bile uygulama çalışmaya devam eder. */ }
@@ -5649,7 +5670,7 @@ function stockSummaryView(){
   }
 
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion='6.56';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
+    state.meta=state.meta||{};state.meta.appVersion='6.64';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
