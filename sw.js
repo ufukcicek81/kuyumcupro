@@ -1,4 +1,4 @@
-const C='asil-v6-76-eski-bakiye-temizlik-20260930';
+const C='asil-v6-77-bilanco-korumali-eski-bakiye-20260930';
 self.addEventListener('install',e=>{
   self.skipWaiting();
   e.waitUntil(caches.open(C).then(c=>c.addAll(['./','./index.html'])));
