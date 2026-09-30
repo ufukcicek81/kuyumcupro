@@ -3154,7 +3154,7 @@ function stockSummaryView(){
     try{localStorage.setItem(LOCAL_EMERGENCY_BACKUP_KEY,JSON.stringify(state));}catch(_){}
     if(state.cloudSync?.enabled)await cloudBackupV5('ESKİ BAKİYE TEMİZLİĞİ ÖNCESİ').catch(()=>false);
     const batch='ESKI-TEMIZ-'+state.activePeriod+'-'+String(Date.now()).slice(-8);
-    const removeIds=new Set(),archiveMoves=[],archiveCustomers=[];
+    const removeIds=new Set(),archiveMoves=[],archiveCustomers=[],changedLegacyKeys=new Set();
     p.touchedIds.forEach(id=>{
       const c=p.customers.get(id);if(!c)return;
       archiveCustomers.push({id:c.id,name:c.name,tlBalance:Number(c.tlBalance||0),hasBalance:Number(c.hasBalance||0),otherBalances:{...(c.otherBalances||{})},openingBalances:{...(c.openingBalances||{})}});
@@ -3162,6 +3162,7 @@ function stockSummaryView(){
       Object.keys(b).forEach(unit=>{
         const oldLegacy=Number(b[unit]||0),target=Math.abs(Number(a[unit]||0))<.000001?0:Number(a[unit]||0);
         if(Math.abs(target-oldLegacy)<=.000001)return;
+        changedLegacyKeys.add(String(c.id)+'|'+String(unit));
         const oldCurrent=cariLegacyBalanceV676(c,unit);
         forceCariLegacyBalanceV676(c,unit,oldCurrent+(target-oldLegacy));
         c.openingBalances=c.openingBalances||{};
@@ -3179,6 +3180,7 @@ function stockSummaryView(){
       const c=p.customers.get(id);if(!c)return;
       const a=p.after.get(id)||{};
       Object.entries(a).forEach(([unit,targetRaw])=>{
+        if(!changedLegacyKeys.has(String(c.id)+'|'+String(unit)))return;
         const target=Math.abs(Number(targetRaw||0))<.000001?0:Number(targetRaw||0);
         if(target===0)return;
         seq++;
