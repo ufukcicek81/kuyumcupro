@@ -1,0 +1,108 @@
+name: Fix customer label v6.67
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - ".github/workflows/fix-customer-label-v667.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore customer label side and printer orientation
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          p = Path("index.html")
+          s = p.read_text(encoding="utf-8")
+
+          # Restore the exact customer-label layout that printed correctly before v6.66.
+          start = s.find("if(x.customerOnly){")
+          end = s.find("const blocks=[];", start)
+          if start < 0 or end < 0:
+              raise SystemExit("customerOnly block not found")
+
+          block = s[start:end]
+
+          # Restore message/company and customer-name coordinates from the known-good layout.
+          block = re.sub(
+              r'<div style="position:absolute;left:23\.0mm;top:\.55mm;width:22\.7mm;height:3\.45mm;display:flex;align-items:center;justify-content:center;text-align:center;font-size:\$\{msgPt\}pt;font-weight:900;line-height:1;white-space:nowrap;overflow:hidden;letter-spacing:\.02em">\$\{esc\(msg\)\}</div>',
+              '<div style="position:absolute;left:23.2mm;top:.75mm;width:22.1mm;height:3.3mm;display:flex;align-items:center;justify-content:center;text-align:center;font-size:6.3pt;font-weight:900;line-height:1;white-space:nowrap;overflow:hidden">${esc(msg)}</div>',
+              block
+          )
+          block = re.sub(
+              r'<div style="position:absolute;left:23\.0mm;top:5\.00mm;width:22\.7mm;height:2\.85mm;display:flex;align-items:center;justify-content:center;text-align:center;font-size:5\.0pt;font-weight:700;line-height:1;white-space:nowrap;overflow:hidden">\$\{esc\(company\)\}</div>',
+              '<div style="position:absolute;left:23.2mm;top:5.15mm;width:22.1mm;height:2.7mm;display:flex;align-items:center;justify-content:center;text-align:center;font-size:5.2pt;font-weight:700;line-height:1;white-space:nowrap;overflow:hidden">${esc(company)}</div>',
+              block
+          )
+
+          # Names must stay on the original 46.1 mm side, not the opposite tail.
+          block = re.sub(
+              r'<div style="position:absolute;left:(?:46\.0|0\.0)mm;top:\.55mm;width:(?:25\.4|22\.7)mm;height:3\.45mm;display:flex;align-items:center;justify-content:center;text-align:center;font-size:\$\{namePt\}pt;font-weight:900;line-height:1;white-space:nowrap;overflow:hidden;letter-spacing:\.01em">\$\{esc\(name\)\}</div>',
+              '<div style="position:absolute;left:46.1mm;top:.65mm;width:24.4mm;height:3.3mm;display:flex;align-items:center;justify-content:center;text-align:center;font-size:6.5pt;font-weight:900;line-height:1;white-space:nowrap;overflow:hidden">${esc(name)}</div>',
+              block
+          )
+          block = re.sub(
+              r'<div style="position:absolute;left:(?:46\.0|0\.0)mm;top:5\.00mm;width:(?:25\.4|22\.7)mm;height:3\.45mm;display:flex;align-items:center;justify-content:center;text-align:center;font-size:\$\{namePt\}pt;font-weight:900;line-height:1;white-space:nowrap;overflow:hidden;letter-spacing:\.01em">\$\{esc\(name\)\}</div>',
+              '<div style="position:absolute;left:46.1mm;top:5.05mm;width:24.4mm;height:3.3mm;display:flex;align-items:center;justify-content:center;text-align:center;font-size:6.5pt;font-weight:900;line-height:1;white-space:nowrap;overflow:hidden">${esc(name)}</div>',
+              block
+          )
+
+          # Remove the v6.66 forced portrait/zero-offset settings. Use the printer's saved,
+          # already calibrated orientation/margins/offsets like the known-good version did.
+          old = "const s={...printerSettings(),copies,mediaMode:'roll',labelWidthMm:72,labelHeightMm:10,gapMm:0,marginTopMm:0,marginRightMm:0,marginBottomMm:0,marginLeftMm:0,orientation:'portrait',horizontalOffsetMm:0,verticalOffsetMm:0,fontScale:100,showCode:false,showKarat:false,showSaleHas:false,showInternalCode:false};"
+          new = "const s={...printerSettings(),copies,showCode:false,showKarat:false,showSaleHas:false,showInternalCode:false};"
+
+          s = s[:start] + block + s[end:]
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif new not in s:
+              raise SystemExit("customer print settings line not found")
+
+          s = s.replace("Asil Kuyumcu Pro V6.66", "Asil Kuyumcu Pro V6.67")
+          s = s.replace("v6.66</span>", "v6.67</span>")
+          s = s.replace("state.meta.appVersion='6.66'", "state.meta.appVersion='6.67'")
+          s = s.replace("/* v6.66 — PC ekranlarında daha kompakt çalışma düzeni */", "/* v6.67 — PC ekranlarında daha kompakt çalışma düzeni */")
+
+          p.write_text(s, encoding="utf-8")
+
+          Path("sw.js").write_text("""const C='asil-v6-67-customer-label-known-good-20260930';
+self.addEventListener('install',e=>{
+  self.skipWaiting();
+  e.waitUntil(caches.open(C).then(c=>c.addAll(['./','./index.html'])));
+});
+self.addEventListener('activate',e=>{
+  e.waitUntil((async()=>{
+    await caches.keys().then(a=>Promise.all(a.filter(x=>x!==C).map(x=>caches.delete(x))));
+    await self.clients.claim();
+  })());
+});
+self.addEventListener('fetch',e=>{
+  const u=new URL(e.request.url);
+  if(u.origin!==self.location.origin || u.pathname.startsWith('/api/')) return;
+  if(e.request.mode==='navigate'){
+    e.respondWith(fetch(e.request,{cache:'no-store'}).catch(()=>caches.match('./index.html')));
+    return;
+  }
+  e.respondWith(fetch(e.request,{cache:'no-store'}).catch(()=>caches.match(e.request)));
+});
+""", encoding="utf-8")
+      - name: Commit direct fix
+        run: |
+          git config user.name "ChatGPT Fix"
+          git config user.email "actions@users.noreply.github.com"
+          git add index.html sw.js
+          if git diff --cached --quiet; then
+            echo "No changes needed"
+          else
+            git commit -m "v6.67: müşteri isim etiketini doğru tarafa geri al"
+            git push
+          fi
