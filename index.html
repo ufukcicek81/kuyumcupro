@@ -2999,17 +2999,14 @@ function stockSummaryView(){
   }
 
   function syncSystemParametersV648(){
-    state.settings=state.settings||{};state.printerSettings=state.printerSettings||{};
-    const val=key=>state.systemParameters?.find(x=>x.key===key)?.value;
-    const yes=v=>['evet','1','true','yes'].includes(String(v??'').toLocaleLowerCase('tr-TR'));
-    const auto=val('autoGoldPrice'),fx=val('updateExchange');
-    if(auto!==undefined||fx!==undefined)state.settings.livePriceSync=(auto===undefined||yes(auto))&&(fx===undefined||yes(fx));
-    const mins=Number(val('exchangeUpdateMinutes'));if(Number.isFinite(mins)&&mins>0)state.settings.exchangeUpdateMinutes=mins;
-    const backup=val('backupEnabled');if(backup!==undefined)state.settings.backupEnabled=yes(backup);
-    const disableBarcode=val('disableBarcode');if(disableBarcode!==undefined)state.settings.disableBarcode=yes(disableBarcode);
-    const printer=String(val('barcodePrinter')||'').trim();if(printer&&printer!=='BarYaz')state.printerSettings.printerName=printer;
+    // v6.64: Eski Pusula parametreleri artık program davranışını geri planda ezmez.
+    // Gerçek ayarlar Sistem Ayarları, Personel, Yazıcı ve Yedek merkezlerinden yönetilir.
+    state.settings=state.settings||{};
+    state.printerSettings=state.printerSettings||{};
     state.settings.parameterValues=Object.fromEntries((state.systemParameters||[]).map(x=>[x.key,x.value]));
+    state.settings.legacyParametersReadOnly=true;
   }
+
   function openPersonnelAddV648(){
     modal('Personel Ekle',`<div class="form-grid"><div class="labelled span-2"><label>Ad Soyad</label><input id="perName" class="input" autocomplete="off"></div><div class="labelled"><label>Kullanıcı Adı</label><input id="perUser" class="input" autocomplete="off"></div><div class="labelled"><label>PIN / Şifre</label><input id="perPin" class="input" type="password" inputmode="numeric" autocomplete="new-password"></div><div class="labelled span-2"><label>Görev</label><select id="perRole" class="select"><option>Satış Danışmanı</option><option>Yönetici</option></select></div><label class="permission-box"><input id="perCanPrice" type="checkbox"> Satış fiyatını değiştirebilir</label><label class="permission-box"><input id="perCanCost" type="checkbox"> Maliyet görebilir</label><label class="permission-box"><input id="perCanFinance" type="checkbox"> Kasa / Finans işlemleri</label><label class="permission-box"><input id="perCanReturn" type="checkbox"> İade / Değişim</label></div>`,async()=>{
       const name=document.getElementById('perName').value.trim(),username=document.getElementById('perUser').value.trim(),pin=document.getElementById('perPin').value.trim(),role=document.getElementById('perRole').value,admin=role==='Yönetici';
