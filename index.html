@@ -1186,7 +1186,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   simplifyBankPosV55();
   ensureBankCariLinksV54();
   reconcileTransactionLedgerV5();
-  save();
+  save(false);
   let uiMode = state.settings.uiMode || 'pc';
   // Apply the selected bright interface once, then respect future theme choices.
   if(state.settings.interfaceVersion !== '6.45'){state.settings.theme='light';state.settings.interfaceVersion='6.45';}
@@ -1234,15 +1234,15 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       return fresh;
     }
   }
-  function save(){
+  function save(touchUpdated=true){
     try{
       if(typeof ensureV5State==='function') ensureV5State();
       if(typeof reconcileTransactionLedgerV5==='function') reconcileTransactionLedgerV5();
-      state.meta=state.meta||{}; state.meta.updatedAt=now(); state.meta.appVersion='6.64';
+      state.meta=state.meta||{}; if(touchUpdated)state.meta.updatedAt=now(); state.meta.appVersion='6.64';
       if(typeof syncSystemParametersV648==='function')syncSystemParametersV648();
       localStorage.setItem(LS_KEY, JSON.stringify(state));
     } catch { /* Yerel dosya modunda depolama engellense bile uygulama çalışmaya devam eder. */ }
-    if(cloudInitializedV5 && !cloudApplyingV5 && state?.cloudSync?.enabled && typeof scheduleCloudPushV5==='function') scheduleCloudPushV5();
+    if(touchUpdated&&cloudInitializedV5 && !cloudApplyingV5 && state?.cloudSync?.enabled && typeof scheduleCloudPushV5==='function') scheduleCloudPushV5();
   }
   function safeNfcReturnGet(){
     try{
@@ -1933,7 +1933,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       if(enteredCloudKey){
         try{
           cloudKeySetV664(enteredCloudKey);
-          await cloudPullV5(false);
+          await cloudPullV5(false,true);
           if(state.cloudSync?.lastStatus==='Anahtar Hatalı'||state.cloudSync?.lastStatus==='Anahtar Gerekli')throw new Error('Bulut güvenlik anahtarı doğrulanamadı');
         }catch(err){
           try{localStorage.removeItem(CLOUD_KEY_STORAGE);}catch(_){}
@@ -5834,7 +5834,7 @@ function stockSummaryView(){
       return false;
     }
   }
-  async function cloudPullV5(manual=false){
+  async function cloudPullV5(manual=false,force=false){
     ensureV5State();if(manual&&!v5Guard('canCloudSync'))return false;
     try{
       state.cloudSync.lastStatus='Alınıyor';
@@ -5853,7 +5853,7 @@ function stockSummaryView(){
       if(!remote||!Array.isArray(remote.stocks)||remote.stocks.length<1000){state.cloudSync.lastStatus='Geçersiz Bulut Verisi';return false;}
       const rt=new Date(remote?.meta?.updatedAt||raw?.updatedAt||0).getTime(),lt=new Date(state?.meta?.updatedAt||0).getTime();
       const needsMigration=!encrypted;
-      if(manual||rt>lt+1000){
+      if(manual||force||rt>lt+1000){
         cloudApplyingV5=true;state=remote;ensureStateShape();ensureV5State();simplifyBankPosV55();ensureBankCariLinksV54();reconcileTransactionLedgerV5();
         state.cloudSync=state.cloudSync||{};state.cloudSync.encrypted=encrypted;state.cloudSync.encryptionMigrationPending=needsMigration;state.cloudSync.lastPull=now();state.cloudSync.lastStatus='Bağlı';
         localStorage.setItem(LS_KEY,JSON.stringify(state));cloudApplyingV5=false;
@@ -5905,6 +5905,8 @@ function stockSummaryView(){
   async function initCloudSyncV5(){
     ensureV5State();
     await cloudPullV5(false);
+    const pinMigrated=await migrateLegacyPinsV664().catch(()=>false);
+    if(pinMigrated){state.cloudSync=state.cloudSync||{};state.cloudSync.encryptionMigrationPending=true;save(false);}
     cloudInitializedV5=true;
     if(state.cloudSync.enabled&&state.cloudSync.lastStatus!=='Anahtar Gerekli'&&state.cloudSync.lastStatus!=='Anahtar Hatalı'){
       if(!cloudKeyGetV664())cloudKeyEnsureV664();
@@ -6848,7 +6850,7 @@ function stockSummaryView(){
   render();
   setTimeout(()=>resumePendingNfcReturnV635(),450);
   initLivePriceSync();
-  migrateLegacyPinsV664().catch(()=>{});
+  migrateLegacyPinsV664().then(changed=>{if(changed)save();}).catch(()=>{});
   initCloudSyncV5();
 })();
 
