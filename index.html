@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101113" />
-  <meta name="description" content="Asil Kuyumcu Pro V6.60 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
+  <meta name="description" content="Asil Kuyumcu Pro V6.61 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.60</title>
+  <title>Asil Kuyumcu Pro V6.61</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -1889,7 +1889,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.60</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
+        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.61</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
         <nav class="nav" aria-label="Ana menü">${['dashboard','sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={dashboard:'Ana Menü',sales:'Satış',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
         <details class="more-nav"><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['dashboard','sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
       </aside>
@@ -2608,6 +2608,10 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const style=(k,barcode=false)=>{const e=els[k],fs=barcode?'':`font-size:${Math.max(2,Number(e.fontPt||5)*scale)}pt;`;return `left:${Number(e.x||0)+ox}mm;top:${Number(e.y||0)+oy}mm;width:${Math.max(.5,Number(e.w||1))}mm;height:${Math.max(.5,Number(e.h||1))}mm;${fs}font-weight:${e.bold===false?400:800};line-height:${Math.max(.5,Number(e.h||1))}mm;`;};
     const attr=k=>opts.editable?` data-label-field="${k}" title="${esc(els[k].label||k)} — fareyle taşı"`:'';
     const guide=opts.editable?`<div class="jl-guide" style="left:23mm"></div><div class="jl-guide" style="left:46mm"></div><div class="jl-tail" style="left:46mm;right:0"></div>`:'';
+    if(x.customerOnly){
+      const msg=String(x.printCustomerMessage||'MUTLULUKLAR').trim(),name=String(x.printCustomerName||'').trim();
+      return `<div class="jewel-label customer-only-label"><div style="position:absolute;left:23.2mm;top:2.1mm;width:22mm;height:5.8mm;display:flex;align-items:center;justify-content:center;text-align:center;font-size:6pt;font-weight:800;line-height:1.15;white-space:normal;overflow:hidden">${esc(msg)}</div><div style="position:absolute;left:46.3mm;top:.7mm;width:24.5mm;height:8.4mm;display:flex;align-items:center;justify-content:center;text-align:center;font-size:7pt;font-weight:900;line-height:1.08;white-space:normal;overflow:hidden;word-break:break-word">${esc(name)}</div></div>`;
+    }
     return `<div class="jewel-label${opts.editable?' edit-mode':''}">${guide}${x.hideBarcode===true?'':`<div class="jl-item jl-barcode"${attr('barcode')} style="${style('barcode',true)}">${code128Svg(x.barcode||code)}</div>`}${s.showCode!==false&&x.hideCode!==true?`<div class="jl-item jl-code"${attr('code')} style="${style('code')}">${esc(code)}</div>`:''}${x.hideCompany===true?'':`<div class="jl-item jl-company"${attr('company')} style="${style('company')}">${esc(company)}</div>`}${s.showSaleHas!==false?`<div class="jl-item jl-price1"${attr('price1')} style="${style('price1')}">${qty(topHas)} HAS</div><div class="jl-item jl-price2"${attr('price2')} style="${style('price2')}">${qty(saleHas)} HAS</div>`:''}${s.showKarat!==false?`<div class="jl-item jl-karat"${attr('karat')} style="${style('karat')}">${esc(labelKaratText(x))}</div>`:''}${internal?`<div class="jl-item jl-internal"${attr('internal')} style="${style('internal')}">${esc(internal)}</div>`:''}${(customerName||opts.editable)?`<div class="jl-item jl-customer"${attr('customer')} style="${style('customer')}">${esc(customerName||'MÜŞTERİ AD SOYAD')}</div>`:''}</div>`;
   }
   function labelPrintDocument(rows,s=printerSettings()){
@@ -2674,19 +2678,23 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const expanded=[];for(let c=0;c<Math.max(1,Number(s.copies||1));c++)expanded.push(...rows);const w=window.open('','_blank','width=850,height=720');if(!w)throw new Error('Tarayıcı açılır pencereyi engelledi');w.document.open();w.document.write(labelPrintDocument(expanded,s).replace('</body>',`<script>window.onload=()=>setTimeout(()=>window.print(),250)<\/script></body>`));w.document.close();return 'Tarayıcı yazdırma';
   }
   async function printLabels(ids,{test=false}={}){
-    const baseRows=test?[syntheticTestLabel()]:ids.map(id=>state.stocks.find(x=>x.id===id)).filter(Boolean),customerOverride=String(document.getElementById('labelCustomerName')?.value||'').trim(),rows=baseRows.map(x=>customerOverride?{...x,printCustomerName:customerOverride}:x);if(!rows.length)return toast('Yazdırılacak etiket seçin','err');const s=printerSettings();
-    try{const target=s.mode==='qz'?await printLabelsQz(rows,s):await printLabelsBrowser(rows,s);state.labelPrintHistory=Array.isArray(state.labelPrintHistory)?state.labelPrintHistory:[];state.labelPrintHistory.unshift({id:uid('LPH'),date:now(),type:test?'Test Etiketi':'Barkod',count:rows.length,codes:rows.map(x=>x.code||x.barcode||'').filter(Boolean).slice(0,12),customerName:customerOverride||'',printer:target,user:session?.name||''});state.labelPrintHistory=state.labelPrintHistory.slice(0,100);audit(`${rows.length} barkod etiketi yazdırıldı · ${target}`,'Barkod');save();toast(`${rows.length} etiket yazdırmaya gönderildi`);}catch(err){console.error(err);toast(`Yazdırma hatası: ${err?.message||err}`,'err');}
+    const rows=test?[syntheticTestLabel()]:ids.map(id=>state.stocks.find(x=>x.id===id)).filter(Boolean);if(!rows.length)return toast('Yazdırılacak etiket seçin','err');const s=printerSettings();
+    try{const target=s.mode==='qz'?await printLabelsQz(rows,s):await printLabelsBrowser(rows,s);state.labelPrintHistory=Array.isArray(state.labelPrintHistory)?state.labelPrintHistory:[];state.labelPrintHistory.unshift({id:uid('LPH'),date:now(),type:test?'Test Etiketi':'Barkod',count:rows.length,codes:rows.map(x=>x.code||x.barcode||'').filter(Boolean).slice(0,12),customerName:'',printer:target,user:session?.name||''});state.labelPrintHistory=state.labelPrintHistory.slice(0,100);audit(`${rows.length} barkod etiketi yazdırıldı · ${target}`,'Barkod');save();toast(`${rows.length} etiket yazdırmaya gönderildi`);}catch(err){console.error(err);toast(`Yazdırma hatası: ${err?.message||err}`,'err');}
   }
   async function printCustomerNameOnlyV649(){
-    const name=String(document.getElementById('labelCustomerName')?.value||'').trim();
+    const name=String(document.getElementById('customerLabelName')?.value||'').trim();
+    const message=String(document.getElementById('customerLabelMessage')?.value||'MUTLULUKLAR').trim();
+    const copies=Math.max(1,Math.min(20,Number(document.getElementById('customerLabelCopies')?.value||1)));
     if(!name)return toast('Etikete basılacak müşteri ad soyadını yazın','err');
-    const s={...printerSettings(),showCode:false,showKarat:false,showSaleHas:false,showInternalCode:false};
-    const row={id:'CUSTOMER-NAME',code:'',barcode:'',name:'',purity:0,amount:0,saleHas:0,costHas:0,printCustomerName:name,hideBarcode:true,hideCode:true,hideCompany:true};
+    const s={...printerSettings(),copies,showCode:false,showKarat:false,showSaleHas:false,showInternalCode:false};
+    const row={id:'CUSTOMER-NAME',code:'',barcode:'',name:'',purity:0,amount:0,saleHas:0,costHas:0,customerOnly:true,printCustomerName:name,printCustomerMessage:message,hideBarcode:true,hideCode:true,hideCompany:true};
     try{
       const target=s.mode==='qz'?await printLabelsQz([row],s):await printLabelsBrowser([row],s);
-      state.labelPrintHistory=Array.isArray(state.labelPrintHistory)?state.labelPrintHistory:[];state.labelPrintHistory.unshift({id:uid('LPH'),date:now(),type:'Müşteri İsim Etiketi',count:1,codes:[],customerName:name,printer:target,user:session?.name||''});state.labelPrintHistory=state.labelPrintHistory.slice(0,100);
-      audit(`Müşteri isim etiketi yazdırıldı · ${name} · ${target}`,'Barkod');save();
-      toast(`${name} isim etiketi yazdırmaya gönderildi`);
+      state.labelPrintHistory=Array.isArray(state.labelPrintHistory)?state.labelPrintHistory:[];
+      state.labelPrintHistory.unshift({id:uid('LPH'),date:now(),type:'Müşteri İsim Etiketi',count:copies,codes:[],customerName:name,printer:target,user:session?.name||''});
+      state.labelPrintHistory=state.labelPrintHistory.slice(0,100);
+      audit(`Müşteri isim etiketi yazdırıldı · ${name} · ${copies} adet · ${target}`,'Barkod');save();
+      toast(`${name} için ${copies} isim etiketi yazdırmaya gönderildi`);
     }catch(err){
       console.error(err);toast(`İsim etiketi yazdırma hatası: ${err?.message||err}`,'err');
     }
@@ -2694,9 +2702,9 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
 
   function openPrinterSettings(){
     const s=printerSettings(),working={...s,elements:mergeLabelElements(JSON.parse(JSON.stringify(s.elements||{})))};
-    const fieldNames={barcode:'Barkod',code:'Ürün Kodu',company:'Şirket Adı',price1:'Etiket / Üst HAS',price2:'Satış HAS',karat:'Ayar',internal:'Özel Kod',customer:'Müşteri Ad Soyad'};
+    const fieldNames={barcode:'Barkod',code:'Ürün Kodu',company:'Şirket Adı',price1:'Etiket / Üst HAS',price2:'Satış HAS',karat:'Ayar',internal:'Özel Kod'};
     modal('Etiket Yazıcısı ve Yerleşim Ayarları',`<div class="printer-settings-grid">
-      <div class="span-4 printer-preset-note"><strong>Doğrudan sessiz baskı:</strong> Barkod Yazdır düğmesi QZ Tray ile yazdırma ekranı açmadan seçili etiket yazıcısına gönderir. İlk kullanımda aşağıdaki <b>QZ Yetkilendir (1 Kez)</b> düğmesinden private-key.pem seçilir. <br><strong>Pusula gibi ayarla:</strong> Aşağıdaki etiket üstünde <b>Barkod, Ürün Kodu, Şirket Adı, HAS fiyatları, Ayar, Özel Kod ve Müşteri Ad Soyad</b> alanlarını fareyle tutup istediğin yere sürükleyebilirsin. <b>Müşteri Ad Soyad stok kartına kaydolmaz;</b> yalnız baskı anında kullanılır. Konumlar KAYDET dediğinde kalıcı olur.</div>
+      <div class="span-4 printer-preset-note"><strong>Doğrudan sessiz baskı:</strong> Barkod Yazdır düğmesi QZ Tray ile yazdırma ekranı açmadan seçili etiket yazıcısına gönderir. İlk kullanımda aşağıdaki <b>QZ Yetkilendir (1 Kez)</b> düğmesinden private-key.pem seçilir. <br><strong>Pusula gibi ayarla:</strong> Aşağıdaki etiket üstünde <b>Barkod, Ürün Kodu, Şirket Adı, HAS fiyatları, Ayar, Özel Kod</b> alanlarını fareyle tutup istediğin yere sürükleyebilirsin. <b>Müşteri Ad Soyad stok kartına kaydolmaz;</b> yalnız baskı anında kullanılır. Konumlar KAYDET dediğinde kalıcı olur.</div>
       <div class="label-layout-editor">
         <div class="editor-head"><div><strong>Etiket Yerleşim Editörü — 72 × 10 mm</strong><br><small>Alanı fareyle tutup sürükle. Seçili alanı aşağıdaki X/Y kutularından da milimetrik ayarlayabilirsin.</small></div><span id="prSelectedName" class="label-editor-selected">Barkod seçili</span></div>
         <div class="label-editor-controls">
@@ -2760,7 +2768,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const s=printerSettings(),list=rows.slice().sort((a,b)=>String(a.barcode||a.code||'').localeCompare(String(b.barcode||b.code||''),'tr',{numeric:true,sensitivity:'base'})),modeLabel=s.mode==='qz'?'QZ Tray / Doğrudan':'Tarayıcı Yazdır';
     return `<div class="page-title" style="margin-top:4px"><div><h1 style="font-size:22px">Barkod / Etiket Merkezi</h1><p>Ürün seç, etiketi önizle ve tarayıcıdan veya doğrudan termal yazıcıdan bas.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" id="printerSettingsBtn">Yazıcı Ayarları</button><button class="btn" id="printTestLabel">Test Etiketi</button><button class="btn btn-primary" id="printAllVisible">Seçilenleri Yazdır</button></div></div>
       <div class="printer-status"><span class="badge gold">${esc(modeLabel)}</span><span class="badge">Yazıcı: ${esc(s.printerName||'Seçilmedi / Sistem Yazıcısı')}</span><span class="badge">Etiket ${qty(s.labelWidthMm)} × ${qty(s.labelHeightMm)} mm</span><span class="badge">${s.dpi} DPI</span><span class="badge">${s.copies} kopya</span></div>
-      <div class="card" style="margin:12px 0;border:2px solid rgba(214,161,31,.35)"><div class="section-head"><h3>Müşteriye Özel İsim Etiketi</h3><span class="badge gold">Stoktan bağımsız</span></div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end"><div class="labelled grow" style="min-width:260px"><label>Müşteri Ad Soyad</label><input id="labelCustomerName" class="input" placeholder="Örn. Ahmet Yılmaz"></div><button class="btn btn-primary" id="printCustomerNameOnly">SADECE İSİM ETİKETİ BAS</button></div><small class="muted">Çeyrek, gram altın vb. için yalnız müşteri adını basabilirsin. Aynı adı seçili normal barkod etiketine de eklemek istersen aşağıdan ürünü seçip “Seçilenleri Yazdır” de.</small></div>
+      <div class="card customer-label-card" style="margin:12px 0;border:2px solid rgba(214,161,31,.35)"><div class="section-head"><h3>Müşteri İsim Etiketi</h3><span class="badge gold">NORMAL BARKODDAN TAMAMEN AYRI</span></div><div class="form-grid"><div class="labelled"><label>Üst Yazı</label><input id="customerLabelMessage" class="input" value="MUTLULUKLAR"></div><div class="labelled span-2"><label>Müşteri Ad Soyad</label><input id="customerLabelName" class="input" placeholder="Örn. UFUK ÇİÇEK"></div><div class="labelled"><label>Adet</label><input id="customerLabelCopies" class="input" type="number" min="1" max="20" value="1"></div></div><div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-primary" id="printCustomerNameOnly">MÜŞTERİ İSİM ETİKETİ YAZDIR</button></div><small class="muted">Bu mod ürün barkodu, fiyat, ayar veya şirket bilgisini basmaz. Sadece üst yazı ve müşteri adı basılır; normal barkod yerleşimine karışmaz.</small></div>
       <div class="printer-toolbar"><input id="labelSearch" class="input grow" placeholder="Barkod, kısa kod (örn. 1657 / ALY1657), ürün adı veya stok kodu ara"><button class="btn btn-outline" id="labelSelectAll">Görünenleri Seç</button><button class="btn btn-outline" id="labelSelectNone">Seçimi Kaldır</button><span class="badge" id="labelSelectedCount">0 seçili</span><span class="badge gold">${list.length} ürün</span></div>
       <div class="notice"><strong>Tüm aktif barkodlu stok listeleniyor.</strong> Aramada <b>ALY0001657</b> yerine sadece <b>1657</b> veya <b>ALY1657</b> yazabilirsin. <b>22</b> gibi başlangıç yazarak da ilgili kodları süzebilirsin. Müşteri adı sadece o baskıya eklenir; ürün kartında saklanmaz.</div>
       ${(state.labelPrintHistory||[]).length?`<div class="card" style="margin-top:12px"><div class="section-head"><h3>Son Basılan Etiketler</h3><button class="btn btn-outline" id="clearLabelPrintHistory">Geçmişi Temizle</button></div><div class="table-wrap"><table class="table" style="min-width:760px"><thead><tr><th>Tarih</th><th>Tür</th><th>Kod / İsim</th><th>Yazıcı</th><th>Kullanıcı</th><th></th></tr></thead><tbody>${(state.labelPrintHistory||[]).slice(0,12).map(h=>`<tr><td>${trDate(h.date)}</td><td>${esc(h.type||'Etiket')}</td><td>${esc(h.customerName||h.codes?.join(', ')||'')}</td><td>${esc(h.printer||'')}</td><td>${esc(h.user||'')}</td><td><button class="btn btn-danger" data-label-history-delete="${h.id}">Sil</button></td></tr>`).join('')}</tbody></table></div></div>`:''}
@@ -6326,7 +6334,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     body+=receiptPairV644('Miktar',qty(x.quantity||0)+' '+String(x.unit||''),false);
     if(Number(x.unitPrice||0))body+=receiptPairV644('Birim Fiyat / Kur',Number(x.unitPrice||0).toLocaleString('tr-TR',{maximumFractionDigits:4}),false);
     body+=receiptPairV644('Toplam TL',money(x.totalTL||0),true);
-    body+=receiptPairV644('Toplam HAS',qty(x.totalHas||0)+' HAS',true);
+    if(!String(x.tradeType||'').startsWith('Döviz'))body+=receiptPairV644('Toplam HAS',qty(x.totalHas||0)+' HAS',true);
     body+=receiptPairV644('Karşılık',x.settlementLabel||x.settlementCurrency||'',false);
     body+=receiptPairV644('Hesap',x.accountName||'',false);
     body+=receiptPairV644('Kullanıcı',x.user||'',false);
