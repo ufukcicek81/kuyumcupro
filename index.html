@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101113" />
-  <meta name="description" content="Asil Kuyumcu Pro V6.65 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
+  <meta name="description" content="Asil Kuyumcu Pro V6.66 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.65</title>
+  <title>Asil Kuyumcu Pro V6.66</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -840,7 +840,7 @@ body[data-theme="dark"] .metric .foot,
 body[data-theme="dark"] .table th{color:#c9cfd7}
 
 
-/* v6.65 — PC ekranlarında daha kompakt çalışma düzeni */
+/* v6.66 — PC ekranlarında daha kompakt çalışma düzeni */
 body[data-ui-mode="pc"] .content{padding:14px 18px 20px}
 body[data-ui-mode="pc"] .content .page-title{margin-bottom:10px}
 body[data-ui-mode="pc"] .content .page-title h1{font-size:24px;line-height:1.1;margin-bottom:4px}
@@ -1238,7 +1238,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     try{
       if(typeof ensureV5State==='function') ensureV5State();
       if(typeof reconcileTransactionLedgerV5==='function') reconcileTransactionLedgerV5();
-      state.meta=state.meta||{}; if(touchUpdated)state.meta.updatedAt=now(); state.meta.appVersion='6.64';
+      state.meta=state.meta||{}; if(touchUpdated)state.meta.updatedAt=now(); state.meta.appVersion='6.66';
       if(typeof syncSystemParametersV648==='function')syncSystemParametersV648();
       localStorage.setItem(LS_KEY, JSON.stringify(state));
     } catch { /* Yerel dosya modunda depolama engellense bile uygulama çalışmaya devam eder. */ }
@@ -1963,7 +1963,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.65</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
+        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.66</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
         <nav class="nav" aria-label="Ana menü">${['dashboard','sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={dashboard:'Ana Menü',sales:'Satış',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
         <details class="more-nav"><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['dashboard','sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
       </aside>
@@ -2763,11 +2763,13 @@ function stockSummaryView(){
     const guide=opts.editable?`<div class="jl-guide" style="left:23mm"></div><div class="jl-guide" style="left:46mm"></div><div class="jl-tail" style="left:46mm;right:0"></div>`:'';
     if(x.customerOnly){
       const msg=String(x.printCustomerMessage||'MUTLULUKLAR').trim(),name=String(x.printCustomerName||'').trim(),company=String(s.companyName||state.settings?.companyName||'ASİL KUYUMCULUK').trim();
+      const namePt=name.length>22?4.8:name.length>17?5.4:6.1;
+      const msgPt=msg.length>18?5.4:6.0;
       return `<div class="jewel-label customer-only-label">
-        <div style="position:absolute;left:23.2mm;top:.75mm;width:22.1mm;height:3.3mm;display:flex;align-items:center;justify-content:center;text-align:center;font-size:6.3pt;font-weight:900;line-height:1;white-space:nowrap;overflow:hidden">${esc(msg)}</div>
-        <div style="position:absolute;left:23.2mm;top:5.15mm;width:22.1mm;height:2.7mm;display:flex;align-items:center;justify-content:center;text-align:center;font-size:5.2pt;font-weight:700;line-height:1;white-space:nowrap;overflow:hidden">${esc(company)}</div>
-        <div style="position:absolute;left:46.1mm;top:.65mm;width:24.4mm;height:3.3mm;display:flex;align-items:center;justify-content:center;text-align:center;font-size:6.5pt;font-weight:900;line-height:1;white-space:nowrap;overflow:hidden">${esc(name)}</div>
-        <div style="position:absolute;left:46.1mm;top:5.05mm;width:24.4mm;height:3.3mm;display:flex;align-items:center;justify-content:center;text-align:center;font-size:6.5pt;font-weight:900;line-height:1;white-space:nowrap;overflow:hidden">${esc(name)}</div>
+        <div style="position:absolute;left:23.0mm;top:.55mm;width:22.7mm;height:3.45mm;display:flex;align-items:center;justify-content:center;text-align:center;font-size:${msgPt}pt;font-weight:900;line-height:1;white-space:nowrap;overflow:hidden;letter-spacing:.02em">${esc(msg)}</div>
+        <div style="position:absolute;left:23.0mm;top:5.00mm;width:22.7mm;height:2.85mm;display:flex;align-items:center;justify-content:center;text-align:center;font-size:5.0pt;font-weight:700;line-height:1;white-space:nowrap;overflow:hidden">${esc(company)}</div>
+        <div style="position:absolute;left:46.0mm;top:.55mm;width:25.4mm;height:3.45mm;display:flex;align-items:center;justify-content:center;text-align:center;font-size:${namePt}pt;font-weight:900;line-height:1;white-space:nowrap;overflow:hidden;letter-spacing:.01em">${esc(name)}</div>
+        <div style="position:absolute;left:46.0mm;top:5.00mm;width:25.4mm;height:3.45mm;display:flex;align-items:center;justify-content:center;text-align:center;font-size:${namePt}pt;font-weight:900;line-height:1;white-space:nowrap;overflow:hidden;letter-spacing:.01em">${esc(name)}</div>
       </div>`;
     }
     const blocks=[];
@@ -2867,7 +2869,7 @@ function stockSummaryView(){
     const message=String(document.getElementById('customerLabelMessage')?.value||'MUTLULUKLAR').trim();
     const copies=Math.max(1,Math.min(20,Number(document.getElementById('customerLabelCopies')?.value||1)));
     if(!name)return toast('Etikete basılacak müşteri ad soyadını yazın','err');
-    const s={...printerSettings(),copies,showCode:false,showKarat:false,showSaleHas:false,showInternalCode:false};
+    const s={...printerSettings(),copies,mediaMode:'roll',labelWidthMm:72,labelHeightMm:10,gapMm:0,marginTopMm:0,marginRightMm:0,marginBottomMm:0,marginLeftMm:0,orientation:'portrait',horizontalOffsetMm:0,verticalOffsetMm:0,fontScale:100,showCode:false,showKarat:false,showSaleHas:false,showInternalCode:false};
     const row={id:'CUSTOMER-NAME',code:'',barcode:'',name:'',purity:0,amount:0,saleHas:0,costHas:0,customerOnly:true,printCustomerName:name,printCustomerMessage:message,hideBarcode:true,hideCode:true,hideCompany:true};
     try{
       const target=s.mode==='qz'?await printLabelsQz([row],s):await printLabelsBrowser([row],s);
@@ -2886,7 +2888,7 @@ function stockSummaryView(){
     const catalog=labelFieldCatalogV665();
     const fieldNames=Object.fromEntries(Object.entries(working.elements).map(([k,e])=>[k,e.label||catalog[e.source||k]?.label||k]));
     modal('Etiket Yazıcısı ve Yerleşim Ayarları',`<div class="printer-settings-grid">
-      <div class="span-4 printer-preset-note"><strong>Doğrudan sessiz baskı:</strong> Barkod Yazdır düğmesi QZ Tray ile yazdırma ekranı açmadan seçili etiket yazıcısına gönderir. İlk kullanımda aşağıdaki <b>QZ Yetkilendir (1 Kez)</b> düğmesinden private-key.pem seçilir. <br><strong>Pusula gibi ayarla:</strong> Aşağıdaki etiket üstünde alanları fareyle taşıyabilir, <b>alan ekleyip kaldırabilir</b> ve Maliyet HAS Kodu, Geliş İşçilik Kodu, Terazi Gramı gibi Pusula alanlarını ayrı ayrı kullanabilirsin. <b>Müşteri Ad Soyad stok kartına kaydolmaz;</b> yalnız baskı anında kullanılır. Konumlar KAYDET dediğinde kalıcı olur.</div>
+      <div class="span-4 printer-preset-note"><strong>Doğrudan sessiz baskı:</strong> Barkod Yazdır düğmesi QZ Tray ile yazdırma ekranı açmadan seçili etiket yazıcısına gönderir. İlk kullanımda aşağıdaki <b>QZ Yetkilendir (1 Kez)</b> düğmesinden private-key.pem seçilir. <br><strong>Pusula gibi ayarla:</strong> Aşağıdaki etiket üstünde alanları fareyle taşıyabilir, <b>alan ekleyip kaldırabilir</b>. Üst HAS, Alt HAS, Ayar, Maliyet HAS Kodu (0,73 → 0073), Geliş İşçilik Kodu (1,00 → 0100) ve Terazi Gramı doğrudan ürün verisinden gelir. Pusula alt satırındaki kaynağı kesinleşmeyen ara kod için tahmin yapılmaz; alan listesi geldiğinde gerçek kaynağa bağlanır. <b>Müşteri Ad Soyad stok kartına kaydolmaz;</b> yalnız baskı anında kullanılır. Konumlar KAYDET dediğinde kalıcı olur.</div>
       <div class="label-layout-editor">
         <div class="editor-head"><div><strong>Etiket Yerleşim Editörü — 72 × 10 mm</strong><br><small>Alanı fareyle tutup sürükle. Seçili alanı aşağıdaki X/Y kutularından da milimetrik ayarlayabilirsin.</small></div><span id="prSelectedName" class="label-editor-selected">Barkod seçili</span></div>
         <div class="label-editor-controls">
@@ -3103,7 +3105,7 @@ function stockSummaryView(){
   }
 
   function syncSystemParametersV648(){
-    // v6.65: Eski Pusula parametreleri artık program davranışını geri planda ezmez.
+    // v6.66: Eski Pusula parametreleri artık program davranışını geri planda ezmez.
     // Gerçek ayarlar Sistem Ayarları, Personel, Yazıcı ve Yedek merkezlerinden yönetilir.
     state.settings=state.settings||{};
     state.printerSettings=state.printerSettings||{};
@@ -5878,7 +5880,7 @@ function stockSummaryView(){
   }
 
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion='6.64';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
+    state.meta=state.meta||{};state.meta.appVersion='6.66';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
