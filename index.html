@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101113" />
-  <meta name="description" content="Asil Kuyumcu Pro V6.59 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
+  <meta name="description" content="Asil Kuyumcu Pro V6.60 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.59</title>
+  <title>Asil Kuyumcu Pro V6.60</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -1889,7 +1889,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.59</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
+        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.60</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
         <nav class="nav" aria-label="Ana menü">${['dashboard','sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={dashboard:'Ana Menü',sales:'Satış',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
         <details class="more-nav"><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['dashboard','sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
       </aside>
@@ -3376,33 +3376,15 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     document.getElementById('prShow').onclick=draw;['prFrom','prTo','prExtra'].forEach(id=>{const el=document.getElementById(id);if(el)el.onchange=draw;});document.getElementById('prCsv').onclick=()=>{if(!last)draw();if(!last?.csv?.length)return;downloadText(last.csv.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(';')).join('\n'),`${last.title.replace(/\s+/g,'_')}.csv`,'text/csv;charset=utf-8');};draw();
   }
   function pageReports(){
-    return `<div class="page-title"><div><h1>Raporlar</h1><p>Görmek istediğiniz raporu seçin. Bu ana ekranda bakiye, eksi değer veya teknik pozisyon gösterilmez.</p></div></div>
-      <div class="grid grid-2" style="margin-top:18px;max-width:980px">
-        <button class="card" id="dailySalesReport" style="text-align:left;padding:26px;min-height:150px;border:1px solid var(--line);cursor:pointer">
-          <div style="font-size:28px;margin-bottom:12px">▥</div>
-          <div style="font-size:21px;font-weight:900">Günlük Satış Raporu</div>
-          <div class="muted" style="margin-top:8px;line-height:1.5">Tarih, ürün, maliyet, satış, kâr, müşteri ve personel detaylarını göster.</div>
-        </button>
-        <button class="card" id="patronReport" style="text-align:left;padding:26px;min-height:150px;border:1px solid var(--line);cursor:pointer">
-          <div style="font-size:28px;margin-bottom:12px">▦</div>
-          <div style="font-size:21px;font-weight:900">Patron Raporu</div>
-          <div class="muted" style="margin-top:8px;line-height:1.5">Satış, maliyet, gelir-gider ve kâr/zarar detaylarını aç.</div>
-        </button>
-        <button class="card" id="balanceSheet" style="text-align:left;padding:26px;min-height:150px;border:1px solid var(--line);cursor:pointer">
-          <div style="font-size:28px;margin-bottom:12px">▤</div>
-          <div style="font-size:21px;font-weight:900">Bilanço</div>
-          <div class="muted" style="margin-top:8px;line-height:1.5">Borçlarımızı ve alacaklarımızı anlaşılır şekilde göster.</div>
-        </button>
-        <button class="card" id="dayCloseV6" style="text-align:left;padding:26px;min-height:150px;border:1px solid var(--line);cursor:pointer">
-          <div style="font-size:28px;margin-bottom:12px">✓</div>
-          <div style="font-size:21px;font-weight:900">Gün Sonu</div>
-          <div class="muted" style="margin-top:8px;line-height:1.5">Günlük kasa kontrolünü ve gün sonu kaydını aç.</div>
-        </button>
-        <button class="card" id="exportReport" style="text-align:left;padding:26px;min-height:150px;border:1px solid var(--line);cursor:pointer">
-          <div style="font-size:28px;margin-bottom:12px">⇩</div>
-          <div style="font-size:21px;font-weight:900">Excel / CSV</div>
-          <div class="muted" style="margin-top:8px;line-height:1.5">Rapor verilerini dosya olarak dışarı aktar.</div>
-        </button>
+    const items=[
+      ['sales_general','SATIŞ RAPORU GENEL'],['sales_detail','SATIŞ RAPORU DETAY'],['sales_summary','SATIŞ RAPORU ÖZET'],['balance_list','BAKİYE LİSTESİ'],['balance_sheet','BİLANÇO'],['transaction','İŞLEM RAPORU'],
+      ['daily_inout','GÜNLÜK GİRİŞ ÇIKIŞ RAPORU'],['product_analysis','ÜRÜN SATIŞ ANALİZİ'],['account_statement','HESAP EKSTRESİ'],['fx','DÖVİZ ALIŞ SATIŞ RAPORU'],['cash','KASA RAPORU'],['sales_karat','SATIŞ RAPORU AYAR'],
+      ['expense','GİDER RAPORU'],['cash_inout','NAKİT GİRİŞ ÇIKIŞ RAPORU'],['sales_producer','SATIŞ RAPORU ÜRETİCİYE GÖRE'],['sales_profit','SATIŞ KÂR RAPORU'],['expense_yearly','GİDER RAPORU YILLIK'],
+      ['gold_sales','ALTIN SATIŞ RAPORU'],['sales_day','SATIŞ GÜN RAPORU'],['patron','PATRON RAPORU'],['general_sales','GENEL SATIŞ RAPORU'],['special','PUSULA ÖZEL RAPORLAR'],['open_position','AÇIK POZİSYON']
+    ];
+    return `<div class="page-title"><div><h1>Raporlar</h1><p>Pusula düzenindeki raporlar. Taş raporları bu menüye eklenmedi.</p></div></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px">
+        ${items.map(([k,t])=>`<button class="card" data-pusula-report="${k}" style="min-height:112px;padding:18px;text-align:center;border:1px solid var(--line);cursor:pointer;display:flex;align-items:center;justify-content:center"><strong style="font-size:14px;line-height:1.35">${t}</strong></button>`).join('')}
       </div>`;
   }
 
@@ -5406,6 +5388,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
 
   function bindReports(){
+    document.querySelectorAll('[data-pusula-report]').forEach(b=>b.addEventListener('click',()=>openPusulaReportV660(b.dataset.pusulaReport)));
     const rerender=()=>{reportFilters.range=document.getElementById('reportRange')?.value||'month';reportFilters.month=document.getElementById('reportMonth')?.value||reportFilters.month;reportFilters.mode=document.getElementById('reportMode')?.value||'HAS';reportFilters.valuationSide=document.getElementById('reportValuation')?.value||'buy';render();};
     ['reportRange','reportMonth','reportMode','reportValuation'].forEach(id=>document.getElementById(id)?.addEventListener('change',rerender));
     document.getElementById('reportEditOpeningCosts')?.addEventListener('click',openOpeningCostEditor);
