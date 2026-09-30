@@ -1,4 +1,4 @@
-const C='asil-v6-74-cari-mass-offset-20260930';
+const C='asil-v6-75-cari-mahsup-20260930';
 self.addEventListener('install',e=>{
   self.skipWaiting();
   e.waitUntil(caches.open(C).then(c=>c.addAll(['./','./index.html'])));
