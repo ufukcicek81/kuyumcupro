@@ -1284,6 +1284,10 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     return {id,name:String(value.name||user?.name||''),role:String(value.role||user?.role||'')};
   }
   function safeSessionGet(){
+    try{
+      const last=Number(localStorage.getItem(SESSION_ACTIVITY_KEY)||0);
+      if(last&&Date.now()-last>securityTimeoutMsV664()){safeSessionRemove();return null;}
+    }catch(_){}
     try {
       const active=normalizeSession(JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null'));
       if(active)return active;
@@ -1322,19 +1326,22 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function safeSessionSet(value){
     const clean=normalizeSession(value);
     if(!clean)return;
+    const at=Date.now();
     try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(clean)); } catch {}
     try {
       localStorage.setItem(PERSIST_SESSION_KEY,JSON.stringify({
         session:clean,
-        updatedAt:Date.now(),
+        updatedAt:at,
         persistent:true
       }));
+      localStorage.setItem(SESSION_ACTIVITY_KEY,String(at));
     } catch {}
     cookieSet(SESSION_COOKIE_KEY,JSON.stringify(clean));
   }
   function safeSessionRemove(){
+    clearTimeout(securityIdleTimerV664);
     try { sessionStorage.removeItem(SESSION_KEY); } catch {}
-    try { localStorage.removeItem(PERSIST_SESSION_KEY); } catch {}
+    try { localStorage.removeItem(PERSIST_SESSION_KEY); localStorage.removeItem(SESSION_ACTIVITY_KEY); } catch {}
     try { localStorage.removeItem(LAST_ROUTE_KEY); } catch {}
     cookieRemove(SESSION_COOKIE_KEY);
     cookieRemove(ROUTE_COOKIE_KEY);
@@ -1890,6 +1897,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     arrangeCompactSalesV646();
     bindShell();
     bindPage(route);
+    bindSecurityAutoLockV664();
   }
 
   function renderLogin(){
@@ -1910,26 +1918,41 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
             <div class="field"><label>Görünüm</label><select id="loginTheme" class="select"><option value="dark" ${theme==='dark'?'selected':''}>🌙 Karanlık Mod</option><option value="light" ${theme==='light'?'selected':''}>☀ Aydınlık Mod</option></select></div>
             <div class="field"><label>Kullanıcı</label><select id="loginUser" class="select">${state.users.map(u=>`<option value="${u.id}">${esc(u.username)} — ${esc(u.name)}</option>`).join('')}</select></div>
             <div class="field"><label>Şifre</label><input id="loginPin" class="input" type="password" value="" inputmode="numeric" autocomplete="current-password" /></div>
+            <details style="margin-bottom:14px"><summary style="cursor:pointer;color:var(--muted);font-size:13px">Yeni cihaz / Bulut anahtarı</summary><div class="field" style="margin-top:10px"><label>Bulut Güvenlik Anahtarı</label><input id="loginCloudKey" class="input" type="password" autocomplete="off" placeholder="Sadece yeni cihazda gerekli"><small class="muted">Diğer cihazdaki Yedek & Sistem bölümünden aldığınız anahtarı buraya girin. Anahtar olmadan şifreli bulut verisi açılamaz.</small></div></details>
             <button class="btn btn-primary" type="submit">Sisteme Gir</button>
-            <div class="login-help">Şifre alanı güvenlik için boş açılır. Art arda 5 hatalı denemede giriş 5 dakika kilitlenir.</div>
+            <div class="login-help">Şifreler PBKDF2 ile özetlenir. Art arda 5 hatalı denemede giriş 5 dakika kilitlenir; hareketsizlikte oturum otomatik kilitlenir.</div>
           </form>
         </div>
       </div>`;
-    document.getElementById('loginForm').addEventListener('submit', e=>{
+    document.getElementById('loginForm').addEventListener('submit', async e=>{
       e.preventDefault();
       const guardKey='asil_login_guard_v650';let guard={fails:0,lockedUntil:0};try{guard=JSON.parse(localStorage.getItem(guardKey)||'{}')||guard;}catch(_){}
       if(Number(guard.lockedUntil||0)>Date.now()){const min=Math.max(1,Math.ceil((Number(guard.lockedUntil)-Date.now())/60000));return toast(`Çok fazla hatalı giriş. ${min} dakika sonra tekrar deneyin.`,'err');}
-      const user = state.users.find(u=>u.id===document.getElementById('loginUser').value);
-      const pin = document.getElementById('loginPin').value;
-      if(!user || user.pin!==pin){guard.fails=Number(guard.fails||0)+1;if(guard.fails>=5)guard={fails:0,lockedUntil:Date.now()+5*60*1000};try{localStorage.setItem(guardKey,JSON.stringify(guard));}catch(_){}return toast(guard.lockedUntil?'5 hatalı deneme: giriş 5 dakika kilitlendi':'Kullanıcı veya şifre hatalı','err');}
-      try{localStorage.removeItem(guardKey);}catch(_){};
-      state.activePeriod = Number(document.getElementById('loginPeriod').value);
-      uiMode = document.getElementById('loginUiMode').value==='tablet' ? 'tablet' : 'pc';
-      theme = document.getElementById('loginTheme').value==='light' ? 'light' : 'dark';
-      state.settings.uiMode = uiMode; state.settings.theme = theme; applyUiMode(); applyTheme(); save();
-      session = {id:user.id,name:user.name,role:user.role}; safeSessionSet(session);
-      audit(`${state.activePeriod} dönemine giriş yapıldı`,'Giriş');
-      route='dashboard'; render();
+      const selectedId=document.getElementById('loginUser').value;
+      const enteredCloudKey=String(document.getElementById('loginCloudKey')?.value||'').trim();
+      if(enteredCloudKey){
+        try{
+          cloudKeySetV664(enteredCloudKey);
+          await cloudPullV5(false);
+          if(state.cloudSync?.lastStatus==='Anahtar Hatalı'||state.cloudSync?.lastStatus==='Anahtar Gerekli')throw new Error('Bulut güvenlik anahtarı doğrulanamadı');
+        }catch(err){
+          try{localStorage.removeItem(CLOUD_KEY_STORAGE);}catch(_){}
+          return toast(err?.message||'Bulut anahtarı geçersiz','err');
+        }
+      }
+      const user=state.users.find(u=>String(u.id)===String(selectedId))||state.users.find(u=>String(u.username||'').toLowerCase()===String(document.querySelector('#loginUser option:checked')?.textContent||'').split('—')[0].trim().toLowerCase());
+      const pin=document.getElementById('loginPin').value;
+      let valid=false;try{valid=await verifyUserPinV664(user,pin);}catch(_){valid=false;}
+      if(!user||!valid){guard.fails=Number(guard.fails||0)+1;if(guard.fails>=5)guard={fails:0,lockedUntil:Date.now()+5*60*1000};try{localStorage.setItem(guardKey,JSON.stringify(guard));}catch(_){}return toast(guard.lockedUntil?'5 hatalı deneme: giriş 5 dakika kilitlendi':'Kullanıcı veya şifre hatalı','err');}
+      try{localStorage.removeItem(guardKey);}catch(_){}
+      if(user.pin&&!user.pinHash){try{await setUserPinV664(user,pin);}catch(_){}}
+      state.activePeriod=Number(document.getElementById('loginPeriod').value);
+      uiMode=document.getElementById('loginUiMode').value==='tablet'?'tablet':'pc';
+      theme=document.getElementById('loginTheme').value==='light'?'light':'dark';
+      state.settings.uiMode=uiMode;state.settings.theme=theme;applyUiMode();applyTheme();save();
+      session={id:user.id,name:user.name,role:user.role};safeSessionSet(session);touchSecurityActivityV664();
+      audit(`${state.activePeriod} dönemine güvenli giriş yapıldı`,'Giriş');
+      route='dashboard';render();
     });
   }
 
@@ -6751,6 +6774,7 @@ function stockSummaryView(){
   render();
   setTimeout(()=>resumePendingNfcReturnV635(),450);
   initLivePriceSync();
+  migrateLegacyPinsV664().catch(()=>{});
   initCloudSyncV5();
 })();
 
