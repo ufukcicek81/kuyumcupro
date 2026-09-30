@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101113" />
-  <meta name="description" content="Asil Kuyumcu Pro V6.71 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
+  <meta name="description" content="Asil Kuyumcu Pro V6.72 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.71</title>
+  <title>Asil Kuyumcu Pro V6.72</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -1242,7 +1242,17 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     try{
       if(typeof ensureV5State==='function') ensureV5State();
       if(typeof reconcileTransactionLedgerV5==='function') reconcileTransactionLedgerV5();
-      state.meta=state.meta||{}; if(touchUpdated)state.meta.updatedAt=now(); state.meta.appVersion='6.71';
+      state.meta=state.meta||{};
+      if(touchUpdated){
+        state.meta.updatedAt=now();
+        // Her veri değiştiren kayıt çağrısı ayrıca işlem günlüğüne yazılır.
+        state.audits=Array.isArray(state.audits)?state.audits:[];
+        const routeName=typeof route!=='undefined'&&route?String(route):'sistem';
+        const summary='Satış '+Number(state.sales?.length||0)+' · Alış '+Number(state.purchases?.length||0)+' · Cari '+Number(state.customerMoves?.length||0)+' · Finans '+Number(state.financeMoves?.length||0)+' · Stok '+Number(state.stockMoves?.length||0);
+        state.audits.unshift({id:uid('AUD'),date:now(),user:(typeof session!=='undefined'&&session?.name)||'Sistem',module:'Otomatik Kayıt',action:'Veri değişikliği kaydedildi · '+routeName+' · '+summary,kind:'OTOMATİK'});
+        state.audits=state.audits.slice(0,5000);
+      }
+      state.meta.appVersion='6.72';
       if(typeof syncSystemParametersV648==='function')syncSystemParametersV648();
       localStorage.setItem(LS_KEY, JSON.stringify(state));
     } catch { /* Yerel dosya modunda depolama engellense bile uygulama çalışmaya devam eder. */ }
@@ -1591,8 +1601,9 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     applyTheme(); save(); render();
   }
   function audit(action,module='Sistem'){
-    state.audits.unshift({id:uid('AUD'),date:now(),user:session?.name || 'Sistem',action,module});
-    state.audits = state.audits.slice(0,500);
+    state.audits=Array.isArray(state.audits)?state.audits:[];
+    state.audits.unshift({id:uid('AUD'),date:now(),user:session?.name || 'Sistem',action,module,kind:'MANUEL'});
+    state.audits = state.audits.slice(0,5000);
     save();
   }
   function playErrorTone(){
@@ -1967,7 +1978,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.71</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
+        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.72</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
         <nav class="nav" aria-label="Ana menü">${['dashboard','sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={dashboard:'Ana Menü',sales:'Satış',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
         <details class="more-nav"><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['dashboard','sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
       </aside>
@@ -3668,7 +3679,7 @@ function stockSummaryView(){
   async function localBackupEnvelopeV664(){
     if(!cloudKeyGetV664())cloudKeyEnsureV664();
     const payload=await cloudEncryptPayloadV664(cloudSafeStateV5());
-    return {format:'ASIL_KUYUMCU_BACKUP_V2',createdAt:now(),appVersion:'6.64',business:state.settings?.companyName||'ASİL KUYUMCULUK',period:state.activePeriod,encrypted:true,payload};
+    return {format:'ASIL_KUYUMCU_BACKUP_V2',createdAt:now(),appVersion:'6.72',business:state.settings?.companyName||'ASİL KUYUMCULUK',period:state.activePeriod,encrypted:true,payload};
   }
   function pageBackup(){
     ensureV5State();
@@ -3676,9 +3687,9 @@ function stockSummaryView(){
     return `<div class="page-title"><div><h1>Yedek · Bulut · Güvenlik</h1><p>Harici disk yedeği, şifreli merkezi bulut, diğer cihaz bağlantısı ve geri yükleme tek merkezde.</p></div><span class="badge ${cloud.lastStatus==='Bağlı'?'green':'gold'}">Bulut: ${esc(cloud.lastStatus||'Bekliyor')}</span></div>
       <div class="grid grid-2">
         <div class="card" style="border:2px solid rgba(214,177,95,.35)"><div class="section-head"><h3>💾 Harici Disk / Akşam Yedeği</h3><span class="badge gold">ÖNERİLEN</span></div>
-          <p class="muted">Her akşam bu düğmeye bas. Tüm işletme verisi AES-256-GCM ile şifrelenmiş tek JSON dosyasına iner; dosyayı harici diskinize kopyalayabilirsiniz.</p>
+          <p class="muted">Her akşam bu düğmeye bas. Bilgisayarda destekleniyorsa Windows'un <b>Farklı Kaydet</b> penceresi açılır ve yedeği nereye kaydedeceğinizi siz seçersiniz.</p>
           <button class="btn btn-primary" id="backupDownload" style="width:100%;min-height:48px">AKŞAM YEDEĞİNİ İNDİR</button>
-          <div class="notice" style="margin-top:10px"><strong>Dosya:</strong> ${esc(backupFileNameV664())}<br><small>Yedek dosyası şifrelidir. Güvenlik anahtarı dosyanın içine konmaz; anahtarı ayrı ve güvenli yerde saklayın.</small></div>
+          <div class="notice" style="margin-top:10px"><strong>Dosya:</strong> ${esc(backupFileNameV664())}<br><strong>Önemli:</strong> Bu yedeğin ayrı bir parola/şifresi yoktur. Dosyayı açan şey aşağıdaki <b>Bulut Güvenlik Anahtarıdır</b>. Anahtarı Göster / Kopyala / Anahtar Dosyasını Kaydet düğmelerinden mutlaka ayrıca saklayın.</div>
         </div>
         <div class="card"><div class="section-head"><h3>↥ Yedekten Geri Yükle</h3><span class="badge red">DİKKAT</span></div>
           <p class="muted">Asil Kuyumcu Pro yedek dosyasını seçin. Geri yükleme mevcut yerel veriyi değiştirir.</p>
@@ -3696,7 +3707,7 @@ function stockSummaryView(){
         </div>
         <div class="card"><div class="section-head"><h3>🔑 Diğer Cihaz Güvenlik Anahtarı</h3><span class="badge ${key?'green':'red'}">${key?'BU CİHAZDA VAR':'YOK'}</span></div>
           <p class="muted">Yeni bilgisayar/tablet şifreli bulut verisini ancak aynı anahtarla açabilir. Anahtarı paroladan ayrı yerde saklayın.</p>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="btn btn-outline" id="cloudKeyShow">Anahtarı Göster</button><button class="btn btn-outline" id="cloudKeyCopy">Kopyala</button><button class="btn btn-outline" id="cloudKeyDownload">Anahtar Dosyasını İndir</button></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="btn btn-outline" id="cloudKeyShow">Anahtarı Göster</button><button class="btn btn-outline" id="cloudKeyCopy">Kopyala</button><button class="btn btn-outline" id="cloudKeyDownload">Anahtar Dosyasını Kaydet</button></div>
           <div class="labelled"><label>Başka Cihazdan Anahtar Gir / Değiştir</label><input id="cloudKeyInput" class="input" type="password" autocomplete="off" placeholder="Bulut güvenlik anahtarı"><small>Anahtarı değiştirmeden önce mevcut anahtar dosyanızı mutlaka saklayın.</small></div>
           <button class="btn btn-primary" id="cloudKeyApply" style="margin-top:8px">ANAHTARI BU CİHAZA KAYDET VE BULUTU AÇ</button>
         </div>
@@ -3709,7 +3720,7 @@ function stockSummaryView(){
         </div>
         <div class="card"><div class="section-head"><h3>Dönem Kapat / Devir</h3><span class="badge red">KRİTİK</span></div><p class="muted">${state.activePeriod} kapanışını kilitler ve ${state.activePeriod+1} açılış stoklarını oluşturur.</p><button class="btn btn-outline" id="periodCarry">${state.activePeriod} → ${state.activePeriod+1} GERÇEK DEVİR</button></div>
       </div>
-      <div class="card" style="margin-top:14px"><div class="section-head"><h3>İşlem Geçmişi / Güvenlik Kaydı</h3><span>Son ${Math.min(100,state.audits.length)} hareket</span></div><div class="table-wrap"><table class="table"><thead><tr><th>Tarih</th><th>Kullanıcı</th><th>Modül</th><th>İşlem</th></tr></thead><tbody>${state.audits.slice(0,100).map(a=>`<tr><td>${trDate(a.date)}</td><td>${esc(a.user)}</td><td><span class="badge">${esc(a.module)}</span></td><td>${esc(a.action)}</td></tr>`).join('')}</tbody></table></div></div>`;
+      <div class="card" style="margin-top:14px"><div class="section-head"><h3>İşlem Geçmişi / Güvenlik Kaydı</h3><span>Son ${Math.min(500,state.audits.length)} hareket</span></div><div class="table-wrap"><table class="table"><thead><tr><th>Tarih</th><th>Kullanıcı</th><th>Modül</th><th>İşlem</th></tr></thead><tbody>${state.audits.slice(0,500).map(a=>`<tr><td>${trDate(a.date)}</td><td>${esc(a.user)}</td><td><span class="badge">${esc(a.module)}</span></td><td>${esc(a.action)}</td></tr>`).join('')}</tbody></table></div></div>`;
   }
 
   function isMobileViewport(){
@@ -5733,7 +5744,7 @@ function stockSummaryView(){
     document.getElementById('dayCloseV6')?.addEventListener('click',openDayCloseV6);
     document.getElementById('exportReport')?.addEventListener('click',()=>{
       const r=reportStats(), sv=stockValuationReport(), aging=cariAgingReport(), expenses=reportExpenseGroups(), personnel=personnelProfitRows(r.sales), pos=managementPositionReport(), health=systemHealthReport();
-      const rows=[['ASIL KUYUMCU PRO V6.71 — HAS YÖNETİM RAPORU'],['Dönem',reportFilters.range==='month'?reportFilters.month:state.activePeriod],[],['ÖZET','HAS','TL'],['Satış Karşılığı',r.revenueHas.toFixed(4),r.revenueTl.toFixed(2)],['Satılan Mal Maliyeti',r.cogsHas.toFixed(4),(r.cogsHas*r.closeRate).toFixed(2)],['Brüt Kâr',r.grossHas.toFixed(4),(r.grossHas*r.closeRate).toFixed(2)],['Gider + POS',(r.expHas+r.feeHas).toFixed(4),(r.expTl+r.feeTl).toFixed(2)],['Döviz Gerçekleşen K/Z',r.realizedFxPlHas.toFixed(4),r.realizedFxPlTl.toFixed(2)],['NET KÂR',r.netHas.toFixed(4),r.adjustedTl.toFixed(2)],['Değerleme Farkı','',r.valuationDiff.toFixed(2)],[],['STOK DEĞERLEME','HAS'],['Barkodlu',sv.barcodeCost.toFixed(4)],['Açık/Barkodsuz',sv.openCost.toFixed(4)],['Hurda',sv.scrapCost.toFixed(4)],['Toplam',sv.totalCost.toFixed(4)],[],['YÖNETİM POZİSYONU','HAS'],['Fiziksel Altın',pos.sv.totalPhysical.toFixed(4)],['Cari HAS Net',Number(pos.cari.HAS||0).toFixed(4)],['Parasal Pozisyon HAS',pos.monetaryHas.toFixed(4)],['NET POZİSYON',pos.netHas.toFixed(4)],[],['SİSTEM SAĞLIĞI','Seviye','Açıklama'],...health.issues.map(x=>[x.title,x.level,x.detail]),[],['SATIŞLAR','Tarih','Belge','Müşteri','Personel','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS','Durum'],...r.sales.map(s=>['',trDate(s.date),s.docNo||s.id,state.customers.find(c=>c.id===s.customerId)?.name||'',s.salesperson,Number(s.total||0).toFixed(2),saleRevenueHas(s).toFixed(4),saleCostHas(s).toFixed(4),(saleRevenueHas(s)-saleCostHas(s)).toFixed(4),s.status]),[],['PERSONEL','Fiş','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS'],...personnel.map(x=>[x.name,x.count,x.salesTl.toFixed(2),x.revenueHas.toFixed(4),x.costHas.toFixed(4),x.profitHas.toFixed(4)]),[],['CARİ YAŞLANDIRMA','Tür','Bakiye','TL Eşdeğer','En Eski Gün'],...aging.details.map(x=>[x.name,x.type,x.parts,x.totalTl.toFixed(2),x.oldest]),[],['BANKA/POS GİDERLERİ','Hareket','TL'],...expenses.map(x=>[x.name,x.count,x.tl.toFixed(2)])];
+      const rows=[['ASIL KUYUMCU PRO V6.72 — HAS YÖNETİM RAPORU'],['Dönem',reportFilters.range==='month'?reportFilters.month:state.activePeriod],[],['ÖZET','HAS','TL'],['Satış Karşılığı',r.revenueHas.toFixed(4),r.revenueTl.toFixed(2)],['Satılan Mal Maliyeti',r.cogsHas.toFixed(4),(r.cogsHas*r.closeRate).toFixed(2)],['Brüt Kâr',r.grossHas.toFixed(4),(r.grossHas*r.closeRate).toFixed(2)],['Gider + POS',(r.expHas+r.feeHas).toFixed(4),(r.expTl+r.feeTl).toFixed(2)],['Döviz Gerçekleşen K/Z',r.realizedFxPlHas.toFixed(4),r.realizedFxPlTl.toFixed(2)],['NET KÂR',r.netHas.toFixed(4),r.adjustedTl.toFixed(2)],['Değerleme Farkı','',r.valuationDiff.toFixed(2)],[],['STOK DEĞERLEME','HAS'],['Barkodlu',sv.barcodeCost.toFixed(4)],['Açık/Barkodsuz',sv.openCost.toFixed(4)],['Hurda',sv.scrapCost.toFixed(4)],['Toplam',sv.totalCost.toFixed(4)],[],['YÖNETİM POZİSYONU','HAS'],['Fiziksel Altın',pos.sv.totalPhysical.toFixed(4)],['Cari HAS Net',Number(pos.cari.HAS||0).toFixed(4)],['Parasal Pozisyon HAS',pos.monetaryHas.toFixed(4)],['NET POZİSYON',pos.netHas.toFixed(4)],[],['SİSTEM SAĞLIĞI','Seviye','Açıklama'],...health.issues.map(x=>[x.title,x.level,x.detail]),[],['SATIŞLAR','Tarih','Belge','Müşteri','Personel','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS','Durum'],...r.sales.map(s=>['',trDate(s.date),s.docNo||s.id,state.customers.find(c=>c.id===s.customerId)?.name||'',s.salesperson,Number(s.total||0).toFixed(2),saleRevenueHas(s).toFixed(4),saleCostHas(s).toFixed(4),(saleRevenueHas(s)-saleCostHas(s)).toFixed(4),s.status]),[],['PERSONEL','Fiş','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS'],...personnel.map(x=>[x.name,x.count,x.salesTl.toFixed(2),x.revenueHas.toFixed(4),x.costHas.toFixed(4),x.profitHas.toFixed(4)]),[],['CARİ YAŞLANDIRMA','Tür','Bakiye','TL Eşdeğer','En Eski Gün'],...aging.details.map(x=>[x.name,x.type,x.parts,x.totalTl.toFixed(2),x.oldest]),[],['BANKA/POS GİDERLERİ','Hareket','TL'],...expenses.map(x=>[x.name,x.count,x.tl.toFixed(2)])];
       downloadText(rows.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(';')).join('\n'),`asil_yonetim_raporu_${reportFilters.range==='month'?reportFilters.month:state.activePeriod}.csv`,'text/csv;charset=utf-8');audit('Genişletilmiş HAS yönetim raporu dışa aktarıldı','Rapor');
     });
   }
@@ -5745,8 +5756,12 @@ function stockSummaryView(){
     document.getElementById('backupDownload')?.addEventListener('click',async()=>{
       try{
         const file=backupFileNameV664(),payload=await localBackupEnvelopeV664();
-        downloadText(JSON.stringify(payload,null,2),file,'application/json');
-        audit(`Şifreli harici disk yedeği indirildi · ${file}`,'Yedek');toast('Şifreli yedek indirildi; harici diskinize kopyalayın');
+        const saved=await saveTextAsV672(JSON.stringify(payload,null,2),file,'application/json');
+        if(!saved.ok)return;
+        audit(`Şifreli harici disk yedeği kaydedildi · ${saved.name} · ${saved.method}`,'Yedek');
+        const k=cloudKeyGetV664();
+        modal('Yedek Kaydedildi',`<div class="notice"><strong>Yedek dosyası kaydedildi.</strong><br><br>Bu dosyanın klasik bir şifresi yok. Geri yüklerken gereken şey <b>Bulut Güvenlik Anahtarıdır.</b> Bu anahtar yedek dosyasının içinde değildir.</div><div class="labelled" style="margin-top:12px"><label>Bu yedeği açan güvenlik anahtarı</label><textarea class="textarea" rows="3" readonly style="font-family:monospace">${esc(k)}</textarea></div><p class="muted">Anahtarı ayrıca güvenli bir USB/diske kaydedin. Anahtar kaybolursa şifreli yedek açılamaz.</p>`,null,'Kapat');
+        toast('Yedek seçtiğiniz konuma kaydedildi');
       }catch(err){toast(`Yedek oluşturulamadı: ${err?.message||err}`,'err');}
     });
     document.getElementById('backupFile')?.addEventListener('change',e=>{
@@ -5771,7 +5786,7 @@ function stockSummaryView(){
     });
     document.getElementById('cloudKeyShow')?.addEventListener('click',()=>{const k=cloudKeyGetV664();if(!k)return toast('Bu cihazda henüz bulut anahtarı yok','err');modal('Bulut Güvenlik Anahtarı',`<div class="notice"><strong>GİZLİ TUTUN.</strong> Bu anahtarı bilen kişi şifreli bulut yedeğini açabilir.</div><textarea class="textarea" rows="3" readonly style="margin-top:10px;font-family:monospace">${esc(k)}</textarea>`,null,'Kapat');});
     document.getElementById('cloudKeyCopy')?.addEventListener('click',async()=>{const k=cloudKeyGetV664();if(!k)return toast('Bulut anahtarı yok','err');try{await navigator.clipboard.writeText(k);toast('Bulut anahtarı panoya kopyalandı');}catch(_){prompt('Bulut anahtarını kopyalayın:',k);}});
-    document.getElementById('cloudKeyDownload')?.addEventListener('click',()=>{const k=cloudKeyGetV664();if(!k)return toast('Bulut anahtarı yok','err');downloadText(`ASIL KUYUMCU PRO BULUT GÜVENLİK ANAHTARI\n\n${k}\n\nBu dosyayı gizli ve çevrimdışı saklayın.\n`,'ASIL_BULUT_GUVENLIK_ANAHTARI.txt','text/plain;charset=utf-8');audit('Bulut güvenlik anahtarı dosyası indirildi','Güvenlik');});
+    document.getElementById('cloudKeyDownload')?.addEventListener('click',async()=>{const k=cloudKeyGetV664();if(!k)return toast('Bulut anahtarı yok','err');try{const saved=await saveTextAsV672(`ASIL KUYUMCU PRO BULUT GÜVENLİK ANAHTARI\n\n${k}\n\nBu dosyayı gizli ve çevrimdışı saklayın.\n`,'ASIL_BULUT_GUVENLIK_ANAHTARI.txt','text/plain;charset=utf-8');if(!saved.ok)return;audit('Bulut güvenlik anahtarı dosyası kaydedildi','Güvenlik');toast('Güvenlik anahtarı seçtiğiniz konuma kaydedildi');}catch(err){toast(`Anahtar kaydedilemedi: ${err?.message||err}`,'err');}});
     document.getElementById('cloudKeyApply')?.addEventListener('click',async()=>{
       const value=String(document.getElementById('cloudKeyInput')?.value||'').trim();if(!value)return toast('Bulut anahtarını girin','err');
       if(!confirm('Bu cihazdaki bulut anahtarı değiştirilecek. Girdiğiniz anahtar doğru mu?'))return;
@@ -5891,7 +5906,7 @@ function stockSummaryView(){
   }
 
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion='6.71';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
+    state.meta=state.meta||{};state.meta.appVersion='6.72';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
@@ -6101,6 +6116,23 @@ function stockSummaryView(){
   }
   function closeModal(){document.getElementById('modalRoot')?.remove();}
   function downloadText(text,name,type){const blob=new Blob([text],{type});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
+  async function saveTextAsV672(text,name,type='application/json'){
+    const blob=new Blob([text],{type});
+    if(typeof window.showSaveFilePicker==='function'){
+      try{
+        const ext=name.toLowerCase().endsWith('.txt')?'.txt':name.toLowerCase().endsWith('.csv')?'.csv':'.json';
+        const mime=String(type||'application/octet-stream').split(';')[0];
+        const handle=await window.showSaveFilePicker({suggestedName:name,types:[{description:ext==='.json'?'Asil Kuyumcu Yedek Dosyası':'Metin Dosyası',accept:{[mime]:[ext]}}]});
+        const writable=await handle.createWritable();await writable.write(blob);await writable.close();
+        return {ok:true,name:handle.name||name,method:'picker'};
+      }catch(err){
+        if(err?.name==='AbortError')return {ok:false,cancelled:true};
+        throw err;
+      }
+    }
+    // Tarayıcı klasör seçme API'sini desteklemiyorsa klasik indirme kullanılır.
+    downloadText(text,name,type);return {ok:true,name,method:'download'};
+  }
 
 
   /* === V6.21 BAĞIMSIZ MASAK MÜŞTERİSİ + KİMLİK BELGESİ + RİSK TARAMA ALTYAPISI === */
@@ -6154,7 +6186,7 @@ function stockSummaryView(){
     state.invoiceSettings.companyTitle=state.invoiceSettings.companyTitle||state.settings.companyName||'ASİL KUYUMCULUK';
     state.invoiceSettings.defaultDocumentType=state.invoiceSettings.defaultDocumentType||'AUTO';
     if(!Array.isArray(state.invoiceRecords))state.invoiceRecords=[];
-    state.meta=state.meta||{};state.meta.appVersion='6.43';
+    state.meta=state.meta||{};state.meta.appVersion='6.72';
   }
   function maskIdNo(v){v=String(v||'').replace(/\D/g,'');if(v.length<5)return v||'—';return v.slice(0,2)+'*****'+v.slice(-2);}
   function identityById(id){return identityRecords.find(x=>x.id===id)||null;}
@@ -6863,7 +6895,7 @@ function stockSummaryView(){
       var old={mode:p.mode,printerName:p.printerName,widthMm:p.widthMm,copies:p.copies};
       try{
         p.mode=document.getElementById('rpMode').value;p.printerName=document.getElementById('rpName').value;p.widthMm=Number(document.getElementById('rpWidth').value||80);p.copies=1;
-        await printReceiptHtmlV644(receiptDocV644('TEST FİŞİ','TEST-'+Date.now(),now(),'','<div class="center"><b>ACLAS / FİŞ YAZICISI TESTİ</b><br>Asil Kuyumcu Pro · V6.71</div>','Test baskısı'),'Test fişi');
+        await printReceiptHtmlV644(receiptDocV644('TEST FİŞİ','TEST-'+Date.now(),now(),'','<div class="center"><b>ACLAS / FİŞ YAZICISI TESTİ</b><br>Asil Kuyumcu Pro · V6.72</div>','Test baskısı'),'Test fişi');
       }finally{Object.assign(p,old);}
     });
   }
@@ -6971,7 +7003,7 @@ function stockSummaryView(){
   var __bindPageV644=bindPage;
   bindPage=function(r){__bindPageV644(r);if(r==='repairs')bindRepairsV644();setTimeout(function(){enhanceReceiptsV644(r);},0);};
   var __saveV644=save;
-  save=function(){ensureRepairReceiptV644();return __saveV644();};
+  save=function(touchUpdated=true){ensureRepairReceiptV644();return __saveV644(touchUpdated);};
   if(!navItems.some(function(x){return x[0]==='repairs';})){var repairIx=Math.max(0,navItems.findIndex(function(x){return x[0]==='stocks';}));navItems.splice(repairIx,0,['repairs','⌁','Tamir / Servis']);}
   ensureRepairReceiptV644();
 
