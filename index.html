@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101113" />
-  <meta name="description" content="Asil Kuyumcu Pro V6.62 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
+  <meta name="description" content="Asil Kuyumcu Pro V6.63 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.62</title>
+  <title>Asil Kuyumcu Pro V6.63</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -840,7 +840,7 @@ body[data-theme="dark"] .metric .foot,
 body[data-theme="dark"] .table th{color:#c9cfd7}
 
 
-/* v6.62 — PC ekranlarında daha kompakt çalışma düzeni */
+/* v6.63 — PC ekranlarında daha kompakt çalışma düzeni */
 body[data-ui-mode="pc"] .content{padding:14px 18px 20px}
 body[data-ui-mode="pc"] .content .page-title{margin-bottom:10px}
 body[data-ui-mode="pc"] .content .page-title h1{font-size:24px;line-height:1.1;margin-bottom:4px}
@@ -1590,7 +1590,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     return {saleHas:s,costHas:c,lossHas:loss,lossTl:loss*Number(state.prices.has?.buy||1),isBelow:c>0&&s+0.0005<c};
   }
   function confirmBelowCostSale(name,saleHas,costHas,onContinue,confirmText='YİNE DE SATIŞA EKLE'){
-    const x=belowCostInfo(saleHas,costHas);if(!x.isBelow){onContinue();return;}
+    const x=belowCostInfo(saleHas,costHas);if(state.settings?.belowCostWarning===false||!x.isBelow){onContinue();return;}
     playErrorTone();
     modal('⚠ MALİYET ALTI SATIŞ UYARISI',`<div class="below-cost-box"><div class="below-cost-title">${esc(name||'Ürün')} maliyetinin altında satılıyor!</div><div class="summary-row"><span>Maliyet</span><strong>${qty(x.costHas)} HAS</strong></div><div class="summary-row"><span>Satış</span><strong class="negative">${qty(x.saleHas)} HAS</strong></div><div class="summary-row total"><span>Tahmini Zarar</span><strong class="negative">-${qty(x.lossHas)} HAS · ${money(x.lossTl)}</strong></div><p>Bu satışa devam etmek istiyorsanız aşağıdaki onay düğmesine basın.</p></div>`,()=>{closeModal();onContinue();},confirmText);
     const btn=document.getElementById('modalConfirm');if(btn){btn.classList.remove('btn-primary');btn.classList.add('btn-danger');setTimeout(()=>btn.focus(),40);}
@@ -1919,7 +1919,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.62</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
+        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.63</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
         <nav class="nav" aria-label="Ana menü">${['dashboard','sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={dashboard:'Ana Menü',sales:'Satış',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
         <details class="more-nav"><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['dashboard','sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
       </aside>
@@ -2987,22 +2987,60 @@ function stockSummaryView(){
     if(Array.isArray(state.definitions?.users))state.definitions.users=state.definitions.users.filter(x=>x!==u.name);
     audit(`${u.name} personelden kaldırıldı`,'Personel');save();render();toast('Personel kaldırıldı');
   }
+  function openPersonnelEditV663(id){
+    const u=state.users.find(x=>x.id===id);if(!u)return;
+    const p=u.permissions||(u.permissions={}),admin=/yönetici|admin/i.test(String(u.role||''));
+    modal('Personel / Yetki Düzenle',`<div class="form-grid"><div class="labelled span-2"><label>Ad Soyad</label><input id="peName" class="input" value="${esc(u.name)}"></div><div class="labelled"><label>Kullanıcı Adı</label><input id="peUser" class="input" value="${esc(u.username)}"></div><div class="labelled"><label>Görev</label><select id="peRole" class="select"><option ${u.role==='Satış Danışmanı'?'selected':''}>Satış Danışmanı</option><option ${admin?'selected':''}>Yönetici</option></select></div><div class="labelled span-2"><label>Yeni PIN / Şifre</label><input id="pePin" class="input" type="password" inputmode="numeric" placeholder="Değiştirmeyeceksen boş bırak"></div><div class="span-4 grid grid-4"><label class="permission-box"><input id="peSell" type="checkbox" ${p.canSell!==false?'checked':''}> Satış</label><label class="permission-box"><input id="pePrice" type="checkbox" ${p.canChangePrice?'checked':''}> Fiyat Değiştir</label><label class="permission-box"><input id="peCost" type="checkbox" ${p.canViewCost?'checked':''}> Maliyet Gör</label><label class="permission-box"><input id="peFinance" type="checkbox" ${p.canManageFinance?'checked':''}> Finans</label><label class="permission-box"><input id="peReturn" type="checkbox" ${p.canReturn?'checked':''}> İade / Değişim</label><label class="permission-box"><input id="peTransform" type="checkbox" ${p.canTransform?'checked':''}> Hurda / Dönüşüm</label><label class="permission-box"><input id="peDefs" type="checkbox" ${p.canManageDefinitions?'checked':''}> Tanımlamalar</label><label class="permission-box"><input id="peCloud" type="checkbox" ${p.canCloudSync?'checked':''}> Bulut / Yedek</label></div></div>`,()=>{
+      const name=String(document.getElementById('peName').value||'').trim(),username=String(document.getElementById('peUser').value||'').trim(),role=document.getElementById('peRole').value,pin=String(document.getElementById('pePin').value||'').trim();
+      if(!name||!username)return toast('Ad soyad ve kullanıcı adı zorunlu','err');
+      if(state.users.some(x=>x.id!==u.id&&String(x.username||'').toLocaleLowerCase('tr-TR')===username.toLocaleLowerCase('tr-TR')))return toast('Bu kullanıcı adı zaten kullanılıyor','err');
+      u.name=name;u.username=username;u.role=role;if(pin)u.pin=pin;
+      u.permissions={...u.permissions,canSell:Boolean(document.getElementById('peSell').checked),canChangePrice:Boolean(document.getElementById('pePrice').checked),canViewCost:Boolean(document.getElementById('peCost').checked),canManageFinance:Boolean(document.getElementById('peFinance').checked),canReturn:Boolean(document.getElementById('peReturn').checked),canTransform:Boolean(document.getElementById('peTransform').checked),canManageDefinitions:Boolean(document.getElementById('peDefs').checked),canCloudSync:Boolean(document.getElementById('peCloud').checked)};
+      if(role==='Yönetici'){u.permissions.canDelete=true;u.permissions.canClosePeriod=true;u.permissions.canCancel=true;}
+      if(session?.id===u.id){session.name=u.name;session.role=u.role;safeSessionSet(session);}
+      audit(`${u.name} personel/yetki bilgileri güncellendi`,'Personel');closeModal();save();render();toast('Personel bilgileri kaydedildi');
+    },'KAYDET');
+  }
   function pagePersonnelV648(){
-    const rows=(state.users||[]).map(u=>`<tr><td><strong>${esc(u.name)}</strong><br><small>${esc(u.username)}</small></td><td><span class="badge ${/yönetici|admin/i.test(String(u.role||''))?'gold':'blue'}">${esc(u.role)}</span></td><td>${u.permissions?.canSell!==false?'Satış':''}${u.permissions?.canViewCost?' · Maliyet':''}${u.permissions?.canManageFinance?' · Finans':''}</td><td>${u.id===session?.id?'<span class="badge gold">Aktif kullanıcı</span>':`<button class="btn btn-danger" data-personnel-remove="${u.id}">Kaldır</button>`}</td></tr>`).join('');
-    return `<div class="page-title"><div><h1>Personel Yönetimi</h1><p>Programa giriş yapacak personeli ekle veya kaldır. Eski satış kayıtlarındaki personel adı silinmez.</p></div><button class="btn btn-primary" id="addPersonnel">+ PERSONEL EKLE</button></div><div class="card"><div class="table-wrap"><table class="table" style="min-width:720px"><thead><tr><th>Ad Soyad / Kullanıcı</th><th>Görev</th><th>Yetki Özeti</th><th>İşlem</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+    const rows=(state.users||[]).map(u=>`<tr><td><strong>${esc(u.name)}</strong><br><small>${esc(u.username)}</small></td><td><span class="badge ${/yönetici|admin/i.test(String(u.role||''))?'gold':'blue'}">${esc(u.role)}</span></td><td>${u.permissions?.canSell!==false?'Satış':''}${u.permissions?.canViewCost?' · Maliyet':''}${u.permissions?.canManageFinance?' · Finans':''}</td><td><div class="row-actions"><button class="btn btn-outline" data-personnel-edit="${u.id}">Düzenle / Yetki</button>${u.id===session?.id?'<span class="badge gold">Aktif kullanıcı</span>':`<button class="btn btn-danger" data-personnel-remove="${u.id}">Kaldır</button>`}</div></td></tr>`).join('');
+    return `<div class="page-title"><div><h1>Personel Yönetimi</h1><p>Programa giriş yapacak kişileri buradan ekle, kaldır ve yetkilerini düzenle. Personel ayarları Sistem Ayarları ile karışmaz.</p></div><button class="btn btn-primary" id="addPersonnel">+ PERSONEL EKLE</button></div><div class="card"><div class="table-wrap"><table class="table" style="min-width:720px"><thead><tr><th>Ad Soyad / Kullanıcı</th><th>Görev</th><th>Yetki Özeti</th><th>İşlem</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   }
   function bindPersonnelV648(){
     document.getElementById('addPersonnel')?.addEventListener('click',openPersonnelAddV648);
+    document.querySelectorAll('[data-personnel-edit]').forEach(b=>b.addEventListener('click',()=>openPersonnelEditV663(b.dataset.personnelEdit)));
     document.querySelectorAll('[data-personnel-remove]').forEach(b=>b.addEventListener('click',()=>removePersonnelV648(b.dataset.personnelRemove)));
   }
 
   function pageParameters(){
-    const groups=uniqueValues((state.systemParameters||[]).map(x=>x.group||'Diğer'));
-    const user=state.users.find(x=>x.id===session?.id)||state.users[0];
-    const rows=(state.systemParameters||[]).map((x,i)=>`<tr data-param-row="${i}" data-param-group="${esc(x.group||'Diğer')}"><td><strong>${esc(x.label)}</strong><div class="muted" style="font-size:11px">${esc(x.group||'Diğer')}</div></td><td>${x.type==='bool'?`<select class="param-value" data-param-index="${i}"><option ${['Evet','1','true',true].includes(x.value)?'selected':''}>Evet</option><option ${['Hayır','0','false',false].includes(x.value)?'selected':''}>Hayır</option></select>`:`<input class="param-value" data-param-index="${i}" type="${x.type==='number'?'number':'text'}" step="${x.type==='number'?'0.01':'any'}" value="${esc(x.value)}">`}</td></tr>`).join('');
-    return `<div class="page-title"><div><h1>Sistem Parametreleri</h1><p>Pusula mantığı: hesap, satış, stok, POS, fiyat, yazıcı ve RFID davranışları kod yerine parametrelerden yönetilir.</p></div><button class="btn btn-primary" id="saveSystemParameters">KAYIT</button></div>
-      <div class="system-param-layout"><div class="card param-groups"><button class="btn btn-primary" data-param-filter="">TÜMÜ</button>${groups.map(g=>`<button class="btn btn-outline" data-param-filter="${esc(g)}">${esc(g)}</button>`).join('')}</div><div><div class="card"><div class="table-wrap"><table class="table param-table" style="min-width:680px"><thead><tr><th>Parametre Adı</th><th>Parametre Tipi / Değer</th></tr></thead><tbody>${rows}</tbody></table></div></div>
-      <div class="card" style="margin-top:14px"><div class="section-head"><h3>Kullanıcı Yetkileri — ${esc(user?.name||'')}</h3><span>Pusula alt bölümüne benzer</span></div><div class="grid grid-4"><label class="permission-box"><input id="permSell" type="checkbox" ${user?.permissions?.canSell!==false?'checked':''}> Satan Eleman</label><label class="permission-box"><input id="permPrice" type="checkbox" ${user?.permissions?.canChangePrice?'checked':''}> Satış Fiyatını Değiştir</label><label class="permission-box"><input id="permCost" type="checkbox" ${user?.permissions?.canViewCost?'checked':''}> Satış Ekr. Maliyet Göster</label><label class="permission-box"><input id="permFinance" type="checkbox" ${user?.permissions?.canManageFinance?'checked':''}> Kasa / Finans Yetkisi</label><label class="permission-box"><input id="permReturn" type="checkbox" ${user?.permissions?.canReturn!==false?'checked':''}> İade / Değişim</label><label class="permission-box"><input id="permTransform" type="checkbox" ${user?.permissions?.canTransform!==false?'checked':''}> Hurda / Dönüşüm</label><label class="permission-box"><input id="permClosePeriod" type="checkbox" ${user?.permissions?.canClosePeriod!==false?'checked':''}> Dönem Kapatma</label><label class="permission-box"><input id="permCloud" type="checkbox" ${user?.permissions?.canCloudSync!==false?'checked':''}> Bulut Senkron</label></div></div></div></div>`;
+    ensureV5State();
+    state.settings=state.settings||{};
+    const cloud=state.cloudSync||{};
+    const autoLock=Number(state.settings.securityAutoLockMinutes||60);
+    return `<div class="page-title"><div><h1>Sistem Ayarları</h1><p>Programın ana davranışlarını buradan yönet. Yazıcı, personel ve yedek gibi özel işlemler kendi merkezlerinde tutulur.</p></div><button class="btn btn-primary" id="saveSystemParameters">AYARLARI KAYDET</button></div>
+      <div class="grid grid-2 system-brain-grid">
+        <div class="card"><div class="section-head"><h3>🏢 Firma / Genel</h3><span class="badge gold">Temel</span></div>
+          <div class="form-grid"><div class="labelled span-2"><label>Firma Adı</label><input id="sysCompanyName" class="input" value="${esc(state.settings.companyName||'ASİL KUYUMCULUK')}"><small>Fiş ve program başlıklarında kullanılır.</small></div><div class="labelled span-2"><label>Şube</label><input id="sysBranch" class="input" value="${esc(state.settings.branch||'Krempark AVM')}"><small>Fiş ve işletme bilgisinde kullanılır.</small></div></div>
+        </div>
+        <div class="card"><div class="section-head"><h3>💰 Satış Güvenliği</h3><span class="badge red">Kritik</span></div>
+          <div class="form-grid"><label class="permission-box span-2"><input id="sysBelowCost" type="checkbox" ${state.settings.belowCostWarning!==false?'checked':''}> Maliyet altı satışta sesli / kırmızı uyarı göster</label><label class="permission-box span-2"><input id="sysCostLock" type="checkbox" ${state.settings.lockCostsForSales!==false?'checked':''}> Satış maliyet temelini kilitle</label></div>
+          <div class="notice" style="margin-top:10px">Bu alanlar satış kârını ve maliyet kontrolünü doğrudan etkiler. Değişiklikler kayıt altına alınır.</div>
+        </div>
+        <div class="card"><div class="section-head"><h3>⇄ Fiyat / Kur</h3><span class="badge blue">Canlı</span></div>
+          <div class="form-grid"><label class="permission-box span-2"><input id="sysLivePrice" type="checkbox" ${state.settings.livePriceSync!==false?'checked':''}> Altın ve döviz fiyatlarını otomatik güncelle</label><div class="labelled span-2"><label>Güncelleme Süresi (dakika)</label><input id="sysPriceMinutes" class="input" type="number" min="0.05" step="0.05" value="${esc(Number(state.settings.exchangeUpdateMinutes||2))}"><small>Canlı fiyat servisinin yenileme aralığıdır.</small></div></div>
+        </div>
+        <div class="card"><div class="section-head"><h3>☁ Bulut / Yedek</h3><span class="badge ${cloud.lastStatus==='Bağlı'?'green':'gold'}">${esc(cloud.lastStatus||'Bekliyor')}</span></div>
+          <div class="form-grid"><label class="permission-box span-2"><input id="sysCloud" type="checkbox" ${cloud.enabled!==false?'checked':''}> Merkezi bulut senkronu açık</label><label class="permission-box span-2"><input id="sysAutoBackup" type="checkbox" ${state.settings.backupEnabled!==false?'checked':''}> Günlük otomatik bulut yedeği al</label></div>
+          <div class="muted" style="margin-top:8px;font-size:12px">Son gönderim: <b>${esc(cloud.lastPush?trDate(cloud.lastPush):'Henüz yok')}</b> · Son alım: <b>${esc(cloud.lastPull?trDate(cloud.lastPull):'Henüz yok')}</b></div>
+        </div>
+        <div class="card"><div class="section-head"><h3>🔒 Güvenlik</h3><span class="badge gold">Önemli</span></div>
+          <div class="form-grid"><div class="labelled span-2"><label>Hareketsizlikte Otomatik Kilit (dakika)</label><input id="sysAutoLock" class="input" type="number" min="5" max="480" step="5" value="${autoLock}"><small>Bu süre işlem yapılmazsa oturum kilitlenir. 5–480 dakika.</small></div></div>
+          <div class="notice" style="margin-top:10px">Kullanıcı şifreleri, yetkiler, bulut anahtarı ve işlem geçmişi güvenlik katmanının parçalarıdır.</div>
+        </div>
+        <div class="card"><div class="section-head"><h3>Yönetim Merkezleri</h3><span>İlgili ayarları doğru yerde tutar</span></div>
+          <div class="grid grid-2"><button class="btn btn-outline" data-system-go="personnel">👤 Personel / Yetkiler</button><button class="btn btn-outline" data-system-go="labels">🏷 Barkod / Yazıcı</button><button class="btn btn-outline" data-system-go="backup">↻ Yedek / Bulut</button><button class="btn btn-outline" data-system-go="definitions">▤ Tanımlamalar</button></div>
+          <p class="muted" style="margin:10px 0 0">Yazıcı, RFID, personel ve benzeri özel ayarlar artık Sistem Ayarları listesini kalabalıklaştırmaz.</p>
+        </div>
+      </div>`;
   }
 
   function v6UnitTlRate(unit){
@@ -5450,12 +5488,28 @@ function stockSummaryView(){
   }
 
   function bindParameters(){
-    document.querySelectorAll('[data-param-filter]').forEach(b=>b.addEventListener('click',()=>{const g=b.dataset.paramFilter||'';document.querySelectorAll('[data-param-filter]').forEach(x=>x.classList.toggle('btn-primary',x===b));document.querySelectorAll('[data-param-row]').forEach(r=>r.style.display=!g||r.dataset.paramGroup===g?'':'none');}));
+    document.querySelectorAll('[data-system-go]').forEach(b=>b.addEventListener('click',()=>{
+      const go=b.dataset.systemGo;
+      if(go==='labels'){stockView='labels';route='stocks';render();return;}
+      route=go;render();
+    }));
     document.getElementById('saveSystemParameters')?.addEventListener('click',()=>{
-      document.querySelectorAll('.param-value').forEach(el=>{const i=Number(el.dataset.paramIndex);if(state.systemParameters[i])state.systemParameters[i].value=el.value;});
-      const user=state.users.find(x=>x.id===session?.id)||state.users[0]; user.permissions=user.permissions||{};user.permissions.canSell=document.getElementById('permSell')?.checked!==false;user.permissions.canChangePrice=Boolean(document.getElementById('permPrice')?.checked);user.permissions.canViewCost=Boolean(document.getElementById('permCost')?.checked);user.permissions.canManageFinance=Boolean(document.getElementById('permFinance')?.checked);user.permissions.canReturn=Boolean(document.getElementById('permReturn')?.checked);user.permissions.canTransform=Boolean(document.getElementById('permTransform')?.checked);user.permissions.canClosePeriod=Boolean(document.getElementById('permClosePeriod')?.checked);user.permissions.canCloudSync=Boolean(document.getElementById('permCloud')?.checked);
-      syncSystemParametersV648();
-      audit('Sistem parametreleri güncellendi ve uygulandı','Sistem');save();toast('Sistem parametreleri kaydedildi ve uygulandı');render();
+      if(!/yönetici|admin/i.test(String(session?.role||'')))return toast('Sistem ayarlarını sadece yönetici değiştirebilir','err');
+      const minutes=Math.max(.05,Number(document.getElementById('sysPriceMinutes')?.value||2));
+      const lockMinutes=Math.max(5,Math.min(480,Number(document.getElementById('sysAutoLock')?.value||60)));
+      state.settings=state.settings||{};
+      state.settings.companyName=String(document.getElementById('sysCompanyName')?.value||'').trim()||'ASİL KUYUMCULUK';
+      state.settings.branch=String(document.getElementById('sysBranch')?.value||'').trim()||'Krempark AVM';
+      state.settings.belowCostWarning=Boolean(document.getElementById('sysBelowCost')?.checked);
+      state.settings.lockCostsForSales=Boolean(document.getElementById('sysCostLock')?.checked);
+      state.settings.livePriceSync=Boolean(document.getElementById('sysLivePrice')?.checked);
+      state.settings.exchangeUpdateMinutes=minutes;
+      state.settings.backupEnabled=Boolean(document.getElementById('sysAutoBackup')?.checked);
+      state.settings.securityAutoLockMinutes=lockMinutes;
+      state.cloudSync=state.cloudSync||{};
+      state.cloudSync.enabled=Boolean(document.getElementById('sysCloud')?.checked);
+      audit('Kritik sistem ayarları güncellendi','Sistem Ayarları');
+      save();toast('Sistem ayarları uygulandı');render();
     });
   }
 
