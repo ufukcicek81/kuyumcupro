@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101113" />
-  <meta name="description" content="Asil Kuyumcu Pro V6.73 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
+  <meta name="description" content="Asil Kuyumcu Pro V6.74 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.73</title>
+  <title>Asil Kuyumcu Pro V6.74</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -1252,7 +1252,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
         state.audits.unshift({id:uid('AUD'),date:now(),user:(typeof session!=='undefined'&&session?.name)||'Sistem',module:'Otomatik Kayıt',action:'Veri değişikliği kaydedildi · '+routeName+' · '+summary,kind:'OTOMATİK'});
         state.audits=state.audits.slice(0,5000);
       }
-      state.meta.appVersion='6.73';
+      state.meta.appVersion='6.74';
       if(typeof syncSystemParametersV648==='function')syncSystemParametersV648();
       localStorage.setItem(LS_KEY, JSON.stringify(state));
     } catch { /* Yerel dosya modunda depolama engellense bile uygulama çalışmaya devam eder. */ }
@@ -1966,7 +1966,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.73</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
+        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.74</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
         <nav class="nav" aria-label="Ana menü">${['dashboard','sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={dashboard:'Ana Menü',sales:'Satış',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
         <details class="more-nav"><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['dashboard','sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
       </aside>
@@ -5905,7 +5905,7 @@ function stockSummaryView(){
   }
 
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion='6.73';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
+    state.meta=state.meta||{};state.meta.appVersion='6.74';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
@@ -6035,12 +6035,133 @@ function stockSummaryView(){
     if(changed){try{localStorage.setItem(LS_KEY,JSON.stringify(state));}catch(_){}cleanupCloudBackupsV6();}
     return ok;
   }
+  function applyCariMassOffsetV674(){
+    state.meta=state.meta||{};
+    if(Number(state.meta.cariMassOffsetV674||0)>=1)return {changed:false,already:true};
+
+    const excludedNames=[
+      'BİROL KOTAN','SAMİ ÇİÇEK','SUZAN CICEK','EROL MEZARCI','NEZAHAT BAYRAM',
+      'OGUZ TOYSHOP','CREO GÜMÜŞ','ÇELEBI GÜMÜŞ','FIRUZE','IPEK KUYUMCULUK',
+      'KARDEŞLER KUYUMCULUK','MODERN KUYUMCULUK','NAMIK GÜMÜŞÇÜ','SEMIH IPEK',
+      'İŞ BANKASI','VAKIFBANK'
+    ];
+    const norm=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ı/g,'i').replace(/İ/g,'I').toUpperCase().replace(/\s+/g,' ').trim();
+    const excluded=new Set(excludedNames.map(norm));
+    const customers=Array.isArray(state.customers)?state.customers:[];
+    const moves=Array.isArray(state.customerMoves)?state.customerMoves:(state.customerMoves=[]);
+
+    const eligible=customers.filter(c=>{
+      if(!c||c.id==='CASH')return false;
+      if(excluded.has(norm(c.name)))return false;
+      const type=norm(c.type);
+      if(type==='BANKA'||type==='POS')return false;
+      if(c.financeAccountId)return false;
+      return true;
+    });
+
+    const units=new Set(['TL','HAS']);
+    eligible.forEach(c=>Object.keys(c.otherBalances||{}).forEach(u=>units.add(String(u||'').toUpperCase())));
+    const balanceOf=(c,u)=>u==='TL'?Number(c.tlBalance||0):u==='HAS'?Number(c.hasBalance||0):Number(c.otherBalances?.[u]||0);
+    const eps=u=>u==='TL'?0.009:0.0004;
+    const round=u=>v=>{
+      const d=u==='TL'?2:3,p=10**d;
+      const n=Math.round((Number(v)||0)*p)/p;
+      return Math.abs(n)<=eps(u)?0:n;
+    };
+    const forceBalance=(c,u,v)=>{
+      v=round(u)(v);
+      if(u==='TL')c.tlBalance=v;
+      else if(u==='HAS')c.hasBalance=v;
+      else {c.otherBalances=c.otherBalances||{};c.otherBalances[u]=v;}
+    };
+
+    let pairCount=0;
+    const touched=new Set();
+    const zeroed=new Set();
+    const amountByUnit={};
+
+    for(const unit of units){
+      let pos=eligible.map(c=>({c,v:round(unit)(balanceOf(c,unit))})).filter(x=>x.v>eps(unit));
+      let neg=eligible.map(c=>({c,v:Math.abs(round(unit)(balanceOf(c,unit)))})).filter(x=>balanceOf(x.c,unit)<-eps(unit));
+      if(!pos.length||!neg.length)continue;
+
+      const totalPos=pos.reduce((a,x)=>a+x.v,0);
+      const totalNeg=neg.reduce((a,x)=>a+x.v,0);
+      if(totalPos>=totalNeg)pos.sort((a,b)=>a.v-b.v);
+      else neg.sort((a,b)=>a.v-b.v);
+
+      let i=0,j=0;
+      while(i<pos.length&&j<neg.length){
+        const p=pos[i],n=neg[j],x=round(unit)(Math.min(p.v,n.v));
+        if(x<=eps(unit))break;
+
+        applyCariBalance(p.c,unit,0,x);
+        applyCariBalance(n.c,unit,x,0);
+        forceBalance(p.c,unit,balanceOf(p.c,unit));
+        forceBalance(n.c,unit,balanceOf(n.c,unit));
+
+        pairCount++;
+        amountByUnit[unit]=round(unit)((amountByUnit[unit]||0)+x);
+        touched.add(p.c.id);touched.add(n.c.id);
+        const doc='MAHSUP-20260930-'+String(pairCount).padStart(4,'0');
+        const date=now();
+        moves.unshift({
+          id:uid('CM'),customerId:p.c.id,period:state.activePeriod,date,type:'TOPLU CARİ MAHSUP',unit,
+          debit:0,credit:x,description:`Toplu borç/alacak mahsubu · Karşı hesap: ${n.c.name}`,
+          user:'Sistem',sourceType:'cariMassOffsetV674',sourceId:n.c.id,sourceDocNo:doc
+        });
+        moves.unshift({
+          id:uid('CM'),customerId:n.c.id,period:state.activePeriod,date,type:'TOPLU CARİ MAHSUP',unit,
+          debit:x,credit:0,description:`Toplu borç/alacak mahsubu · Karşı hesap: ${p.c.name}`,
+          user:'Sistem',sourceType:'cariMassOffsetV674',sourceId:p.c.id,sourceDocNo:doc
+        });
+
+        p.v=round(unit)(p.v-x);
+        n.v=round(unit)(n.v-x);
+        if(p.v<=eps(unit))i++;
+        if(n.v<=eps(unit))j++;
+      }
+    }
+
+    eligible.forEach(c=>{
+      for(const unit of units){
+        const before=balanceOf(c,unit);
+        forceBalance(c,unit,before);
+        if(Math.abs(balanceOf(c,unit))<=eps(unit))zeroed.add(c.id+'|'+unit);
+      }
+    });
+
+    state.meta.cariMassOffsetV674=1;
+    state.meta.cariMassOffsetV674Summary={
+      date:now(),pairCount,touchedAccounts:touched.size,zeroedUnitBalances:zeroed.size,amountByUnit,
+      excludedNames:[...excludedNames],financeLinkedAccountsProtected:true
+    };
+    state.audits=Array.isArray(state.audits)?state.audits:[];
+    state.audits.unshift({
+      id:uid('AUD'),date:now(),user:'Sistem',module:'Cari',
+      action:`Toplu borç/alacak mahsubu uygulandı · ${pairCount} eşleşme · ${touched.size} cari · Finans bağlantılı hesaplar ve hariç tutulan liste korunmuştur.`,
+      kind:'TOPLU MAHSUP'
+    });
+    return {changed:pairCount>0,pairCount,touchedAccounts:touched.size,zeroedUnitBalances:zeroed.size,amountByUnit};
+  }
+
   async function initCloudSyncV5(){
     ensureV5State();
     if(state.cloudSync?.enabled && state.settings?.backupEnabled!==false){
       await cloudBackupV5('AÇILIŞ ÖNCESİ GÜVENLİK').catch(()=>false);
     }
     await cloudPullV5(false);
+    if(Number(state.meta?.cariMassOffsetV674||0)<1){
+      try{localStorage.setItem('asil_kuyumcu_pre_cari_offset_v674',JSON.stringify(state));}catch(_){}
+      await cloudBackupV5('TOPLU CARİ MAHSUP ÖNCESİ').catch(()=>false);
+      const offsetResult=applyCariMassOffsetV674();
+      if(offsetResult.changed){
+        save(true);
+        await cloudPushV5(false).catch(()=>false);
+      }else{
+        save(false);
+      }
+    }
     const pinMigrated=await migrateLegacyPinsV664().catch(()=>false);
     if(pinMigrated)save(false);
     cloudInitializedV5=true;
@@ -6180,7 +6301,7 @@ function stockSummaryView(){
     state.invoiceSettings.companyTitle=state.invoiceSettings.companyTitle||state.settings.companyName||'ASİL KUYUMCULUK';
     state.invoiceSettings.defaultDocumentType=state.invoiceSettings.defaultDocumentType||'AUTO';
     if(!Array.isArray(state.invoiceRecords))state.invoiceRecords=[];
-    state.meta=state.meta||{};state.meta.appVersion='6.73';
+    state.meta=state.meta||{};state.meta.appVersion='6.74';
   }
   function maskIdNo(v){v=String(v||'').replace(/\D/g,'');if(v.length<5)return v||'—';return v.slice(0,2)+'*****'+v.slice(-2);}
   function identityById(id){return identityRecords.find(x=>x.id===id)||null;}
