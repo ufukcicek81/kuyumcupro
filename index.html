@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101113" />
-  <meta name="description" content="Asil Kuyumcu Pro V6.64 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
+  <meta name="description" content="Asil Kuyumcu Pro V6.65 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.64</title>
+  <title>Asil Kuyumcu Pro V6.65</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -840,7 +840,7 @@ body[data-theme="dark"] .metric .foot,
 body[data-theme="dark"] .table th{color:#c9cfd7}
 
 
-/* v6.64 — PC ekranlarında daha kompakt çalışma düzeni */
+/* v6.65 — PC ekranlarında daha kompakt çalışma düzeni */
 body[data-ui-mode="pc"] .content{padding:14px 18px 20px}
 body[data-ui-mode="pc"] .content .page-title{margin-bottom:10px}
 body[data-ui-mode="pc"] .content .page-title h1{font-size:24px;line-height:1.1;margin-bottom:4px}
@@ -1963,7 +1963,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.64</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
+        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.65</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
         <nav class="nav" aria-label="Ana menü">${['dashboard','sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={dashboard:'Ana Menü',sales:'Satış',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
         <details class="more-nav"><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['dashboard','sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
       </aside>
@@ -2675,22 +2675,72 @@ function stockSummaryView(){
     return `<div class="page-title" style="margin-top:4px"><div><h1 style="font-size:22px">Stok Kartı Tanımlama</h1><p>Pusula ekranındaki ürün grubu, ürün kodu, takip birimleri ve sabit milyem mantığı.</p></div><button class="btn btn-primary" data-new-stockcard="1">+ Yeni Stok Kartı</button></div><div class="notice">Altın kartında <strong>Milyem Sabiti</strong> tanımlanır. Altın girişinde mal seçildiğinde ayar otomatik gelir ve miktardan HAS hesaplanır.</div><div class="stock-card-order-hint">Kartları fareyle tutup sürükleyerek istediğin sıraya al. Sıralama kalıcı kaydedilir.</div><div class="master-card-grid" id="stockCardOrderGrid" style="margin-top:8px">${state.stockCardsMaster.map(c=>`<div class="stock-card-box" draggable="true" data-stockcard-order="${c.id}"><div class="section-head"><h4>${esc(c.productDefinition||c.name)}</h4><span class="badge gold">Kod ${esc(c.productCode||c.code)}</span></div><p>${esc(c.productGroup||c.productType)} · Stok: ${esc(c.stockTrackingUnit||'')} · İşçilik: ${esc(c.workmanshipTrackingUnit||'')}</p><div class="meta"><span class="badge">${qty(c.fixedMilyem||c.purity)} milyem</span><span class="badge">${esc(c.unit12||'GR')}</span>${c.countedTracking?'<span class="badge blue">Adetli Takip</span>':''}${c.ziynet?'<span class="badge gold">Ziynet</span>':''}${c.ziynet&&Number(c.zGram||0)>0?`<span class="badge green">1 Adet = ${qty(c.zGram)} GR</span>`:''}</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px"><button class="btn btn-outline" data-edit-stockcard="${c.id}">Düzenle</button><button class="btn btn-danger" data-delete-stockcard="${c.id}">Sil</button></div></div>`).join('')}</div>`;
   }
 
+  function labelFieldCatalogV665(){
+    return {
+      barcode:{label:'Barkod',source:'barcode'},
+      code:{label:'Ürün Kodu',source:'code'},
+      company:{label:'Şirket Adı',source:'company'},
+      price1:{label:'Etiket / Üst HAS',source:'price1'},
+      price2:{label:'Satış / Alt HAS',source:'price2'},
+      karat:{label:'Ayar',source:'karat'},
+      costCode:{label:'Maliyet HAS Kodu (0,73 → 0073)',source:'costCode'},
+      workCode:{label:'Geliş İşçilik Kodu (1,00 → 0100)',source:'workCode'},
+      weight:{label:'Terazi Gramı',source:'weight'},
+      purity:{label:'Milyem / Saflık',source:'purity'},
+      productName:{label:'Ürün Adı',source:'productName'},
+      pusulaCode:{label:'Pusula / Kısa Kod',source:'pusulaCode'},
+      model:{label:'Model',source:'model'},
+      internal:{label:'Eski Birleşik İç Kod',source:'internal'},
+      customer:{label:'Müşteri Ad Soyad',source:'customer'},
+      customText:{label:'Sabit Metin',source:'customText'}
+    };
+  }
   function labelElementDefaults(){
     return {
-      barcode:{label:'Barkod',x:1.2,y:.45,w:20.2,h:4,fontPt:0,bold:true},
-      code:{label:'Ürün Kodu',x:1.2,y:4.60,w:20.2,h:1.9,fontPt:5.8,bold:true},
-      company:{label:'Şirket Adı',x:1.2,y:6.65,w:20.2,h:2.0,fontPt:5.4,bold:true},
-      price1:{label:'Etiket / Üst HAS',x:23.7,y:.55,w:12.8,h:2.3,fontPt:6.4,bold:true},
-      price2:{label:'Satış HAS',x:23.7,y:3.05,w:12.8,h:2.3,fontPt:6.4,bold:true},
-      karat:{label:'Ayar',x:39.1,y:.75,w:5.2,h:2.3,fontPt:6.1,bold:true},
-      internal:{label:'Özel Kod',x:23.7,y:6.45,w:20.7,h:1.8,fontPt:4.4,bold:true},
-      customer:{label:'Müşteri Ad Soyad',x:46.8,y:.8,w:24,h:2.1,fontPt:5.1,bold:true}
+      barcode:{label:'Barkod',source:'barcode',enabled:true,x:1.2,y:.45,w:20.2,h:4,fontPt:0,bold:true},
+      code:{label:'Ürün Kodu',source:'code',enabled:true,x:1.2,y:4.60,w:20.2,h:1.9,fontPt:5.8,bold:true},
+      company:{label:'Şirket Adı',source:'company',enabled:true,x:1.2,y:6.65,w:20.2,h:2.0,fontPt:5.4,bold:true},
+      price1:{label:'Etiket / Üst HAS',source:'price1',enabled:true,x:23.7,y:.55,w:12.8,h:2.3,fontPt:6.4,bold:true},
+      price2:{label:'Satış / Alt HAS',source:'price2',enabled:true,x:23.7,y:3.05,w:12.8,h:2.3,fontPt:6.4,bold:true},
+      karat:{label:'Ayar',source:'karat',enabled:true,x:39.1,y:.75,w:5.2,h:2.3,fontPt:6.1,bold:true},
+      costCode:{label:'Maliyet HAS Kodu',source:'costCode',enabled:true,x:23.7,y:6.45,w:5.2,h:1.8,fontPt:4.4,bold:true},
+      workCode:{label:'Geliş İşçilik Kodu',source:'workCode',enabled:true,x:29.2,y:6.45,w:5.2,h:1.8,fontPt:4.4,bold:true},
+      weight:{label:'Terazi Gramı',source:'weight',enabled:true,x:39.0,y:6.45,w:5.5,h:1.8,fontPt:4.4,bold:true},
+      purity:{label:'Milyem / Saflık',source:'purity',enabled:false,x:34.6,y:6.45,w:4.0,h:1.8,fontPt:4.4,bold:true},
+      productName:{label:'Ürün Adı',source:'productName',enabled:false,x:1.2,y:6.65,w:20.2,h:2,fontPt:5,bold:true},
+      pusulaCode:{label:'Pusula / Kısa Kod',source:'pusulaCode',enabled:false,x:1.2,y:4.60,w:20.2,h:1.9,fontPt:5.6,bold:true},
+      model:{label:'Model',source:'model',enabled:false,x:23.7,y:6.45,w:10,h:1.8,fontPt:4.4,bold:true},
+      internal:{label:'Eski Birleşik İç Kod',source:'internal',enabled:false,x:23.7,y:6.45,w:20.7,h:1.8,fontPt:4.4,bold:true},
+      customer:{label:'Müşteri Ad Soyad',source:'customer',enabled:false,x:46.8,y:.8,w:24,h:2.1,fontPt:5.1,bold:true}
     };
   }
   function mergeLabelElements(raw){
-    const d=labelElementDefaults(),r=raw&&typeof raw==='object'?raw:{};const out={};
-    Object.keys(d).forEach(k=>out[k]={...d[k],...(r[k]||{})});return out;
+    const d=labelElementDefaults(),r=raw&&typeof raw==='object'?raw:{},out={};
+    Object.keys(d).forEach(k=>out[k]={...d[k],...(r[k]||{})});
+    Object.keys(r).filter(k=>!out[k]&&r[k]&&typeof r[k]==='object').forEach(k=>out[k]={enabled:true,source:'customText',label:'Yeni Alan',x:23.7,y:6.45,w:8,h:1.8,fontPt:4.4,bold:true,...r[k]});
+    return out;
   }
+  function labelSourceValueV665(source,x,s,e){
+    const saleHas=Number(x.saleHas||stockCounterHas(x)||0),mult=Math.max(0,Number(s.labelPriceMultiplier||1.12)),topHas=Number(x.labelPriceHas??(saleHas*mult));
+    const src=String(source||e?.source||'');
+    if(src==='code')return String(x.code||x.barcode||x.pusulaCode||'');
+    if(src==='company')return String(s.companyName||state.settings?.companyName||'ASİL KUYUMCULUK');
+    if(src==='price1')return `${qty(topHas)} HAS`;
+    if(src==='price2')return `${qty(saleHas)} HAS`;
+    if(src==='karat')return labelKaratText(x);
+    if(src==='costCode')return String(Math.round(Math.max(0,Number(x.costHas||0))*100)).padStart(4,'0');
+    if(src==='workCode')return String(Math.round(Math.max(0,Number(x.workmanshipEntryValue??x.workmanshipValue??0))*100)).padStart(4,'0');
+    if(src==='weight')return Math.max(0,stockAmount(x)).toFixed(2);
+    if(src==='purity')return String(x.purity??x.karat??'');
+    if(src==='productName')return String(x.name||'');
+    if(src==='pusulaCode')return String(x.pusulaCode||'');
+    if(src==='model')return String(x.model||'');
+    if(src==='internal')return labelInternalCode(x);
+    if(src==='customer')return String(x.printCustomerName||'');
+    if(src==='customText')return String(e?.customText||e?.label||'');
+    return '';
+  }
+
   function printerSettings(){
     const defaults={mode:'qz',mediaMode:'roll',printerName:'',labelWidthMm:72,labelHeightMm:10,gapMm:0,columns:3,pageMarginMm:8,marginTopMm:0,marginRightMm:0,marginBottomMm:0,marginLeftMm:0,orientation:'portrait',copies:1,dpi:203,fontScale:100,showName:false,showCode:true,showKarat:true,showWeight:false,showPusulaCode:false,showSaleHas:true,showSaleTl:false,showModel:false,showInternalCode:true,autoPrintAfterBarcode:false,qzScriptUrl:'https://cdn.jsdelivr.net/npm/qz-tray@2.3.0/qz-tray.js',layout:'pusula72x10',layoutVersion:4,directPrintVersion:1,horizontalOffsetMm:0,verticalOffsetMm:0,labelPriceMultiplier:1.12,companyName:'ASİL KUYUMCULUK'};
     const s=state.printerSettings||(state.printerSettings={...defaults});
@@ -2705,21 +2755,46 @@ function stockSummaryView(){
     s.elements=mergeLabelElements(s.elements);return s;
   }
   function applyPusulaLabelPreset(target=printerSettings()){
-    Object.assign(target,{mediaMode:'roll',labelWidthMm:72,labelHeightMm:10,gapMm:0,marginTopMm:0,marginRightMm:0,marginBottomMm:0,marginLeftMm:0,orientation:'portrait',fontScale:100,layout:'pusula72x10',layoutVersion:4,horizontalOffsetMm:0,verticalOffsetMm:0,labelPriceMultiplier:1.12,companyName:'ASİL KUYUMCULUK',showCode:true,showKarat:true,showInternalCode:true,showSaleHas:true,showSaleTl:false,elements:labelElementDefaults()});return target;
+    Object.assign(target,{mediaMode:'roll',labelWidthMm:72,labelHeightMm:10,gapMm:0,marginTopMm:0,marginRightMm:0,marginBottomMm:0,marginLeftMm:0,orientation:'portrait',fontScale:100,layout:'pusula72x10',layoutVersion:4,horizontalOffsetMm:0,verticalOffsetMm:0,labelPriceMultiplier:1.12,companyName:'ASİL KUYUMCULUK',showCode:true,showKarat:true,showInternalCode:false,showSaleHas:true,showSaleTl:false,elements:labelElementDefaults()});return target;
   }
   function labelFieldHtml(x,s=printerSettings(),opts={}){
-    const saleHas=Number(x.saleHas||stockCounterHas(x)||0),mult=Math.max(0,Number(s.labelPriceMultiplier||1.12)),topHas=Number(x.labelPriceHas??(saleHas*mult));
     const ox=Number(s.horizontalOffsetMm||0),oy=Number(s.verticalOffsetMm||0),scale=Math.max(.5,Number(s.fontScale||100)/100),els=mergeLabelElements(s.elements);
-    const code=String(x.code||x.barcode||x.pusulaCode||''),company=String(s.companyName||state.settings?.companyName||'ASİL KUYUMCULUK'),internal=s.showInternalCode===false?'':labelInternalCode(x),customerName=String(x.printCustomerName||'').trim();
-    const style=(k,barcode=false)=>{const e=els[k],fs=barcode?'':`font-size:${Math.max(2,Number(e.fontPt||5)*scale)}pt;`;return `left:${Number(e.x||0)+ox}mm;top:${Number(e.y||0)+oy}mm;width:${Math.max(.5,Number(e.w||1))}mm;height:${Math.max(.5,Number(e.h||1))}mm;${fs}font-weight:${e.bold===false?400:800};line-height:${Math.max(.5,Number(e.h||1))}mm;`;};
-    const attr=k=>opts.editable?` data-label-field="${k}" title="${esc(els[k].label||k)} — fareyle taşı"`:'';
+    const style=(e,barcode=false)=>{const fs=barcode?'':`font-size:${Math.max(2,Number(e.fontPt||5)*scale)}pt;`;return `left:${Number(e.x||0)+ox}mm;top:${Number(e.y||0)+oy}mm;width:${Math.max(.5,Number(e.w||1))}mm;height:${Math.max(.5,Number(e.h||1))}mm;${fs}font-weight:${e.bold===false?400:800};line-height:${Math.max(.5,Number(e.h||1))}mm;`;};
     const guide=opts.editable?`<div class="jl-guide" style="left:23mm"></div><div class="jl-guide" style="left:46mm"></div><div class="jl-tail" style="left:46mm;right:0"></div>`:'';
     if(x.customerOnly){
-      const msg=String(x.printCustomerMessage||'MUTLULUKLAR').trim(),name=String(x.printCustomerName||'').trim();
-      return `<div class="jewel-label customer-only-label"><div style="position:absolute;left:23.2mm;top:2.1mm;width:22mm;height:5.8mm;display:flex;align-items:center;justify-content:center;text-align:center;font-size:6pt;font-weight:800;line-height:1.15;white-space:normal;overflow:hidden">${esc(msg)}</div><div style="position:absolute;left:46.3mm;top:.7mm;width:24.5mm;height:8.4mm;display:flex;align-items:center;justify-content:center;text-align:center;font-size:7pt;font-weight:900;line-height:1.08;white-space:normal;overflow:hidden;word-break:break-word">${esc(name)}</div></div>`;
+      const msg=String(x.printCustomerMessage||'MUTLULUKLAR').trim(),name=String(x.printCustomerName||'').trim(),company=String(s.companyName||state.settings?.companyName||'ASİL KUYUMCULUK').trim();
+      return `<div class="jewel-label customer-only-label">
+        <div style="position:absolute;left:23.2mm;top:.75mm;width:22.1mm;height:3.3mm;display:flex;align-items:center;justify-content:center;text-align:center;font-size:6.3pt;font-weight:900;line-height:1;white-space:nowrap;overflow:hidden">${esc(msg)}</div>
+        <div style="position:absolute;left:23.2mm;top:5.15mm;width:22.1mm;height:2.7mm;display:flex;align-items:center;justify-content:center;text-align:center;font-size:5.2pt;font-weight:700;line-height:1;white-space:nowrap;overflow:hidden">${esc(company)}</div>
+        <div style="position:absolute;left:46.1mm;top:.65mm;width:24.4mm;height:3.3mm;display:flex;align-items:center;justify-content:center;text-align:center;font-size:6.5pt;font-weight:900;line-height:1;white-space:nowrap;overflow:hidden">${esc(name)}</div>
+        <div style="position:absolute;left:46.1mm;top:5.05mm;width:24.4mm;height:3.3mm;display:flex;align-items:center;justify-content:center;text-align:center;font-size:6.5pt;font-weight:900;line-height:1;white-space:nowrap;overflow:hidden">${esc(name)}</div>
+      </div>`;
     }
-    return `<div class="jewel-label${opts.editable?' edit-mode':''}">${guide}${x.hideBarcode===true?'':`<div class="jl-item jl-barcode"${attr('barcode')} style="${style('barcode',true)}">${code128Svg(x.barcode||code)}</div>`}${s.showCode!==false&&x.hideCode!==true?`<div class="jl-item jl-code"${attr('code')} style="${style('code')}">${esc(code)}</div>`:''}${x.hideCompany===true?'':`<div class="jl-item jl-company"${attr('company')} style="${style('company')}">${esc(company)}</div>`}${s.showSaleHas!==false?`<div class="jl-item jl-price1"${attr('price1')} style="${style('price1')}">${qty(topHas)} HAS</div><div class="jl-item jl-price2"${attr('price2')} style="${style('price2')}">${qty(saleHas)} HAS</div>`:''}${s.showKarat!==false?`<div class="jl-item jl-karat"${attr('karat')} style="${style('karat')}">${esc(labelKaratText(x))}</div>`:''}${internal?`<div class="jl-item jl-internal"${attr('internal')} style="${style('internal')}">${esc(internal)}</div>`:''}${(customerName||opts.editable)?`<div class="jl-item jl-customer"${attr('customer')} style="${style('customer')}">${esc(customerName||'MÜŞTERİ AD SOYAD')}</div>`:''}</div>`;
+    const blocks=[];
+    Object.entries(els).forEach(([key,e])=>{
+      if(e?.enabled===false)return;
+      if(key==='code'&&s.showCode===false)return;
+      if((key==='price1'||key==='price2')&&s.showSaleHas===false)return;
+      if(key==='karat'&&s.showKarat===false)return;
+      if(key==='internal'&&s.showInternalCode===false)return;
+      if(key==='barcode'&&x.hideBarcode===true)return;
+      if(key==='code'&&x.hideCode===true)return;
+      if(key==='company'&&x.hideCompany===true)return;
+      const source=String(e.source||key);
+      const attr=opts.editable?` data-label-field="${esc(key)}" title="${esc(e.label||key)} — fareyle taşı"`:'';
+      if(source==='barcode'){
+        const code=String(x.barcode||x.code||x.pusulaCode||'');
+        blocks.push(`<div class="jl-item jl-barcode"${attr} style="${style(e,true)}">${code128Svg(code)}</div>`);
+        return;
+      }
+      let val=labelSourceValueV665(source,x,s,e);
+      if(source==='customer'&&!val&&opts.editable)val='MÜŞTERİ AD SOYAD';
+      if(!val&&!opts.editable)return;
+      blocks.push(`<div class="jl-item"${attr} style="${style(e)}">${esc(val||e.label||'ALAN')}</div>`);
+    });
+    return `<div class="jewel-label${opts.editable?' edit-mode':''}">${guide}${blocks.join('')}</div>`;
   }
+
   function labelPrintDocument(rows,s=printerSettings()){
     const w=Math.max(10,Number(s.labelWidthMm||72)),h=Math.max(8,Number(s.labelHeightMm||10));
     const labels=rows.map(x=>`<section class="lab">${labelFieldHtml(x,s)}</section>`).join('');
@@ -2999,7 +3074,7 @@ function stockSummaryView(){
   }
 
   function syncSystemParametersV648(){
-    // v6.64: Eski Pusula parametreleri artık program davranışını geri planda ezmez.
+    // v6.65: Eski Pusula parametreleri artık program davranışını geri planda ezmez.
     // Gerçek ayarlar Sistem Ayarları, Personel, Yazıcı ve Yedek merkezlerinden yönetilir.
     state.settings=state.settings||{};
     state.printerSettings=state.printerSettings||{};
