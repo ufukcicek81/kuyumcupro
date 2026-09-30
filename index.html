@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101113" />
-  <meta name="description" content="Asil Kuyumcu Pro V6.57 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
+  <meta name="description" content="Asil Kuyumcu Pro V6.58 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.57</title>
+  <title>Asil Kuyumcu Pro V6.58</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -1889,7 +1889,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.57</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
+        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.58</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
         <nav class="nav" aria-label="Ana menü">${['dashboard','sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={dashboard:'Ana Menü',sales:'Satış',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
         <details class="more-nav"><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['dashboard','sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
       </aside>
@@ -3174,9 +3174,128 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     document.getElementById('balCalc')?.addEventListener('click',calc);calc();
   }
 
+
+  function dailySalesReportRowsV658(fromDate,toDate,userFilter=''){
+    const f=new Date(`${fromDate}T00:00:00`).getTime(),t=new Date(`${toDate}T23:59:59.999`).getTime(),rows=[];
+    (state.sales||[]).filter(s=>{
+      const tm=new Date(s.date||0).getTime();
+      return s.period===state.activePeriod&&s.status==='Tamamlandı'&&(s.lines||[]).length&&tm>=f&&tm<=t&&(!userFilter||String(s.salesperson||'')===userFilter);
+    }).forEach(s=>{
+      const customer=state.customers.find(c=>c.id===s.customerId)?.name||'PEŞİN MÜŞTERİ';
+      const gross=(s.lines||[]).reduce((a,l)=>a+Number(l.total||0),0);
+      const net=Number(s.total||gross||0),factor=gross>0?net/gross:1;
+      const sellRate=Math.max(.000001,Number(s.hasSellRateAtSale||historicalHasRate(s.date,'sell')||1));
+      const buyRate=Math.max(.000001,Number(s.hasBuyRateAtSale||historicalHasRate(s.date,'buy')||1));
+      (s.lines||[]).forEach((l,idx)=>{
+        const stock=(state.stocks||[]).find(x=>x.id===l.stockId);
+        const open=(state.openStocks||[]).find(x=>x.id===l.openStockId);
+        const saleTl=Number(l.total||0)*factor,costHas=Number(l.costHas||0),saleHas=saleTl/sellRate;
+        const profitHas=saleHas-costHas,costTl=costHas*buyRate,profitTl=saleTl-costTl;
+        const amount=Number(l.displayQty??l.displayAmount??l.weight??l.qty??1);
+        rows.push({
+          saleId:s.id,lineNo:idx+1,docNo:s.docNo||s.id,date:s.date,customer,salesperson:s.salesperson||'',
+          code:l.code||stock?.pusulaCode||stock?.code||open?.pusulaCode||open?.productCode||'',
+          name:l.name||stock?.name||stock?.type||open?.name||'Ürün',
+          karat:String(l.karat||stock?.purity||stock?.karat||open?.purity||''),
+          amount,unit:String(l.unit||l.stockUnit||'GR').toUpperCase(),
+          costHas,saleHas,profitHas,costTl,saleTl,profitTl,
+          pct:costHas?profitHas/costHas*100:0,
+          model:stock?.model||open?.model||'',
+          barcode:stock?.barcode||((l.sourceType==='barcode'&&l.code)?l.code:''),
+          note:l.note||s.note||''
+        });
+      });
+    });
+    return rows.sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.docNo).localeCompare(String(b.docNo)));
+  }
+
+  function openDailySalesReportV658(){
+    const d=new Date(),today=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const people=[...new Set((state.sales||[]).filter(s=>s.period===state.activePeriod&&s.status==='Tamamlandı').map(s=>String(s.salesperson||'').trim()).filter(BoleaN))].sort((a,b)=>a.localeCompare(b,'tr'));
+    const body=`       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        <button class="btn btn-primary" data-dsr-view="detail">Detay Satışlar</button>
+        <button class="btn btn-outline" data-dsr-view="summary">Özet Satışlar</button>
+        <button class="btn btn-outline" data-dsr-view="docs">Fiş Bazında</button>
+      </div>
+      <div class="card" style="padding:14px">
+        <div class="form-grid">
+          <div class="labelled"><label>Başlangıç</label><input id="dsrFrom" class="input" type="date" value="${today}"></div>
+          <div class="labelled"><label>Bitiş</label><input id="dsrTo" class="input" type="date" value="${today}"></div>
+          <div class="labelled"><label>Gösterim</label><select id="dsrUnit" class="select"><option value="HAS">HAS</option><option value="TL">TL</option></select></div>
+          <div class="labelled"><label>Kullanıcı / Personel</label><select id="dsrUser" class="select"><option value="">Tümü</option>${people.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+          <button class="btn btn-primary" id="dsrShow">Göster</button>
+          <button class="btn btn-outline" id="dsrCsv">CSV İndir</button>
+          <button class="btn btn-outline" id="dsrPrint">Yazdır</button>
+        </div>
+      </div>
+      <div id="dailySalesReportResult" style="margin-top:14px"></div>`;
+    modal('Günlük Satış Raporu',body,null,'Kapat');
+    const modalEl=document.querySelector('#modalRoot .modal');if(modalEl)modalEl.style.width='min(1480px,98vw)';
+    let view='detail',lastRows=[];
+
+    const val=(r,k,unit)=>unit==='TL'?Number(r[k+'Tl']||0):Number(r[k+'Has']||0);
+    const fmt=(n,unit)=>unit==='TL'?money(n):`${qty(n)} HAS`;
+
+    const draw=()=>{
+      const from=document.getElementById('dsrFrom')?.value,to=document.getElementById('dsrTo')?.value,unit=document.getElementById('dsrUnit')?.value||'HAS',user=document.getElementById('dsrUser')?.value||'',box=document.getElementById('dailySalesReportResult');
+      if(!from||!to||!box)return;
+      if(from>to){box.innerHTML='<div class="notice negative">Başlangıç tarihi bitiş tarihinden büyük olamaz.</div>';return;}
+      const rows=dailySalesReportRowsV658(from,to,user);lastRows=rows;
+      const totalCost=rows.reduce((a,r)=>a+val(r,'cost',unit),0),totalSale=rows.reduce((a,r)=>a+val(r,'sale',unit),0),totalProfit=rows.reduce((a,r)=>a+val(r,'profit',unit),0);
+      const uniqueDocs=new Set(rows.map(r=>r.saleId)).size;
+      let table='';
+
+      if(view==='summary'){
+        const map=new Map();
+        rows.forEach(r=>{const k=[r.code,r.name,r.karat,r.unit].join('|'),x=map.get(k)||{code:r.code,name:r.name,karat:r.karat,unit:r.unit,count:0,amount:0,costHas:0,saleHas:0,profitHas:0,costTl:0,saleTl:0,profitTl:0};x.count++;x.amount+=r.amount;x.costHas+=r.costHas;x.saleHas+=r.saleHas;x.profitHas+=r.profitHas;x.costTl+=r.costTl;x.saleTl+=r.saleTl;x.profitTl+=r.profitTl;map.set(k,x);});
+        const a=[...map.values()];
+        table=`<div class="table-wrap"><table class="table" style="min-width:980px"><thead><tr><th>ÜRÜN KODU</th><th>ÜRÜN TİPİ</th><th>AYAR</th><th class="num">SATIR</th><th class="num">MİKTAR</th><th>BİRİM</th><th class="num">MALİYET</th><th class="num">SATIŞ</th><th class="num">KÂR</th><th class="num">%</th></tr></thead><tbody>${a.map(r=>{const cost=val(r,'cost',unit),sale=val(r,'sale',unit),profit=val(r,'profit',unit),pct=cost?profit/cost*100:0;return `<tr><td><strong>${esc(r.code)}</strong></td><td>${esc(r.name)}</td><td>${esc(r.karat)}</td><td class="num">${r.count}</td><td class="num">${qty(r.amount)}</td><td>${esc(r.unit)}</td><td class="num">${fmt(cost,unit)}</td><td class="num"><strong>${fmt(sale,unit)}</strong></td><td class="num"><strong class="${profit>=0?'positive':'negative'}">${fmt(profit,unit)}</strong></td><td class="num">${qty(pct)}%</td></tr>`;}).join('')||'<tr><td colspan="10">Bu tarihlerde satış bulunamadı.</td></tr>'}</tbody></table></div>`;
+      }else if(view==='docs'){
+        const map=new Map();
+        rows.forEach(r=>{const x=map.get(r.saleId)||{saleId:r.saleId,docNo:r.docNo,date:r.date,customer:r.customer,salesperson:r.salesperson,lines:0,costHas:0,saleHas:0,profitHas:0,costTl:0,saleTl:0,profitTl:0};x.lines++;x.costHas+=r.costHas;x.saleHas+=r.saleHas;x.profitHas+=r.profitHas;x.costTl+=r.costTl;x.saleTl+=r.saleTl;x.profitTl+=r.profitTl;map.set(r.saleId,x);});
+        const a=[...map.values()];
+        table=`<div class="table-wrap"><table class="table" style="min-width:1050px"><thead><tr><th>TARİH</th><th>FİŞ</th><th>MÜŞTERİ</th><th>PERSONEL</th><th class="num">ÜRÜN</th><th class="num">MALİYET</th><th class="num">SATIŞ</th><th class="num">KÂR</th><th class="num">%</th></tr></thead><tbody>${a.map(r=>{const cost=val(r,'cost',unit),sale=val(r,'sale',unit),profit=val(r,'profit',unit),pct=cost?profit/cost*100:0;return `<tr><td>${trDate(r.date)}</td><td><strong>${esc(r.docNo)}</strong></td><td>${esc(r.customer)}</td><td>${esc(r.salesperson)}</td><td class="num">${r.lines}</td><td class="num">${fmt(cost,unit)}</td><td class="num"><strong>${fmt(sale,unit)}</strong></td><td class="num"><strong class="${profit>=0?'positive':'negative'}">${fmt(profit,unit)}</strong></td><td class="num">${qty(pct)}%</td></tr>`;}).join('')||'<tr><td colspan="9">Bu tarihlerde satış bulunamadı.</td></tr>'}</tbody></table></div>`;
+      }else{
+        table=`<div class="table-wrap"><table class="table" style="min-width:1450px"><thead><tr><th>ÜRÜN KODU</th><th>ÜRÜN TİPİ</th><th>AYAR</th><th class="num">MİKTAR</th><th class="num">MALİYET</th><th>BİRİM</th><th class="num">SATIŞ</th><th>BİRİM</th><th class="num">KÂR</th><th class="num">%</th><th>SATIŞ KİME</th><th>PERSONEL</th><th>MODEL</th><th>BARKOD</th></tr></thead><tbody>${rows.map(r=>{const cost=val(r,'cost',unit),sale=val(r,'sale',unit),profit=val(r,'profit',unit);return `<tr><td><strong>${esc(r.code)}</strong></td><td>${esc(r.name)}</td><td>${esc(r.karat)}</td><td class="num">${qty(r.amount)}</td><td class="num">${fmt(cost,unit)}</td><td>${unit}</td><td class="num"><strong>${fmt(sale,unit)}</strong></td><td>${unit}</td><td class="num"><strong class="${profit>=0?'positive':'negative'}">${fmt(profit,unit)}</strong></td><td class="num">${qty(r.pct)}%</td><td>${esc(r.customer)}</td><td>${esc(r.salesperson)}</td><td>${esc(r.model)}</td><td>${esc(r.barcode)}</td></tr>`;}).join('')||'<tr><td colspan="14">Bu tarihlerde satış bulunamadı.</td></tr>'}</tbody></table></div>`;
+      }
+
+      box.innerHTML=`<div class="grid grid-4" style="margin-bottom:12px">${metric('Satış Fişi',String(uniqueDocs),`${rows.length} ürün satırı`)}${metric('Maliyet',fmt(totalCost,unit),'Seçilen tarihler')}${metric('Satış',fmt(totalSale,unit),'İskonto / net satış dahil')}${metric('Net Kâr',fmt(totalProfit,unit),'Satış − maliyet',totalProfit>=0?'positive':'negative')}</div>${table}<div class="summary-row total" style="margin-top:12px"><span>NET KÂR</span><strong class="${totalProfit>=0?'positive':'negative'}">${fmt(totalProfit,unit)}</strong></div>`;
+    };
+
+    document.querySelectorAll('[data-dsr-view]').forEach(btn=>btn.addEventListener('click',()=>{
+      view=btn.dataset.dsrView||'detail';
+      document.querySelectorAll('[data-dsr-view]').forEach(x=>{x.classList.remove('btn-primary');x.classList.add('btn-outline');});
+      btn.classList.remove('btn-outline');btn.classList.add('btn-primary');draw();
+    }));
+    document.getElementById('dsrShow')?.addEventListener('click',draw);
+    ['dsrFrom','dsrTo','dsrUnit','dsrUser'].forEach(id=>document.getElementById(id)?.addEventListener('change',draw));
+    document.getElementById('dsrCsv')?.addEventListener('click',()=>{
+      draw();
+      const from=document.getElementById('dsrFrom')?.value||today,to=document.getElementById('dsrTo')?.value||today;
+      const rows=[['Tarih','Fiş','Ürün Kodu','Ürün Tipi','Ayar','Miktar','Birim','Maliyet HAS','Satış HAS','Kâr HAS','Kâr %','Müşteri','Personel','Model','Barkod'],...lastRows.map(r=>[trDate(r.date),r.docNo,r.code,r.name,r.karat,r.amount,r.unit,r.costHas.toFixed(4),r.saleHas.toFixed(4),r.profitHas.toFixed(4),r.pct.toFixed(2),r.customer,r.salesperson,r.model,r.barcode])];
+      downloadText(rows.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(';')).join('\n'),`gunluk_satis_raporu_${from}_${to}.csv`,'text/csv;charset=utf-8');
+      audit(`${from} - ${to} günlük satış raporu dışa aktarıldı`,'Rapor');
+    });
+    document.getElementById('dsrPrint')?.addEventListener('click',()=>{
+      draw();const box=document.getElementById('dailySalesReportResult');if(!box)return;
+      const from=document.getElementById('dsrFrom')?.value||today,to=document.getElementById('dsrTo')?.value||today,w=window.open('','_blank','width=1280,height=850');
+      if(!w)return toast('Yazdırma penceresi açılamadı. Açılır pencereye izin verin.','err');
+      w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Günlük Satış Raporu</title><style>body{font:12px Arial,sans-serif;color:#111;padding:20px}h2{margin:0 0 6px}p{margin:0 0 16px;color:#555}.grid{display:flex;gap:10px;flex-wrap:wrap}.card{border:1px solid #bbb;padding:8px 12px}.metric .label,.metric .foot{font-size:10px}.metric .value{font-weight:700;font-size:16px}.table-wrap{overflow:visible}table{width:100%;border-collapse:collapse}th,td{border:1px solid #bbb;padding:5px;text-align:left}th{background:#eee}.num{text-align:right}.positive{color:#086b2f}.negative{color:#9b1c1c}.summary-row{display:flex;justify-content:flex-end;gap:20px;margin-top:10px;font-size:14px;font-weight:700}@media print{body{padding:0}.table{font-size:9px}}</style></head><body><h2>ASİL KUYUMCU PRO — GÜNLÜK SATIŞ RAPORU</h2><p>${from} → ${to}</p>${box.innerHTML}</body></html>`);
+      w.document.close();w.focus();setTimeout(()=>w.print(),250);
+    });
+    draw();
+  }
+
   function pageReports(){
     return `<div class="page-title"><div><h1>Raporlar</h1><p>Görmek istediğiniz raporu seçin. Bu ana ekranda bakiye, eksi değer veya teknik pozisyon gösterilmez.</p></div></div>
       <div class="grid grid-2" style="margin-top:18px;max-width:980px">
+        <button class="card" id="dailySalesReport" style="text-align:left;padding:26px;min-height:150px;border:1px solid var(--line);cursor:pointer">
+          <div style="font-size:28px;margin-bottom:12px">▥</div>
+          <div style="font-size:21px;font-weight:900">Günlük Satış Raporu</div>
+          <div class="muted" style="margin-top:8px;line-height:1.5">Tarih, ürün, maliyet, satış, kâr, müşteri ve personel detaylarını göster.</div>
+        </button>
         <button class="card" id="patronReport" style="text-align:left;padding:26px;min-height:150px;border:1px solid var(--line);cursor:pointer">
           <div style="font-size:28px;margin-bottom:12px">▦</div>
           <div style="font-size:21px;font-weight:900">Patron Raporu</div>
@@ -5203,6 +5322,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const rerender=()=>{reportFilters.range=document.getElementById('reportRange')?.value||'month';reportFilters.month=document.getElementById('reportMonth')?.value||reportFilters.month;reportFilters.mode=document.getElementById('reportMode')?.value||'HAS';reportFilters.valuationSide=document.getElementById('reportValuation')?.value||'buy';render();};
     ['reportRange','reportMonth','reportMode','reportValuation'].forEach(id=>document.getElementById(id)?.addEventListener('change',rerender));
     document.getElementById('reportEditOpeningCosts')?.addEventListener('click',openOpeningCostEditor);
+    document.getElementById('dailySalesReport')?.addEventListener('click',openDailySalesReportV658);
     document.getElementById('patronReport')?.addEventListener('click',openPatronReport);
     document.getElementById('balanceSheet')?.addEventListener('click',openBalanceSheet);
     document.getElementById('dayCloseV6')?.addEventListener('click',openDayCloseV6);
