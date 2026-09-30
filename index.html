@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101113" />
-  <meta name="description" content="Asil Kuyumcu Pro V6.58 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
+  <meta name="description" content="Asil Kuyumcu Pro V6.59 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.58</title>
+  <title>Asil Kuyumcu Pro V6.59</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -1889,7 +1889,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.58</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
+        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.59</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
         <nav class="nav" aria-label="Ana menü">${['dashboard','sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={dashboard:'Ana Menü',sales:'Satış',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
         <details class="more-nav"><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['dashboard','sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
       </aside>
@@ -3179,7 +3179,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const f=new Date(`${fromDate}T00:00:00`).getTime(),t=new Date(`${toDate}T23:59:59.999`).getTime(),rows=[];
     (state.sales||[]).filter(s=>{
       const tm=new Date(s.date||0).getTime();
-      return s.period===state.activePeriod&&s.status==='Tamamlandı'&&(s.lines||[]).length&&tm>=f&&tm<=t&&(!userFilter||String(s.salesperson||'')===userFilter);
+      return String(s.period)===String(state.activePeriod)&&s.status==='Tamamlandı'&&(s.lines||[]).length&&tm>=f&&tm<=t&&(!userFilter||String(s.salesperson||'')===userFilter);
     }).forEach(s=>{
       const customer=state.customers.find(c=>c.id===s.customerId)?.name||'PEŞİN MÜŞTERİ';
       const gross=(s.lines||[]).reduce((a,l)=>a+Number(l.total||0),0);
@@ -3211,7 +3211,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
 
   function openDailySalesReportV658(){
     const d=new Date(),today=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    const people=[...new Set((state.sales||[]).filter(s=>s.period===state.activePeriod&&s.status==='Tamamlandı').map(s=>String(s.salesperson||'').trim()).filter(BoleaN))].sort((a,b)=>a.localeCompare(b,'tr'));
+    const people=[...new Set((state.sales||[]).filter(s=>String(s.period)===String(state.activePeriod)&&s.status==='Tamamlandı').map(s=>String(s.salesperson||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr'));
     const body=`       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
         <button class="btn btn-primary" data-dsr-view="detail">Detay Satışlar</button>
         <button class="btn btn-outline" data-dsr-view="summary">Özet Satışlar</button>
