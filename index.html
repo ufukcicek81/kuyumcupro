@@ -839,6 +839,36 @@ body[data-theme="dark"] .field label{color:#e2e6eb;font-weight:700}
 body[data-theme="dark"] .metric .foot,
 body[data-theme="dark"] .table th{color:#c9cfd7}
 
+
+/* v6.62 — PC ekranlarında daha kompakt çalışma düzeni */
+body[data-ui-mode="pc"] .content{padding:14px 18px 20px}
+body[data-ui-mode="pc"] .content .page-title{margin-bottom:10px}
+body[data-ui-mode="pc"] .content .page-title h1{font-size:24px;line-height:1.1;margin-bottom:4px}
+body[data-ui-mode="pc"] .content .page-title p{font-size:12px;margin:0}
+body[data-ui-mode="pc"] .content .card{padding:12px;border-radius:12px}
+body[data-ui-mode="pc"] .content .section-head{margin-bottom:8px}
+body[data-ui-mode="pc"] .content .table th,
+body[data-ui-mode="pc"] .content .table td{padding:6px 8px;font-size:12px;line-height:1.22}
+body[data-ui-mode="pc"] .content .table th{font-size:11px}
+body[data-ui-mode="pc"] .content .btn{padding:8px 10px;border-radius:9px;font-size:12px}
+body[data-ui-mode="pc"] .content .input,
+body[data-ui-mode="pc"] .content .select,
+body[data-ui-mode="pc"] .content .textarea{padding:8px 9px;border-radius:9px;font-size:12px}
+body[data-ui-mode="pc"] .content .labelled{gap:4px}
+body[data-ui-mode="pc"] .content .labelled label{font-size:11px}
+body[data-ui-mode="pc"] .content .filter-panel{gap:7px;margin-bottom:9px}
+body[data-ui-mode="pc"] .content .inline-kpi{padding:6px 9px;font-size:11px}
+body[data-ui-mode="pc"] .content .table-wrap{max-height:68vh;overflow:auto}
+body[data-ui-mode="pc"] .content .table-wrap .table thead th{position:sticky;top:0;z-index:3;background:var(--panel-2)}
+body[data-ui-mode="pc"][data-screen="stocks"] .content .table-wrap{max-height:calc(100vh - 245px)}
+body[data-ui-mode="pc"][data-screen="stocks"] .pusula-stock-summary .table-wrap{max-height:calc(100vh - 225px)}
+body[data-ui-mode="pc"] .master-card-grid{grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:9px}
+body[data-ui-mode="pc"] .stock-card-box{padding:10px}
+.stock-order-row{cursor:grab}
+.stock-order-row.dragging,.stock-card-box.dragging{opacity:.45}
+.stock-order-handle{display:inline-flex;align-items:center;justify-content:center;width:21px;height:21px;border:1px solid var(--line);border-radius:6px;margin-right:7px;color:var(--muted);font-size:12px;vertical-align:middle;user-select:none}
+.stock-card-box[data-stockcard-order]{cursor:grab}
+.stock-card-order-hint{font-size:11px;color:var(--muted);margin-top:6px}
 </style>
 <style id="simple-interface-v645">
 /* v6.45 — readable horizontal workspace; business and print logic unchanged */
@@ -2514,8 +2544,40 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     return Object.entries(map).sort((a,b)=>Number(a[0])-Number(b[0])).map(([k,v])=>({name:(v.purity===333?'8 K':v.purity===417?'10 K':v.purity===585?'14 K':v.purity===916?'22 K':v.purity===995?'24 K':v.purity===300?'14 K DÜŞÜK':k),...v}));
   }
 
-  function stockSummaryView(){
-    const open=(state.openStocks||[]).filter(x=>x.period===state.activePeriod);
+  
+  function orderedOpenStocksV662(){
+    const rows=(state.openStocks||[]).filter(x=>x.period===state.activePeriod);
+    const order=Array.isArray(state.settings?.stockSummaryOrder)?state.settings.stockSummaryOrder:[];
+    const ix=new Map(order.map((id,i)=>[String(id),i]));
+    return rows.slice().sort((a,b)=>{
+      const ai=ix.has(String(a.id))?ix.get(String(a.id)):99999;
+      const bi=ix.has(String(b.id))?ix.get(String(b.id)):99999;
+      return ai-bi || String(a.name||'').localeCompare(String(b.name||''),'tr');
+    });
+  }
+  function bindOpenStockOrderV662(){
+    const table=document.querySelector('.stock-summary-table');if(!table)return;
+    let drag=null;
+    table.querySelectorAll('[data-open-order]').forEach(row=>{
+      row.addEventListener('dragstart',()=>{drag=row;row.classList.add('dragging');});
+      row.addEventListener('dragend',()=>{row.classList.remove('dragging');drag=null;});
+      row.addEventListener('dragover',e=>{e.preventDefault();if(!drag||drag===row)return;const rect=row.getBoundingClientRect();const after=e.clientY>rect.top+rect.height/2;row.parentNode.insertBefore(drag,after?row.nextSibling:row);});
+      row.addEventListener('drop',e=>{e.preventDefault();state.settings=state.settings||{};state.settings.stockSummaryOrder=[...table.querySelectorAll('[data-open-order]')].map(x=>x.dataset.openOrder);save();toast('Stok sıralaması kaydedildi');});
+    });
+    document.getElementById('resetStockSummaryOrder')?.addEventListener('click',()=>{state.settings=state.settings||{};state.settings.stockSummaryOrder=[];save();render();});
+  }
+  function bindStockCardOrderV662(){
+    const grid=document.getElementById('stockCardOrderGrid');if(!grid)return;
+    let drag=null;
+    grid.querySelectorAll('[data-stockcard-order]').forEach(box=>{
+      box.addEventListener('dragstart',()=>{drag=box;box.classList.add('dragging');});
+      box.addEventListener('dragend',()=>{box.classList.remove('dragging');drag=null;});
+      box.addEventListener('dragover',e=>{e.preventDefault();if(!drag||drag===box)return;const r=box.getBoundingClientRect();const after=e.clientY>r.top+r.height/2;grid.insertBefore(drag,after?box.nextSibling:box);});
+      box.addEventListener('drop',e=>{e.preventDefault();const ids=[...grid.querySelectorAll('[data-stockcard-order]')].map(x=>x.dataset.stockcardOrder);const map=new Map((state.stockCardsMaster||[]).map(x=>[String(x.id),x]));state.stockCardsMaster=ids.map(id=>map.get(String(id))).filter(Boolean);save();toast('Stok kartı sıralaması kaydedildi');});
+    });
+  }
+function stockSummaryView(){
+    const open=orderedOpenStocksV662();
     const bar=barcodeStockSummary();
     const scrap=(state.scrapStocks||[]).filter(x=>x.period===state.activePeriod);
     const openAmount=open.reduce((a,x)=>a+Number(x.amount||0),0),openHas=open.reduce((a,x)=>a+Number(x.hasWeight||0),0),openWork=open.reduce((a,x)=>a+Number(x.workmanshipTotalHas||0),0),openCost=open.reduce((a,x)=>a+openInventoryCostHas(x),0);
