@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101113" />
-  <meta name="description" content="Asil Kuyumcu Pro V6.63 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
+  <meta name="description" content="Asil Kuyumcu Pro V6.64 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.63</title>
+  <title>Asil Kuyumcu Pro V6.64</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -840,7 +840,7 @@ body[data-theme="dark"] .metric .foot,
 body[data-theme="dark"] .table th{color:#c9cfd7}
 
 
-/* v6.63 — PC ekranlarında daha kompakt çalışma düzeni */
+/* v6.64 — PC ekranlarında daha kompakt çalışma düzeni */
 body[data-ui-mode="pc"] .content{padding:14px 18px 20px}
 body[data-ui-mode="pc"] .content .page-title{margin-bottom:10px}
 body[data-ui-mode="pc"] .content .page-title h1{font-size:24px;line-height:1.1;margin-bottom:4px}
@@ -1963,7 +1963,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.63</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
+        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.64</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
         <nav class="nav" aria-label="Ana menü">${['dashboard','sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={dashboard:'Ana Menü',sales:'Satış',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
         <details class="more-nav"><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['dashboard','sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
       </aside>
@@ -3551,8 +3551,10 @@ function stockSummaryView(){
     const d=new Date(),date=[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-'),time=String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0');
     return `ASIL_KUYUMCU_YEDEK_${date}_${time}.json`;
   }
-  function localBackupEnvelopeV664(){
-    return {format:'ASIL_KUYUMCU_BACKUP_V1',createdAt:now(),appVersion:'6.64',business:state.settings?.companyName||'ASİL KUYUMCULUK',period:state.activePeriod,state:cloudSafeStateV5()};
+  async function localBackupEnvelopeV664(){
+    if(!cloudKeyGetV664())cloudKeyEnsureV664();
+    const payload=await cloudEncryptPayloadV664(cloudSafeStateV5());
+    return {format:'ASIL_KUYUMCU_BACKUP_V2',createdAt:now(),appVersion:'6.64',business:state.settings?.companyName||'ASİL KUYUMCULUK',period:state.activePeriod,encrypted:true,payload};
   }
   function pageBackup(){
     ensureV5State();
@@ -3560,14 +3562,14 @@ function stockSummaryView(){
     return `<div class="page-title"><div><h1>Yedek · Bulut · Güvenlik</h1><p>Harici disk yedeği, şifreli merkezi bulut, diğer cihaz bağlantısı ve geri yükleme tek merkezde.</p></div><span class="badge ${cloud.lastStatus==='Bağlı'?'green':'gold'}">Bulut: ${esc(cloud.lastStatus||'Bekliyor')}</span></div>
       <div class="grid grid-2">
         <div class="card" style="border:2px solid rgba(214,177,95,.35)"><div class="section-head"><h3>💾 Harici Disk / Akşam Yedeği</h3><span class="badge gold">ÖNERİLEN</span></div>
-          <p class="muted">Her akşam bu düğmeye bas. Tüm işletme verisi tek JSON dosyasına iner; dosyayı harici diskinize kopyalayabilirsiniz.</p>
+          <p class="muted">Her akşam bu düğmeye bas. Tüm işletme verisi AES-256-GCM ile şifrelenmiş tek JSON dosyasına iner; dosyayı harici diskinize kopyalayabilirsiniz.</p>
           <button class="btn btn-primary" id="backupDownload" style="width:100%;min-height:48px">AKŞAM YEDEĞİNİ İNDİR</button>
-          <div class="notice" style="margin-top:10px"><strong>Dosya:</strong> ${esc(backupFileNameV664())}<br><small>Bulut anahtarı güvenlik nedeniyle bu veri yedeğinin içine konmaz. Bulut anahtarını ayrıca saklayın.</small></div>
+          <div class="notice" style="margin-top:10px"><strong>Dosya:</strong> ${esc(backupFileNameV664())}<br><small>Yedek dosyası şifrelidir. Güvenlik anahtarı dosyanın içine konmaz; anahtarı ayrı ve güvenli yerde saklayın.</small></div>
         </div>
         <div class="card"><div class="section-head"><h3>↥ Yedekten Geri Yükle</h3><span class="badge red">DİKKAT</span></div>
           <p class="muted">Asil Kuyumcu Pro yedek dosyasını seçin. Geri yükleme mevcut yerel veriyi değiştirir.</p>
           <input type="file" id="backupFile" accept="application/json,.json" class="input">
-          <div class="muted" style="margin-top:9px;font-size:12px">Yeni yedek formatı ve eski ham JSON yedekleri desteklenir.</div>
+          <div class="muted" style="margin-top:9px;font-size:12px">Şifreli yeni yedekler ile eski ham JSON yedekleri desteklenir.</div>
         </div>
         <div class="card"><div class="section-head"><h3>☁ Şifreli Merkezi Bulut</h3><span class="badge ${enc?'green':'gold'}">${enc?'AES-GCM ŞİFRELİ':'ANAHTAR BEKLİYOR'}</span></div>
           <p class="muted">Mağaza PC'si, tablet ve diğer bilgisayarlar aynı merkezi veri setini kullanır. Buluta gönderilen iş verisi cihaz anahtarıyla şifrelenir.</p>
@@ -5626,10 +5628,12 @@ function stockSummaryView(){
     document.getElementById('backupCloudPush')?.addEventListener('click',()=>cloudPushV5(true));
     document.getElementById('backupCloudPull')?.addEventListener('click',()=>cloudPullV5(true));
     document.getElementById('cloudBackupNow')?.addEventListener('click',async()=>{if(!v5Guard('canCloudSync'))return;const ok=await cloudBackupV5('MANUEL BULUT');toast(ok?'Şifreli manuel bulut yedeği alındı':'Bulut yedeği alınamadı',ok?'ok':'err');if(ok)audit('Manuel şifreli bulut yedeği alındı','Yedek');});
-    document.getElementById('backupDownload')?.addEventListener('click',()=>{
-      const file=backupFileNameV664(),payload=localBackupEnvelopeV664();
-      downloadText(JSON.stringify(payload,null,2),file,'application/json');
-      audit(`Harici disk için tam yedek indirildi · ${file}`,'Yedek');toast('Yedek dosyası indirildi; harici diskinize kopyalayın');
+    document.getElementById('backupDownload')?.addEventListener('click',async()=>{
+      try{
+        const file=backupFileNameV664(),payload=await localBackupEnvelopeV664();
+        downloadText(JSON.stringify(payload,null,2),file,'application/json');
+        audit(`Şifreli harici disk yedeği indirildi · ${file}`,'Yedek');toast('Şifreli yedek indirildi; harici diskinize kopyalayın');
+      }catch(err){toast(`Yedek oluşturulamadı: ${err?.message||err}`,'err');}
     });
     document.getElementById('backupFile')?.addEventListener('change',e=>{
       const file=e.target.files[0];if(!file)return;
@@ -5637,7 +5641,13 @@ function stockSummaryView(){
       const reader=new FileReader();
       reader.onload=async()=>{
         try{
-          const parsed=JSON.parse(reader.result),data=parsed?.format==='ASIL_KUYUMCU_BACKUP_V1'?parsed.state:parsed;
+          const parsed=JSON.parse(reader.result);
+          let data;
+          if(parsed?.format==='ASIL_KUYUMCU_BACKUP_V2'&&parsed?.encrypted){
+            if(!cloudKeyGetV664())throw new Error('Bu şifreli yedek için önce bulut güvenlik anahtarını bu cihaza yükleyin');
+            data=await cloudDecryptPayloadV664(parsed.payload);
+          }else if(parsed?.format==='ASIL_KUYUMCU_BACKUP_V1')data=parsed.state;
+          else data=parsed;
           if(!data?.meta||!Array.isArray(data?.users)||!Array.isArray(data?.stocks))throw new Error('Yedek yapısı doğrulanamadı');
           cloudApplyingV5=true;state=data;ensureStateShape();ensureV5State();simplifyBankPosV55();ensureBankCariLinksV54();reconcileTransactionLedgerV5();await migrateLegacyPinsV664();cloudApplyingV5=false;
           localStorage.setItem(LS_KEY,JSON.stringify(state));audit(`${file.name} yedeğinden geri yükleme yapıldı`,'Yedek');toast('Yedek güvenli şekilde geri yüklendi');render();
