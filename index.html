@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101113" />
-  <meta name="description" content="Asil Kuyumcu Pro V6.72 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
+  <meta name="description" content="Asil Kuyumcu Pro V6.73 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.72</title>
+  <title>Asil Kuyumcu Pro V6.73</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -1252,7 +1252,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
         state.audits.unshift({id:uid('AUD'),date:now(),user:(typeof session!=='undefined'&&session?.name)||'Sistem',module:'Otomatik Kayıt',action:'Veri değişikliği kaydedildi · '+routeName+' · '+summary,kind:'OTOMATİK'});
         state.audits=state.audits.slice(0,5000);
       }
-      state.meta.appVersion='6.72';
+      state.meta.appVersion='6.73';
       if(typeof syncSystemParametersV648==='function')syncSystemParametersV648();
       localStorage.setItem(LS_KEY, JSON.stringify(state));
     } catch { /* Yerel dosya modunda depolama engellense bile uygulama çalışmaya devam eder. */ }
@@ -1933,7 +1933,6 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
             <div class="field"><label>Görünüm</label><select id="loginTheme" class="select"><option value="dark" ${theme==='dark'?'selected':''}>🌙 Karanlık Mod</option><option value="light" ${theme==='light'?'selected':''}>☀ Aydınlık Mod</option></select></div>
             <div class="field"><label>Kullanıcı</label><select id="loginUser" class="select">${state.users.map(u=>`<option value="${u.id}">${esc(u.username)} — ${esc(u.name)}</option>`).join('')}</select></div>
             <div class="field"><label>Şifre</label><input id="loginPin" class="input" type="password" value="" inputmode="numeric" autocomplete="current-password" /></div>
-            <details style="margin-bottom:14px"><summary style="cursor:pointer;color:var(--muted);font-size:13px">Yeni cihaz / Bulut anahtarı</summary><div class="field" style="margin-top:10px"><label>Bulut Güvenlik Anahtarı</label><input id="loginCloudKey" class="input" type="password" autocomplete="off" placeholder="Sadece yeni cihazda gerekli"><small class="muted">Diğer cihazdaki Yedek & Sistem bölümünden aldığınız anahtarı buraya girin. Anahtar olmadan şifreli bulut verisi açılamaz.</small></div></details>
             <button class="btn btn-primary" type="submit">Sisteme Gir</button>
             <div class="login-help">Şifreler PBKDF2 ile özetlenir. Art arda 5 hatalı denemede giriş 5 dakika kilitlenir; hareketsizlikte oturum otomatik kilitlenir.</div>
           </form>
@@ -1944,17 +1943,6 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       const guardKey='asil_login_guard_v650';let guard={fails:0,lockedUntil:0};try{guard=JSON.parse(localStorage.getItem(guardKey)||'{}')||guard;}catch(_){}
       if(Number(guard.lockedUntil||0)>Date.now()){const min=Math.max(1,Math.ceil((Number(guard.lockedUntil)-Date.now())/60000));return toast(`Çok fazla hatalı giriş. ${min} dakika sonra tekrar deneyin.`,'err');}
       const selectedId=document.getElementById('loginUser').value;
-      const enteredCloudKey=String(document.getElementById('loginCloudKey')?.value||'').trim();
-      if(enteredCloudKey){
-        try{
-          cloudKeySetV664(enteredCloudKey);
-          await cloudPullV5(false,true);
-          if(state.cloudSync?.lastStatus==='Anahtar Hatalı'||state.cloudSync?.lastStatus==='Anahtar Gerekli')throw new Error('Bulut güvenlik anahtarı doğrulanamadı');
-        }catch(err){
-          try{localStorage.removeItem(CLOUD_KEY_STORAGE);}catch(_){}
-          return toast(err?.message||'Bulut anahtarı geçersiz','err');
-        }
-      }
       const user=state.users.find(u=>String(u.id)===String(selectedId))||state.users.find(u=>String(u.username||'').toLowerCase()===String(document.querySelector('#loginUser option:checked')?.textContent||'').split('—')[0].trim().toLowerCase());
       const pin=document.getElementById('loginPin').value;
       let valid=false;try{valid=await verifyUserPinV664(user,pin);}catch(_){valid=false;}
@@ -1978,7 +1966,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.72</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
+        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.73</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
         <nav class="nav" aria-label="Ana menü">${['dashboard','sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={dashboard:'Ana Menü',sales:'Satış',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
         <details class="more-nav"><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['dashboard','sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
       </aside>
@@ -3210,7 +3198,7 @@ function stockSummaryView(){
         </div>
         <div class="card"><div class="section-head"><h3>🔒 Güvenlik</h3><span class="badge gold">Önemli</span></div>
           <div class="form-grid"><div class="labelled span-2"><label>Hareketsizlikte Otomatik Kilit (dakika)</label><input id="sysAutoLock" class="input" type="number" min="5" max="480" step="5" value="${autoLock}"><small>Bu süre işlem yapılmazsa oturum kilitlenir. 5–480 dakika.</small></div></div>
-          <div class="notice" style="margin-top:10px">Kullanıcı şifreleri, yetkiler, bulut anahtarı ve işlem geçmişi güvenlik katmanının parçalarıdır.</div>
+          <div class="notice" style="margin-top:10px">Kullanıcı giriş şifreleri, yetkiler, yedekler ve işlem geçmişi güvenlik katmanının parçalarıdır.</div>
         </div>
         <div class="card"><div class="section-head"><h3>Yönetim Merkezleri</h3><span>İlgili ayarları doğru yerde tutar</span></div>
           <div class="grid grid-2"><button class="btn btn-outline" data-system-go="personnel">👤 Personel / Yetkiler</button><button class="btn btn-outline" data-system-go="labels">🏷 Barkod / Yazıcı</button><button class="btn btn-outline" data-system-go="backup">↻ Yedek / Bulut</button><button class="btn btn-outline" data-system-go="definitions">▤ Tanımlamalar</button></div>
@@ -3677,27 +3665,25 @@ function stockSummaryView(){
     return `ASIL_KUYUMCU_YEDEK_${date}_${time}.json`;
   }
   async function localBackupEnvelopeV664(){
-    if(!cloudKeyGetV664())cloudKeyEnsureV664();
-    const payload=await cloudEncryptPayloadV664(cloudSafeStateV5());
-    return {format:'ASIL_KUYUMCU_BACKUP_V2',createdAt:now(),appVersion:'6.72',business:state.settings?.companyName||'ASİL KUYUMCULUK',period:state.activePeriod,encrypted:true,payload};
+    return {format:'ASIL_KUYUMCU_BACKUP_V3',createdAt:now(),appVersion:'6.73',business:state.settings?.companyName||'ASİL KUYUMCULUK',period:state.activePeriod,encrypted:false,state:cloudSafeStateV5()};
   }
   function pageBackup(){
     ensureV5State();
-    const key=cloudKeyGetV664(),cloud=state.cloudSync||{},enc=cloud.encrypted!==false&&Boolean(key);
-    return `<div class="page-title"><div><h1>Yedek · Bulut · Güvenlik</h1><p>Harici disk yedeği, şifreli merkezi bulut, diğer cihaz bağlantısı ve geri yükleme tek merkezde.</p></div><span class="badge ${cloud.lastStatus==='Bağlı'?'green':'gold'}">Bulut: ${esc(cloud.lastStatus||'Bekliyor')}</span></div>
+    const cloud=state.cloudSync||{};
+    return `<div class="page-title"><div><h1>Yedek · Bulut</h1><p>Yedekler artık şifresizdir. Harici disk yedeği ve merkezi bulut aynı veriyi doğrudan saklar.</p></div><span class="badge ${cloud.lastStatus==='Bağlı'?'green':'gold'}">Bulut: ${esc(cloud.lastStatus||'Bekliyor')}</span></div>
       <div class="grid grid-2">
         <div class="card" style="border:2px solid rgba(214,177,95,.35)"><div class="section-head"><h3>💾 Harici Disk / Akşam Yedeği</h3><span class="badge gold">ÖNERİLEN</span></div>
-          <p class="muted">Her akşam bu düğmeye bas. Bilgisayarda destekleniyorsa Windows'un <b>Farklı Kaydet</b> penceresi açılır ve yedeği nereye kaydedeceğinizi siz seçersiniz.</p>
-          <button class="btn btn-primary" id="backupDownload" style="width:100%;min-height:48px">AKŞAM YEDEĞİNİ İNDİR</button>
-          <div class="notice" style="margin-top:10px"><strong>Dosya:</strong> ${esc(backupFileNameV664())}<br><strong>Önemli:</strong> Bu yedeğin ayrı bir parola/şifresi yoktur. Dosyayı açan şey aşağıdaki <b>Bulut Güvenlik Anahtarıdır</b>. Anahtarı Göster / Kopyala / Anahtar Dosyasını Kaydet düğmelerinden mutlaka ayrıca saklayın.</div>
+          <p class="muted">AKŞAM YEDEĞİNİ KAYDET dediğinizde desteklenen tarayıcılarda Windows'un Farklı Kaydet penceresi açılır; klasörü ve dosya yerini siz seçersiniz.</p>
+          <button class="btn btn-primary" id="backupDownload" style="width:100%;min-height:48px">AKŞAM YEDEĞİNİ KAYDET</button>
+          <div class="notice" style="margin-top:10px"><strong>Dosya:</strong> ${esc(backupFileNameV664())}<br><small>Şifre yok, güvenlik anahtarı yok. Dosya doğrudan geri yüklenebilir.</small></div>
         </div>
         <div class="card"><div class="section-head"><h3>↥ Yedekten Geri Yükle</h3><span class="badge red">DİKKAT</span></div>
           <p class="muted">Asil Kuyumcu Pro yedek dosyasını seçin. Geri yükleme mevcut yerel veriyi değiştirir.</p>
           <input type="file" id="backupFile" accept="application/json,.json" class="input">
-          <div class="muted" style="margin-top:9px;font-size:12px">Şifreli yeni yedekler ile eski ham JSON yedekleri desteklenir.</div>
+          <div class="muted" style="margin-top:9px;font-size:12px">Yeni şifresiz yedekler doğrudan açılır. Eski şifreli yedekler yalnız bu cihazda eski anahtar hâlâ varsa geriye dönük uyumluluk için açılabilir.</div>
         </div>
-        <div class="card"><div class="section-head"><h3>☁ Şifreli Merkezi Bulut</h3><span class="badge ${enc?'green':'gold'}">${enc?'AES-GCM ŞİFRELİ':'ANAHTAR BEKLİYOR'}</span></div>
-          <p class="muted">Mağaza PC'si, tablet ve diğer bilgisayarlar aynı merkezi veri setini kullanır. Buluta gönderilen iş verisi cihaz anahtarıyla şifrelenir.</p>
+        <div class="card"><div class="section-head"><h3>☁ Merkezi Bulut</h3><span class="badge green">ŞİFRESİZ</span></div>
+          <p class="muted">Mağaza PC'si, tablet ve diğer bilgisayarlar aynı merkezi veri setini kullanır. Bulut verisi artık anahtar/parola istemez.</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary" id="backupCloudPush">Şimdi Buluta Gönder</button><button class="btn btn-outline" id="backupCloudPull">Buluttan Güncel Veriyi Al</button><button class="btn btn-outline" id="cloudBackupNow">Bulutta Manuel Yedek Al</button></div>
           <div class="summary-row" style="margin-top:10px"><span>Son gönderim</span><strong>${cloud.lastPush?trDate(cloud.lastPush):'—'}</strong></div>
           <div class="summary-row"><span>Son alım</span><strong>${cloud.lastPull?trDate(cloud.lastPull):'—'}</strong></div>
@@ -3705,24 +3691,16 @@ function stockSummaryView(){
           <div class="summary-row"><span>Haftalık yedek</span><strong>${esc(state.meta?.lastWeeklyBackup||'—')}</strong></div>
           <div class="summary-row"><span>Aylık yedek</span><strong>${esc(state.meta?.lastMonthlyBackup||'—')}</strong></div>
         </div>
-        <div class="card"><div class="section-head"><h3>🔑 Diğer Cihaz Güvenlik Anahtarı</h3><span class="badge ${key?'green':'red'}">${key?'BU CİHAZDA VAR':'YOK'}</span></div>
-          <p class="muted">Yeni bilgisayar/tablet şifreli bulut verisini ancak aynı anahtarla açabilir. Anahtarı paroladan ayrı yerde saklayın.</p>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="btn btn-outline" id="cloudKeyShow">Anahtarı Göster</button><button class="btn btn-outline" id="cloudKeyCopy">Kopyala</button><button class="btn btn-outline" id="cloudKeyDownload">Anahtar Dosyasını Kaydet</button></div>
-          <div class="labelled"><label>Başka Cihazdan Anahtar Gir / Değiştir</label><input id="cloudKeyInput" class="input" type="password" autocomplete="off" placeholder="Bulut güvenlik anahtarı"><small>Anahtarı değiştirmeden önce mevcut anahtar dosyanızı mutlaka saklayın.</small></div>
-          <button class="btn btn-primary" id="cloudKeyApply" style="margin-top:8px">ANAHTARI BU CİHAZA KAYDET VE BULUTU AÇ</button>
-        </div>
         <div class="card"><div class="section-head"><h3>🔒 Sistem Güvenliği</h3><span class="badge green">AKTİF</span></div>
-          <div class="summary-row"><span>Kullanıcı şifreleri</span><strong>PBKDF2-SHA256</strong></div>
-          <div class="summary-row"><span>Bulut veri şifreleme</span><strong>AES-256-GCM</strong></div>
-          <div class="summary-row"><span>Hatalı giriş kilidi</span><strong>5 deneme / 5 dk</strong></div>
-          <div class="summary-row"><span>Hareketsizlik kilidi</span><strong>${Math.max(5,Number(state.settings?.securityAutoLockMinutes||60))} dk</strong></div>
+          <div class="summary-row"><span>Kullanıcı giriş şifreleri</span><strong>AKTİF</strong></div>
+          <div class="summary-row"><span>Yedek dosyası şifresi</span><strong>YOK</strong></div>
+          <div class="summary-row"><span>Bulut yedek şifresi</span><strong>YOK</strong></div>
           <div class="summary-row"><span>İşlem geçmişi</span><strong>${state.audits.length} kayıt</strong></div>
         </div>
         <div class="card"><div class="section-head"><h3>Dönem Kapat / Devir</h3><span class="badge red">KRİTİK</span></div><p class="muted">${state.activePeriod} kapanışını kilitler ve ${state.activePeriod+1} açılış stoklarını oluşturur.</p><button class="btn btn-outline" id="periodCarry">${state.activePeriod} → ${state.activePeriod+1} GERÇEK DEVİR</button></div>
       </div>
       <div class="card" style="margin-top:14px"><div class="section-head"><h3>İşlem Geçmişi / Güvenlik Kaydı</h3><span>Son ${Math.min(500,state.audits.length)} hareket</span></div><div class="table-wrap"><table class="table"><thead><tr><th>Tarih</th><th>Kullanıcı</th><th>Modül</th><th>İşlem</th></tr></thead><tbody>${state.audits.slice(0,500).map(a=>`<tr><td>${trDate(a.date)}</td><td>${esc(a.user)}</td><td><span class="badge">${esc(a.module)}</span></td><td>${esc(a.action)}</td></tr>`).join('')}</tbody></table></div></div>`;
   }
-
   function isMobileViewport(){
     return window.matchMedia('(max-width: 820px)').matches || window.matchMedia('(pointer: coarse)').matches;
   }
@@ -5744,7 +5722,7 @@ function stockSummaryView(){
     document.getElementById('dayCloseV6')?.addEventListener('click',openDayCloseV6);
     document.getElementById('exportReport')?.addEventListener('click',()=>{
       const r=reportStats(), sv=stockValuationReport(), aging=cariAgingReport(), expenses=reportExpenseGroups(), personnel=personnelProfitRows(r.sales), pos=managementPositionReport(), health=systemHealthReport();
-      const rows=[['ASIL KUYUMCU PRO V6.72 — HAS YÖNETİM RAPORU'],['Dönem',reportFilters.range==='month'?reportFilters.month:state.activePeriod],[],['ÖZET','HAS','TL'],['Satış Karşılığı',r.revenueHas.toFixed(4),r.revenueTl.toFixed(2)],['Satılan Mal Maliyeti',r.cogsHas.toFixed(4),(r.cogsHas*r.closeRate).toFixed(2)],['Brüt Kâr',r.grossHas.toFixed(4),(r.grossHas*r.closeRate).toFixed(2)],['Gider + POS',(r.expHas+r.feeHas).toFixed(4),(r.expTl+r.feeTl).toFixed(2)],['Döviz Gerçekleşen K/Z',r.realizedFxPlHas.toFixed(4),r.realizedFxPlTl.toFixed(2)],['NET KÂR',r.netHas.toFixed(4),r.adjustedTl.toFixed(2)],['Değerleme Farkı','',r.valuationDiff.toFixed(2)],[],['STOK DEĞERLEME','HAS'],['Barkodlu',sv.barcodeCost.toFixed(4)],['Açık/Barkodsuz',sv.openCost.toFixed(4)],['Hurda',sv.scrapCost.toFixed(4)],['Toplam',sv.totalCost.toFixed(4)],[],['YÖNETİM POZİSYONU','HAS'],['Fiziksel Altın',pos.sv.totalPhysical.toFixed(4)],['Cari HAS Net',Number(pos.cari.HAS||0).toFixed(4)],['Parasal Pozisyon HAS',pos.monetaryHas.toFixed(4)],['NET POZİSYON',pos.netHas.toFixed(4)],[],['SİSTEM SAĞLIĞI','Seviye','Açıklama'],...health.issues.map(x=>[x.title,x.level,x.detail]),[],['SATIŞLAR','Tarih','Belge','Müşteri','Personel','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS','Durum'],...r.sales.map(s=>['',trDate(s.date),s.docNo||s.id,state.customers.find(c=>c.id===s.customerId)?.name||'',s.salesperson,Number(s.total||0).toFixed(2),saleRevenueHas(s).toFixed(4),saleCostHas(s).toFixed(4),(saleRevenueHas(s)-saleCostHas(s)).toFixed(4),s.status]),[],['PERSONEL','Fiş','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS'],...personnel.map(x=>[x.name,x.count,x.salesTl.toFixed(2),x.revenueHas.toFixed(4),x.costHas.toFixed(4),x.profitHas.toFixed(4)]),[],['CARİ YAŞLANDIRMA','Tür','Bakiye','TL Eşdeğer','En Eski Gün'],...aging.details.map(x=>[x.name,x.type,x.parts,x.totalTl.toFixed(2),x.oldest]),[],['BANKA/POS GİDERLERİ','Hareket','TL'],...expenses.map(x=>[x.name,x.count,x.tl.toFixed(2)])];
+      const rows=[['ASIL KUYUMCU PRO V6.73 — HAS YÖNETİM RAPORU'],['Dönem',reportFilters.range==='month'?reportFilters.month:state.activePeriod],[],['ÖZET','HAS','TL'],['Satış Karşılığı',r.revenueHas.toFixed(4),r.revenueTl.toFixed(2)],['Satılan Mal Maliyeti',r.cogsHas.toFixed(4),(r.cogsHas*r.closeRate).toFixed(2)],['Brüt Kâr',r.grossHas.toFixed(4),(r.grossHas*r.closeRate).toFixed(2)],['Gider + POS',(r.expHas+r.feeHas).toFixed(4),(r.expTl+r.feeTl).toFixed(2)],['Döviz Gerçekleşen K/Z',r.realizedFxPlHas.toFixed(4),r.realizedFxPlTl.toFixed(2)],['NET KÂR',r.netHas.toFixed(4),r.adjustedTl.toFixed(2)],['Değerleme Farkı','',r.valuationDiff.toFixed(2)],[],['STOK DEĞERLEME','HAS'],['Barkodlu',sv.barcodeCost.toFixed(4)],['Açık/Barkodsuz',sv.openCost.toFixed(4)],['Hurda',sv.scrapCost.toFixed(4)],['Toplam',sv.totalCost.toFixed(4)],[],['YÖNETİM POZİSYONU','HAS'],['Fiziksel Altın',pos.sv.totalPhysical.toFixed(4)],['Cari HAS Net',Number(pos.cari.HAS||0).toFixed(4)],['Parasal Pozisyon HAS',pos.monetaryHas.toFixed(4)],['NET POZİSYON',pos.netHas.toFixed(4)],[],['SİSTEM SAĞLIĞI','Seviye','Açıklama'],...health.issues.map(x=>[x.title,x.level,x.detail]),[],['SATIŞLAR','Tarih','Belge','Müşteri','Personel','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS','Durum'],...r.sales.map(s=>['',trDate(s.date),s.docNo||s.id,state.customers.find(c=>c.id===s.customerId)?.name||'',s.salesperson,Number(s.total||0).toFixed(2),saleRevenueHas(s).toFixed(4),saleCostHas(s).toFixed(4),(saleRevenueHas(s)-saleCostHas(s)).toFixed(4),s.status]),[],['PERSONEL','Fiş','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS'],...personnel.map(x=>[x.name,x.count,x.salesTl.toFixed(2),x.revenueHas.toFixed(4),x.costHas.toFixed(4),x.profitHas.toFixed(4)]),[],['CARİ YAŞLANDIRMA','Tür','Bakiye','TL Eşdeğer','En Eski Gün'],...aging.details.map(x=>[x.name,x.type,x.parts,x.totalTl.toFixed(2),x.oldest]),[],['BANKA/POS GİDERLERİ','Hareket','TL'],...expenses.map(x=>[x.name,x.count,x.tl.toFixed(2)])];
       downloadText(rows.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(';')).join('\n'),`asil_yonetim_raporu_${reportFilters.range==='month'?reportFilters.month:state.activePeriod}.csv`,'text/csv;charset=utf-8');audit('Genişletilmiş HAS yönetim raporu dışa aktarıldı','Rapor');
     });
   }
@@ -5752,16 +5730,14 @@ function stockSummaryView(){
   function bindBackup(){
     document.getElementById('backupCloudPush')?.addEventListener('click',()=>cloudPushV5(true));
     document.getElementById('backupCloudPull')?.addEventListener('click',()=>cloudPullV5(true));
-    document.getElementById('cloudBackupNow')?.addEventListener('click',async()=>{if(!v5Guard('canCloudSync'))return;const ok=await cloudBackupV5('MANUEL BULUT');toast(ok?'Şifreli manuel bulut yedeği alındı':'Bulut yedeği alınamadı',ok?'ok':'err');if(ok)audit('Manuel şifreli bulut yedeği alındı','Yedek');});
+    document.getElementById('cloudBackupNow')?.addEventListener('click',async()=>{if(!v5Guard('canCloudSync'))return;const ok=await cloudBackupV5('MANUEL BULUT');toast(ok?'Manuel bulut yedeği alındı':'Bulut yedeği alınamadı',ok?'ok':'err');if(ok)audit('Manuel bulut yedeği alındı','Yedek');});
     document.getElementById('backupDownload')?.addEventListener('click',async()=>{
       try{
         const file=backupFileNameV664(),payload=await localBackupEnvelopeV664();
         const saved=await saveTextAsV672(JSON.stringify(payload,null,2),file,'application/json');
         if(!saved.ok)return;
-        audit(`Şifreli harici disk yedeği kaydedildi · ${saved.name} · ${saved.method}`,'Yedek');
-        const k=cloudKeyGetV664();
-        modal('Yedek Kaydedildi',`<div class="notice"><strong>Yedek dosyası kaydedildi.</strong><br><br>Bu dosyanın klasik bir şifresi yok. Geri yüklerken gereken şey <b>Bulut Güvenlik Anahtarıdır.</b> Bu anahtar yedek dosyasının içinde değildir.</div><div class="labelled" style="margin-top:12px"><label>Bu yedeği açan güvenlik anahtarı</label><textarea class="textarea" rows="3" readonly style="font-family:monospace">${esc(k)}</textarea></div><p class="muted">Anahtarı ayrıca güvenli bir USB/diske kaydedin. Anahtar kaybolursa şifreli yedek açılamaz.</p>`,null,'Kapat');
-        toast('Yedek seçtiğiniz konuma kaydedildi');
+        audit(`Şifresiz harici disk yedeği kaydedildi · ${saved.name} · ${saved.method}`,'Yedek');
+        toast('Şifresiz yedek seçtiğiniz konuma kaydedildi');
       }catch(err){toast(`Yedek oluşturulamadı: ${err?.message||err}`,'err');}
     });
     document.getElementById('backupFile')?.addEventListener('change',e=>{
@@ -5772,29 +5748,21 @@ function stockSummaryView(){
         try{
           const parsed=JSON.parse(reader.result);
           let data;
-          if(parsed?.format==='ASIL_KUYUMCU_BACKUP_V2'&&parsed?.encrypted){
-            if(!cloudKeyGetV664())throw new Error('Bu şifreli yedek için önce bulut güvenlik anahtarını bu cihaza yükleyin');
+          if(parsed?.format==='ASIL_KUYUMCU_BACKUP_V3'&&parsed?.state)data=parsed.state;
+          else if(parsed?.format==='ASIL_KUYUMCU_BACKUP_V2'&&parsed?.encrypted){
+            // Eski şifreli yedekleri sadece geriye dönük uyumluluk için açmayı dene.
             data=await cloudDecryptPayloadV664(parsed.payload);
           }else if(parsed?.format==='ASIL_KUYUMCU_BACKUP_V1')data=parsed.state;
           else data=parsed;
           if(!data?.meta||!Array.isArray(data?.users)||!Array.isArray(data?.stocks))throw new Error('Yedek yapısı doğrulanamadı');
           cloudApplyingV5=true;state=data;ensureStateShape();ensureV5State();simplifyBankPosV55();ensureBankCariLinksV54();reconcileTransactionLedgerV5();await migrateLegacyPinsV664();cloudApplyingV5=false;
-          localStorage.setItem(LS_KEY,JSON.stringify(state));audit(`${file.name} yedeğinden geri yükleme yapıldı`,'Yedek');toast('Yedek güvenli şekilde geri yüklendi');render();
+          localStorage.setItem(LS_KEY,JSON.stringify(state));audit(`${file.name} yedeğinden geri yükleme yapıldı`,'Yedek');toast('Yedek geri yüklendi');render();
         }catch(err){cloudApplyingV5=false;toast(`Geçersiz yedek dosyası: ${err?.message||err}`,'err');}
       };
       reader.readAsText(file);
     });
-    document.getElementById('cloudKeyShow')?.addEventListener('click',()=>{const k=cloudKeyGetV664();if(!k)return toast('Bu cihazda henüz bulut anahtarı yok','err');modal('Bulut Güvenlik Anahtarı',`<div class="notice"><strong>GİZLİ TUTUN.</strong> Bu anahtarı bilen kişi şifreli bulut yedeğini açabilir.</div><textarea class="textarea" rows="3" readonly style="margin-top:10px;font-family:monospace">${esc(k)}</textarea>`,null,'Kapat');});
-    document.getElementById('cloudKeyCopy')?.addEventListener('click',async()=>{const k=cloudKeyGetV664();if(!k)return toast('Bulut anahtarı yok','err');try{await navigator.clipboard.writeText(k);toast('Bulut anahtarı panoya kopyalandı');}catch(_){prompt('Bulut anahtarını kopyalayın:',k);}});
-    document.getElementById('cloudKeyDownload')?.addEventListener('click',async()=>{const k=cloudKeyGetV664();if(!k)return toast('Bulut anahtarı yok','err');try{const saved=await saveTextAsV672(`ASIL KUYUMCU PRO BULUT GÜVENLİK ANAHTARI\n\n${k}\n\nBu dosyayı gizli ve çevrimdışı saklayın.\n`,'ASIL_BULUT_GUVENLIK_ANAHTARI.txt','text/plain;charset=utf-8');if(!saved.ok)return;audit('Bulut güvenlik anahtarı dosyası kaydedildi','Güvenlik');toast('Güvenlik anahtarı seçtiğiniz konuma kaydedildi');}catch(err){toast(`Anahtar kaydedilemedi: ${err?.message||err}`,'err');}});
-    document.getElementById('cloudKeyApply')?.addEventListener('click',async()=>{
-      const value=String(document.getElementById('cloudKeyInput')?.value||'').trim();if(!value)return toast('Bulut anahtarını girin','err');
-      if(!confirm('Bu cihazdaki bulut anahtarı değiştirilecek. Girdiğiniz anahtar doğru mu?'))return;
-      try{cloudKeySetV664(value);state.cloudSync.lastStatus='Anahtar Yüklendi';const ok=await cloudPullV5(true);if(ok){audit('Bulut anahtarı bu cihaza aktarıldı ve veri alındı','Güvenlik');}render();}catch(err){toast(err?.message||'Anahtar kaydedilemedi','err');}
-    });
     document.getElementById('periodCarry')?.addEventListener('click',openFiscalCloseV5);
   }
-
   // ===================== ASİL KUYUMCU PRO V5 ÇEKİRDEK =====================
   function migratePusulaSuppliersV51(){
     state.meta=state.meta||{};if(Number(state.meta.supplierImportVersion||0)>=1)return;state.customers=Array.isArray(state.customers)?state.customers:[];state.customerMoves=Array.isArray(state.customerMoves)?state.customerMoves:[];state.definitions=state.definitions||{};state.definitions.suppliers=Array.isArray(state.definitions.suppliers)?state.definitions.suppliers:[];
@@ -5906,7 +5874,7 @@ function stockSummaryView(){
   }
 
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion='6.72';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
+    state.meta=state.meta||{};state.meta.appVersion='6.73';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
@@ -5956,16 +5924,13 @@ function stockSummaryView(){
   async function cloudPushV5(manual=false){
     ensureV5State();if(!state.cloudSync.enabled&&!manual)return false;if(manual&&!v5Guard('canCloudSync'))return false;
     try{
-      if(!crypto?.subtle)throw new Error('Bu tarayıcı güvenli bulut şifrelemesini desteklemiyor');
-      if(!cloudKeyGetV664())cloudKeyEnsureV664();
-      state.cloudSync.lastStatus='Şifreleniyor';state.meta.updatedAt=now();
-      const payload=await cloudEncryptPayloadV664(cloudSafeStateV5());
-      state.cloudSync.lastStatus='Gönderiliyor';
+      state.cloudSync.lastStatus='Gönderiliyor';state.meta.updatedAt=now();
+      const payload=cloudSafeStateV5();
       const r=await fetch(CLOUD_STATE_URL,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
       if(!r.ok)throw new Error(`HTTP ${r.status}`);
-      state.cloudSync.lastStatus='Bağlı';state.cloudSync.encrypted=true;state.cloudSync.encryptionMigrationPending=false;state.cloudSync.lastPush=now();
+      state.cloudSync.lastStatus='Bağlı';state.cloudSync.encrypted=false;state.cloudSync.encryptionMigrationPending=false;state.cloudSync.lastPush=now();
       localStorage.setItem(LS_KEY,JSON.stringify(state));
-      if(manual){toast('Şifreli merkezi buluta gönderildi');render();}
+      if(manual){toast('Merkezi buluta gönderildi');render();}
       return true;
     }catch(e){
       state.cloudSync.lastStatus='Bağlantı Hatası';state.cloudSync.lastError=String(e?.message||e);
@@ -5981,25 +5946,23 @@ function stockSummaryView(){
       if(!r.ok)throw new Error(`HTTP ${r.status}`);
       const raw=await r.json();
       if(!raw){state.cloudSync.lastStatus='İlk Kurulum';if(manual)await cloudPushV5(true);return false;}
-      const encrypted=Boolean(raw?.encrypted&&raw?.format==='ASIL_CLOUD_AESGCM_V1');
-      let remote;
-      try{remote=await cloudDecryptPayloadV664(raw);}
-      catch(err){
-        if(String(err?.message)==='CLOUD_KEY_REQUIRED'){state.cloudSync.lastStatus='Anahtar Gerekli';state.cloudSync.encrypted=true;if(manual)toast('Bu cihazda bulut anahtarı yok. Yedek & Sistem bölümünden anahtarı girin.','err');return false;}
-        if(String(err?.message)==='CLOUD_KEY_INVALID'){state.cloudSync.lastStatus='Anahtar Hatalı';state.cloudSync.encrypted=true;if(manual)toast('Bulut anahtarı yanlış; veri açılamadı.','err');return false;}
-        throw err;
+      let remote=raw;
+      // Sadece eski şifreli bulut kaydı varsa geriye dönük uyumluluk için bir kez çözmeyi dene.
+      if(raw?.encrypted&&raw?.format==='ASIL_CLOUD_AESGCM_V1'){
+        remote=await cloudDecryptPayloadV664(raw);
+      }else if(raw?.format==='ASIL_BACKUP_CLOUD_V3'&&raw?.state){
+        remote=raw.state;
       }
       if(!remote||typeof remote!=='object'||!Array.isArray(remote.stocks)){state.cloudSync.lastStatus='Geçersiz Bulut Verisi';return false;}
-      const rt=new Date(remote?.meta?.updatedAt||raw?.updatedAt||0).getTime(),lt=new Date(state?.meta?.updatedAt||0).getTime();
-      const needsMigration=!encrypted;
+      const rt=new Date(remote?.meta?.updatedAt||0).getTime(),lt=new Date(state?.meta?.updatedAt||0).getTime();
       if(manual||force||rt>lt+1000){
         cloudApplyingV5=true;state=remote;ensureStateShape();ensureV5State();simplifyBankPosV55();ensureBankCariLinksV54();reconcileTransactionLedgerV5();
-        state.cloudSync=state.cloudSync||{};state.cloudSync.encrypted=encrypted;state.cloudSync.encryptionMigrationPending=needsMigration;state.cloudSync.lastPull=now();state.cloudSync.lastStatus='Bağlı';
+        state.cloudSync=state.cloudSync||{};state.cloudSync.encrypted=false;state.cloudSync.encryptionMigrationPending=false;state.cloudSync.lastPull=now();state.cloudSync.lastStatus='Bağlı';
         localStorage.setItem(LS_KEY,JSON.stringify(state));cloudApplyingV5=false;
-        if(manual){toast(encrypted?'Şifreli bulut verisi alındı':'Eski bulut verisi alındı; şifreli formata yükseltilecek');render();}
+        if(manual){toast('Bulut verisi alındı');render();}
         return true;
       }
-      state.cloudSync.encrypted=encrypted;state.cloudSync.encryptionMigrationPending=needsMigration;state.cloudSync.lastStatus='Bağlı';
+      state.cloudSync.encrypted=false;state.cloudSync.encryptionMigrationPending=false;state.cloudSync.lastStatus='Bağlı';
       return false;
     }catch(e){
       cloudApplyingV5=false;state.cloudSync.lastStatus='Bağlantı Hatası';state.cloudSync.lastError=String(e?.message||e);
@@ -6009,9 +5972,9 @@ function stockSummaryView(){
   }
   async function cloudBackupV5(label='AUTO'){
     try{
-      if(!cloudKeyGetV664())cloudKeyEnsureV664();
-      const key=new Date().toISOString().replace(/[.:]/g,'-'),payload=await cloudEncryptPayloadV664(cloudSafeStateV5());
-      const r=await fetch(`${CLOUD_BACKUP_BASE}/${key}.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({format:'ASIL_BACKUP_CLOUD_V2',label,date:now(),encrypted:true,payload})});
+      const key=new Date().toISOString().replace(/[.:]/g,'-');
+      const body={format:'ASIL_BACKUP_CLOUD_V3',label,date:now(),encrypted:false,state:cloudSafeStateV5()};
+      const r=await fetch(`${CLOUD_BACKUP_BASE}/${key}.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       return r.ok;
     }catch(e){state.cloudSync.lastError=String(e?.message||e);return false;}
   }
@@ -6033,7 +5996,7 @@ function stockSummaryView(){
     return `${x.getUTCFullYear()}-W${String(week).padStart(2,'0')}`;
   }
   async function autoDailyBackupV6(){
-    ensureV5State();if(!state.cloudSync?.enabled||state.settings?.backupEnabled===false||state.cloudSync?.lastStatus==='Anahtar Gerekli')return false;
+    ensureV5State();if(!state.cloudSync?.enabled||state.settings?.backupEnabled===false)return false;
     const d=new Date(),day=d.toISOString().slice(0,10),week=isoWeekKeyV664(d),month=day.slice(0,7);let ok=true,changed=false;
     if(state.meta.lastDailyBackup!==day){const x=await cloudBackupV5('GÜNLÜK OTOMATİK');ok=ok&&x;if(x){state.meta.lastDailyBackup=day;changed=true;}}
     if(state.meta.lastWeeklyBackup!==week){const x=await cloudBackupV5('HAFTALIK OTOMATİK');ok=ok&&x;if(x){state.meta.lastWeeklyBackup=week;changed=true;}}
@@ -6043,33 +6006,33 @@ function stockSummaryView(){
   }
   async function initCloudSyncV5(){
     ensureV5State();
-    // Güncelleme/açılış öncesi mevcut yerel durumu buluta güvenlik kopyası olarak bırak.
-    // Bulut kapalıysa veya anahtar yoksa sessizce atlanır.
-    if(state.cloudSync?.enabled && state.settings?.backupEnabled!==false && cloudKeyGetV664()){
+    if(state.cloudSync?.enabled && state.settings?.backupEnabled!==false){
       await cloudBackupV5('AÇILIŞ ÖNCESİ GÜVENLİK').catch(()=>false);
     }
     await cloudPullV5(false);
     const pinMigrated=await migrateLegacyPinsV664().catch(()=>false);
-    if(pinMigrated){state.cloudSync=state.cloudSync||{};state.cloudSync.encryptionMigrationPending=true;save(false);}
+    if(pinMigrated)save(false);
     cloudInitializedV5=true;
-    if(state.cloudSync.enabled&&state.cloudSync.lastStatus!=='Anahtar Gerekli'&&state.cloudSync.lastStatus!=='Anahtar Hatalı'){
-      if(!cloudKeyGetV664())cloudKeyEnsureV664();
-      if(state.cloudSync.encryptionMigrationPending||!state.cloudSync.lastPush)await cloudPushV5(false);
+    if(state.cloudSync.enabled){
+      if(!state.cloudSync.lastPush)await cloudPushV5(false);
       try{
         cloudStreamV5?.close?.();cloudStreamV5=new EventSource(CLOUD_STATE_URL);
         cloudStreamV5.addEventListener('put',async ev=>{
           try{
             const p=JSON.parse(ev.data||'{}');if(p.path!=='/'||!p.data)return;
-            let remote;try{remote=await cloudDecryptPayloadV664(p.data);}catch(err){if(String(err?.message)==='CLOUD_KEY_REQUIRED')state.cloudSync.lastStatus='Anahtar Gerekli';else if(String(err?.message)==='CLOUD_KEY_INVALID')state.cloudSync.lastStatus='Anahtar Hatalı';return;}
-            const rt=new Date(remote?.meta?.updatedAt||p.data?.updatedAt||0).getTime(),lt=new Date(state?.meta?.updatedAt||0).getTime();
-            if(remote&&Array.isArray(remote.stocks)&&rt>lt+1200){cloudApplyingV5=true;state=remote;ensureStateShape();ensureV5State();simplifyBankPosV55();ensureBankCariLinksV54();reconcileTransactionLedgerV5();state.cloudSync.encrypted=Boolean(p.data?.encrypted);state.cloudSync.lastPull=now();state.cloudSync.lastStatus='Bağlı';localStorage.setItem(LS_KEY,JSON.stringify(state));cloudApplyingV5=false;render();}
+            let remote=p.data;
+            if(remote?.encrypted&&remote?.format==='ASIL_CLOUD_AESGCM_V1'){
+              try{remote=await cloudDecryptPayloadV664(remote);}catch(_){return;}
+            }
+            if(remote?.format==='ASIL_BACKUP_CLOUD_V3'&&remote?.state)remote=remote.state;
+            const rt=new Date(remote?.meta?.updatedAt||0).getTime(),lt=new Date(state?.meta?.updatedAt||0).getTime();
+            if(remote&&Array.isArray(remote.stocks)&&rt>lt+1200){cloudApplyingV5=true;state=remote;ensureStateShape();ensureV5State();simplifyBankPosV55();ensureBankCariLinksV54();reconcileTransactionLedgerV5();state.cloudSync.encrypted=false;state.cloudSync.lastPull=now();state.cloudSync.lastStatus='Bağlı';localStorage.setItem(LS_KEY,JSON.stringify(state));cloudApplyingV5=false;render();}
           }catch(_){}
         });
       }catch(_){}
     }
     await autoDailyBackupV6();
   }
-
   function saleLineFromStockV5(s){const saleHas=Number(s.saleHas||stockCounterHas(s)||0),unitPrice=saleHas*Number(state.prices.has.sell||1);return {sourceType:'barcode',stockId:s.id,code:s.barcode||s.code,name:s.name||s.type,karat:String(s.purity||s.karat||''),weight:stockAmount(s),displayAmount:stockAmount(s),unit:'GR',qty:stockAmount(s),pieceCount:1,unitPrice,price:unitPrice,total:unitPrice,costHas:Number(s.costHas||0),saleHas,cost:Number(s.costHas||0)*Number(state.prices.has.buy||1),note:'Ürün değişimi'};}
   function openExchangeV5(){
     if(!v5Guard('canReturn'))return;const sales=(state.sales||[]).filter(s=>s.period===state.activePeriod&&s.status==='Tamamlandı'&&(s.lines||[]).some(l=>l.stockId));if(!sales.length)return toast('Değişime uygun satış bulunamadı','err');
@@ -6186,7 +6149,7 @@ function stockSummaryView(){
     state.invoiceSettings.companyTitle=state.invoiceSettings.companyTitle||state.settings.companyName||'ASİL KUYUMCULUK';
     state.invoiceSettings.defaultDocumentType=state.invoiceSettings.defaultDocumentType||'AUTO';
     if(!Array.isArray(state.invoiceRecords))state.invoiceRecords=[];
-    state.meta=state.meta||{};state.meta.appVersion='6.72';
+    state.meta=state.meta||{};state.meta.appVersion='6.73';
   }
   function maskIdNo(v){v=String(v||'').replace(/\D/g,'');if(v.length<5)return v||'—';return v.slice(0,2)+'*****'+v.slice(-2);}
   function identityById(id){return identityRecords.find(x=>x.id===id)||null;}
@@ -6895,7 +6858,7 @@ function stockSummaryView(){
       var old={mode:p.mode,printerName:p.printerName,widthMm:p.widthMm,copies:p.copies};
       try{
         p.mode=document.getElementById('rpMode').value;p.printerName=document.getElementById('rpName').value;p.widthMm=Number(document.getElementById('rpWidth').value||80);p.copies=1;
-        await printReceiptHtmlV644(receiptDocV644('TEST FİŞİ','TEST-'+Date.now(),now(),'','<div class="center"><b>ACLAS / FİŞ YAZICISI TESTİ</b><br>Asil Kuyumcu Pro · V6.72</div>','Test baskısı'),'Test fişi');
+        await printReceiptHtmlV644(receiptDocV644('TEST FİŞİ','TEST-'+Date.now(),now(),'','<div class="center"><b>ACLAS / FİŞ YAZICISI TESTİ</b><br>Asil Kuyumcu Pro · V6.73</div>','Test baskısı'),'Test fişi');
       }finally{Object.assign(p,old);}
     });
   }
