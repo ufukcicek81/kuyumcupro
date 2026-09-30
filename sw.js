@@ -1,4 +1,4 @@
-const C='asil-v6-68-customer-name-opposite-side-20260930';
+const C='asil-v6-69-customer-name-single-20260930';
 self.addEventListener('install',e=>{
   self.skipWaiting();
   e.waitUntil(caches.open(C).then(c=>c.addAll(['./','./index.html'])));
