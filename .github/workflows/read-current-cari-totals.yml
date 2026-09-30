@@ -1,0 +1,130 @@
+name: Read current cari totals
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/read-current-cari-totals.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  calculate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read Firebase and calculate totals
+        shell: python
+        run: |
+          import json, urllib.request, unicodedata, re
+
+          URL="https://asil-kuyumculuk-2feb6-default-rtdb.firebaseio.com/kuyumcuProV5/state.json"
+          with urllib.request.urlopen(URL, timeout=30) as r:
+              state=json.load(r)
+
+          if not isinstance(state,dict) or not isinstance(state.get("customers"),list):
+              raise SystemExit("Current Firebase state is invalid")
+
+          def norm(v):
+              s=unicodedata.normalize("NFD",str(v or "").upper().replace("İ","I").replace("ı","I"))
+              s="".join(ch for ch in s if unicodedata.category(ch)!="Mn")
+              return re.sub(r"[^A-Z0-9]+"," ",s).strip()
+
+          excludes=[
+            "BİROL KOTAN","SAMİ ÇİÇEK","SUZAN ÇİÇEK","EROL MEZARCI","NEZAHAT BAYRAM",
+            "OĞUZ TOYSHOP","CREO GÜMÜŞ","ÇELEBİ GÜMÜŞ","FİRUZE","İPEK KUYUMCULUK",
+            "KARDEŞLER KUYUMCULUK","MODERN KUYUMCULUK","NAMIK GÜMÜŞÇÜ","SEMİH İPEK",
+            "İŞ BANKASI","VAKIFBANK"
+          ]
+          ex=[norm(x) for x in excludes]
+          def protected_by_list(c):
+              n=norm(c.get("name"))
+              return any(p and (n==p or p in n or n in p) for p in ex)
+          def is_finance(c):
+              return c.get("id")=="CASH" or norm(c.get("type")) in {"BANKA","POS"} or bool(c.get("financeAccountId"))
+
+          customers=state.get("customers") or []
+          moves=state.get("customerMoves") or []
+
+          # Read-only rollback of the earlier wrong v6.74/v6.75 mahsup records.
+          byid={str(c.get("id")):c for c in customers}
+          bad=[m for m in moves if str(m.get("sourceType") or "") in {"cariMassOffsetV674","cariNetting"}]
+          for m in bad:
+              c=byid.get(str(m.get("customerId")))
+              if not c: continue
+              u=str(m.get("unit") or "TL").upper()
+              delta=float(m.get("credit") or 0)-float(m.get("debit") or 0)
+              if u=="TL": c["tlBalance"]=float(c.get("tlBalance") or 0)+delta
+              elif u=="HAS": c["hasBalance"]=float(c.get("hasBalance") or 0)+delta
+              else:
+                  ob=c.setdefault("otherBalances",{})
+                  ob[u]=float(ob.get(u) or 0)+delta
+          moves=[m for m in moves if str(m.get("sourceType") or "") not in {"cariMassOffsetV674","cariNetting"}]
+
+          def bal(c,u):
+              u=u.upper()
+              if u=="TL": return float(c.get("tlBalance") or 0)
+              if u=="HAS": return float(c.get("hasBalance") or 0)
+              return float((c.get("otherBalances") or {}).get(u) or 0)
+
+          def legacy_move(m):
+              code=str(m.get("code") or "").upper()
+              typ=norm(m.get("type"))
+              src=str(m.get("sourceType") or "").lower()
+              doc=str(m.get("sourceDocNo") or "").upper()
+              return code=="DV" or "DEVIR" in typ or "ACILIS" in typ or src.startswith("opening") or doc.startswith("PUSULA-") or "-ACILIS-" in doc or doc.startswith("OPEN-")
+
+          move_by={}
+          for m in moves:
+              move_by.setdefault(str(m.get("customerId")),[]).append(m)
+
+          def legacy_map(c):
+              cm=move_by.get(str(c.get("id")),[])
+              units={"TL","HAS"}
+              units.update(str(k).upper() for k in (c.get("otherBalances") or {}).keys())
+              units.update(str(m.get("unit") or "TL").upper() for m in cm)
+              out={}
+              for u in units:
+                  mt=0.0; lm=0.0
+                  for m in cm:
+                      if str(m.get("unit") or "TL").upper()!=u: continue
+                      d=float(m.get("debit") or 0)-float(m.get("credit") or 0)
+                      mt+=d
+                      if legacy_move(m): lm+=d
+                  current=bal(c,u)
+                  unknown=current-mt
+                  out[u]=lm+unknown
+              return out
+
+          def summarize(cset, use_legacy=False):
+              debt={}; credit={}
+              accounts_debt=set(); accounts_credit=set()
+              for c in cset:
+                  vals=legacy_map(c) if use_legacy else {"TL":bal(c,"TL"),"HAS":bal(c,"HAS"),**{str(k).upper():float(v or 0) for k,v in (c.get("otherBalances") or {}).items()}}
+                  for u,v in vals.items():
+                      v=float(v or 0)
+                      if v>1e-9:
+                          debt[u]=debt.get(u,0)+v; accounts_debt.add(str(c.get("id")))
+                      elif v<-1e-9:
+                          credit[u]=credit.get(u,0)+(-v); accounts_credit.add(str(c.get("id")))
+              units=sorted(set(debt)|set(credit))
+              match={u:min(debt.get(u,0),credit.get(u,0)) for u in units}
+              net={u:debt.get(u,0)-credit.get(u,0) for u in units}
+              return {"debt":debt,"credit":credit,"matchable":match,"net":net,"debt_accounts":len(accounts_debt),"credit_accounts":len(accounts_credit)}
+
+          exact=[c for c in customers if c and not protected_by_list(c)]
+          safe=[c for c in exact if not is_finance(c)]
+
+          result={
+              "updatedAt":(state.get("meta") or {}).get("updatedAt"),
+              "wrong_offsets_readonly_rolled_back":len(bad),
+              "excluded_names":excludes,
+              "exact_list_only_current":summarize(exact,False),
+              "exact_list_only_legacy":summarize(exact,True),
+              "safe_cleanup_current":summarize(safe,False),
+              "safe_cleanup_legacy":summarize(safe,True),
+              "exact_count":len(exact),
+              "safe_count":len(safe)
+          }
+          print("CARI_TOTALS_JSON="+json.dumps(result,ensure_ascii=False,sort_keys=True))
