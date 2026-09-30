@@ -1,4 +1,4 @@
-const C='asil-v6-64-secure-cloud-backup-20260930';
+const C='asil-v6-65-label-fields-20260930';
 self.addEventListener('install',e=>{
   self.skipWaiting();
   e.waitUntil(caches.open(C).then(c=>c.addAll(['./','./index.html'])));
