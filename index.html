@@ -3547,11 +3547,53 @@ function stockSummaryView(){
       </div>`;
   }
 
+  function backupFileNameV664(){
+    const d=new Date(),date=[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-'),time=String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0');
+    return `ASIL_KUYUMCU_YEDEK_${date}_${time}.json`;
+  }
+  function localBackupEnvelopeV664(){
+    return {format:'ASIL_KUYUMCU_BACKUP_V1',createdAt:now(),appVersion:'6.64',business:state.settings?.companyName||'ASİL KUYUMCULUK',period:state.activePeriod,state:cloudSafeStateV5()};
+  }
   function pageBackup(){
     ensureV5State();
-    return `<div class="page-title"><div><h1>Yedek & Sistem</h1><p>Yerel yedek, merkezi Asil bulut senkronu, gerçek dönem kapatma/devir ve işlem geçmişi.</p></div><span class="badge ${state.cloudSync?.lastStatus==='Bağlı'?'green':'gold'}">Bulut: ${esc(state.cloudSync?.lastStatus||'Bekliyor')}</span></div>
-      <div class="grid grid-4"><div class="card"><h3>Yedek Al</h3><p class="muted">Tüm veriyi tek JSON dosyasına aktarır.</p><button class="btn btn-primary" id="backupDownload">Yedeği İndir</button><div class="muted" style="margin-top:8px;font-size:11px">Bulutta günlük otomatik yedek: <b>${esc(state.meta?.lastDailyBackup||'Henüz yok')}</b> · 30 gün saklama</div></div><div class="card"><h3>Yedek Yükle</h3><p class="muted">Daha önce indirilmiş JSON yedeğini geri yükler.</p><input type="file" id="backupFile" accept="application/json" class="input"></div><div class="card"><h3>Merkezi Bulut</h3><p class="muted">PC/tablet aynı veri setini kullanır.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="backupCloudPush">Buluta Gönder</button><button class="btn" id="backupCloudPull">Buluttan Al</button></div></div><div class="card"><h3>Dönem Kapat / Devir</h3><p class="muted">${state.activePeriod} kapanışını kilitler ve ${state.activePeriod+1} açılış stoklarını oluşturur.</p><button class="btn" id="periodCarry">${state.activePeriod} → ${state.activePeriod+1} GERÇEK DEVİR</button></div></div>
-      <div class="card" style="margin-top:16px"><div class="section-head"><h3>İşlem Geçmişi</h3><span>Son ${Math.min(100,state.audits.length)} hareket</span></div><div class="table-wrap"><table class="table"><thead><tr><th>Tarih</th><th>Kullanıcı</th><th>Modül</th><th>İşlem</th></tr></thead><tbody>${state.audits.slice(0,100).map(a=>`<tr><td>${trDate(a.date)}</td><td>${esc(a.user)}</td><td><span class="badge">${esc(a.module)}</span></td><td>${esc(a.action)}</td></tr>`).join('')}</tbody></table></div></div>`;
+    const key=cloudKeyGetV664(),cloud=state.cloudSync||{},enc=cloud.encrypted!==false&&Boolean(key);
+    return `<div class="page-title"><div><h1>Yedek · Bulut · Güvenlik</h1><p>Harici disk yedeği, şifreli merkezi bulut, diğer cihaz bağlantısı ve geri yükleme tek merkezde.</p></div><span class="badge ${cloud.lastStatus==='Bağlı'?'green':'gold'}">Bulut: ${esc(cloud.lastStatus||'Bekliyor')}</span></div>
+      <div class="grid grid-2">
+        <div class="card" style="border:2px solid rgba(214,177,95,.35)"><div class="section-head"><h3>💾 Harici Disk / Akşam Yedeği</h3><span class="badge gold">ÖNERİLEN</span></div>
+          <p class="muted">Her akşam bu düğmeye bas. Tüm işletme verisi tek JSON dosyasına iner; dosyayı harici diskinize kopyalayabilirsiniz.</p>
+          <button class="btn btn-primary" id="backupDownload" style="width:100%;min-height:48px">AKŞAM YEDEĞİNİ İNDİR</button>
+          <div class="notice" style="margin-top:10px"><strong>Dosya:</strong> ${esc(backupFileNameV664())}<br><small>Bulut anahtarı güvenlik nedeniyle bu veri yedeğinin içine konmaz. Bulut anahtarını ayrıca saklayın.</small></div>
+        </div>
+        <div class="card"><div class="section-head"><h3>↥ Yedekten Geri Yükle</h3><span class="badge red">DİKKAT</span></div>
+          <p class="muted">Asil Kuyumcu Pro yedek dosyasını seçin. Geri yükleme mevcut yerel veriyi değiştirir.</p>
+          <input type="file" id="backupFile" accept="application/json,.json" class="input">
+          <div class="muted" style="margin-top:9px;font-size:12px">Yeni yedek formatı ve eski ham JSON yedekleri desteklenir.</div>
+        </div>
+        <div class="card"><div class="section-head"><h3>☁ Şifreli Merkezi Bulut</h3><span class="badge ${enc?'green':'gold'}">${enc?'AES-GCM ŞİFRELİ':'ANAHTAR BEKLİYOR'}</span></div>
+          <p class="muted">Mağaza PC'si, tablet ve diğer bilgisayarlar aynı merkezi veri setini kullanır. Buluta gönderilen iş verisi cihaz anahtarıyla şifrelenir.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary" id="backupCloudPush">Şimdi Buluta Gönder</button><button class="btn btn-outline" id="backupCloudPull">Buluttan Güncel Veriyi Al</button><button class="btn btn-outline" id="cloudBackupNow">Bulutta Manuel Yedek Al</button></div>
+          <div class="summary-row" style="margin-top:10px"><span>Son gönderim</span><strong>${cloud.lastPush?trDate(cloud.lastPush):'—'}</strong></div>
+          <div class="summary-row"><span>Son alım</span><strong>${cloud.lastPull?trDate(cloud.lastPull):'—'}</strong></div>
+          <div class="summary-row"><span>Günlük yedek</span><strong>${esc(state.meta?.lastDailyBackup||'—')}</strong></div>
+          <div class="summary-row"><span>Haftalık yedek</span><strong>${esc(state.meta?.lastWeeklyBackup||'—')}</strong></div>
+          <div class="summary-row"><span>Aylık yedek</span><strong>${esc(state.meta?.lastMonthlyBackup||'—')}</strong></div>
+        </div>
+        <div class="card"><div class="section-head"><h3>🔑 Diğer Cihaz Güvenlik Anahtarı</h3><span class="badge ${key?'green':'red'}">${key?'BU CİHAZDA VAR':'YOK'}</span></div>
+          <p class="muted">Yeni bilgisayar/tablet şifreli bulut verisini ancak aynı anahtarla açabilir. Anahtarı paroladan ayrı yerde saklayın.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="btn btn-outline" id="cloudKeyShow">Anahtarı Göster</button><button class="btn btn-outline" id="cloudKeyCopy">Kopyala</button><button class="btn btn-outline" id="cloudKeyDownload">Anahtar Dosyasını İndir</button></div>
+          <div class="labelled"><label>Başka Cihazdan Anahtar Gir / Değiştir</label><input id="cloudKeyInput" class="input" type="password" autocomplete="off" placeholder="Bulut güvenlik anahtarı"><small>Anahtarı değiştirmeden önce mevcut anahtar dosyanızı mutlaka saklayın.</small></div>
+          <button class="btn btn-primary" id="cloudKeyApply" style="margin-top:8px">ANAHTARI BU CİHAZA KAYDET VE BULUTU AÇ</button>
+        </div>
+        <div class="card"><div class="section-head"><h3>🔒 Sistem Güvenliği</h3><span class="badge green">AKTİF</span></div>
+          <div class="summary-row"><span>Kullanıcı şifreleri</span><strong>PBKDF2-SHA256</strong></div>
+          <div class="summary-row"><span>Bulut veri şifreleme</span><strong>AES-256-GCM</strong></div>
+          <div class="summary-row"><span>Hatalı giriş kilidi</span><strong>5 deneme / 5 dk</strong></div>
+          <div class="summary-row"><span>Hareketsizlik kilidi</span><strong>${Math.max(5,Number(state.settings?.securityAutoLockMinutes||60))} dk</strong></div>
+          <div class="summary-row"><span>İşlem geçmişi</span><strong>${state.audits.length} kayıt</strong></div>
+        </div>
+        <div class="card"><div class="section-head"><h3>Dönem Kapat / Devir</h3><span class="badge red">KRİTİK</span></div><p class="muted">${state.activePeriod} kapanışını kilitler ve ${state.activePeriod+1} açılış stoklarını oluşturur.</p><button class="btn btn-outline" id="periodCarry">${state.activePeriod} → ${state.activePeriod+1} GERÇEK DEVİR</button></div>
+      </div>
+      <div class="card" style="margin-top:14px"><div class="section-head"><h3>İşlem Geçmişi / Güvenlik Kaydı</h3><span>Son ${Math.min(100,state.audits.length)} hareket</span></div><div class="table-wrap"><table class="table"><thead><tr><th>Tarih</th><th>Kullanıcı</th><th>Modül</th><th>İşlem</th></tr></thead><tbody>${state.audits.slice(0,100).map(a=>`<tr><td>${trDate(a.date)}</td><td>${esc(a.user)}</td><td><span class="badge">${esc(a.module)}</span></td><td>${esc(a.action)}</td></tr>`).join('')}</tbody></table></div></div>`;
   }
 
   function isMobileViewport(){
@@ -5583,11 +5625,36 @@ function stockSummaryView(){
   function bindBackup(){
     document.getElementById('backupCloudPush')?.addEventListener('click',()=>cloudPushV5(true));
     document.getElementById('backupCloudPull')?.addEventListener('click',()=>cloudPullV5(true));
-    document.getElementById('backupDownload').addEventListener('click',()=>{downloadText(JSON.stringify(state,null,2),`ASIL_${state.activePeriod}_${new Date().toISOString().replace(/[:.]/g,'-')}.json`,'application/json');audit('Manuel yedek indirildi','Yedek');});
-    document.getElementById('backupFile').addEventListener('change',e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const data=JSON.parse(reader.result);if(!data.meta||!data.users)throw new Error();state=data;save();audit('Yedekten geri yükleme yapıldı','Yedek');toast('Yedek geri yüklendi');render();}catch{toast('Geçersiz yedek dosyası','err')}};reader.readAsText(file);});
+    document.getElementById('cloudBackupNow')?.addEventListener('click',async()=>{if(!v5Guard('canCloudSync'))return;const ok=await cloudBackupV5('MANUEL BULUT');toast(ok?'Şifreli manuel bulut yedeği alındı':'Bulut yedeği alınamadı',ok?'ok':'err');if(ok)audit('Manuel şifreli bulut yedeği alındı','Yedek');});
+    document.getElementById('backupDownload')?.addEventListener('click',()=>{
+      const file=backupFileNameV664(),payload=localBackupEnvelopeV664();
+      downloadText(JSON.stringify(payload,null,2),file,'application/json');
+      audit(`Harici disk için tam yedek indirildi · ${file}`,'Yedek');toast('Yedek dosyası indirildi; harici diskinize kopyalayın');
+    });
+    document.getElementById('backupFile')?.addEventListener('change',e=>{
+      const file=e.target.files[0];if(!file)return;
+      if(!confirm('Seçilen yedek mevcut yerel verinin yerine yüklenecek. Devam edilsin mi?')){e.target.value='';return;}
+      const reader=new FileReader();
+      reader.onload=async()=>{
+        try{
+          const parsed=JSON.parse(reader.result),data=parsed?.format==='ASIL_KUYUMCU_BACKUP_V1'?parsed.state:parsed;
+          if(!data?.meta||!Array.isArray(data?.users)||!Array.isArray(data?.stocks))throw new Error('Yedek yapısı doğrulanamadı');
+          cloudApplyingV5=true;state=data;ensureStateShape();ensureV5State();simplifyBankPosV55();ensureBankCariLinksV54();reconcileTransactionLedgerV5();await migrateLegacyPinsV664();cloudApplyingV5=false;
+          localStorage.setItem(LS_KEY,JSON.stringify(state));audit(`${file.name} yedeğinden geri yükleme yapıldı`,'Yedek');toast('Yedek güvenli şekilde geri yüklendi');render();
+        }catch(err){cloudApplyingV5=false;toast(`Geçersiz yedek dosyası: ${err?.message||err}`,'err');}
+      };
+      reader.readAsText(file);
+    });
+    document.getElementById('cloudKeyShow')?.addEventListener('click',()=>{const k=cloudKeyGetV664();if(!k)return toast('Bu cihazda henüz bulut anahtarı yok','err');modal('Bulut Güvenlik Anahtarı',`<div class="notice"><strong>GİZLİ TUTUN.</strong> Bu anahtarı bilen kişi şifreli bulut yedeğini açabilir.</div><textarea class="textarea" rows="3" readonly style="margin-top:10px;font-family:monospace">${esc(k)}</textarea>`,null,'Kapat');});
+    document.getElementById('cloudKeyCopy')?.addEventListener('click',async()=>{const k=cloudKeyGetV664();if(!k)return toast('Bulut anahtarı yok','err');try{await navigator.clipboard.writeText(k);toast('Bulut anahtarı panoya kopyalandı');}catch(_){prompt('Bulut anahtarını kopyalayın:',k);}});
+    document.getElementById('cloudKeyDownload')?.addEventListener('click',()=>{const k=cloudKeyGetV664();if(!k)return toast('Bulut anahtarı yok','err');downloadText(`ASIL KUYUMCU PRO BULUT GÜVENLİK ANAHTARI\n\n${k}\n\nBu dosyayı gizli ve çevrimdışı saklayın.\n`,'ASIL_BULUT_GUVENLIK_ANAHTARI.txt','text/plain;charset=utf-8');audit('Bulut güvenlik anahtarı dosyası indirildi','Güvenlik');});
+    document.getElementById('cloudKeyApply')?.addEventListener('click',async()=>{
+      const value=String(document.getElementById('cloudKeyInput')?.value||'').trim();if(!value)return toast('Bulut anahtarını girin','err');
+      if(!confirm('Bu cihazdaki bulut anahtarı değiştirilecek. Girdiğiniz anahtar doğru mu?'))return;
+      try{cloudKeySetV664(value);state.cloudSync.lastStatus='Anahtar Yüklendi';const ok=await cloudPullV5(true);if(ok){audit('Bulut anahtarı bu cihaza aktarıldı ve veri alındı','Güvenlik');}render();}catch(err){toast(err?.message||'Anahtar kaydedilemedi','err');}
+    });
     document.getElementById('periodCarry')?.addEventListener('click',openFiscalCloseV5);
   }
-
 
   // ===================== ASİL KUYUMCU PRO V5 ÇEKİRDEK =====================
   function migratePusulaSuppliersV51(){
