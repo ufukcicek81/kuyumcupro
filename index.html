@@ -5710,28 +5710,122 @@ function stockSummaryView(){
   function registerTransactionV5(type,docNo,description='',extra={}){ensureV5State();let t=state.transactions.find(x=>x.docNo===docNo);if(!t){t={id:uid('TXN'),docNo,type,period:state.activePeriod,date:now(),status:'Aktif',user:session?.name||'Sistem',description,refs:[],...extra};state.transactions.unshift(t);}else{t.type=type||t.type;t.description=description||t.description;Object.assign(t,extra);}return t;}
   function transactionDetailV5(id){reconcileTransactionLedgerV5();const t=state.transactions.find(x=>x.id===id);if(!t)return;const refs=(t.refs||[]);modal(`İşlem Bağlantısı — ${esc(t.docNo)}`,`<div class="summary-row"><span>Tür</span><strong>${esc(t.type)}</strong></div><div class="summary-row"><span>Durum</span><strong>${esc(t.status||'Aktif')}</strong></div><div class="summary-row"><span>Tarih</span><strong>${trDate(t.date)}</strong></div><div class="summary-row"><span>Açıklama</span><strong>${esc(t.description||'')}</strong></div><div class="table-wrap" style="margin-top:12px"><table class="table" style="min-width:0"><thead><tr><th>Modül</th><th>Kayıt ID</th></tr></thead><tbody>${refs.map(r=>`<tr><td>${esc(r.kind)}</td><td>${esc(r.id)}</td></tr>`).join('')||'<tr><td colspan="2">Bağlı kayıt bulunamadı.</td></tr>'}</tbody></table></div>`,null,'Kapat');}
 
-  function cloudSafeStateV5(){const c=clone(state);if(Array.isArray(c.specialProducts))c.specialProducts.forEach(x=>{if(String(x.photo||'').length>250000)x.photo='';});return c;}
+  function cloudSafeStateV5(){
+    const c=clone(state);
+    delete c.currentUser;
+    if(Array.isArray(c.specialProducts))c.specialProducts.forEach(x=>{if(String(x.photo||'').length>250000)x.photo='';});
+    return c;
+  }
   function scheduleCloudPushV5(){clearTimeout(cloudPushTimerV5);cloudPushTimerV5=setTimeout(()=>cloudPushV5(false),2200);}
   async function cloudPushV5(manual=false){
-    ensureV5State();if(!state.cloudSync.enabled&&!manual)return;if(manual&&!v5Guard('canCloudSync'))return;
-    try{state.cloudSync.lastStatus='Gönderiliyor';state.meta.updatedAt=now();const payload=cloudSafeStateV5();const r=await fetch(CLOUD_STATE_URL,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(!r.ok)throw new Error(`HTTP ${r.status}`);state.cloudSync.lastStatus='Bağlı';state.cloudSync.lastPush=now();localStorage.setItem(LS_KEY,JSON.stringify(state));if(manual){toast('Merkezi buluta gönderildi');render();}}
-    catch(e){state.cloudSync.lastStatus='Bağlantı Hatası';state.cloudSync.lastError=String(e?.message||e);if(manual){toast('Bulut gönderimi başarısız','err');render();}}
+    ensureV5State();if(!state.cloudSync.enabled&&!manual)return false;if(manual&&!v5Guard('canCloudSync'))return false;
+    try{
+      if(!crypto?.subtle)throw new Error('Bu tarayıcı güvenli bulut şifrelemesini desteklemiyor');
+      if(!cloudKeyGetV664())cloudKeyEnsureV664();
+      state.cloudSync.lastStatus='Şifreleniyor';state.meta.updatedAt=now();
+      const payload=await cloudEncryptPayloadV664(cloudSafeStateV5());
+      state.cloudSync.lastStatus='Gönderiliyor';
+      const r=await fetch(CLOUD_STATE_URL,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      if(!r.ok)throw new Error(`HTTP ${r.status}`);
+      state.cloudSync.lastStatus='Bağlı';state.cloudSync.encrypted=true;state.cloudSync.encryptionMigrationPending=false;state.cloudSync.lastPush=now();
+      localStorage.setItem(LS_KEY,JSON.stringify(state));
+      if(manual){toast('Şifreli merkezi buluta gönderildi');render();}
+      return true;
+    }catch(e){
+      state.cloudSync.lastStatus='Bağlantı Hatası';state.cloudSync.lastError=String(e?.message||e);
+      if(manual){toast(`Bulut gönderimi başarısız: ${e?.message||e}`,'err');render();}
+      return false;
+    }
   }
   async function cloudPullV5(manual=false){
     ensureV5State();if(manual&&!v5Guard('canCloudSync'))return false;
-    try{state.cloudSync.lastStatus='Alınıyor';const r=await fetch(CLOUD_STATE_URL+'?v='+Date.now(),{cache:'no-store'});if(!r.ok)throw new Error(`HTTP ${r.status}`);const remote=await r.json();if(!remote||!Array.isArray(remote.stocks)||remote.stocks.length<1000){state.cloudSync.lastStatus='İlk Kurulum';if(manual)await cloudPushV5(true);return false;}const rt=new Date(remote?.meta?.updatedAt||0).getTime(),lt=new Date(state?.meta?.updatedAt||0).getTime();if(manual||rt>lt+1000){cloudApplyingV5=true;state=remote;ensureStateShape();ensureV5State();simplifyBankPosV55();ensureBankCariLinksV54();reconcileTransactionLedgerV5();localStorage.setItem(LS_KEY,JSON.stringify(state));cloudApplyingV5=false;state.cloudSync.lastPull=now();state.cloudSync.lastStatus='Bağlı';if(manual){toast('Buluttaki güncel veri alındı');render();}return true;}state.cloudSync.lastStatus='Bağlı';return false;}
-    catch(e){state.cloudSync.lastStatus='Bağlantı Hatası';state.cloudSync.lastError=String(e?.message||e);if(manual){toast('Buluttan veri alınamadı','err');render();}return false;}
+    try{
+      state.cloudSync.lastStatus='Alınıyor';
+      const r=await fetch(CLOUD_STATE_URL+'?v='+Date.now(),{cache:'no-store'});
+      if(!r.ok)throw new Error(`HTTP ${r.status}`);
+      const raw=await r.json();
+      if(!raw){state.cloudSync.lastStatus='İlk Kurulum';if(manual)await cloudPushV5(true);return false;}
+      const encrypted=Boolean(raw?.encrypted&&raw?.format==='ASIL_CLOUD_AESGCM_V1');
+      let remote;
+      try{remote=await cloudDecryptPayloadV664(raw);}
+      catch(err){
+        if(String(err?.message)==='CLOUD_KEY_REQUIRED'){state.cloudSync.lastStatus='Anahtar Gerekli';state.cloudSync.encrypted=true;if(manual)toast('Bu cihazda bulut anahtarı yok. Yedek & Sistem bölümünden anahtarı girin.','err');return false;}
+        if(String(err?.message)==='CLOUD_KEY_INVALID'){state.cloudSync.lastStatus='Anahtar Hatalı';state.cloudSync.encrypted=true;if(manual)toast('Bulut anahtarı yanlış; veri açılamadı.','err');return false;}
+        throw err;
+      }
+      if(!remote||!Array.isArray(remote.stocks)||remote.stocks.length<1000){state.cloudSync.lastStatus='Geçersiz Bulut Verisi';return false;}
+      const rt=new Date(remote?.meta?.updatedAt||raw?.updatedAt||0).getTime(),lt=new Date(state?.meta?.updatedAt||0).getTime();
+      const needsMigration=!encrypted;
+      if(manual||rt>lt+1000){
+        cloudApplyingV5=true;state=remote;ensureStateShape();ensureV5State();simplifyBankPosV55();ensureBankCariLinksV54();reconcileTransactionLedgerV5();
+        state.cloudSync=state.cloudSync||{};state.cloudSync.encrypted=encrypted;state.cloudSync.encryptionMigrationPending=needsMigration;state.cloudSync.lastPull=now();state.cloudSync.lastStatus='Bağlı';
+        localStorage.setItem(LS_KEY,JSON.stringify(state));cloudApplyingV5=false;
+        if(manual){toast(encrypted?'Şifreli bulut verisi alındı':'Eski bulut verisi alındı; şifreli formata yükseltilecek');render();}
+        return true;
+      }
+      state.cloudSync.encrypted=encrypted;state.cloudSync.encryptionMigrationPending=needsMigration;state.cloudSync.lastStatus='Bağlı';
+      return false;
+    }catch(e){
+      cloudApplyingV5=false;state.cloudSync.lastStatus='Bağlantı Hatası';state.cloudSync.lastError=String(e?.message||e);
+      if(manual){toast(`Buluttan veri alınamadı: ${e?.message||e}`,'err');render();}
+      return false;
+    }
   }
   async function cloudBackupV5(label='AUTO'){
-    try{const key=new Date().toISOString().replace(/[.:]/g,'-');const r=await fetch(`${CLOUD_BACKUP_BASE}/${key}.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({label,date:now(),state:cloudSafeStateV5()})});return r.ok;}catch(e){return false;}
+    try{
+      if(!cloudKeyGetV664())cloudKeyEnsureV664();
+      const key=new Date().toISOString().replace(/[.:]/g,'-'),payload=await cloudEncryptPayloadV664(cloudSafeStateV5());
+      const r=await fetch(`${CLOUD_BACKUP_BASE}/${key}.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({format:'ASIL_BACKUP_CLOUD_V2',label,date:now(),encrypted:true,payload})});
+      return r.ok;
+    }catch(e){state.cloudSync.lastError=String(e?.message||e);return false;}
   }
   async function cleanupCloudBackupsV6(){
-    try{const r=await fetch(`${CLOUD_BACKUP_BASE}.json?v=${Date.now()}`,{cache:'no-store'});if(!r.ok)return;const data=await r.json();if(!data||typeof data!=='object')return;const cut=Date.now()-30*86400000;const old=Object.entries(data).filter(([,v])=>new Date(v?.date||0).getTime()<cut).map(([k])=>k);for(const k of old.slice(0,80))await fetch(`${CLOUD_BACKUP_BASE}/${encodeURIComponent(k)}.json`,{method:'DELETE'});}catch(_){ }
+    try{
+      const r=await fetch(`${CLOUD_BACKUP_BASE}.json?v=${Date.now()}`,{cache:'no-store'});if(!r.ok)return;
+      const data=await r.json();if(!data||typeof data!=='object')return;
+      const nowMs=Date.now(),old=Object.entries(data).filter(([,v])=>{
+        const age=nowMs-new Date(v?.date||0).getTime(),label=String(v?.label||'').toUpperCase();
+        const keep=label.includes('AYLIK')?365:label.includes('HAFTALIK')?90:30;
+        return age>keep*86400000;
+      }).map(([k])=>k);
+      for(const k of old.slice(0,100))await fetch(`${CLOUD_BACKUP_BASE}/${encodeURIComponent(k)}.json`,{method:'DELETE'});
+    }catch(_){}
+  }
+  function isoWeekKeyV664(d=new Date()){
+    const x=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()));x.setUTCDate(x.getUTCDate()+4-(x.getUTCDay()||7));
+    const y=new Date(Date.UTC(x.getUTCFullYear(),0,1)),week=Math.ceil((((x-y)/86400000)+1)/7);
+    return `${x.getUTCFullYear()}-W${String(week).padStart(2,'0')}`;
   }
   async function autoDailyBackupV6(){
-    ensureV5State();if(!state.cloudSync?.enabled||state.settings?.backupEnabled===false)return false;const day=new Date().toISOString().slice(0,10);if(state.meta.lastDailyBackup===day)return true;const ok=await cloudBackupV5('GÜNLÜK OTOMATİK');if(ok){state.meta.lastDailyBackup=day;try{localStorage.setItem(LS_KEY,JSON.stringify(state));}catch(_){}cleanupCloudBackupsV6();}return ok;
+    ensureV5State();if(!state.cloudSync?.enabled||state.settings?.backupEnabled===false||state.cloudSync?.lastStatus==='Anahtar Gerekli')return false;
+    const d=new Date(),day=d.toISOString().slice(0,10),week=isoWeekKeyV664(d),month=day.slice(0,7);let ok=true,changed=false;
+    if(state.meta.lastDailyBackup!==day){const x=await cloudBackupV5('GÜNLÜK OTOMATİK');ok=ok&&x;if(x){state.meta.lastDailyBackup=day;changed=true;}}
+    if(state.meta.lastWeeklyBackup!==week){const x=await cloudBackupV5('HAFTALIK OTOMATİK');ok=ok&&x;if(x){state.meta.lastWeeklyBackup=week;changed=true;}}
+    if(state.meta.lastMonthlyBackup!==month){const x=await cloudBackupV5('AYLIK OTOMATİK');ok=ok&&x;if(x){state.meta.lastMonthlyBackup=month;changed=true;}}
+    if(changed){try{localStorage.setItem(LS_KEY,JSON.stringify(state));}catch(_){}cleanupCloudBackupsV6();}
+    return ok;
   }
-  async function initCloudSyncV5(){ensureV5State();await cloudPullV5(false);cloudInitializedV5=true;if(state.cloudSync.enabled){if(!state.cloudSync.lastPull)await cloudPushV5(false);try{cloudStreamV5?.close?.();cloudStreamV5=new EventSource(CLOUD_STATE_URL);cloudStreamV5.addEventListener('put',async ev=>{try{const p=JSON.parse(ev.data||'{}');if(p.path!=='/'||!p.data)return;const remote=p.data,rt=new Date(remote?.meta?.updatedAt||0).getTime(),lt=new Date(state?.meta?.updatedAt||0).getTime();if(rt>lt+1200){cloudApplyingV5=true;state=remote;ensureStateShape();ensureV5State();simplifyBankPosV55();ensureBankCariLinksV54();localStorage.setItem(LS_KEY,JSON.stringify(state));cloudApplyingV5=false;render();}}catch(_){}});}catch(_){}}await autoDailyBackupV6();}
+  async function initCloudSyncV5(){
+    ensureV5State();
+    await cloudPullV5(false);
+    cloudInitializedV5=true;
+    if(state.cloudSync.enabled&&state.cloudSync.lastStatus!=='Anahtar Gerekli'&&state.cloudSync.lastStatus!=='Anahtar Hatalı'){
+      if(!cloudKeyGetV664())cloudKeyEnsureV664();
+      if(state.cloudSync.encryptionMigrationPending||!state.cloudSync.lastPush)await cloudPushV5(false);
+      try{
+        cloudStreamV5?.close?.();cloudStreamV5=new EventSource(CLOUD_STATE_URL);
+        cloudStreamV5.addEventListener('put',async ev=>{
+          try{
+            const p=JSON.parse(ev.data||'{}');if(p.path!=='/'||!p.data)return;
+            let remote;try{remote=await cloudDecryptPayloadV664(p.data);}catch(err){if(String(err?.message)==='CLOUD_KEY_REQUIRED')state.cloudSync.lastStatus='Anahtar Gerekli';else if(String(err?.message)==='CLOUD_KEY_INVALID')state.cloudSync.lastStatus='Anahtar Hatalı';return;}
+            const rt=new Date(remote?.meta?.updatedAt||p.data?.updatedAt||0).getTime(),lt=new Date(state?.meta?.updatedAt||0).getTime();
+            if(remote&&Array.isArray(remote.stocks)&&rt>lt+1200){cloudApplyingV5=true;state=remote;ensureStateShape();ensureV5State();simplifyBankPosV55();ensureBankCariLinksV54();reconcileTransactionLedgerV5();state.cloudSync.encrypted=Boolean(p.data?.encrypted);state.cloudSync.lastPull=now();state.cloudSync.lastStatus='Bağlı';localStorage.setItem(LS_KEY,JSON.stringify(state));cloudApplyingV5=false;render();}
+          }catch(_){}
+        });
+      }catch(_){}
+    }
+    await autoDailyBackupV6();
+  }
 
   function saleLineFromStockV5(s){const saleHas=Number(s.saleHas||stockCounterHas(s)||0),unitPrice=saleHas*Number(state.prices.has.sell||1);return {sourceType:'barcode',stockId:s.id,code:s.barcode||s.code,name:s.name||s.type,karat:String(s.purity||s.karat||''),weight:stockAmount(s),displayAmount:stockAmount(s),unit:'GR',qty:stockAmount(s),pieceCount:1,unitPrice,price:unitPrice,total:unitPrice,costHas:Number(s.costHas||0),saleHas,cost:Number(s.costHas||0)*Number(state.prices.has.buy||1),note:'Ürün değişimi'};}
   function openExchangeV5(){
