@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101113" />
-  <meta name="description" content="Asil Kuyumcu Pro V6.79 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
+  <meta name="description" content="Asil Kuyumcu Pro V6.80 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.79</title>
+  <title>Asil Kuyumcu Pro V6.80</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -1252,7 +1252,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
         state.audits.unshift({id:uid('AUD'),date:now(),user:(typeof session!=='undefined'&&session?.name)||'Sistem',module:'Otomatik Kayıt',action:'Veri değişikliği kaydedildi · '+routeName+' · '+summary,kind:'OTOMATİK'});
         state.audits=state.audits.slice(0,5000);
       }
-      state.meta.appVersion='6.78';
+      state.meta.appVersion='6.80';
       if(typeof syncSystemParametersV648==='function')syncSystemParametersV648();
       localStorage.setItem(LS_KEY, JSON.stringify(state));
     } catch { /* Yerel dosya modunda depolama engellense bile uygulama çalışmaya devam eder. */ }
@@ -1966,7 +1966,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.79</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
+        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.80</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
         <nav class="nav" aria-label="Ana menü">${['dashboard','sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={dashboard:'Ana Menü',sales:'Satış',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
         <details class="more-nav"><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['dashboard','sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
       </aside>
@@ -3940,6 +3940,71 @@ function stockSummaryView(){
       </div>`;
   }
 
+  function cloudCountShallowV680(v){
+    if(Array.isArray(v))return v.reduce((n,x)=>n+(x==null?0:1),0);
+    if(v&&typeof v==='object')return Object.keys(v).length;
+    return 0;
+  }
+  async function cloudJsonV680(url){
+    const r=await fetch(url,{cache:'no-store'});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    return r.json();
+  }
+  async function cloudBackupStatV680(key){
+    const base=`${CLOUD_BACKUP_BASE}/${encodeURIComponent(key)}`;
+    const [label,date,updated,stocks,cards,open,scrap,sales,cari]=await Promise.all([
+      cloudJsonV680(base+'/label.json').catch(()=>''),cloudJsonV680(base+'/date.json').catch(()=>''),
+      cloudJsonV680(base+'/state/meta/updatedAt.json').catch(()=>''),
+      cloudJsonV680(base+'/state/stocks.json?shallow=true').catch(()=>null),
+      cloudJsonV680(base+'/state/stockCardsMaster.json?shallow=true').catch(()=>null),
+      cloudJsonV680(base+'/state/openStocks.json?shallow=true').catch(()=>null),
+      cloudJsonV680(base+'/state/scrapStocks.json?shallow=true').catch(()=>null),
+      cloudJsonV680(base+'/state/sales.json?shallow=true').catch(()=>null),
+      cloudJsonV680(base+'/state/customerMoves.json?shallow=true').catch(()=>null)
+    ]);
+    return {key,label:String(label||'YEDEK'),date:String(date||updated||''),updated:String(updated||''),stocks:cloudCountShallowV680(stocks),cards:cloudCountShallowV680(cards),open:cloudCountShallowV680(open),scrap:cloudCountShallowV680(scrap),sales:cloudCountShallowV680(sales),cari:cloudCountShallowV680(cari)};
+  }
+  function cloudBackupHistoryRowV680(x){
+    const d=x.date?trDate(x.date):x.key;
+    const strong=x.stocks>=500||x.cards>=20;
+    return `<tr><td><strong>${esc(d)}</strong><br><small>${esc(x.label)}</small></td><td class="num ${strong?'positive':''}">${x.cards}</td><td class="num ${strong?'positive':''}">${x.stocks}</td><td class="num">${x.open}</td><td class="num">${x.sales}</td><td class="num">${x.cari}</td><td><button class="btn btn-outline" data-cloud-backup-restore="${esc(x.key)}">Bu Yedeği Geri Yükle</button></td></tr>`;
+  }
+  async function loadCloudBackupHistoryV680(){
+    const box=document.getElementById('cloudBackupHistoryListV680');if(!box)return;
+    box.innerHTML='<div class="notice">Bulut yedekleri taranıyor…</div>';
+    try{
+      const shallow=await cloudJsonV680(CLOUD_BACKUP_BASE+'.json?shallow=true');
+      const keys=Object.keys(shallow||{}).sort().reverse().slice(0,14);
+      if(!keys.length){box.innerHTML='<div class="notice">Bulut yedek kaydı bulunamadı.</div>';return;}
+      const rows=[];
+      for(const key of keys){rows.push(await cloudBackupStatV680(key));}
+      box.innerHTML=`<div class="notice"><strong>Salt okunur kontrol:</strong> Aşağıdaki liste yalnız yedekleri gösterir; “Geri Yükle” düğmesine basılmadan mevcut veri değişmez. Dünkü kayıtta barkodlu stok ve stok kartı sayısını özellikle kontrol edin.</div>
+      <div class="table-wrap" style="margin-top:10px"><table class="table"><thead><tr><th>Yedek</th><th class="num">Stok Kartı</th><th class="num">Barkodlu Stok</th><th class="num">Açık Stok</th><th class="num">Satış</th><th class="num">Cari Hrk.</th><th>İşlem</th></tr></thead><tbody>${rows.map(cloudBackupHistoryRowV680).join('')}</tbody></table></div>`;
+      box.querySelectorAll('[data-cloud-backup-restore]').forEach(btn=>btn.addEventListener('click',()=>restoreCloudBackupV680(btn.dataset.cloudBackupRestore,rows.find(x=>x.key===btn.dataset.cloudBackupRestore))));
+    }catch(err){box.innerHTML=`<div class="notice" style="border-color:#d66"><strong>Yedek geçmişi okunamadı:</strong> ${esc(err?.message||err)}</div>`;}
+  }
+  async function restoreCloudBackupV680(key,info){
+    const desc=info?`${info.cards} stok kartı, ${info.stocks} barkodlu stok, ${info.sales} satış, ${info.cari} cari hareket`:'seçilen yedek';
+    if(!confirm(`DİKKAT: ${info?.date?trDate(info.date):key} tarihli yedek TÜM SİSTEM verisinin yerine yüklenecek.\n\nYedek: ${desc}\n\nMevcut durum önce ayrıca güvenlik yedeğine alınacak. Devam edilsin mi?`))return;
+    const box=document.getElementById('cloudBackupHistoryListV680');if(box)box.insertAdjacentHTML('afterbegin','<div class="notice">Geri yükleme hazırlanıyor…</div>');
+    try{
+      await cloudBackupV5('GERİ YÜKLEME ÖNCESİ GÜVENLİK').catch(()=>false);
+      const raw=await cloudJsonV680(`${CLOUD_BACKUP_BASE}/${encodeURIComponent(key)}.json?v=${Date.now()}`);
+      const data=raw?.state||raw;
+      if(!data||typeof data!=='object'||!Array.isArray(data.stocks)||!Array.isArray(data.stockCardsMaster))throw new Error('Yedek yapısı doğrulanamadı');
+      cloudApplyingV5=true;
+      state=data;
+      ensureStateShape();ensureV5State();simplifyBankPosV55();ensureBankCariLinksV54();reconcileTransactionLedgerV5();
+      state.meta=state.meta||{};state.meta.updatedAt=now();state.meta.appVersion='6.80';
+      state.audits=Array.isArray(state.audits)?state.audits:[];
+      state.audits.unshift({id:uid('AUD'),date:now(),user:session?.name||'Sistem',module:'Yedek',action:`${info?.date?trDate(info.date):key} bulut yedeğinden tam sistem geri yüklendi · Stok kartı ${state.stockCardsMaster.length} · Barkodlu stok ${state.stocks.length}`,kind:'GERİ YÜKLEME'});
+      localStorage.setItem(LS_KEY,JSON.stringify(state));
+      cloudApplyingV5=false;
+      if(state.cloudSync?.enabled)await cloudPushV5(false).catch(()=>false);
+      toast('Bulut yedeği geri yüklendi','ok');render();
+    }catch(err){cloudApplyingV5=false;toast('Geri yükleme başarısız: '+(err?.message||err),'err');}
+  }
+
   function backupFileNameV664(){
     const d=new Date(),date=[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-'),time=String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0');
     return `ASIL_KUYUMCU_YEDEK_${date}_${time}.json`;
@@ -3970,6 +4035,11 @@ function stockSummaryView(){
           <div class="summary-row"><span>Günlük yedek</span><strong>${esc(state.meta?.lastDailyBackup||'—')}</strong></div>
           <div class="summary-row"><span>Haftalık yedek</span><strong>${esc(state.meta?.lastWeeklyBackup||'—')}</strong></div>
           <div class="summary-row"><span>Aylık yedek</span><strong>${esc(state.meta?.lastMonthlyBackup||'—')}</strong></div>
+        </div>
+        <div class="card"><div class="section-head"><h3>🕘 Bulut Yedek Geçmişi / Kurtarma</h3><span class="badge gold">DÜNÜ BUL</span></div>
+          <p class="muted">Günlük / haftalık / manuel bulut yedeklerini tarih ve kayıt adetleriyle karşılaştırır. Listelemek hiçbir veriyi değiştirmez.</p>
+          <button class="btn btn-primary" id="cloudBackupHistoryV680" style="width:100%;min-height:46px">BULUT YEDEKLERİNİ LİSTELE</button>
+          <div id="cloudBackupHistoryListV680" style="margin-top:10px"></div>
         </div>
         <div class="card"><div class="section-head"><h3>🔒 Sistem Güvenliği</h3><span class="badge green">AKTİF</span></div>
           <div class="summary-row"><span>Kullanıcı giriş şifreleri</span><strong>AKTİF</strong></div>
@@ -6072,6 +6142,7 @@ function stockSummaryView(){
   }
 
   function bindBackup(){
+    document.getElementById('cloudBackupHistoryV680')?.addEventListener('click',loadCloudBackupHistoryV680);
     document.getElementById('backupCloudPush')?.addEventListener('click',()=>cloudPushV5(true));
     document.getElementById('backupCloudPull')?.addEventListener('click',()=>cloudPullV5(true));
     document.getElementById('cloudBackupNow')?.addEventListener('click',async()=>{if(!v5Guard('canCloudSync'))return;const ok=await cloudBackupV5('MANUEL BULUT');toast(ok?'Manuel bulut yedeği alındı':'Bulut yedeği alınamadı',ok?'ok':'err');if(ok)audit('Manuel bulut yedeği alındı','Yedek');});
