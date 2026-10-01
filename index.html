@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101113" />
-  <meta name="description" content="Asil Kuyumcu Pro V6.87 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
+  <meta name="description" content="Asil Kuyumcu Pro V7.0 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.87</title>
+  <title>Asil Kuyumcu Pro V7.0</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -120,7 +120,7 @@ radial-gradient(circle at bottom left, rgba(98,168,255,.08), transparent 35%),va
 .price-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.price-card table{width:100%;border-collapse:collapse}.price-card th,.price-card td{padding:9px;border-bottom:1px solid #292e35;font-size:13px}.price-card input{width:100px;background:#101215;border:1px solid #31353c;border-radius:8px;color:#fff;padding:7px;text-align:right}
 
 .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.68);display:grid;place-items:center;padding:16px;z-index:100}.modal{width:min(720px,100%);max-height:90vh;overflow:auto;background:#14171b;border:1px solid #353a42;border-radius:20px;box-shadow:var(--shadow)}.modal-head{display:flex;justify-content:space-between;align-items:center;padding:18px 20px;border-bottom:1px solid var(--line)}.modal-head h3{margin:0}.modal-body{padding:20px}.modal-actions{display:flex;justify-content:flex-end;gap:10px;padding:16px 20px;border-top:1px solid var(--line)}
-/* V6.84 — Cari işlem ekranı tek ekranda kompakt kullanım */
+/* V7.0 — Cari işlem ekranı tek ekranda kompakt kullanım */
 .cari-move-modal{width:min(1040px,96vw);max-height:96vh;overflow:hidden}
 .cari-move-modal .modal-head{padding:10px 14px}
 .cari-move-modal .modal-body{padding:10px 14px;max-height:calc(96vh - 112px);overflow:auto}
@@ -401,7 +401,7 @@ body[data-theme="light"] .login-help{border-color:#d8dde3;color:#5f6975}
 body[data-theme="light"] .notice{border-color:#d9c181;background:#fff8e8}
 body[data-theme="light"] .label-preview{background:#fff;color:#111}
 
-/* === V6.13 BARKOD / ETİKET YAZICI MERKEZİ === */
+/* === V7.0 BARKOD / ETİKET YAZICI MERKEZİ === */
 .printer-toolbar{display:grid;grid-template-columns:minmax(220px,1.2fr) auto auto auto auto;gap:8px;align-items:center;margin:12px 0}
 .printer-status{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .printer-settings-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
@@ -427,7 +427,7 @@ body[data-theme="light"] .label-preview{background:#fff;color:#111}
 .jewel-label .jl-internal{left:0;top:6.15mm;font-size:1.55mm;letter-spacing:.03mm}
 .printer-preset-note{padding:10px 12px;border:1px solid #d1b56a;border-radius:10px;background:rgba(214,177,95,.08);font-size:12px;line-height:1.45}
 
-/* === V6.13 PUSULA TARZI SÜRÜKLE-BIRAK ETİKET EDİTÖRÜ === */
+/* === V7.0 PUSULA TARZI SÜRÜKLE-BIRAK ETİKET EDİTÖRÜ === */
 .label-layout-editor{grid-column:1/-1;border:1px solid var(--line);border-radius:14px;padding:14px;background:var(--panel-2)}
 .label-layout-editor .editor-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}
 .label-layout-editor .editor-head strong{font-size:14px}.label-layout-editor .editor-head small{color:var(--muted)}
@@ -585,7 +585,7 @@ body[data-theme="light"] .sale-entry-switch{background:#e8eceb}
 
 /* v5.18 — Cari ekstre: tek ekran, satır bazlı son durum */
 
-/* v6.5 — Cari işlem ekranında görünür cari bakiye */
+/* v7.0 — Cari işlem ekranında görünür cari bakiye */
 .cari-live-balance{border:1px solid #d7ad4a;background:rgba(214,177,95,.13);border-radius:14px;padding:12px 14px;margin-bottom:14px}
 .cari-live-balance-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
 .cari-live-balance-head strong{font-size:14px;letter-spacing:.02em}
@@ -747,18 +747,18 @@ body[data-theme="light"] .sale-search-results{background:#fff}
 }
 
 
-/* v6.10 Altın / Ziynet gerçek işlem merkezi */
+/* v7.0 Altın / Ziynet gerçek işlem merkezi */
 body[data-route="scrap"] .trade-actions .btn{min-height:54px;font-size:14px}
 
 
-/* v6.11 maliyet altı satış uyarısı */
+/* v7.0 maliyet altı satış uyarısı */
 .below-cost-box{border:2px solid #c53d49;background:rgba(197,61,73,.12);border-radius:16px;padding:18px}
 .below-cost-title{font-size:22px;font-weight:900;color:#ff737d;margin-bottom:12px;text-align:center}
 .below-cost-box p{margin:14px 0 0;text-align:center;font-weight:700}
 
 
 
-/* === V6.20 PC OKUNABİLİRLİK + UYUM / BANKA / E-FATURA === */
+/* === V7.0 PC OKUNABİLİRLİK + UYUM / BANKA / E-FATURA === */
 @media(min-width:821px){
 body[data-ui-mode="pc"]{font-size:16px;line-height:1.42}
 body[data-ui-mode="pc"] .sidebar{width:272px;padding-left:15px;padding-right:15px}
@@ -813,7 +813,7 @@ body[data-ui-mode="pc"] .user-chip .muted{font-size:13px!important}
 @media(max-width:1100px){.addon-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.addon-filterbar{grid-template-columns:1fr 1fr}}
 @media(max-width:720px){.addon-grid,.addon-filterbar{grid-template-columns:1fr}}
 
-/* === V6.30 MASAK RİSK + NFC KÖPRÜSÜ === */
+/* === V7.0 MASAK RİSK + NFC KÖPRÜSÜ === */
 .risk-hit{border:1px solid rgba(197,61,73,.5);background:rgba(197,61,73,.08);border-radius:12px;padding:12px;margin:8px 0}
 .risk-review{border:1px solid rgba(214,177,95,.55);background:rgba(214,177,95,.08);border-radius:12px;padding:12px;margin:8px 0}
 .risk-clean{border:1px solid rgba(42,157,91,.45);background:rgba(42,157,91,.07);border-radius:12px;padding:12px;margin:8px 0}
@@ -863,7 +863,7 @@ body[data-theme="dark"] .metric .foot,
 body[data-theme="dark"] .table th{color:#c9cfd7}
 
 
-/* v6.67 — PC ekranlarında daha kompakt çalışma düzeni */
+/* v7.0 — PC ekranlarında daha kompakt çalışma düzeni */
 body[data-ui-mode="pc"] .content{padding:14px 18px 20px}
 body[data-ui-mode="pc"] .content .page-title{margin-bottom:10px}
 body[data-ui-mode="pc"] .content .page-title h1{font-size:24px;line-height:1.1;margin-bottom:4px}
@@ -894,7 +894,7 @@ body[data-ui-mode="pc"] .stock-card-box{padding:10px}
 .stock-card-order-hint{font-size:11px;color:var(--muted);margin-top:6px}
 </style>
 <style id="simple-interface-v645">
-/* v6.45 — readable horizontal workspace; business and print logic unchanged */
+/* v7.0 — readable horizontal workspace; business and print logic unchanged */
 @media screen {
 body[data-theme="light"]{--bg:#f7f7f5;--panel:#fff;--panel-2:#f5f5f2;--panel-3:#eeefec;--line:#dcdedb;--text:#242a31;--muted:#626b76;--gold:#af8b32;--gold-2:#8a661d;--green:#147c4c;--red:#c73940;--shadow:0 12px 36px #18202b12;background:var(--bg);color:var(--text)}
 body[data-ui-mode] {font-size:16px;line-height:1.45}
@@ -1354,7 +1354,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
 
   async function load(){
-    // V6.83+: Öncelik büyük kapasiteli IndexedDB. Eski localStorage kayıtları otomatik taşınır.
+    // V7.0+: Öncelik büyük kapasiteli IndexedDB. Eski localStorage kayıtları otomatik taşınır.
     try{
       const big=await idbGetStateV681();
       if(big&&typeof big==='object'&&Array.isArray(big.stocks)){
@@ -1550,7 +1550,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     state.printerSettings = state.printerSettings || {};
     const psDefaults={mode:'qz',mediaMode:'roll',printerName:'',labelWidthMm:50,labelHeightMm:25,gapMm:2,columns:3,pageMarginMm:8,marginTopMm:0,marginRightMm:0,marginBottomMm:0,marginLeftMm:0,orientation:'portrait',copies:1,dpi:203,fontScale:100,showName:true,showCode:true,showKarat:true,showWeight:true,showPusulaCode:true,showSaleHas:false,showSaleTl:false,showModel:false,autoPrintAfterBarcode:false,qzScriptUrl:'https://cdn.jsdelivr.net/npm/qz-tray@2.3.0/qz-tray.js',qzSignerScriptUrl:'https://cdnjs.cloudflare.com/ajax/libs/jsrsasign/11.1.0/jsrsasign-all-min.js'};
     Object.entries(psDefaults).forEach(([k,v])=>{if(state.printerSettings[k]===undefined||state.printerSettings[k]===null)state.printerSettings[k]=v;});
-    // v6.17: QZ imzalı sessiz baskı desteği; özel anahtar yalnız bu tarayıcıda yerel olarak saklanır.
+    // v7.0: QZ imzalı sessiz baskı desteği; özel anahtar yalnız bu tarayıcıda yerel olarak saklanır.
     if(Number(state.printerSettings.directPrintVersion||0)<1){state.printerSettings.mode='qz';state.printerSettings.directPrintVersion=1;}
     const legacyPrinter=state.systemParameters?.find?.(x=>x.key==='barcodePrinter')?.value;
     if(!state.printerSettings.printerName && legacyPrinter && !/^BarYaz$/i.test(String(legacyPrinter))) state.printerSettings.printerName=String(legacyPrinter);
@@ -2122,7 +2122,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.83</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
+        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v7.0</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
         <nav class="nav" aria-label="Ana menü">${['dashboard','sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={dashboard:'Ana Menü',sales:'Satış',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
         <details class="more-nav"><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['dashboard','sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
       </aside>
@@ -3260,7 +3260,7 @@ function stockSummaryView(){
     state.meta.wrongCariOffsetsRollbackV676={date:now(),removedMoves:bad.length,restoredMoves:restored};
     if(bad.length){
       state.audits=Array.isArray(state.audits)?state.audits:[];
-      state.audits.unshift({id:uid('AUD'),date:now(),user:'Sistem',module:'Cari',action:`Yanlış v6.74/v6.75 toplu mahsup geri alındı · ${bad.length} yapay hareket kaldırıldı · gerçek cari bakiyeleri geri getirildi.`,kind:'DÜZELTME'});
+      state.audits.unshift({id:uid('AUD'),date:now(),user:'Sistem',module:'Cari',action:`Yanlış v7.0/v7.0 toplu mahsup geri alındı · ${bad.length} yapay hareket kaldırıldı · gerçek cari bakiyeleri geri getirildi.`,kind:'DÜZELTME'});
     }
     return {changed:bad.length>0,count:bad.length};
   }
@@ -3551,7 +3551,7 @@ function stockSummaryView(){
   }
 
   function syncSystemParametersV648(){
-    // v6.66: Eski Pusula parametreleri artık program davranışını geri planda ezmez.
+    // v7.0: Eski Pusula parametreleri artık program davranışını geri planda ezmez.
     // Gerçek ayarlar Sistem Ayarları, Personel, Yazıcı ve Yedek merkezlerinden yönetilir.
     state.settings=state.settings||{};
     state.printerSettings=state.printerSettings||{};
@@ -6400,7 +6400,7 @@ function stockSummaryView(){
     document.getElementById('dayCloseV6')?.addEventListener('click',openDayCloseV6);
     document.getElementById('exportReport')?.addEventListener('click',()=>{
       const r=reportStats(), sv=stockValuationReport(), aging=cariAgingReport(), expenses=reportExpenseGroups(), personnel=personnelProfitRows(r.sales), pos=managementPositionReport(), health=systemHealthReport();
-      const rows=[['ASIL KUYUMCU PRO V6.73 — HAS YÖNETİM RAPORU'],['Dönem',reportFilters.range==='month'?reportFilters.month:state.activePeriod],[],['ÖZET','HAS','TL'],['Satış Karşılığı',r.revenueHas.toFixed(4),r.revenueTl.toFixed(2)],['Satılan Mal Maliyeti',r.cogsHas.toFixed(4),(r.cogsHas*r.closeRate).toFixed(2)],['Brüt Kâr',r.grossHas.toFixed(4),(r.grossHas*r.closeRate).toFixed(2)],['Gider + POS',(r.expHas+r.feeHas).toFixed(4),(r.expTl+r.feeTl).toFixed(2)],['Döviz Gerçekleşen K/Z',r.realizedFxPlHas.toFixed(4),r.realizedFxPlTl.toFixed(2)],['NET KÂR',r.netHas.toFixed(4),r.adjustedTl.toFixed(2)],['Değerleme Farkı','',r.valuationDiff.toFixed(2)],[],['STOK DEĞERLEME','HAS'],['Barkodlu',sv.barcodeCost.toFixed(4)],['Açık/Barkodsuz',sv.openCost.toFixed(4)],['Hurda',sv.scrapCost.toFixed(4)],['Toplam',sv.totalCost.toFixed(4)],[],['YÖNETİM POZİSYONU','HAS'],['Fiziksel Altın',pos.sv.totalPhysical.toFixed(4)],['Cari HAS Net',Number(pos.cari.HAS||0).toFixed(4)],['Parasal Pozisyon HAS',pos.monetaryHas.toFixed(4)],['NET POZİSYON',pos.netHas.toFixed(4)],[],['SİSTEM SAĞLIĞI','Seviye','Açıklama'],...health.issues.map(x=>[x.title,x.level,x.detail]),[],['SATIŞLAR','Tarih','Belge','Müşteri','Personel','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS','Durum'],...r.sales.map(s=>['',trDate(s.date),s.docNo||s.id,state.customers.find(c=>c.id===s.customerId)?.name||'',s.salesperson,Number(s.total||0).toFixed(2),saleRevenueHas(s).toFixed(4),saleCostHas(s).toFixed(4),(saleRevenueHas(s)-saleCostHas(s)).toFixed(4),s.status]),[],['PERSONEL','Fiş','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS'],...personnel.map(x=>[x.name,x.count,x.salesTl.toFixed(2),x.revenueHas.toFixed(4),x.costHas.toFixed(4),x.profitHas.toFixed(4)]),[],['CARİ YAŞLANDIRMA','Tür','Bakiye','TL Eşdeğer','En Eski Gün'],...aging.details.map(x=>[x.name,x.type,x.parts,x.totalTl.toFixed(2),x.oldest]),[],['BANKA/POS GİDERLERİ','Hareket','TL'],...expenses.map(x=>[x.name,x.count,x.tl.toFixed(2)])];
+      const rows=[['ASIL KUYUMCU PRO V7.0 — HAS YÖNETİM RAPORU'],['Dönem',reportFilters.range==='month'?reportFilters.month:state.activePeriod],[],['ÖZET','HAS','TL'],['Satış Karşılığı',r.revenueHas.toFixed(4),r.revenueTl.toFixed(2)],['Satılan Mal Maliyeti',r.cogsHas.toFixed(4),(r.cogsHas*r.closeRate).toFixed(2)],['Brüt Kâr',r.grossHas.toFixed(4),(r.grossHas*r.closeRate).toFixed(2)],['Gider + POS',(r.expHas+r.feeHas).toFixed(4),(r.expTl+r.feeTl).toFixed(2)],['Döviz Gerçekleşen K/Z',r.realizedFxPlHas.toFixed(4),r.realizedFxPlTl.toFixed(2)],['NET KÂR',r.netHas.toFixed(4),r.adjustedTl.toFixed(2)],['Değerleme Farkı','',r.valuationDiff.toFixed(2)],[],['STOK DEĞERLEME','HAS'],['Barkodlu',sv.barcodeCost.toFixed(4)],['Açık/Barkodsuz',sv.openCost.toFixed(4)],['Hurda',sv.scrapCost.toFixed(4)],['Toplam',sv.totalCost.toFixed(4)],[],['YÖNETİM POZİSYONU','HAS'],['Fiziksel Altın',pos.sv.totalPhysical.toFixed(4)],['Cari HAS Net',Number(pos.cari.HAS||0).toFixed(4)],['Parasal Pozisyon HAS',pos.monetaryHas.toFixed(4)],['NET POZİSYON',pos.netHas.toFixed(4)],[],['SİSTEM SAĞLIĞI','Seviye','Açıklama'],...health.issues.map(x=>[x.title,x.level,x.detail]),[],['SATIŞLAR','Tarih','Belge','Müşteri','Personel','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS','Durum'],...r.sales.map(s=>['',trDate(s.date),s.docNo||s.id,state.customers.find(c=>c.id===s.customerId)?.name||'',s.salesperson,Number(s.total||0).toFixed(2),saleRevenueHas(s).toFixed(4),saleCostHas(s).toFixed(4),(saleRevenueHas(s)-saleCostHas(s)).toFixed(4),s.status]),[],['PERSONEL','Fiş','Satış TL','Satış HAS','Maliyet HAS','Kâr HAS'],...personnel.map(x=>[x.name,x.count,x.salesTl.toFixed(2),x.revenueHas.toFixed(4),x.costHas.toFixed(4),x.profitHas.toFixed(4)]),[],['CARİ YAŞLANDIRMA','Tür','Bakiye','TL Eşdeğer','En Eski Gün'],...aging.details.map(x=>[x.name,x.type,x.parts,x.totalTl.toFixed(2),x.oldest]),[],['BANKA/POS GİDERLERİ','Hareket','TL'],...expenses.map(x=>[x.name,x.count,x.tl.toFixed(2)])];
       downloadText(rows.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(';')).join('\n'),`asil_yonetim_raporu_${reportFilters.range==='month'?reportFilters.month:state.activePeriod}.csv`,'text/csv;charset=utf-8');audit('Genişletilmiş HAS yönetim raporu dışa aktarıldı','Rapor');
     });
   }
@@ -6977,7 +6977,7 @@ function stockSummaryView(){
   }
 
 
-  /* === V6.21 BAĞIMSIZ MASAK MÜŞTERİSİ + KİMLİK BELGESİ + RİSK TARAMA ALTYAPISI === */
+  /* === V7.0 BAĞIMSIZ MASAK MÜŞTERİSİ + KİMLİK BELGESİ + RİSK TARAMA ALTYAPISI === */
   const KYC_LOCAL_KEY='asil_kuyumcu_pro_kyc_v2';
   const KYC_OLD_LOCAL_KEY='asil_kuyumcu_pro_kyc_v1';
   const KYC_DB_NAME='asil_kuyumcu_secure_v1';
@@ -7524,7 +7524,7 @@ function stockSummaryView(){
   loadAddonLocalData();
   ensureMilyemPlusAddons();
 
-  /* === V6.44 TAMİR / SERVİS + TERMAL FİŞ YAZDIRMA === */
+  /* === V7.0 TAMİR / SERVİS + TERMAL FİŞ YAZDIRMA === */
   function ensureRepairReceiptV644(){
     state.repairs=Array.isArray(state.repairs)?state.repairs:[];
     state.settings=state.settings||{};
@@ -7737,7 +7737,7 @@ function stockSummaryView(){
       var old={mode:p.mode,printerName:p.printerName,widthMm:p.widthMm,copies:p.copies};
       try{
         p.mode=document.getElementById('rpMode').value;p.printerName=document.getElementById('rpName').value;p.widthMm=Number(document.getElementById('rpWidth').value||80);p.copies=1;
-        await printReceiptHtmlV644(receiptDocV644('TEST FİŞİ','TEST-'+Date.now(),now(),'','<div class="center"><b>ACLAS / FİŞ YAZICISI TESTİ</b><br>Asil Kuyumcu Pro · V6.73</div>','Test baskısı'),'Test fişi');
+        await printReceiptHtmlV644(receiptDocV644('TEST FİŞİ','TEST-'+Date.now(),now(),'','<div class="center"><b>ACLAS / FİŞ YAZICISI TESTİ</b><br>Asil Kuyumcu Pro · V7.0</div>','Test baskısı'),'Test fişi');
       }finally{Object.assign(p,old);}
     });
   }
