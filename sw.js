@@ -42,8 +42,11 @@ self.addEventListener('fetch',e=>{
       const ct=r.headers.get('content-type')||'';
       if(!ct.includes('text/html')) return r;
       const text=await r.text();
-      if(text.includes('ufuk-cari-sw-fix')) return new Response(text,{status:r.status,statusText:r.statusText,headers:r.headers});
-      return new Response(text.replace('</body>',CARI_FIX+'</body>'),{status:r.status,statusText:r.statusText,headers:r.headers});
+      const headers=new Headers(r.headers);
+      headers.delete('content-length');
+      headers.delete('content-encoding');
+      if(text.includes('ufuk-cari-sw-fix')) return new Response(text,{status:r.status,statusText:r.statusText,headers:headers});
+      return new Response(text.replace('</body>',CARI_FIX+'</body>'),{status:r.status,statusText:r.statusText,headers:headers});
     }).catch(()=>caches.match('./index.html')));
     return;
   }
