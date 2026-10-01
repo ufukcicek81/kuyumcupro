@@ -7858,5 +7858,74 @@ function stockSummaryView(){
 })();
 
   </script>
+<style id="ufuk-cari-safe-css">
+/* UFUK_CARI_SAFE_FILTER_20261001 */
+#cariCardGrid{gap:8px!important;align-items:start!important}
+#cariCardGrid>.card{padding:10px!important;margin:0!important;min-height:0!important}
+#cariCardGrid>.card .section-head{margin-bottom:4px!important}
+#cariCardGrid>.card .summary-row{padding:2px 0!important}
+#cariCardGrid>.card .muted{margin-bottom:3px!important}
+#cariCardGrid>.card .btn{min-height:30px!important;padding:5px 8px!important}
+@media(min-width:1200px){#cariCardGrid{grid-template-columns:repeat(4,minmax(0,1fr))!important}}
+@media(min-width:900px) and (max-width:1199px){#cariCardGrid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+</style>
+<script id="ufuk-cari-safe-js">
+/* UFUK_CARI_SAFE_FILTER_20261001 */
+(function(){
+  "use strict";
+  var bound=new WeakSet();
+  function tx(e){return ((e&&e.textContent)||"").replace(/\s+/g," ").trim().toLocaleLowerCase("tr-TR")}
+  function typeOf(t){
+    if(t==="tümü")return "Tümü";
+    if(t==="müşteri")return "Müşteri";
+    if(t==="toptancı"||t==="toptanci")return "Toptancı";
+    if(t==="banka")return "Banka";
+    if(t==="özel")return "Özel";
+    return null;
+  }
+  function findInput(){return document.querySelector('#cariCardSearch,input[placeholder*="Cari /"],input[placeholder*="Cari"]')}
+  function findGrid(input){
+    var p=input&&input.parentElement;
+    for(var i=0;i<7&&p;i++,p=p.parentElement){
+      if(p.querySelectorAll('[class*="card"]').length>=4)return p;
+    }
+    return null;
+  }
+  function cardType(card){
+    var t=tx(card);
+    if(/(^| )toptancı( |$)|(^| )toptanci( |$)/.test(t))return "Toptancı";
+    if(/(^| )banka( |$)/.test(t))return "Banka";
+    if(/(^| )özel( |$)/.test(t))return "Özel";
+    if(/(^| )müşteri( |$)|(^| )musteri( |$)/.test(t))return "Müşteri";
+    return null;
+  }
+  function filter(type){
+    var input=findInput(); if(!input)return;
+    var grid=findGrid(input); if(!grid)return;
+    var cards=grid.querySelectorAll('.card');
+    cards.forEach(function(c){
+      if(c.contains(input))return;
+      var ct=cardType(c);
+      if(ct)c.style.display=(type==="Tümü"||ct===type)?"":"none";
+    });
+  }
+  function bind(){
+    var input=findInput(); if(!input)return;
+    var p=input.parentElement;
+    for(var i=0;i<5&&p;i++,p=p.parentElement){
+      var bs=p.querySelectorAll('button');
+      if(bs.length<3)continue;
+      bs.forEach(function(b){
+        if(bound.has(b))return;
+        var typ=typeOf(tx(b)); if(!typ)return;
+        bound.add(b);
+        b.addEventListener('click',function(){setTimeout(function(){filter(typeOf(tx(b))||"Tümü")},0)});
+      });
+      break;
+    }
+  }
+  document.addEventListener('DOMContentLoaded',function(){bind();setTimeout(bind,300);setTimeout(bind,1000)});
+})();
+</script>
 </body>
 </html>
