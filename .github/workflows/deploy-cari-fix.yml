@@ -1,0 +1,58 @@
+name: Deploy tested cari fix
+on:
+  push:
+    branches: [main]
+    paths:
+      - cari-fix-final.js
+permissions:
+  contents: write
+jobs:
+  test-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore known stable application
+        run: git checkout e6275e72ac00c7128c45e82e9a2088a79aa7dd88 -- index.html
+      - name: Test JavaScript
+        run: node --check cari-fix-final.js
+      - name: Test application structure
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('index.html').read_text(encoding='utf-8')
+          required=['cariCardGrid','Cari Çağır','Müşteri','Toptancı','Banka','Özel']
+          missing=[x for x in required if x not in s]
+          if missing:
+              raise SystemExit('Cari UI test failed: missing '+', '.join(missing))
+          print('Stable application structure: PASS')
+          PY
+      - name: Install tested cari fix
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace('Asil Kuyumcu Pro V6.86','Asil Kuyumcu Pro V6.87')
+          s=s.replace('V6.86','V6.87')
+          s=s.replace('v6.86','v6.87')
+          tag='<script src="./cari-fix-final.js"></script>'
+          if tag not in s:
+              pos=s.rfind('</body>')
+              if pos<0:
+                  raise SystemExit('Cannot find </body>')
+              s=s[:pos]+tag+s[pos:]
+          p.write_text(s,encoding='utf-8')
+          PY
+          grep -q 'cari-fix-final.js' index.html
+          node --check cari-fix-final.js
+          git diff --check
+      - name: Commit only after tests pass
+        run: |
+          git config user.name "Asil Kuyumcu CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add index.html
+          git diff --cached --quiet && exit 0
+          git commit -m "v6.87 cari filtreleri ve kompakt kartlar"
+          git push origin HEAD:main
