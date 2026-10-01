@@ -1,0 +1,148 @@
+name: Fix Cari UI
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix-cari-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply compact cari filters
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('index.html')
+          text = path.read_text(encoding='utf-8')
+          marker = 'UFUK_CARI_UI_COMPACT_FILTER_20261001'
+          if marker in text:
+              print('Cari UI patch already applied.')
+              raise SystemExit(0)
+
+          css = r'''<style id="ufuk-cari-ui-compact">
+/* UFUK_CARI_UI_COMPACT_FILTER_20261001 */
+#cariCardGrid{gap:10px!important;align-items:start!important}
+#cariCardGrid>.card{margin:0!important;padding:11px!important;min-height:0!important}
+#cariCardGrid>.card .section-head{margin-bottom:5px!important}
+#cariCardGrid>.card .section-head h3{font-size:15px!important;line-height:1.2!important;margin:0!important}
+#cariCardGrid>.card .muted{font-size:11px!important;margin-bottom:5px!important}
+#cariCardGrid>.card .summary-row{padding:3px 0!important;min-height:0!important}
+#cariCardGrid>.card .summary-row span{font-size:11px!important}
+#cariCardGrid>.card .summary-row strong{font-size:12px!important}
+#cariCardGrid>.card .badge{font-size:10px!important;padding:3px 6px!important}
+#cariCardGrid>.card>div[style*="display:flex"]{margin-top:8px!important}
+#cariCardGrid>.card .btn{min-height:32px!important;padding:6px 9px!important;font-size:11px!important}
+@media(min-width:1200px){#cariCardGrid{grid-template-columns:repeat(4,minmax(0,1fr))!important}}
+@media(min-width:900px) and (max-width:1199px){#cariCardGrid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+</style>'''
+
+          js = r'''<script id="ufuk-cari-ui-filter-script">
+/* UFUK_CARI_UI_COMPACT_FILTER_20261001 */
+(function(){
+  'use strict';
+  function id(x){return document.getElementById(x)}
+  function norm(x){return String(x||'').trim().toLocaleLowerCase('tr-TR')}
+  function applyCariFilters(){
+    var grid=id('cariCardGrid');
+    if(!grid)return;
+    var search=id('cariCardSearch');
+    var q=norm(search&&search.value);
+    var active=window.cariTypeFilter||'Müşteri';
+    var visible=0;
+    grid.querySelectorAll('[data-cari-card]').forEach(function(card){
+      var type=norm(card.getAttribute('data-cari-type'));
+      var hay=norm(card.getAttribute('data-cari-search')||card.textContent);
+      var typeOk=active==='Tümü'||type===norm(active);
+      var searchOk=!q||hay.indexOf(q)>=0;
+      var ok=typeOk&&searchOk;
+      card.style.display=ok?'':'none';
+      if(ok)visible++;
+    });
+    document.querySelectorAll('[data-cari-type-filter]').forEach(function(btn){
+      var on=btn.getAttribute('data-cari-type-filter')===active;
+      btn.classList.toggle('btn-primary',on);
+      btn.classList.toggle('btn-outline',!on);
+      btn.setAttribute('aria-pressed',on?'true':'false');
+    });
+    var count=id('cariCardCount');
+    if(count)count.textContent=visible+' cari';
+  }
+  function bindCariUI(){
+    var grid=id('cariCardGrid');
+    if(!grid)return;
+    if(!window.__ufukCariDelegation){
+      window.__ufukCariDelegation=true;
+      document.addEventListener('click',function(e){
+        var btn=e.target.closest('[data-cari-type-filter]');
+        if(btn){
+          e.preventDefault();
+          window.cariTypeFilter=btn.getAttribute('data-cari-type-filter')||'Tümü';
+          applyCariFilters();
+          return;
+        }
+        if(e.target.closest('#cariCardClear')){
+          var s=id('cariCardSearch'); if(s)s.value='';
+          window.cariTypeFilter='Tümü';
+          applyCariFilters();
+        }
+      });
+      document.addEventListener('input',function(e){
+        if(e.target&&e.target.id==='cariCardSearch')applyCariFilters();
+      });
+    }
+    applyCariFilters();
+  }
+  var oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==='function'&&!window.__ufukCariRenderWrapped){
+    window.__ufukCariRenderWrapped=true;
+    window.renderAll=function(){
+      var r=oldRenderAll.apply(this,arguments);
+      setTimeout(bindCariUI,0);
+      setTimeout(bindCariUI,80);
+      return r;
+    };
+  }
+  var oldRender=window.render;
+  if(typeof oldRender==='function'&&!window.__ufukCariRenderWrapped2){
+    window.__ufukCariRenderWrapped2=true;
+    window.render=function(){
+      var r=oldRender.apply(this,arguments);
+      setTimeout(bindCariUI,0);
+      setTimeout(bindCariUI,80);
+      return r;
+    };
+  }
+  document.addEventListener('DOMContentLoaded',function(){setTimeout(bindCariUI,50);setTimeout(bindCariUI,300)});
+  window.addEventListener('load',function(){setTimeout(bindCariUI,50);setTimeout(bindCariUI,300)});
+  var mo=new MutationObserver(function(){if(id('cariCardGrid'))bindCariUI()});
+  document.addEventListener('DOMContentLoaded',function(){mo.observe(document.body,{childList:true,subtree:true})});
+})();
+</script>'''
+
+          injection = css + '\n' + js + '\n'
+          marker_pos = text.rfind('</body>')
+          if marker_pos >= 0:
+              text = text[:marker_pos] + injection + text[marker_pos:]
+          else:
+              text += '\n' + injection
+          path.write_text(text, encoding='utf-8')
+          print('Cari UI patch applied.')
+
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "v6.87 cari kart filtre ve kompakt görünüm"
+            git push
+          fi
