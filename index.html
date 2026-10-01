@@ -6413,7 +6413,7 @@ function stockSummaryView(){
       const r=await fetch(CLOUD_STATE_URL,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
       if(!r.ok)throw new Error(`HTTP ${r.status}`);
       state.cloudSync.lastStatus='Bağlı';state.cloudSync.encrypted=false;state.cloudSync.encryptionMigrationPending=false;state.cloudSync.lastPush=now();
-      localStorage.setItem(LS_KEY,JSON.stringify(state));
+      persistStateBackgroundV681(state);
       if(manual){toast('Merkezi buluta gönderildi');render();}
       return true;
     }catch(e){
