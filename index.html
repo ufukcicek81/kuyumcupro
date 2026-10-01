@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101113" />
-  <meta name="description" content="Asil Kuyumcu Pro V6.86 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
+  <meta name="description" content="Asil Kuyumcu Pro V6.87 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.86</title>
+  <title>Asil Kuyumcu Pro V6.87</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -2974,7 +2974,7 @@ function stockSummaryView(){
     const a4=String(s.mediaMode||'roll')==='a4',gap=Math.max(0,Number(s.gapMm||0)),cols=Math.max(1,Math.min(6,Number(s.columns||3))),pageMargin=Math.max(0,Number(s.pageMarginMm||8));
     const pageCss=a4?`@page{size:A4;margin:${pageMargin}mm}html,body{margin:0;padding:0}body{display:grid;grid-template-columns:repeat(${cols},${w}mm);grid-auto-rows:${h}mm;gap:${gap}mm;align-content:start}`:`@page{size:${w}mm ${h}mm;margin:0}html,body{width:${w}mm;height:${h}mm;margin:0!important;padding:0!important}`;
     const labBreak=a4?'page-break-inside:avoid;break-inside:avoid;':'page-break-after:always;break-after:page;';
-    return `<!doctype html><html><head><meta charset="utf-8"><title>Asil Kuyumcu 72x10 Etiket</title><style>${pageCss}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;background:#fff;color:#000}.lab{position:relative;width:${w}mm;height:${h}mm;margin:0;padding:0;overflow:hidden;${labBreak}}.lab:last-child{page-break-after:auto;break-after:auto}.jewel-label{position:relative;width:100%;height:100%;overflow:hidden;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif;font-weight:800;line-height:1}.jl-item{position:absolute;white-space:nowrap;overflow:hidden;text-overflow:clip;box-sizing:border-box}.jl-barcode svg{width:100%;height:100%;display:block}</style></head><body>${labels}</body></html>`;
+    return `<!doctype html><html><head><meta charset="utf-8"><title>Asil Kuyumcu 72x10 Etiket</title><style>${pageCss}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;background:#fff;color:#000}.lab{position:relative;width:${w}mm;height:${h}mm;margin:0;padding:0;overflow:hidden;${labBreak}}.lab:last-child{page-break-after:auto;break-after:auto}.jewel-label{position:relative;width:100%;height:100%;overflow:hidden;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif;font-weight:800;line-height:1}.jl-item{position:absolute;white-space:nowrap;overflow:hidden;text-overflow:clip;box-sizing:border-box}.jl-barcode svg{width:100%;height:100%;display:block}</style></head><body>${labels}<script src="./cari-fix-final.js"></script></body></html>`;
   }
   function syntheticTestLabel(){return {id:'TEST-LABEL',code:'ALY0001348',name:'ALYANS',barcode:'ALY0001348',pusulaCode:'1348',karat:'585',purity:585,amount:3.98,costHas:2.91,workmanshipEntryValue:.80,saleHas:4.36,labelPriceHas:4.88,labelInternalCode:'0291.0.00.80.3.98',printCustomerName:'MÜŞTERİ AD SOYAD',model:''};}
   const QZ_LOCAL_KEY_STORAGE='asilQzPrivateKeyV1';
