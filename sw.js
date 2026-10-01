@@ -1,4 +1,4 @@
-const C='asil-v6-77-bilanco-korumali-eski-bakiye-20260930';
+const C='asil-v6-78-cari-altin-ziynet-20261001';
 self.addEventListener('install',e=>{
   self.skipWaiting();
   e.waitUntil(caches.open(C).then(c=>c.addAll(['./','./index.html'])));
