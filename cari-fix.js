@@ -7,6 +7,12 @@
   let query='';
   const norm=v=>String(v||'').trim().toLocaleLowerCase('tr-TR');
   const esc=v=>String(v||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  function syncVersion(){
+    document.querySelectorAll('body *').forEach(el=>{
+      if(el.children.length===0 && /V6\.\d+/i.test(el.textContent||'')) el.textContent=el.textContent.replace(/V6\.\d+/ig,'V6.94');
+    });
+    if(document.title && /V6\.\d+/i.test(document.title)) document.title=document.title.replace(/V6\.\d+/ig,'V6.94');
+  }
   function isCariPage(){ return [...document.querySelectorAll('h1,h2,h3')].some(x=>norm(x.textContent).includes('cari hesap işlemleri')); }
   function typeOfCard(card){
     const badges=[...card.querySelectorAll('.badge')];
@@ -47,7 +53,7 @@
       document.head.appendChild(s);
     }
   }
-  function run(){compact();makeBar();apply()}
+  function run(){syncVersion();compact();makeBar();apply()}
   let timer=0; const schedule=()=>{clearTimeout(timer);timer=setTimeout(run,80)};
   document.addEventListener('DOMContentLoaded',run); window.addEventListener('load',run);
   new MutationObserver(schedule).observe(document.documentElement,{childList:true,subtree:true});
