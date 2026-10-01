@@ -1,41 +1,29 @@
-const C='asil-v6-94-cari-filter-safe-20261001';
+/* ASIL KUYUMCU PRO - SAFE SERVICE WORKER V6.95
+   This worker intentionally does not rewrite HTML or inject scripts.
+   It only clears old caches and unregisters itself. */
+const VERSION = 'asil-safe-v6-95';
 
 self.addEventListener('install', event => {
-  event.waitUntil(self.skipWaiting());
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
-    const keys = await caches.keys();
-    await Promise.all(keys.map(k => caches.delete(k)));
-    await self.clients.claim();
+    try {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(key => caches.delete(key)));
+    } catch (_) {}
+    try {
+      await self.registration.unregister();
+    } catch (_) {}
+    try {
+      const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      clients.forEach(client => client.postMessage({ type: 'ASIL_SAFE_SW_CLEARED', version: VERSION }));
+    } catch (_) {}
   })());
 });
 
-function htmlResponse(response, html){
-  const headers=new Headers(response.headers);
-  headers.delete('content-length');
-  headers.delete('content-encoding');
-  headers.delete('content-range');
-  headers.delete('etag');
-  return new Response(html,{status:response.status,statusText:response.statusText,headers});
-}
-
 self.addEventListener('fetch', event => {
-  const request=event.request;
-  const url=new URL(request.url);
-  if(url.origin!==self.location.origin) return;
-  if(request.method!=='GET'||url.pathname.startsWith('/api/')) return;
-
-  event.respondWith((async()=>{
-    const response=await fetch(request,{cache:'no-store'});
-    const type=response.headers.get('content-type')||'';
-    const isHtml=type.includes('text/html')&&(url.pathname.endsWith('/')||url.pathname.endsWith('/index.html'));
-    if(!isHtml) return response;
-    try{
-      const html=await response.text();
-      const injected=html.replace(/<\/body>/i,'<script src="./cari-fix.js?v=692"></script></body>');
-      return htmlResponse(response,injected);
-    }catch(e){return response;}
-  })());
+  // Never intercept or modify application requests.
+  return;
 });
