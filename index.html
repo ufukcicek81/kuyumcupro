@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101113" />
-  <meta name="description" content="Asil Kuyumcu Pro V6.85 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
+  <meta name="description" content="Asil Kuyumcu Pro V6.86 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.85</title>
+  <title>Asil Kuyumcu Pro V6.86</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -133,6 +133,7 @@ radial-gradient(circle at bottom left, rgba(98,168,255,.08), transparent 35%),va
 .cari-move-modal .labelled label{font-size:11px}
 .cari-move-modal .input,.cari-move-modal .select{padding:8px 9px;min-height:36px}
 .cari-move-modal #cmGoldWrap .form-grid,.cari-move-modal #cmReturnWrap .form-grid{grid-template-columns:repeat(6,minmax(0,1fr));gap:7px}
+.cari-move-modal #cmOpenHistory{white-space:nowrap;padding:6px 10px;font-size:12px}
 .cari-move-modal #cmGoldWrap .form-grid .span-2,.cari-move-modal #cmReturnWrap .form-grid .span-2{grid-column:span 2}
 .cari-move-modal #cmGoldWrap,.cari-move-modal #cmReturnWrap{border:1px solid var(--line);border-radius:12px;padding:8px;background:var(--panel-2)}
 .cari-move-modal #cmGoldWrap .labelled,.cari-move-modal #cmReturnWrap .labelled{min-width:0}
@@ -5782,7 +5783,7 @@ function stockSummaryView(){
       add('TL',displayTl,'TL');
       Object.entries(c.otherBalances||{}).filter(([,v])=>Math.abs(Number(v||0))>.000001).forEach(([u,v])=>add(String(u).toUpperCase(),Number(v||0),String(u).toUpperCase()));
     }
-    return `<div class="cari-live-balance"><div class="cari-live-balance-head"><strong>CARİ BAKİYESİ</strong><span>${esc(c.name)} · ${esc(c.type||'Cari')}</span></div><div class="cari-live-balance-values">${items.join('')}</div></div>`;
+    return `<div class="cari-live-balance"><div class="cari-live-balance-head"><strong>CARİ BAKİYESİ</strong><span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>${esc(c.name)} · ${esc(c.type||'Cari')}</span><button type="button" class="btn btn-outline btn-sm" id="cmOpenHistory">İŞLEM GEÇMİŞİ</button></span></div><div class="cari-live-balance-values">${items.join('')}</div></div>`;
   }
 
   function openCariMove(id,editMoveId=''){
@@ -5914,6 +5915,7 @@ function stockSummaryView(){
       if(!bankCariTransfer)registerTransactionV5(cariMoveLabel(def),move.sourceDocNo,`${c.name} · ${counterEnabled?conversionText:(qty(postingAmount)+' '+postingUnit)}`,{amountHas:postingUnit==='HAS'?postingAmount:0,amountTl:postingUnit==='TL'?postingAmount:0});
       audit(`${c.name} cari hesabı: ${cariMoveLabel(def)} ${counterEnabled?conversionText:(qty(postingAmount)+' '+postingUnit)}`,'Cari'); closeModal(); save(); render();
     },'İŞLEMİ KAYDET');
+    document.getElementById('cmOpenHistory')?.addEventListener('click',()=>openCariDetail(c.id));
     document.querySelector('#modalRoot .modal')?.classList.add('cari-move-modal');
     document.querySelector('#modalRoot .modal-body > .form-grid')?.classList.add('cari-move-grid');
     const typeEl=document.getElementById('cmType'),unitEl=document.getElementById('cmUnit'),unitLabel=document.getElementById('cmUnitLabel'),sideEl=document.getElementById('cmSide'),amountEl=document.getElementById('cmAmount'),amountLabel=document.getElementById('cmAmountLabel'),hint=document.getElementById('cmHint'),finWrap=document.getElementById('cmFinanceWrap'),finEl=document.getElementById('cmFinanceAccount'),sourceRateWrap=document.getElementById('cmSourceRateWrap'),sourceRateEl=document.getElementById('cmSourceRate'),counterWrap=document.getElementById('cmCounterWrap'),counterEnabledEl=document.getElementById('cmCounterEnabled'),counterUnitEl=document.getElementById('cmCounterUnit'),counterAmountEl=document.getElementById('cmCounterAmount'),counterRateEl=document.getElementById('cmCounterRate'),goldWrap=document.getElementById('cmGoldWrap'),goldCard=document.getElementById('cmGoldCard'),goldAmount=document.getElementById('cmGoldAmount'),goldAmountLabel=document.getElementById('cmGoldAmountLabel'),goldCount=document.getElementById('cmGoldCount'),goldCountWrap=document.getElementById('cmGoldCountWrap'),goldZGram=document.getElementById('cmGoldZGram'),goldZGramWrap=document.getElementById('cmGoldZGramWrap'),goldMilyem=document.getElementById('cmGoldMilyem'),goldWorkMode=document.getElementById('cmGoldWorkMode'),goldWorkValue=document.getElementById('cmGoldWorkValue'),goldMaterialHas=document.getElementById('cmGoldMaterialHas'),goldWorkTotal=document.getElementById('cmGoldWorkTotal'),goldCounterHas=document.getElementById('cmGoldCounterHas'),returnWrap=document.getElementById('cmReturnWrap'),returnStock=document.getElementById('cmReturnStock'),returnCount=document.getElementById('cmReturnCount'),returnCountWrap=document.getElementById('cmReturnCountWrap'),returnGram=document.getElementById('cmReturnGram'),returnZGram=document.getElementById('cmReturnZGram'),returnZGramWrap=document.getElementById('cmReturnZGramWrap'),returnMilyem=document.getElementById('cmReturnMilyem'),returnHas=document.getElementById('cmReturnHas'),returnAvailable=document.getElementById('cmReturnAvailable'),ziynetWrap=document.getElementById('cmZiynetWrap'),ziynetStock=document.getElementById('cmZiynetStock'),ziynetCount=document.getElementById('cmZiynetCount'),ziynetHasUnit=document.getElementById('cmZiynetHasUnit'),ziynetTotalHas=document.getElementById('cmZiynetTotalHas'),ziynetAvailable=document.getElementById('cmZiynetAvailable'),scrapWrap=document.getElementById('cmScrapWrap'),scrapEl=document.getElementById('cmScrapStock'),scrapGram=document.getElementById('cmScrapGram'),scrapMilyem=document.getElementById('cmScrapMilyem'),scrapHas=document.getElementById('cmScrapHas'),scrapAvailable=document.getElementById('cmScrapAvailable');
@@ -6574,7 +6576,7 @@ function stockSummaryView(){
   }
 
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion='6.85';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();migratePusulaFixedMilyemV684();
+    state.meta=state.meta||{};state.meta.appVersion='6.86';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();migratePusulaFixedMilyemV684();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
