@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101113" />
-  <meta name="description" content="Asil Kuyumcu Pro V6.78 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
+  <meta name="description" content="Asil Kuyumcu Pro V6.79 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.78</title>
+  <title>Asil Kuyumcu Pro V6.79</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -1966,7 +1966,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.78</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
+        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.79</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
         <nav class="nav" aria-label="Ana menü">${['dashboard','sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={dashboard:'Ana Menü',sales:'Satış',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
         <details class="more-nav"><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['dashboard','sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
       </aside>
@@ -2453,7 +2453,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
         </div></div>
         <div class="card" style="margin-top:16px"><div class="section-head"><h3>Altın Giriş Satırı</h3><span>Stok kartındaki sabit milyem otomatik gelir</span></div>
           <div class="form-grid">
-            <div class="labelled span-2"><label>Mal Tanımı</label><select id="purCard" class="select"><option value="">— Seç —</option>${state.stockCardsMaster.filter(c=>c.productGroup==='ALTIN'||c.productType==='Altın Mamul'||c.ziynet).map(c=>`<option value="${c.id}">${esc(c.productDefinition||c.name)} · ${qty(c.fixedMilyem||c.purity)} milyem</option>`).join('')}</select></div>
+            <div class="labelled span-2"><label>Mal Tanımı</label><select id="purCard" class="select"><option value="">— Seç —</option>${registeredStockCardsForEntryV679().map(c=>`<option value="${c.id}">${esc(c.productDefinition||c.name)}${c.productCode||c.code?` · ${esc(c.productCode||c.code)}`:''}${c.ziynet?' · ADET':''} · ${qty(c.fixedMilyem||c.purity)} milyem</option>`).join('')}</select></div>
             <div class="labelled"><label>Miktar</label><div class="purchase-number-pair"><input id="purAmount" class="input" type="number" step="0.001" value="0"><input id="purUnit" class="input" value="GR" readonly style="text-align:center"></div></div>
             <div class="labelled"><label>Ayar</label><input id="purMilyem" class="input" type="number" step="0.1" value="0" readonly></div>
             <div class="labelled"><label>HAS</label><input id="purMaterialHas" class="input" type="number" step="0.001" value="0" readonly></div>
@@ -2570,6 +2570,14 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
 
   function getStockCard(id){ return state.stockCardsMaster.find(x=>x.id===id); }
+  function registeredStockCardsForEntryV679(){
+    return (state.stockCardsMaster||[]).filter(x=>{
+      const id=String(x?.id||'');
+      // Barkodlu ürünlerden otomatik türetilen kartlar gerçek stok kartı değildir;
+      // Altın giriş seçiminde yalnızca sistemde tanımlı stok kartlarını göster.
+      return !/^SC-(ALY|BIL|ISM|KEL|KOL|KUP|KYU|NZL|SET|TTS|UCL|YUZ|ZIN)-/i.test(id);
+    });
+  }
   function stockAmount(s){ return Number(s.amount ?? s.grossWeight ?? s.qty ?? 0); }
   function stockHas(s){ return Number(s.hasWeight||calcHas(stockAmount(s),s.purity)); }
   function stockWorkmanshipHas(s){ return Number(s.workmanshipTotalHas ?? s.workmanshipValue ?? 0); }
@@ -5602,13 +5610,7 @@ function stockSummaryView(){
       audit(`${c.name} cari hesabı: ${cariMoveLabel(def)} ${counterEnabled?conversionText:(qty(postingAmount)+' '+postingUnit)}`,'Cari'); closeModal(); save(); render();
     },'İŞLEMİ KAYDET');
     const typeEl=document.getElementById('cmType'),unitEl=document.getElementById('cmUnit'),unitLabel=document.getElementById('cmUnitLabel'),sideEl=document.getElementById('cmSide'),amountEl=document.getElementById('cmAmount'),amountLabel=document.getElementById('cmAmountLabel'),hint=document.getElementById('cmHint'),finWrap=document.getElementById('cmFinanceWrap'),finEl=document.getElementById('cmFinanceAccount'),sourceRateWrap=document.getElementById('cmSourceRateWrap'),sourceRateEl=document.getElementById('cmSourceRate'),counterWrap=document.getElementById('cmCounterWrap'),counterEnabledEl=document.getElementById('cmCounterEnabled'),counterUnitEl=document.getElementById('cmCounterUnit'),counterAmountEl=document.getElementById('cmCounterAmount'),counterRateEl=document.getElementById('cmCounterRate'),goldWrap=document.getElementById('cmGoldWrap'),goldCard=document.getElementById('cmGoldCard'),goldAmount=document.getElementById('cmGoldAmount'),goldAmountLabel=document.getElementById('cmGoldAmountLabel'),goldCount=document.getElementById('cmGoldCount'),goldCountWrap=document.getElementById('cmGoldCountWrap'),goldZGram=document.getElementById('cmGoldZGram'),goldZGramWrap=document.getElementById('cmGoldZGramWrap'),goldMilyem=document.getElementById('cmGoldMilyem'),goldWorkMode=document.getElementById('cmGoldWorkMode'),goldWorkValue=document.getElementById('cmGoldWorkValue'),goldMaterialHas=document.getElementById('cmGoldMaterialHas'),goldWorkTotal=document.getElementById('cmGoldWorkTotal'),goldCounterHas=document.getElementById('cmGoldCounterHas'),ziynetWrap=document.getElementById('cmZiynetWrap'),ziynetStock=document.getElementById('cmZiynetStock'),ziynetCount=document.getElementById('cmZiynetCount'),ziynetHasUnit=document.getElementById('cmZiynetHasUnit'),ziynetTotalHas=document.getElementById('cmZiynetTotalHas'),ziynetAvailable=document.getElementById('cmZiynetAvailable'),scrapWrap=document.getElementById('cmScrapWrap'),scrapEl=document.getElementById('cmScrapStock'),scrapGram=document.getElementById('cmScrapGram'),scrapMilyem=document.getElementById('cmScrapMilyem'),scrapHas=document.getElementById('cmScrapHas'),scrapAvailable=document.getElementById('cmScrapAvailable');
-    const goldRows=()=> (state.stockCardsMaster||[]).filter(x=>{
-      const group=String(x.productGroup||x.group||'').toLocaleUpperCase('tr-TR');
-      const type=String(x.productType||'').toLocaleUpperCase('tr-TR');
-      const isGold=Boolean(x.ziynet)||group.includes('ALTIN')||group.includes('ZİYNET')||type.includes('ALTIN')||type.includes('ZİYNET');
-      const autoBarcodeDerived=/^SC-(ALY|BIL|ISM|KEL|KOL|KUP|KYU|NZL|SET|TTS|UCL|YUZ|ZIN)-/i.test(String(x.id||''));
-      return isGold&&!autoBarcodeDerived;
-    });
+    const goldRows=()=> registeredStockCardsForEntryV679();
     const fillGold=()=>{
       const rows=goldRows();
       goldCard.innerHTML=rows.map(x=>`<option value="${x.id}">${esc(x.productDefinition||x.name)}${x.ziynet?' · ADET':''}</option>`).join('');
