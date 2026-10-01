@@ -1,4 +1,4 @@
-const C='asil-v6-80-backup-recovery-20261001';
+const C='asil-v6-81-indexeddb-quota-20261001';
 self.addEventListener('install',e=>{
   self.skipWaiting();
   e.waitUntil(caches.open(C).then(c=>c.addAll(['./','./index.html'])));
