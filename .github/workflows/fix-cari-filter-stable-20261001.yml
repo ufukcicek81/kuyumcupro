@@ -136,3 +136,4 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git add index.html sw.js
           if git diff --cached --quiet; then echo "No changes"; else git commit -m "v6.90 cari filtre sabitle"; git push; fi
+# trigger update
