@@ -1,0 +1,138 @@
+name: Fix Cari Filter Stable
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/fix-cari-filter-stable-20261001.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply stable cari filter
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          marker = 'UFUK_CARI_FILTER_STABLE_20261001'
+          if marker in s:
+              print('Already patched')
+              raise SystemExit(0)
+          patch = r'''<style id="ufuk-cari-filter-stable-css">
+/* UFUK_CARI_FILTER_STABLE_20261001 */
+.ufuk-cari-card-compact{padding:10px!important;margin:0!important;min-height:0!important}
+.ufuk-cari-card-compact .section-head{margin-bottom:5px!important}
+.ufuk-cari-card-compact .summary-row{padding:3px 0!important;min-height:0!important}
+.ufuk-cari-card-compact .btn{min-height:30px!important;padding:5px 8px!important;font-size:12px!important}
+</style>
+<script id="ufuk-cari-filter-stable-js">
+/* UFUK_CARI_FILTER_STABLE_20261001 */
+(function(){
+  'use strict';
+  var active='Tümü';
+  var names={'tümü':'Tümü','müşteri':'Müşteri','musteri':'Müşteri','toptancı':'Toptancı','toptanci':'Toptancı','banka':'Banka','özel':'Özel','ozel':'Özel'};
+  function norm(x){return String(x||'').replace(/\s+/g,' ').trim().toLocaleLowerCase('tr-TR')}
+  function typeOfText(x){return names[norm(x)]||null}
+  function findSearch(){return document.querySelector('#cariCardSearch,input[placeholder*="Cari /"]')||document.querySelector('input[placeholder*="Cari"]')}
+  function findCards(){
+    var input=findSearch();
+    if(input){
+      var p=input.parentElement;
+      for(var i=0;i<10&&p;i++,p=p.parentElement){
+        var direct=p.querySelectorAll(':scope > .card');
+        if(direct.length>=2)return Array.from(direct);
+        var all=p.querySelectorAll('.card');
+        if(all.length>=4)return Array.from(all).filter(function(c){return !c.parentElement.closest('.card')});
+      }
+    }
+    var marked=Array.from(document.querySelectorAll('.ufuk-cari-card-compact'));
+    if(marked.length)return marked;
+    return [];
+  }
+  function cardType(card){
+    var badge=card.querySelector('.badge');
+    var t=typeOfText(badge&&badge.textContent);
+    if(t)return t;
+    var x=norm(card.textContent);
+    if(/\btoptancı\b|\btoptanci\b/.test(x))return 'Toptancı';
+    if(/\bbanka\b/.test(x))return 'Banka';
+    if(/\bözel\b|\bozel\b/.test(x))return 'Özel';
+    if(/\bmüşteri\b|\bmusteri\b/.test(x))return 'Müşteri';
+    return null;
+  }
+  function compact(cards){cards.forEach(function(c){c.classList.add('ufuk-cari-card-compact')})}
+  function apply(){
+    var input=findSearch();
+    var q=norm(input&&input.value);
+    var cards=findCards();
+    compact(cards);
+    cards.forEach(function(c){
+      var t=cardType(c);
+      var ok=(active==='Tümü'||t===active);
+      if(ok&&q)ok=norm(c.textContent).indexOf(q)>=0;
+      c.style.display=ok?'':'none';
+    });
+    document.querySelectorAll('button').forEach(function(b){
+      var t=typeOfText(b.textContent);
+      if(!t)return;
+      b.classList.toggle('btn-primary',t===active);
+      b.classList.toggle('btn-outline',t!==active);
+      b.setAttribute('aria-pressed',t===active?'true':'false');
+    });
+  }
+  function categoryButton(el){
+    if(!el||el.tagName!=='BUTTON')return null;
+    return typeOfText(el.textContent);
+  }
+  function captureClick(e){
+    var b=e.target&&e.target.closest?e.target.closest('button'):null;
+    var t=categoryButton(b);
+    if(!t)return;
+    var input=findSearch();
+    if(!input)return;
+    e.preventDefault();
+    e.stopPropagation();
+    if(e.stopImmediatePropagation)e.stopImmediatePropagation();
+    active=t;
+    apply();
+  }
+  function bind(){
+    if(!window.__ufukCariStableCapture){
+      window.__ufukCariStableCapture=true;
+      document.addEventListener('click',captureClick,true);
+      document.addEventListener('input',function(e){if(e.target===findSearch())apply()},true);
+    }
+    var buttons=document.querySelectorAll('button');
+    buttons.forEach(function(b){var t=categoryButton(b);if(t&&b.classList.contains('btn-primary'))active=t});
+    apply();
+  }
+  function start(){bind();setTimeout(bind,250);setTimeout(bind,700);setTimeout(bind,1500)}
+  document.addEventListener('DOMContentLoaded',start);
+  window.addEventListener('load',start);
+})();
+</script>
+'''
+          pos=s.rfind('</body>')
+          if pos<0: raise SystemExit('No body tag')
+          s=s[:pos]+patch+s[pos:]
+          p.write_text(s,encoding='utf-8')
+          sw=Path('sw.js')
+          if sw.exists():
+              x=sw.read_text(encoding='utf-8')
+              import re
+              x=re.sub(r"const C='[^']+';", "const C='asil-v6-90-cari-filter-stable-20261001';", x, count=1)
+              sw.write_text(x,encoding='utf-8')
+          print('stable cari filter patch applied')
+      - name: Commit
+        run: |
+          git config user.name "ChatGPT Fix"
+          git config user.email "actions@users.noreply.github.com"
+          git add index.html sw.js
+          if git diff --cached --quiet; then echo "No changes"; else git commit -m "v6.90 cari filtre sabitle"; git push; fi
