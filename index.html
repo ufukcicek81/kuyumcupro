@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101113" />
-  <meta name="description" content="Asil Kuyumcu Pro V6.82 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
+  <meta name="description" content="Asil Kuyumcu Pro V6.83 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.82</title>
+  <title>Asil Kuyumcu Pro V6.83</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -1331,7 +1331,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
 
   async function load(){
-    // V6.82+: Öncelik büyük kapasiteli IndexedDB. Eski localStorage kayıtları otomatik taşınır.
+    // V6.83+: Öncelik büyük kapasiteli IndexedDB. Eski localStorage kayıtları otomatik taşınır.
     try{
       const big=await idbGetStateV681();
       if(big&&typeof big==='object'&&Array.isArray(big.stocks)){
@@ -1385,7 +1385,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
         state.audits.unshift({id:uid('AUD'),date:now(),user:(typeof session!=='undefined'&&session?.name)||'Sistem',module:'Otomatik Kayıt',action:'Veri değişikliği kaydedildi · '+routeName+' · '+summary,kind:'OTOMATİK'});
         state.audits=state.audits.slice(0,5000);
       }
-      state.meta.appVersion='6.82';
+      state.meta.appVersion='6.83';
       if(typeof syncSystemParametersV648==='function')syncSystemParametersV648();
       persistStateBackgroundV681(state);
     } catch { }
@@ -2099,7 +2099,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.82</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
+        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v6.83</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
         <nav class="nav" aria-label="Ana menü">${['dashboard','sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={dashboard:'Ana Menü',sales:'Satış',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
         <details class="more-nav"><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['dashboard','sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
       </aside>
@@ -4128,7 +4128,7 @@ function stockSummaryView(){
       cloudApplyingV5=true;
       state=data;
       ensureStateShape();ensureV5State();simplifyBankPosV55();ensureBankCariLinksV54();reconcileTransactionLedgerV5();
-      state.meta=state.meta||{};state.meta.updatedAt=now();state.meta.appVersion='6.82';
+      state.meta=state.meta||{};state.meta.updatedAt=now();state.meta.appVersion='6.83';
       state.audits=Array.isArray(state.audits)?state.audits:[];
       state.audits.unshift({id:uid('AUD'),date:now(),user:session?.name||'Sistem',module:'Yedek',action:`${info?.date?trDate(info.date):key} bulut yedeğinden tam sistem geri yüklendi · Stok kartı ${state.stockCardsMaster.length} · Barkodlu stok ${state.stocks.length}`,kind:'GERİ YÜKLEME'});
       await persistStateCriticalV681(state);
@@ -4176,7 +4176,7 @@ function stockSummaryView(){
         </div>
         <div class="card"><div class="section-head"><h3>🔒 Sistem Güvenliği</h3><span class="badge green">ÜRETİM KORUMASI</span></div>
           <div class="summary-row"><span>Ana cihaz verisi</span><strong>IndexedDB + yerel kopya</strong></div>
-          <div class="summary-row"><span>Anormal veri düşüş kilidi</span><strong class="${state.meta?.productionGuardV682?.blocked?'negative':'positive'}">${state.meta?.productionGuardV682?.blocked?'YAZMA DURDURULDU':'AKTİF'}</strong></div>
+          <div class="summary-row"><span>Çift yönlü veri düşüş kilidi</span><strong class="${state.meta?.productionGuardV682?.blocked?'negative':'positive'}">${state.meta?.productionGuardV682?.blocked?'YAZMA DURDURULDU':'AKTİF'}</strong></div>
           <div class="summary-row"><span>Bulut yazma doğrulaması</span><strong>${state.cloudSync?.lastVerified?trDate(state.cloudSync.lastVerified):'İlk kontrolde'}</strong></div>
           <div class="summary-row"><span>Dönerli yerel kurtarma</span><strong>Son 30 nokta</strong></div>
           <div class="summary-row"><span>Bulut öncesi kurtarma</span><strong>5 dk aralıklı</strong></div>
@@ -6424,7 +6424,7 @@ function stockSummaryView(){
   }
 
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion='6.82';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
+    state.meta=state.meta||{};state.meta.appVersion='6.83';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
@@ -6544,12 +6544,26 @@ function stockSummaryView(){
         remote=raw.state;
       }
       if(!remote||typeof remote!=='object'||!Array.isArray(remote.stocks)){state.cloudSync.lastStatus='Geçersiz Bulut Verisi';return false;}
+      const incomingGuard=productionDropIssuesV682(remote,state);
+      if(incomingGuard.issues.length&&!force){
+        state.cloudSync.lastStatus='UZAK VERİ GÜVENLİK KİLİDİ';
+        state.cloudSync.lastError='Buluttan gelen veri anormal küçülmüş: '+incomingGuard.issues.join(' · ');
+        state.meta=state.meta||{};state.meta.productionGuardV682={date:now(),blocked:true,direction:'cloud-to-device',issues:incomingGuard.issues,candidate:incomingGuard.candidate,remote:incomingGuard.remote};
+        persistStateBackgroundV681(state);
+        if(manual)toast('GÜVENLİK: Buluttaki şüpheli veri cihaza alınmadı. '+incomingGuard.issues.join(' · '),'err');
+        return false;
+      }
+      const localDrop=productionDropIssuesV682(state,remote);
       const rt=new Date(remote?.meta?.updatedAt||0).getTime(),lt=new Date(state?.meta?.updatedAt||0).getTime();
-      if(manual||force||rt>lt+1000){
+      if(manual||force||rt>lt+1000||localDrop.issues.length){
+        const autoRecovered=!manual&&!force&&localDrop.issues.length>0;
         cloudApplyingV5=true;state=remote;ensureStateShape();ensureV5State();simplifyBankPosV55();ensureBankCariLinksV54();reconcileTransactionLedgerV5();
-        state.cloudSync=state.cloudSync||{};state.cloudSync.encrypted=false;state.cloudSync.encryptionMigrationPending=false;state.cloudSync.lastPull=now();state.cloudSync.lastStatus='Bağlı';
+        state.cloudSync=state.cloudSync||{};state.cloudSync.encrypted=false;state.cloudSync.encryptionMigrationPending=false;state.cloudSync.lastPull=now();state.cloudSync.lastStatus=autoRecovered?'OTOMATİK KURTARILDI':'Bağlı';
+        state.meta=state.meta||{};state.meta.productionGuardV682={date:now(),blocked:false,autoRecovered,stats:stateStatsV682(state)};
+        if(autoRecovered){state.audits=Array.isArray(state.audits)?state.audits:[];state.audits.unshift({id:uid('AUD'),date:now(),user:'Sistem',module:'Veri Güvenliği',action:'Cihazdaki anormal veri düşüşü algılandı; sağlam merkezi bulut kaydı otomatik geri alındı.',kind:'OTOMATİK KURTARMA'});}
         await persistStateCriticalV681(state);cloudApplyingV5=false;
-        if(manual){toast('Bulut verisi alındı');render();}
+        if(manual){toast('Bulut verisi güvenlik kontrolünden geçerek alındı');render();}
+        else if(autoRecovered){toast('VERİ GÜVENLİĞİ: Cihaz verisi sağlam bulut kaydından otomatik kurtarıldı','ok');render();}
         return true;
       }
       state.cloudSync.encrypted=false;state.cloudSync.encryptionMigrationPending=false;state.cloudSync.lastStatus='Bağlı';
@@ -6731,8 +6745,15 @@ function stockSummaryView(){
               try{remote=await cloudDecryptPayloadV664(remote);}catch(_){return;}
             }
             if(remote?.format==='ASIL_BACKUP_CLOUD_V3'&&remote?.state)remote=remote.state;
+            if(!remote||!Array.isArray(remote.stocks))return;
+            const inbound=productionDropIssuesV682(remote,state);
+            if(inbound.issues.length){
+              state.cloudSync.lastStatus='UZAK VERİ REDDEDİLDİ';state.cloudSync.lastError=inbound.issues.join(' · ');
+              state.meta=state.meta||{};state.meta.productionGuardV682={date:now(),blocked:true,direction:'stream-to-device',issues:inbound.issues,candidate:inbound.candidate,remote:inbound.remote};
+              persistStateBackgroundV681(state);toast('VERİ GÜVENLİĞİ: Başka cihazdan gelen şüpheli küçülmüş veri reddedildi','err');return;
+            }
             const rt=new Date(remote?.meta?.updatedAt||0).getTime(),lt=new Date(state?.meta?.updatedAt||0).getTime();
-            if(remote&&Array.isArray(remote.stocks)&&rt>lt+1200){cloudApplyingV5=true;state=remote;ensureStateShape();ensureV5State();simplifyBankPosV55();ensureBankCariLinksV54();reconcileTransactionLedgerV5();state.cloudSync.encrypted=false;state.cloudSync.lastPull=now();state.cloudSync.lastStatus='Bağlı';await persistStateCriticalV681(state);cloudApplyingV5=false;render();}
+            if(rt>lt+1200){cloudApplyingV5=true;state=remote;ensureStateShape();ensureV5State();simplifyBankPosV55();ensureBankCariLinksV54();reconcileTransactionLedgerV5();state.cloudSync.encrypted=false;state.cloudSync.lastPull=now();state.cloudSync.lastStatus='Bağlı';state.meta.productionGuardV682={date:now(),blocked:false,stats:stateStatsV682(state)};await persistStateCriticalV681(state);cloudApplyingV5=false;render();}
           }catch(_){}
         });
       }catch(_){}
