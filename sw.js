@@ -1,4 +1,4 @@
-const C='asil-v6-83-production-safety-20261001';
+const C='asil-v6-89-cari-ui-20261001';
 self.addEventListener('install',e=>{
   self.skipWaiting();
   e.waitUntil(caches.open(C).then(c=>c.addAll(['./','./index.html'])));
