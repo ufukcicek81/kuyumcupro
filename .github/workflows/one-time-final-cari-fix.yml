@@ -1,0 +1,81 @@
+name: One-time final Cari UI fix
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch index safely
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace('v6.83','v6.94')
+          marker='UFUK_CARI_FILTER_FINAL_20261001'
+          if marker not in s:
+              patch='''
+<style id="ufuk-cari-final-style">
+/* UFUK_CARI_FILTER_FINAL_20261001 */
+#cariCardGrid{gap:10px!important;align-items:start!important}
+#cariCardGrid>.card{padding:10px!important;min-height:0!important}
+#ufukCariFilterBar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0 12px;padding:10px;border:1px solid #ddd;border-radius:10px;background:#fff}
+#ufukCariFilterBar input{flex:1 1 280px;min-width:220px;padding:9px 12px;border:1px solid #ccc;border-radius:8px}
+#ufukCariFilterBar button{padding:8px 12px;border:1px solid #ddd;border-radius:8px;background:#fff;cursor:pointer;font-weight:700}
+#ufukCariFilterBar button.ufuk-active{background:#b48b2c;color:#fff;border-color:#b48b2c}
+</style>
+<script id="ufuk-cari-final-script">
+(function(){
+'use strict';
+var active='Tümü';
+var types=['Tümü','Müşteri','Toptancı','Banka','Özel'];
+function text(el){return (el&&el.textContent||'').trim()}
+function norm(v){return String(v||'').toLocaleLowerCase('tr-TR')}
+function cards(){
+  var g=document.getElementById('cariCardGrid');
+  if(g){var a=g.querySelectorAll(':scope>.card');if(a.length)return Array.from(a)}
+  var out=[];document.querySelectorAll('.card').forEach(function(c){var t=text(c);if(/Müşteri|Toptancı|Banka|Özel/.test(t)&&/Hesap Kodu|Bakiye/.test(t))out.push(c)});return out;
+}
+function cardType(c){var t=text(c);for(var i=1;i<types.length;i++){if(new RegExp('(^|\\n|\\s)'+types[i]+'($|\\n|\\s)','i').test(t))return types[i]}return ''}
+function apply(){
+  var bar=document.getElementById('ufukCariFilterBar');
+  var q=norm(bar&&bar.querySelector('input')&&bar.querySelector('input').value);
+  cards().forEach(function(c){var ok=(active==='Tümü'||cardType(c)===active)&&(!q||norm(text(c)).indexOf(q)>=0);c.style.display=ok?'':'none'});
+  if(bar)bar.querySelectorAll('button[data-type]').forEach(function(b){b.classList.toggle('ufuk-active',b.dataset.type===active)});
+}
+function ensureBar(){
+  if(!document.body||document.getElementById('ufukCariFilterBar'))return;
+  var anchor=document.getElementById('cariCardGrid');
+  if(!anchor){var hs=Array.from(document.querySelectorAll('h1,h2,h3,h4,div')).filter(function(e){return text(e)==='Cari Çağır'});anchor=hs.length?hs[0]:null}
+  if(!anchor)return;
+  var bar=document.createElement('div');bar.id='ufukCariFilterBar';
+  bar.innerHTML='<input type="search" placeholder="Cari / toptancı adı, hesap kodu, telefon veya tür ara"><button data-type="Tümü">Tümü</button><button data-type="Müşteri">Müşteri</button><button data-type="Toptancı">Toptancı</button><button data-type="Banka">Banka</button><button data-type="Özel">Özel</button>';
+  anchor.parentNode.insertBefore(bar,anchor);
+  bar.addEventListener('click',function(e){var b=e.target.closest('button[data-type]');if(!b)return;active=b.dataset.type;apply()});
+  bar.querySelector('input').addEventListener('input',apply);apply();
+}
+function capture(e){var b=e.target.closest&&e.target.closest('button');if(!b)return;var t=text(b);if(types.indexOf(t)<0)return;var bar=document.getElementById('ufukCariFilterBar');if(!bar)return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();active=t;apply()}
+function boot(){ensureBar();apply()}
+document.addEventListener('click',capture,true);
+document.addEventListener('DOMContentLoaded',function(){boot();setTimeout(boot,300);setTimeout(boot,1000)});
+new MutationObserver(function(){if(!document.getElementById('ufukCariFilterBar'))boot()}).observe(document.documentElement,{childList:true,subtree:true});
+})();
+</script>
+'''
+              pos=s.rfind('</body>')
+              s=s[:pos]+patch+s[pos:] if pos>=0 else s+patch
+          p.write_text(s,encoding='utf-8')
+      - name: Commit and push
+        run: |
+          git config user.name "ChatGPT One-time Fix"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "v6.94 final cari filter fix" || exit 0
+          git push
