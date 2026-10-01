@@ -1,4 +1,4 @@
-name: Cari UI safe patch
+name: Cari UI one-shot patch
 
 on:
   push:
@@ -15,93 +15,142 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply safe cari UI patch
+      - name: Apply cari UI v6.89
         shell: python
         run: |
           from pathlib import Path
           p=Path('index.html')
           s=p.read_text(encoding='utf-8')
-          marker='UFUK_CARI_SAFE_FILTER_20261001'
+          marker='UFUK_CARI_UI_V689_20261001'
           if marker in s:
               raise SystemExit(0)
-          css='''<style id="ufuk-cari-safe-css">
-          /* UFUK_CARI_SAFE_FILTER_20261001 */
-          #cariCardGrid{gap:8px!important;align-items:start!important}
-          #cariCardGrid>.card{padding:10px!important;margin:0!important;min-height:0!important}
-          #cariCardGrid>.card .section-head{margin-bottom:4px!important}
-          #cariCardGrid>.card .summary-row{padding:2px 0!important}
-          #cariCardGrid>.card .muted{margin-bottom:3px!important}
-          #cariCardGrid>.card .btn{min-height:30px!important;padding:5px 8px!important}
-          @media(min-width:1200px){#cariCardGrid{grid-template-columns:repeat(4,minmax(0,1fr))!important}}
-          @media(min-width:900px) and (max-width:1199px){#cariCardGrid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+          css=r'''<style id="ufuk-cari-ui-v689">
+          /* UFUK_CARI_UI_V689_20261001 */
+          .ufuk-cari-card-compact{padding:10px!important;margin:0!important;min-height:0!important}
+          .ufuk-cari-card-compact .section-head{margin-bottom:5px!important}
+          .ufuk-cari-card-compact .summary-row{padding:3px 0!important;min-height:0!important}
+          .ufuk-cari-card-compact .btn{min-height:30px!important;padding:5px 8px!important;font-size:12px!important}
+          .ufuk-cari-card-balance{display:grid!important;grid-template-columns:1fr 1fr;gap:6px;margin:7px 0!important}
+          .ufuk-cari-card-balance>div{padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2);min-width:0}
+          .ufuk-cari-card-balance small{display:block;color:var(--muted);font-size:10px;margin-bottom:2px}
+          .ufuk-cari-card-balance strong{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
           </style>'''
-          js='''<script id="ufuk-cari-safe-js">
-          /* UFUK_CARI_SAFE_FILTER_20261001 */
+          js=r'''<script id="ufuk-cari-ui-v689-js">
+          /* UFUK_CARI_UI_V689_20261001 */
           (function(){
-            "use strict";
-            var bound=new WeakSet();
-            function tx(e){return ((e&&e.textContent)||"").replace(/\\s+/g," ").trim().toLocaleLowerCase("tr-TR")}
-            function typeOf(t){
-              if(t==="tümü")return "Tümü";
-              if(t==="müşteri")return "Müşteri";
-              if(t==="toptancı"||t==="toptanci")return "Toptancı";
-              if(t==="banka")return "Banka";
-              if(t==="özel")return "Özel";
-              return null;
-            }
-            function findInput(){return document.querySelector('#cariCardSearch,input[placeholder*="Cari /"],input[placeholder*="Cari"]')}
-            function findGrid(input){
-              var p=input&&input.parentElement;
-              for(var i=0;i<7&&p;i++,p=p.parentElement){
-                if(p.querySelectorAll('[class*="card"]').length>=4)return p;
+            'use strict';
+            var active='Tümü';
+            var categories={'tümü':'Tümü','müşteri':'Müşteri','musteri':'Müşteri','toptancı':'Toptancı','toptanci':'Toptancı','banka':'Banka','özel':'Özel','ozel':'Özel'};
+            function norm(x){return String(x||'').replace(/\s+/g,' ').trim().toLocaleLowerCase('tr-TR')}
+            function cat(x){return categories[norm(x)]||null}
+            function input(){return document.querySelector('#cariCardSearch,input[placeholder*="Cari /"],input[placeholder*="Cari"]')}
+            function root(){
+              var i=input(); if(!i)return null;
+              var p=i.parentElement;
+              for(var n=0;n<10&&p;n++,p=p.parentElement){
+                var direct=p.querySelectorAll(':scope > .card');
+                if(direct.length>=2)return p;
+                var all=p.querySelectorAll('.card');
+                if(all.length>=4)return p;
               }
               return null;
             }
-            function cardType(card){
-              var t=tx(card);
-              if(/(^| )toptancı( |$)|(^| )toptanci( |$)/.test(t))return "Toptancı";
-              if(/(^| )banka( |$)/.test(t))return "Banka";
-              if(/(^| )özel( |$)/.test(t))return "Özel";
-              if(/(^| )müşteri( |$)|(^| )musteri( |$)/.test(t))return "Müşteri";
+            function cards(){
+              var r=root(); if(!r)return [];
+              var a=Array.from(r.querySelectorAll(':scope > .card'));
+              if(a.length>=2)return a;
+              return Array.from(r.querySelectorAll('.card')).filter(function(c){return !c.parentElement.closest('.card')});
+            }
+            function cardCat(c){
+              var b=c.querySelector('.badge');
+              var x=cat(b&&b.textContent);
+              if(x)return x;
+              var t=norm(c.textContent);
+              if(t.indexOf('toptancı')>=0||t.indexOf('toptanci')>=0)return 'Toptancı';
+              if(t.indexOf('banka')>=0)return 'Banka';
+              if(t.indexOf('özel')>=0||t.indexOf('ozel')>=0)return 'Özel';
+              if(t.indexOf('müşteri')>=0||t.indexOf('musteri')>=0)return 'Müşteri';
               return null;
             }
-            function filter(type){
-              var input=findInput(); if(!input)return;
-              var grid=findGrid(input); if(!grid)return;
-              var cards=grid.querySelectorAll('.card');
-              cards.forEach(function(c){
-                if(c.contains(input))return;
-                var ct=cardType(c);
-                if(ct)c.style.display=(type==="Tümü"||ct===type)?"":"none";
+            function compact(){cards().forEach(function(c){c.classList.add('ufuk-cari-card-compact')})}
+            function revealExistingBalance(c){
+              c.querySelectorAll('.summary-row,.balance,.cari-balance,[data-balance],[class*="balance"],[class*="bakiye"]').forEach(function(e){
+                e.style.removeProperty('display');
+                if(getComputedStyle(e).display==='none')e.style.display='flex';
+              });
+            }
+            function addBalanceIfPresent(c){
+              if(c.querySelector('.ufuk-cari-card-balance'))return;
+              var candidates=[];
+              c.querySelectorAll('.summary-row').forEach(function(r){
+                var text=norm(r.textContent);
+                if(text.indexOf('bakiye')>=0||text.indexOf('tl')>=0||text.indexOf('has')>=0)candidates.push(r);
+              });
+              if(!candidates.length)return;
+              var box=document.createElement('div');box.className='ufuk-cari-card-balance';
+              candidates.slice(0,4).forEach(function(r){
+                var d=document.createElement('div');
+                var parts=r.querySelectorAll('span,strong');
+                var label=parts.length>1?parts[0].textContent.trim():'Bakiye';
+                var value=parts.length>1?parts[parts.length-1].textContent.trim():r.textContent.trim();
+                d.innerHTML='<small></small><strong></strong>';
+                d.firstChild.textContent=label;d.lastChild.textContent=value;box.appendChild(d);
+              });
+              var head=c.querySelector('.section-head');
+              if(head)head.insertAdjacentElement('afterend',box);
+            }
+            function apply(){
+              var q=norm(input()&&input().value);
+              cards().forEach(function(c){
+                var cc=cardCat(c);
+                var ok=(active==='Tümü'||cc===active);
+                if(ok&&q)ok=norm(c.textContent).indexOf(q)>=0;
+                c.style.display=ok?'':'none';
+                if(ok){compact();revealExistingBalance(c);addBalanceIfPresent(c)}
+              });
+              document.querySelectorAll('button').forEach(function(b){
+                var x=cat(b.textContent); if(!x)return;
+                b.classList.toggle('btn-primary',x===active);
+                b.classList.toggle('btn-outline',x!==active);
+                b.setAttribute('aria-pressed',x===active?'true':'false');
               });
             }
             function bind(){
-              var input=findInput(); if(!input)return;
-              var p=input.parentElement;
-              for(var i=0;i<5&&p;i++,p=p.parentElement){
-                var bs=p.querySelectorAll('button');
-                if(bs.length<3)continue;
-                bs.forEach(function(b){
-                  if(bound.has(b))return;
-                  var typ=typeOf(tx(b)); if(!typ)return;
-                  bound.add(b);
-                  b.addEventListener('click',function(){setTimeout(function(){filter(typeOf(tx(b))||"Tümü")},0)});
-                });
-                break;
+              var i=input(); if(!i)return;
+              document.querySelectorAll('button').forEach(function(b){
+                if(b.dataset.ufukCariBound==='1')return;
+                var x=cat(b.textContent); if(!x)return;
+                b.dataset.ufukCariBound='1';
+                b.addEventListener('click',function(){active=x;setTimeout(apply,0);setTimeout(apply,100)});
+              });
+              if(i.dataset.ufukCariInputBound!=='1'){
+                i.dataset.ufukCariInputBound='1';
+                i.addEventListener('input',apply);
               }
+              compact();apply();
             }
-            document.addEventListener('DOMContentLoaded',function(){bind();setTimeout(bind,300);setTimeout(bind,1000)});
+            function start(){bind();setTimeout(bind,250);setTimeout(bind,800);setTimeout(bind,1600)}
+            document.addEventListener('DOMContentLoaded',start);
+            window.addEventListener('load',start);
+            new MutationObserver(function(){bind()}).observe(document.body,{childList:true,subtree:true});
           })();
           </script>'''
           pos=s.rfind('</body>')
           if pos<0: raise SystemExit('body not found')
           s=s[:pos]+css+'\n'+js+'\n'+s[pos:]
           p.write_text(s,encoding='utf-8')
+
+          sw=Path('sw.js')
+          if sw.exists():
+              t=sw.read_text(encoding='utf-8')
+              import re
+              t=re.sub(r"const C='[^']+';", "const C='asil-v6-89-cari-ui-20261001';", t, count=1)
+              sw.write_text(t,encoding='utf-8')
       - name: Commit patch
         run: |
           git config user.name "ChatGPT Fix"
           git config user.email "actions@users.noreply.github.com"
-          git add index.html
+          git add index.html sw.js
           if git diff --cached --quiet; then exit 0; fi
-          git commit -m "v6.88 cari filtre ve kompakt kartlar"
+          git commit -m "v6.89 cari filtre kart bakiye görünümü"
           git push
