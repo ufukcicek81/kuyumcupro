@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101113" />
-  <meta name="description" content="Asil Kuyumcu Pro V6.84 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
+  <meta name="description" content="Asil Kuyumcu Pro V6.85 - stok, satış, cari, banka hareketleri, kimlik/MASAK ve e-Fatura entegrasyon altyapısı" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <title>Asil Kuyumcu Pro V6.84</title>
+  <title>Asil Kuyumcu Pro V6.85</title>
   <style>
 :root {
   --bg: #0c0d0f;
@@ -132,15 +132,15 @@ radial-gradient(circle at bottom left, rgba(98,168,255,.08), transparent 35%),va
 .cari-move-modal .labelled{gap:4px;margin-bottom:0}
 .cari-move-modal .labelled label{font-size:11px}
 .cari-move-modal .input,.cari-move-modal .select{padding:8px 9px;min-height:36px}
-.cari-move-modal #cmGoldWrap .form-grid{grid-template-columns:repeat(6,minmax(0,1fr));gap:7px}
-.cari-move-modal #cmGoldWrap .form-grid .span-2{grid-column:span 2}
-.cari-move-modal #cmGoldWrap{border:1px solid var(--line);border-radius:12px;padding:8px;background:var(--panel-2)}
-.cari-move-modal #cmGoldWrap .labelled{min-width:0}
+.cari-move-modal #cmGoldWrap .form-grid,.cari-move-modal #cmReturnWrap .form-grid{grid-template-columns:repeat(6,minmax(0,1fr));gap:7px}
+.cari-move-modal #cmGoldWrap .form-grid .span-2,.cari-move-modal #cmReturnWrap .form-grid .span-2{grid-column:span 2}
+.cari-move-modal #cmGoldWrap,.cari-move-modal #cmReturnWrap{border:1px solid var(--line);border-radius:12px;padding:8px;background:var(--panel-2)}
+.cari-move-modal #cmGoldWrap .labelled,.cari-move-modal #cmReturnWrap .labelled{min-width:0}
 .cari-move-modal #cmHint{margin-top:7px!important;padding:7px 9px;font-size:11px}
 @media(max-width:820px){
   .cari-move-modal{width:min(720px,98vw);max-height:96vh}
-  .cari-move-modal #cmGoldWrap .form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .cari-move-modal #cmGoldWrap .form-grid .span-2{grid-column:span 2}
+  .cari-move-modal #cmGoldWrap .form-grid,.cari-move-modal #cmReturnWrap .form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .cari-move-modal #cmGoldWrap .form-grid .span-2,.cari-move-modal #cmReturnWrap .form-grid .span-2{grid-column:span 2}
 }
 
 
@@ -1180,7 +1180,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     {code:'AG', name:'ALTIN GİRİŞ', defaultUnit:'HAS', effect:'credit', special:'goldIn'},
     {code:'AL', name:'ALACAKLANDIR', defaultUnit:'HAS', effect:'credit'},
     {code:'BR', name:'BORÇLANDIR', defaultUnit:'HAS', effect:'debit'},
-    {code:'CI', name:'ÇIKAN İADE', defaultUnit:'HAS', effect:'debit'},
+    {code:'CI', name:'ÇIKAN İADE', defaultUnit:'HAS', effect:'debit', special:'returnOut'},
     {code:'CV', name:'ÇEVİRME', defaultUnit:'HAS', effect:'manual'},
     {code:'HC', name:'HURDA ÇIKIŞ', defaultUnit:'HAS', effect:'debit', special:'scrapOut'},
     {code:'HG', name:'HURDA GİRİŞ', defaultUnit:'HAS', effect:'credit', special:'scrapIn'},
@@ -5601,9 +5601,55 @@ function stockSummaryView(){
     const tx=(state.transactions||[]).find(x=>x.docNo===move.sourceDocNo);if(tx){tx.status='Ters Kayıt';tx.reversedAt=now();tx.reversedBy=session?.name||'Sistem';}
     return 1;
   }
+  function cariMoveIsReturnOut(def){ return String(def?.code||'')==='CI'; }
+  function createCariReturnOutMove({customer,stockId,count,gram,milyem,description,date}){
+    const o=(state.openStocks||[]).find(x=>x.id===stockId&&x.period===state.activePeriod);
+    if(!o)return {ok:false,msg:'İade edilecek stok ürününü seçin'};
+    const isAdet=String(o.unit||'').toUpperCase()==='ADET';
+    const beforeAmount=Number(o.amount||0),zGram=Number(o.zGram||0);
+    count=Math.max(0,Number(count||0));gram=Math.max(0,Number(gram||0));milyem=Number(milyem||0);
+    const outAmount=isAdet?count:gram,totalGram=isAdet?(count*zGram):gram;
+    if(outAmount<=0)return {ok:false,msg:isAdet?'İade adedini girin':'İade gramını girin'};
+    if(isAdet&&zGram<=0)return {ok:false,msg:`${o.name} kartında Z. Gram / Adet tanımlı değil`};
+    if(milyem<=0)return {ok:false,msg:'İade milyemini girin'};
+    if(outAmount>beforeAmount+.000001)return {ok:false,msg:`${o.name} stokta ${qty(beforeAmount)} ${isAdet?'ADET':'GR'} var.`};
+    const commercialHas=totalGram*milyem/1000;
+    const beforePhysical=Number(o.hasWeight||0),beforeWork=Number(o.workmanshipTotalHas||0);
+    const unitCost=Number(o.inventoryUnitCostHas||o.openingUnitCostHas||(beforeAmount>0?(beforePhysical+beforeWork)/beforeAmount:0));
+    const ratio=beforeAmount>0?outAmount/beforeAmount:0;
+    const physicalHas=Math.max(0,beforePhysical*ratio),workmanshipHas=Math.max(0,beforeWork*ratio),costHas=unitCost*outAmount,differenceHas=commercialHas-costHas;
+    o.amount=Math.max(0,beforeAmount-outAmount);
+    o.hasWeight=Math.max(0,beforePhysical-physicalHas);
+    o.workmanshipTotalHas=Math.max(0,beforeWork-workmanshipHas);
+    if(isAdet)o.count=Math.max(0,Number(o.count||beforeAmount)-outAmount);
+    if(o.amount<=.000001){o.amount=0;if(isAdet)o.count=0;o.hasWeight=0;o.workmanshipTotalHas=0;o.inventoryUnitCostHas=0;o.averageWorkmanship=0;}
+    else{o.inventoryUnitCostHas=unitCost;o.averageWorkmanship=Number(o.workmanshipTotalHas||0)/o.amount;}
+    const docNo=nextCariDocNo('CI');
+    const qtyText=isAdet?`${qty(count)} ADET × ${qty(zGram)} GR = ${qty(totalGram)} GR`:`${qty(gram)} GR`;
+    const move={id:uid('CM'),customerId:customer.id,period:state.activePeriod,date,code:'CI',type:'CI - ÇIKAN İADE',unit:'HAS',debit:commercialHas,credit:0,description:`${o.name} · ${qtyText} × ${qty(milyem)} / 1000 = ${qty(commercialHas)} HAS${description?' · '+description:''}`,user:session.name,userDescription:description||'',sourceType:'cariReturnOut',sourceDocNo:docNo,sourceUnit:isAdet?'ADET':'GR',sourceAmount:outAmount,sourceRate:milyem,counterEnabled:true,counterUnit:'HAS',counterAmount:commercialHas,counterRate:1,returnOutImpact:{openStockId:o.id,unit:isAdet?'ADET':'GR',amount:outAmount,count:isAdet?count:0,gram:totalGram,zGram,milyem,commercialHas,physicalHas,workmanshipHas,costHas,differenceHas,unitCostBefore:unitCost}};
+    applyCariBalance(customer,'HAS',commercialHas,0);state.customerMoves.unshift(move);
+    state.stockMoves.unshift({id:uid('SM'),period:state.activePeriod,date,stockId:o.id,code:o.productCode||o.name,type:'CI - ÇIKAN İADE',from:'Açık Stok',to:customer.name,description:move.description,sourceType:'cariReturnOut',sourceId:move.id,sourceDocNo:docNo,user:session.name});
+    state.tradeMoves.unshift({id:uid('TRD'),docNo,period:state.activePeriod,date,tradeType:'CI - ÇIKAN İADE',side:'Çıkış',item:o.name,itemCode:o.id,quantity:outAmount,unit:isAdet?'ADET':'GR',milyem,totalHas:commercialHas,costHas,profitHas:differenceHas,customerId:customer.id,customer:customer.name,description:move.description,user:session.name,userDescription:description||'',sourceType:'cariReturnOut',sourceId:move.id});
+    registerTransactionV5('CI - ÇIKAN İADE',docNo,`${customer.name} · ${o.name} · ${qty(totalGram)} GR × ${qty(milyem)} = ${qty(commercialHas)} HAS`,{amountHas:commercialHas,costHas,profitHas:differenceHas});
+    return {ok:true,move,o,commercialHas,costHas,differenceHas};
+  }
+  function reverseLinkedReturnOutForCariMove(move){
+    const imp=move?.returnOutImpact;if(!imp)return 0;
+    const o=(state.openStocks||[]).find(x=>x.id===imp.openStockId);if(!o)return 0;
+    const add=Number(imp.amount||0),oldAmount=Number(o.amount||0),oldCost=oldAmount*Number(o.inventoryUnitCostHas||imp.unitCostBefore||0);
+    o.amount=oldAmount+add;o.hasWeight=Number(o.hasWeight||0)+Number(imp.physicalHas||0);o.workmanshipTotalHas=Number(o.workmanshipTotalHas||0)+Number(imp.workmanshipHas||0);
+    if(String(imp.unit||'').toUpperCase()==='ADET')o.count=Number(o.count||oldAmount)+add;
+    o.inventoryUnitCostHas=o.amount>0?(oldCost+Number(imp.costHas||0))/o.amount:Number(imp.unitCostBefore||0);
+    o.averageWorkmanship=o.amount>0?Number(o.workmanshipTotalHas||0)/o.amount:0;
+    state.stockMoves=state.stockMoves.filter(x=>!(x.sourceType==='cariReturnOut'&&x.sourceId===move.id));
+    state.tradeMoves=state.tradeMoves.filter(x=>!(x.sourceType==='cariReturnOut'&&x.sourceId===move.id));
+    const tx=(state.transactions||[]).find(x=>x.docNo===move.sourceDocNo);if(tx){tx.status='Ters Kayıt';tx.reversedAt=now();tx.reversedBy=session?.name||'Sistem';}
+    return 1;
+  }
+
   function cariMoveUsesConversion(def, customer){
     const code=String(def?.code||'');
-    return customer?.type!=='Banka' && !['AC','AG','HC','HG','ZC','ZG'].includes(code) && def?.effect!=='none';
+    return customer?.type!=='Banka' && !['AC','AG','CI','HC','HG','ZC','ZG'].includes(code) && def?.effect!=='none';
   }
   function cariRateForUnit(unit){
     const u=String(unit||'TL').toUpperCase();
@@ -5623,6 +5669,14 @@ function stockSummaryView(){
       if(!document.getElementById('cmGoldCard')?.value)return {ok:false,msg:'Mal tanımı seçin'};
       if(Number(document.getElementById('cmGoldAmount')?.value||0)<=0)return {ok:false,msg:'Miktar girin'};
       if(Number(document.getElementById('cmGoldMilyem')?.value||0)<=0)return {ok:false,msg:'Ayar / milyem girin'};
+      return {ok:true,def};
+    }
+    if(cariMoveIsReturnOut(def)){
+      if(!document.getElementById('cmReturnStock')?.value)return {ok:false,msg:'İade edilecek ürünü seçin'};
+      const o=(state.openStocks||[]).find(x=>x.id===document.getElementById('cmReturnStock')?.value),isAdet=String(o?.unit||'').toUpperCase()==='ADET';
+      if(isAdet&&Number(document.getElementById('cmReturnCount')?.value||0)<=0)return {ok:false,msg:'İade adedini girin'};
+      if(!isAdet&&Number(document.getElementById('cmReturnGram')?.value||0)<=0)return {ok:false,msg:'İade gramını girin'};
+      if(Number(document.getElementById('cmReturnMilyem')?.value||0)<=0)return {ok:false,msg:'İade milyemini girin'};
       return {ok:true,def};
     }
     if(cariMoveIsZiynet(def)){
@@ -5661,6 +5715,12 @@ function stockSummaryView(){
       add('Mal HAS',`${document.getElementById('cmGoldMaterialHas')?.value||'0'} HAS`);
       add('İşçilik',`${document.getElementById('cmGoldWorkTotal')?.value||'0'} HAS`);
       add('Karşı Hesap',`${document.getElementById('cmGoldCounterHas')?.value||'0'} HAS`,true);
+    }else if(cariMoveIsReturnOut(def)){
+      const o=(state.openStocks||[]).find(x=>x.id===document.getElementById('cmReturnStock')?.value),isAdet=String(o?.unit||'').toUpperCase()==='ADET';
+      add('İade Ürünü',o?.name||'—');if(isAdet)add('Adet',qty(Number(document.getElementById('cmReturnCount')?.value||0)));
+      add('Toplam Gram',`${qty(Number(document.getElementById('cmReturnGram')?.value||0))} GR`);
+      add('Milyem',qty(Number(document.getElementById('cmReturnMilyem')?.value||0)));
+      add('Cari HAS',`${document.getElementById('cmReturnHas')?.value||'0'} HAS`,true);
     }else if(cariMoveIsZiynet(def)){
       const o=(state.openStocks||[]).find(x=>x.id===document.getElementById('cmZiynetStock')?.value);
       add('Ziynet',o?.name||'—'); add('Adet',qty(Number(document.getElementById('cmZiynetCount')?.value||0))); add('HAS / Adet',qty(Number(document.getElementById('cmZiynetHasUnit')?.value||0))); add('Toplam',`${document.getElementById('cmZiynetTotalHas')?.value||'0'} HAS`,true);
@@ -5754,6 +5814,15 @@ function stockSummaryView(){
         <div class="labelled"><label>Toplam İşçilik</label><input id="cmGoldWorkTotal" class="input" readonly></div>
         <div class="labelled span-2"><label>Karşı Hesap</label><input id="cmGoldCounterHas" class="input" readonly></div>
       </div></div>
+      <div class="span-4" id="cmReturnWrap" style="display:none"><div class="form-grid">
+        <div class="labelled span-2"><label>İade Edilecek Ürün</label><select id="cmReturnStock" class="select"></select></div>
+        <div class="labelled" id="cmReturnCountWrap"><label>Adet</label><input id="cmReturnCount" class="input" type="number" min="0" step="1" value="1"></div>
+        <div class="labelled"><label>Toplam Gram</label><input id="cmReturnGram" class="input" type="number" min="0" step="0.001" value="0"></div>
+        <div class="labelled" id="cmReturnZGramWrap"><label>Z. Gram / Adet</label><input id="cmReturnZGram" class="input" readonly></div>
+        <div class="labelled"><label>Milyem</label><input id="cmReturnMilyem" class="input" type="number" min="0" step="0.1" placeholder="Örn. 995"></div>
+        <div class="labelled"><label>Hesaplanan HAS</label><input id="cmReturnHas" class="input" readonly></div>
+        <div class="labelled span-2"><label>Stok Durumu</label><input id="cmReturnAvailable" class="input" readonly></div>
+      </div></div>
       <div class="span-4" id="cmZiynetWrap" style="display:none"><div class="form-grid">
         <div class="labelled span-2"><label>Ziynet Ürün</label><select id="cmZiynetStock" class="select"></select></div>
         <div class="labelled"><label>Adet</label><input id="cmZiynetCount" class="input" type="number" step="1" min="0"></div>
@@ -5782,6 +5851,11 @@ function stockSummaryView(){
         const dateInput=document.getElementById('cmDate').value; const date=dateWithCurrentClock(dateInput);
         const r=createCariGoldInMove({customer:c,cardId:document.getElementById('cmGoldCard')?.value,amount:Number(document.getElementById('cmGoldAmount')?.value||0),count:Number(document.getElementById('cmGoldCount')?.value||1),milyem:Number(document.getElementById('cmGoldMilyem')?.value||0),workMode:document.getElementById('cmGoldWorkMode')?.value||'Birim İşçilik',workValue:Number(document.getElementById('cmGoldWorkValue')?.value||0),description:document.getElementById('cmDesc').value,date});
         if(!r.ok){rollbackEdit(r.msg);return;}audit(`${c.name}: AG - ALTIN GİRİŞ · ${qty(r.totalHas)} HAS`,'Cari/Altın');closeModal();save();render();return;
+      }
+      if(cariMoveIsReturnOut(def)){
+        const dateInput=document.getElementById('cmDate').value,date=dateWithCurrentClock(dateInput);
+        const r=createCariReturnOutMove({customer:c,stockId:document.getElementById('cmReturnStock')?.value,count:Number(document.getElementById('cmReturnCount')?.value||0),gram:Number(document.getElementById('cmReturnGram')?.value||0),milyem:Number(document.getElementById('cmReturnMilyem')?.value||0),description:document.getElementById('cmDesc').value,date});
+        if(!r.ok){rollbackEdit(r.msg);return;}audit(`${c.name}: CI - ÇIKAN İADE · ${r.o.name} · ${qty(r.commercialHas)} HAS`,'Cari/İade');closeModal();save();render();return;
       }
       if(cariMoveIsZiynet(def)){
         const dateInput=document.getElementById('cmDate').value; const date=dateWithCurrentClock(dateInput);
@@ -5842,7 +5916,7 @@ function stockSummaryView(){
     },'İŞLEMİ KAYDET');
     document.querySelector('#modalRoot .modal')?.classList.add('cari-move-modal');
     document.querySelector('#modalRoot .modal-body > .form-grid')?.classList.add('cari-move-grid');
-    const typeEl=document.getElementById('cmType'),unitEl=document.getElementById('cmUnit'),unitLabel=document.getElementById('cmUnitLabel'),sideEl=document.getElementById('cmSide'),amountEl=document.getElementById('cmAmount'),amountLabel=document.getElementById('cmAmountLabel'),hint=document.getElementById('cmHint'),finWrap=document.getElementById('cmFinanceWrap'),finEl=document.getElementById('cmFinanceAccount'),sourceRateWrap=document.getElementById('cmSourceRateWrap'),sourceRateEl=document.getElementById('cmSourceRate'),counterWrap=document.getElementById('cmCounterWrap'),counterEnabledEl=document.getElementById('cmCounterEnabled'),counterUnitEl=document.getElementById('cmCounterUnit'),counterAmountEl=document.getElementById('cmCounterAmount'),counterRateEl=document.getElementById('cmCounterRate'),goldWrap=document.getElementById('cmGoldWrap'),goldCard=document.getElementById('cmGoldCard'),goldAmount=document.getElementById('cmGoldAmount'),goldAmountLabel=document.getElementById('cmGoldAmountLabel'),goldCount=document.getElementById('cmGoldCount'),goldCountWrap=document.getElementById('cmGoldCountWrap'),goldZGram=document.getElementById('cmGoldZGram'),goldZGramWrap=document.getElementById('cmGoldZGramWrap'),goldMilyem=document.getElementById('cmGoldMilyem'),goldWorkMode=document.getElementById('cmGoldWorkMode'),goldWorkValue=document.getElementById('cmGoldWorkValue'),goldMaterialHas=document.getElementById('cmGoldMaterialHas'),goldWorkTotal=document.getElementById('cmGoldWorkTotal'),goldCounterHas=document.getElementById('cmGoldCounterHas'),ziynetWrap=document.getElementById('cmZiynetWrap'),ziynetStock=document.getElementById('cmZiynetStock'),ziynetCount=document.getElementById('cmZiynetCount'),ziynetHasUnit=document.getElementById('cmZiynetHasUnit'),ziynetTotalHas=document.getElementById('cmZiynetTotalHas'),ziynetAvailable=document.getElementById('cmZiynetAvailable'),scrapWrap=document.getElementById('cmScrapWrap'),scrapEl=document.getElementById('cmScrapStock'),scrapGram=document.getElementById('cmScrapGram'),scrapMilyem=document.getElementById('cmScrapMilyem'),scrapHas=document.getElementById('cmScrapHas'),scrapAvailable=document.getElementById('cmScrapAvailable');
+    const typeEl=document.getElementById('cmType'),unitEl=document.getElementById('cmUnit'),unitLabel=document.getElementById('cmUnitLabel'),sideEl=document.getElementById('cmSide'),amountEl=document.getElementById('cmAmount'),amountLabel=document.getElementById('cmAmountLabel'),hint=document.getElementById('cmHint'),finWrap=document.getElementById('cmFinanceWrap'),finEl=document.getElementById('cmFinanceAccount'),sourceRateWrap=document.getElementById('cmSourceRateWrap'),sourceRateEl=document.getElementById('cmSourceRate'),counterWrap=document.getElementById('cmCounterWrap'),counterEnabledEl=document.getElementById('cmCounterEnabled'),counterUnitEl=document.getElementById('cmCounterUnit'),counterAmountEl=document.getElementById('cmCounterAmount'),counterRateEl=document.getElementById('cmCounterRate'),goldWrap=document.getElementById('cmGoldWrap'),goldCard=document.getElementById('cmGoldCard'),goldAmount=document.getElementById('cmGoldAmount'),goldAmountLabel=document.getElementById('cmGoldAmountLabel'),goldCount=document.getElementById('cmGoldCount'),goldCountWrap=document.getElementById('cmGoldCountWrap'),goldZGram=document.getElementById('cmGoldZGram'),goldZGramWrap=document.getElementById('cmGoldZGramWrap'),goldMilyem=document.getElementById('cmGoldMilyem'),goldWorkMode=document.getElementById('cmGoldWorkMode'),goldWorkValue=document.getElementById('cmGoldWorkValue'),goldMaterialHas=document.getElementById('cmGoldMaterialHas'),goldWorkTotal=document.getElementById('cmGoldWorkTotal'),goldCounterHas=document.getElementById('cmGoldCounterHas'),returnWrap=document.getElementById('cmReturnWrap'),returnStock=document.getElementById('cmReturnStock'),returnCount=document.getElementById('cmReturnCount'),returnCountWrap=document.getElementById('cmReturnCountWrap'),returnGram=document.getElementById('cmReturnGram'),returnZGram=document.getElementById('cmReturnZGram'),returnZGramWrap=document.getElementById('cmReturnZGramWrap'),returnMilyem=document.getElementById('cmReturnMilyem'),returnHas=document.getElementById('cmReturnHas'),returnAvailable=document.getElementById('cmReturnAvailable'),ziynetWrap=document.getElementById('cmZiynetWrap'),ziynetStock=document.getElementById('cmZiynetStock'),ziynetCount=document.getElementById('cmZiynetCount'),ziynetHasUnit=document.getElementById('cmZiynetHasUnit'),ziynetTotalHas=document.getElementById('cmZiynetTotalHas'),ziynetAvailable=document.getElementById('cmZiynetAvailable'),scrapWrap=document.getElementById('cmScrapWrap'),scrapEl=document.getElementById('cmScrapStock'),scrapGram=document.getElementById('cmScrapGram'),scrapMilyem=document.getElementById('cmScrapMilyem'),scrapHas=document.getElementById('cmScrapHas'),scrapAvailable=document.getElementById('cmScrapAvailable');
     const goldRows=()=> registeredStockCardsForEntryV679();
     const fillGold=()=>{
       const rows=goldRows();
@@ -5874,6 +5948,20 @@ function stockSummaryView(){
       goldCounterHas.value=total?qty(total):'0';
       amountEl.value=total||0;
     };
+    const returnRows=()=> (state.openStocks||[]).filter(x=>x.period===state.activePeriod&&Number(x.amount||0)>0);
+    const syncReturnCalc=(resetMilyem=false,resetQty=false)=>{
+      const o=(state.openStocks||[]).find(x=>x.id===returnStock?.value);if(!o)return;
+      const isAdet=String(o.unit||'').toUpperCase()==='ADET',zg=Number(o.zGram||0);
+      returnCountWrap.style.display=isAdet?'':'none';returnZGramWrap.style.display=isAdet?'':'none';returnGram.readOnly=isAdet;
+      if(resetQty){returnCount.value=isAdet?'1':'0';returnGram.value=isAdet?String(zg||0):'';}
+      if(resetMilyem||!Number(returnMilyem.value||0)){const card=getStockCard(o.stockCardId);returnMilyem.value=String(Number(o.purity||card?.purity||card?.karat||0));}
+      const n=Math.max(0,Number(returnCount.value||0));if(isAdet)returnGram.value=(n*zg).toFixed(3);
+      const g=Math.max(0,Number(returnGram.value||0)),m=Math.max(0,Number(returnMilyem.value||0)),hh=g*m/1000;
+      returnZGram.value=isAdet?qty(zg):'0';returnHas.value=hh?qty(hh):'0';
+      returnAvailable.value=isAdet?`${qty(o.amount||0)} ADET · ${qty(zg)} GR/adet · Saflık ${qty(o.purity||0)}`:`${qty(o.amount||0)} GR · Saflık ${qty(o.purity||0)}`;
+      amountEl.value=hh||0;
+    };
+    const fillReturn=()=>{const rows=returnRows();returnStock.innerHTML=rows.map(o=>`<option value="${o.id}">${esc(o.name)} · ${qty(o.amount||0)} ${String(o.unit||'').toUpperCase()==='ADET'?'ADET':'GR'}</option>`).join('');syncReturnCalc(true,true);};
     const ziynetRows=()=> (state.openStocks||[]).filter(x=>x.period===state.activePeriod&&String(x.unit||'').toUpperCase()==='ADET'&&(Number(x.amount||0)>0||typeEl.value==='ZG'));
     const fillZiynet=()=>{const rows=ziynetRows();ziynetStock.innerHTML=rows.map(x=>`<option value="${x.id}">${esc(x.name)} · ${qty(x.amount||0)} ADET · Fiziksel ${qty(x.hasWeight||0)} HAS</option>`).join('');syncZiynetCalc(true);};
     const syncZiynetCalc=(resetRate=false)=>{const o=(state.openStocks||[]).find(x=>x.id===ziynetStock?.value);if(!o)return;if(resetRate||!Number(ziynetHasUnit.value||0))ziynetHasUnit.value=String(ziynetDefaultHasPerUnit(o,typeEl.value)||0);const n=Number(ziynetCount.value||0),u=Number(ziynetHasUnit.value||0),t=n*u;ziynetTotalHas.value=t?qty(t):'0';ziynetAvailable.value=`${qty(o.amount||0)} ADET · 1 Adet ${qty(o.zGram||0)} GR · Maliyet ${qty(o.inventoryUnitCostHas||o.openingUnitCostHas||0)} HAS/ADET`;amountEl.value=t||0;};
@@ -5897,8 +5985,9 @@ function stockSummaryView(){
     const sync=()=>{
       const def=CARI_MOVE_TYPES.find(x=>x.code===typeEl.value)||CARI_MOVE_TYPES[0]; unitEl.value=def.defaultUnit||'HAS';
       const manual=def.effect==='manual'; sideEl.disabled=!manual && def.effect!=='none'; if(def.effect==='debit')sideEl.value='debit'; if(def.effect==='credit')sideEl.value='credit';
-      const goldMode=cariMoveIsGold(def),ziynetMode=cariMoveIsZiynet(def),scrapMode=cariMoveIsScrap(def); const stockEntryMode=goldMode||ziynetMode||scrapMode; amountEl.disabled=def.effect==='none' || stockEntryMode; ['cmUnitWrap','cmAmountWrap','cmSideWrap'].forEach(k=>{const el=document.getElementById(k);if(el)el.style.display=stockEntryMode?'none':'';}); goldWrap.style.display=goldMode?'block':'none';ziynetWrap.style.display=ziynetMode?'block':'none';scrapWrap.style.display=scrapMode?'block':'none';
+      const goldMode=cariMoveIsGold(def),returnMode=cariMoveIsReturnOut(def),ziynetMode=cariMoveIsZiynet(def),scrapMode=cariMoveIsScrap(def); const stockEntryMode=goldMode||returnMode||ziynetMode||scrapMode; amountEl.disabled=def.effect==='none' || stockEntryMode; ['cmUnitWrap','cmAmountWrap','cmSideWrap'].forEach(k=>{const el=document.getElementById(k);if(el)el.style.display=stockEntryMode?'none':'';}); goldWrap.style.display=goldMode?'block':'none';returnWrap.style.display=returnMode?'block':'none';ziynetWrap.style.display=ziynetMode?'block':'none';scrapWrap.style.display=scrapMode?'block':'none';
       if(goldMode){unitEl.value='HAS';unitEl.disabled=true;sideEl.value='credit';sideEl.disabled=true;fillGold();}
+      else if(returnMode){unitEl.value='HAS';unitEl.disabled=true;sideEl.value='debit';sideEl.disabled=true;fillReturn();}
       else if(ziynetMode){unitEl.value='HAS';unitEl.disabled=true;sideEl.value=def.code==='ZC'?'debit':'credit';sideEl.disabled=true;fillZiynet();}
       else if(scrapMode){unitEl.value='HAS';unitEl.disabled=true;sideEl.disabled=true;fillScrap();}else unitEl.disabled=false;
       const conversionMode=cariMoveUsesConversion(def,c); sourceRateWrap.style.display=conversionMode?'':'none'; counterWrap.style.display=conversionMode?'block':'none'; unitLabel.textContent=conversionMode?'Cins':'Birim';amountLabel.textContent=conversionMode?'Tutar':'Miktar / Tutar';
@@ -5912,6 +6001,7 @@ function stockSummaryView(){
       else if(linkedFinance){document.querySelector('#cmFinanceWrap label').textContent='Karşı Hesap / Kasa';fillFinance();}
       if(conversionMode)syncCounter();
       if(cariMoveIsGold(def)) hint.innerHTML='<strong>AG - ALTIN GİRİŞ:</strong> Gramlı altınlarla birlikte adetli ziynetler de aynı listede görünür. Ziynette Adet × Z. Gram otomatik hesaplanır; açık stok ve cari aynı belgeyle güncellenir.';
+      else if(def.code==='CI') hint.innerHTML='<strong>CI - ÇIKAN İADE:</strong> Açık stoktan mamul veya ziynet seçin. Adetli üründe gram otomatik gelir. <b>Milyem serbesttir</b>; örneğin 24 Ayar 1 Gram için 995 otomatik gelir, isterseniz değiştirirsiniz. Hesaplanan HAS cari BORÇ olur ve ürün stoktan düşer.';
       else if(def.code==='HC') hint.innerHTML='<strong>HC - HURDA ÇIKIŞ:</strong> Hurda türünü, gramı ve işlem milyemini girin. Örn. 14 HURDASI 575 milyem. Cari BORÇ otomatik HAS hesaplanır; hurda gramı stoktan düşer.';
       else if(def.code==='HG') hint.innerHTML='<strong>HG - HURDA GİRİŞ:</strong> Hurda türünü, gramı ve işlem milyemini girin. Cari ALACAK otomatik HAS hesaplanır ve hurda stoğu artar.';
       else if(def.code==='ZC') hint.innerHTML='<strong>ZC - ZİYNET ÇIKIŞ:</strong> Ziynet ürününü, adedi ve HAS/Adet değerini girin. Cari BORÇ olur ve ziynet stoktan düşer.';
@@ -5929,6 +6019,7 @@ function stockSummaryView(){
     unitEl.addEventListener('change',()=>{syncCounter();if(cariMoveNeedsFinance(CARI_MOVE_TYPES.find(x=>x.code===typeEl.value)))fillFinance();});
     amountEl.addEventListener('input',syncCounter);sourceRateEl.addEventListener('input',syncCounter);counterEnabledEl.addEventListener('change',syncCounter);counterUnitEl.addEventListener('change',syncCounter);counterRateEl.addEventListener('input',syncCounter);
     goldCard?.addEventListener('change',()=>syncGoldCalc(true,true));goldAmount?.addEventListener('input',()=>syncGoldCalc(false,false));goldCount?.addEventListener('input',()=>syncGoldCalc(false,false));goldMilyem?.addEventListener('input',()=>syncGoldCalc(false,false));goldWorkMode?.addEventListener('change',()=>syncGoldCalc(false,false));goldWorkValue?.addEventListener('input',()=>syncGoldCalc(false,false));
+    returnStock?.addEventListener('change',()=>syncReturnCalc(true,true));returnCount?.addEventListener('input',()=>syncReturnCalc(false,false));returnGram?.addEventListener('input',()=>syncReturnCalc(false,false));returnMilyem?.addEventListener('input',()=>syncReturnCalc(false,false));
     ziynetStock?.addEventListener('change',()=>syncZiynetCalc(true));ziynetCount?.addEventListener('input',()=>syncZiynetCalc(false));ziynetHasUnit?.addEventListener('input',()=>syncZiynetCalc(false));
     scrapEl?.addEventListener('change',()=>syncScrapCalc(true));scrapGram?.addEventListener('input',()=>syncScrapCalc(false));scrapMilyem?.addEventListener('input',()=>syncScrapCalc(false));
     const cariConfirmBtn=document.getElementById('modalConfirm');
@@ -5959,6 +6050,14 @@ function stockSummaryView(){
           }
           goldMilyem.value=Number(editingMove.sourceRate??0)||'';
           syncGoldCalc(false,false);
+        }else if(cariMoveIsReturnOut(def)){
+          const imp=editingMove.returnOutImpact||{};
+          if(imp.openStockId&&[...returnStock.options].some(o=>o.value===imp.openStockId))returnStock.value=imp.openStockId;
+          syncReturnCalc(true,true);
+          if(String(imp.unit||'').toUpperCase()==='ADET')returnCount.value=Number(imp.count??editingMove.sourceAmount??1)||1;
+          else returnGram.value=Number(imp.gram??editingMove.sourceAmount??0)||'';
+          returnMilyem.value=Number(imp.milyem??editingMove.sourceRate??0)||'';
+          syncReturnCalc(false,false);
         }else if(cariMoveIsZiynet(def)){
           const imp=editingMove.ziynetImpact||{};
           if(imp.openStockId&&[...ziynetStock.options].some(o=>o.value===imp.openStockId))ziynetStock.value=imp.openStockId;
@@ -6000,8 +6099,8 @@ function stockSummaryView(){
   }
   function removeManualCariMove(moveId){
     const m=state.customerMoves.find(x=>x.id===moveId); if(!m)return false; const c=state.customers.find(x=>x.id===m.customerId); if(c)applyCariBalance(c,m.unit,Number(m.credit||0),Number(m.debit||0));
-    const bankTransferCount=reverseBankCashTransferForCariMove(m); const linkedFinanceCount=bankTransferCount?0:reverseLinkedFinanceForCariMove(m); const linkedScrapCount=reverseLinkedScrapForCariMove(m); const linkedGoldCount=reverseLinkedGoldForCariMove(m); const linkedZiynetCount=reverseLinkedZiynetForCariMove(m);
-    state.customerMoves=state.customerMoves.filter(x=>x.id!==moveId); audit(`${c?.name||'Cari'} hareketi silindi: ${m.type}${bankTransferCount?' · banka/kasa virmanı geri alındı':''}${linkedFinanceCount?' · bağlı kasa hareketi geri alındı':''}${linkedScrapCount?' · hurda stok hareketi geri alındı':''}${linkedGoldCount?' · altın stok hareketi geri alındı':''}${linkedZiynetCount?' · ziynet stok hareketi geri alındı':''}`,'Cari'); return true;
+    const bankTransferCount=reverseBankCashTransferForCariMove(m); const linkedFinanceCount=bankTransferCount?0:reverseLinkedFinanceForCariMove(m); const linkedScrapCount=reverseLinkedScrapForCariMove(m); const linkedGoldCount=reverseLinkedGoldForCariMove(m); const linkedReturnCount=reverseLinkedReturnOutForCariMove(m); const linkedZiynetCount=reverseLinkedZiynetForCariMove(m);
+    state.customerMoves=state.customerMoves.filter(x=>x.id!==moveId); audit(`${c?.name||'Cari'} hareketi silindi: ${m.type}${bankTransferCount?' · banka/kasa virmanı geri alındı':''}${linkedFinanceCount?' · bağlı kasa hareketi geri alındı':''}${linkedScrapCount?' · hurda stok hareketi geri alındı':''}${linkedGoldCount?' · altın stok hareketi geri alındı':''}${linkedReturnCount?' · çıkan iade stok hareketi geri alındı':''}${linkedZiynetCount?' · ziynet stok hareketi geri alındı':''}`,'Cari'); return true;
   }
   function openOpeningCariEdit(move){
     const c=(state.customers||[]).find(x=>x.id===move?.customerId); if(!c||!move)return;
@@ -6475,7 +6574,7 @@ function stockSummaryView(){
   }
 
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion='6.84';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();migratePusulaFixedMilyemV684();
+    state.meta=state.meta||{};state.meta.appVersion='6.85';migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();migratePusulaFixedMilyemV684();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
