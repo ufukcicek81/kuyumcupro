@@ -1,0 +1,35 @@
+name: Inject Cari History
+on:
+  push:
+    branches: [feature-01-cari-islem-gecmisi]
+    paths:
+      - 'features/cari-history-v1.js'
+      - '.github/workflows/inject-cari-history.yml'
+jobs:
+  inject:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inject script tag
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          tag = '<script src="./features/cari-history-v1.js"></script>'
+          if tag not in s:
+              marker = '</body>'
+              if marker not in s:
+                  raise SystemExit('index.html içinde </body> bulunamadı')
+              s = s.replace(marker, tag + '\n' + marker, 1)
+              p.write_text(s, encoding='utf-8')
+      - name: Commit injection
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git diff --cached --quiet && exit 0
+          git commit -m 'v1 cari işlem geçmişini programa bağla'
+          git push
