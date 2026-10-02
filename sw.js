@@ -1,5 +1,5 @@
-const C='asil-v6-83-stock-commercial-v1-20261002';
-const FEATURES=['./features/cari-history-v1.js','./features/cari-collection-v1.js','./features/return-tradein-v1.js','./features/stock-milyem-v1.js','./features/stock-card-selector-v1.js','./features/stock-card-commercial-v1.js'];
+const C='asil-v6-83-barcode-label-v1-20261002';
+const FEATURES=['./features/cari-history-v1.js','./features/cari-collection-v1.js','./features/return-tradein-v1.js','./features/stock-milyem-v1.js','./features/stock-card-selector-v1.js','./features/stock-card-commercial-v1.js','./features/barcode-label-v1.js'];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(C).then(c=>c.addAll(['./','./index.html',...FEATURES])))});
 self.addEventListener('activate',e=>{e.waitUntil((async()=>{await caches.keys().then(a=>Promise.all(a.filter(x=>x!==C).map(x=>caches.delete(x))));await self.clients.claim()})())});
 async function injectFeatures(response){if(!response||!response.ok)return response;const type=response.headers.get('content-type')||'';if(!type.includes('text/html'))return response;let text=await response.text();for(const feature of FEATURES){if(!text.includes(feature)){const tag=`<script src="${feature}"></script>`;text=text.includes('</body>')?text.replace('</body>',tag+'\n</body>'):text+'\n'+tag}}const headers=new Headers(response.headers);headers.delete('content-length');return new Response(text,{status:response.status,statusText:response.statusText,headers})}
