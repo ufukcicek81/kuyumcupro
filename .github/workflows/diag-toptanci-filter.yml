@@ -1,5 +1,9 @@
 name: Diagnose toptanci filter
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/diag-toptanci-filter.yml"
   workflow_dispatch:
 permissions:
   contents: read
