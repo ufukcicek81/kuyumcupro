@@ -1,0 +1,42 @@
+name: one-time-v684-filter-fix
+on:
+  push:
+    branches:
+      - codex/v684-toptanci-filter
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply v6.84 Toptanci filter fix
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          old="(!q||r.dataset.search.toLocaleLowerCase('tr-TR').includes(q))&&(!acct||r.dataset.customerType===acct)&&(!cid||r.dataset.customer===cid)&&(!typ||r.dataset.type===typ)&&(!unit||r.dataset.unit===unit)?'':'none';"
+          new="(!q||r.dataset.search.toLocaleLowerCase('tr-TR').includes(q))&&(!acct||String(r.dataset.customerType||'').trim().toLocaleLowerCase('tr-TR')===String(acct).trim().toLocaleLowerCase('tr-TR'))&&(!cid||r.dataset.customer===cid)&&(!typ||r.dataset.type===typ)&&(!unit||r.dataset.unit===unit)?'':'none';"
+          assert s.count(old)==1, f'Expected exactly one old filter expression, found {s.count(old)}'
+          s=s.replace(old,new)
+          s=s.replace('Asil Kuyumcu Pro V6.83 -','Asil Kuyumcu Pro V6.84 -')
+          s=s.replace('<title>Asil Kuyumcu Pro V6.83</title>','<title>Asil Kuyumcu Pro V6.84</title>')
+          s=s.replace('<span class="ui-version">v6.83</span>','<span class="ui-version">v6.84</span>')
+          s=s.replace("state.meta.appVersion='6.83';","state.meta.appVersion='6.84';")
+          assert "state.meta.appVersion='6.83';" not in s
+          assert "String(r.dataset.customerType||'').trim().toLocaleLowerCase('tr-TR')===String(acct).trim().toLocaleLowerCase('tr-TR')" in s
+          p.write_text(s,encoding='utf-8')
+          PY
+          git diff --check
+          git diff --unified=3 -- index.html
+      - name: Commit and remove one-time workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git rm .github/workflows/one-time-v684.yml
+          git commit -m "V6.84: fix cari hareketleri toptanci filtresi"
+          git push origin HEAD:codex/v684-toptanci-filter
