@@ -12,8 +12,10 @@
   function apply(){var input=searchInput(),q=norm(input&&input.value);cards().forEach(function(c){var ok=(active==='Tümü'||type(c)===active)&&(!q||norm(text(c)).indexOf(q)>=0);c.style.display=ok?'':'none'});filterButtons().forEach(function(b){var on=text(b)===active;b.classList.toggle('active',on);b.classList.toggle('btn-primary',on);b.setAttribute('aria-pressed',on?'true':'false')})}
   function bind(){if(!grid())return;if(!bound){bound=true;document.addEventListener('click',function(e){var b=e.target&&e.target.closest?e.target.closest('button'):null;if(!b||TYPES.indexOf(text(b))<0||filterButtons().indexOf(b)<0)return;e.preventDefault();e.stopPropagation();active=text(b);apply()},true);document.addEventListener('input',function(e){if(e.target===searchInput())apply()})}apply()}
   function addCompactStyle(){if(document.getElementById('ufukCariCompactStyle'))return;var st=document.createElement('style');st.id='ufukCariCompactStyle';st.textContent='#cariCardGrid{gap:10px!important;align-items:start!important}#cariCardGrid>.card{padding:11px!important;min-height:0!important}#cariCardGrid>.card .section-head{margin-bottom:5px!important}#cariCardGrid>.card .section-head h3{font-size:15px!important}#cariCardGrid>.card .summary-row{padding:3px 0!important}#cariCardGrid>.card .btn{min-height:32px!important;padding:6px 9px!important;font-size:11px!important}@media(min-width:1200px){#cariCardGrid{grid-template-columns:repeat(4,minmax(0,1fr))!important}}@media(min-width:900px) and (max-width:1199px){#cariCardGrid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}';document.head.appendChild(st)}
-  var mo=new MutationObserver(function(){if(grid()){addCompactStyle();bind()}unlockZiynetTakas()});
+  var mo=new MutationObserver(function(){if(grid()){addCompactStyle();bind()}});
 
+  // Döviz satışında fiş başlığını doğru tipe çevir ve satış tamamlanınca
+  // geçmişe tekrar girmeden mevcut "Fiş Yazdır" aksiyonunu otomatik çalıştır.
   var currencySalePending=false;
   var currencyPrintDone=false;
   function visible(el){if(!el)return false;var s=getComputedStyle(el);var r=el.getBoundingClientRect();return s.display!=='none'&&s.visibility!=='hidden'&&r.width>0&&r.height>0}
@@ -60,74 +62,85 @@
     window.finalizeSale=wrapped;
     return true;
   }
-  function bindCurrencyPrint(){patchFinalize();autoPrintCurrencyReceipt()}
+  function bindCurrencyPrint(){patchFinalize();autoPrintCurrencyReceipt();}
 
-  var ziynetTakasBound=new WeakSet();
+  // Takas/ziynet penceresinde Fiyat ve Toplam Tutar alanlarını gerçekten serbest bırak.
+  // Uygulamanın sonradan disabled/readonly vermesi veya kontrollü input ile eski değeri
+  // geri yazması durumunda da alanları tekrar açarız. Fiyat boş bırakılabilir ve toplam
+  // tutar kullanıcı tarafından elle girilebilir.
   function ziynetTakasModal(el){
-    var t=text(el);
-    return /Müşteriden\s+Al\s*\/\s*Takas\s*Mahsubu/i.test(t)||/Altın\s*\/\s*Ziynet/i.test(t)&&/Takas/i.test(t);
-  }
-  function fieldContainer(input){
-    var p=input;
-    for(var i=0;i<6&&p;i++,p=p.parentElement){
-      var s=text(p);
-      if(/Fiyat\s*\(TL\)/i.test(s)||/Toplam\s*Tutar/i.test(s))return p;
-    }
-    return input.parentElement||input;
+    return /Müşteriden\s+Al\s*\/\s*Takas\s*Mahsubu/i.test(text(el));
   }
   function fieldLabel(input){
     var p=input;
-    for(var i=0;i<6&&p;i++,p=p.parentElement){
+    for(var i=0;i<7&&p;i++,p=p.parentElement){
       var lab=p.querySelector&&p.querySelector('label');
       if(lab){var t=text(lab);if(t)return t;}
     }
-    var c=fieldContainer(input),ct=text(c);
-    if(/Fiyat\s*\(TL\)/i.test(ct))return 'Fiyat (TL)';
-    if(/Toplam\s*Tutar/i.test(ct))return 'Toplam Tutar';
     var prev=input.previousElementSibling;
     return prev?text(prev):'';
   }
-  function unlockInput(input){
-    if(!input||input.tagName==='SELECT')return;
+  function isTakasField(input){
+    var lab=fieldLabel(input);
+    var ph=String(input.getAttribute('placeholder')||'');
+    var name=String(input.getAttribute('name')||'');
+    var aria=String(input.getAttribute('aria-label')||'');
+    return /Fiyat\s*\(TL\)|Toplam\s*Tutar/i.test(lab+' '+ph+' '+name+' '+aria);
+  }
+  function makeEditable(input){
+    if(!input||!isTakasField(input))return;
     input.disabled=false;
     input.readOnly=false;
     input.removeAttribute('disabled');
     input.removeAttribute('readonly');
-    input.setAttribute('aria-disabled','false');
+    input.removeAttribute('aria-disabled');
     input.style.pointerEvents='auto';
     input.style.userSelect='text';
-    input.style.cursor='text';
+    input.style.webkitUserSelect='text';
+    input.tabIndex=0;
+    input.classList.remove('disabled','readonly');
   }
   function unlockZiynetTakas(){
     var roots=Array.from(document.querySelectorAll('.modal,.dialog,[role="dialog"],[class*="modal"],[class*="dialog"]')).filter(visible).filter(ziynetTakasModal);
     roots.forEach(function(root){
-      var inputs=Array.from(root.querySelectorAll('input,textarea'));
-      inputs.forEach(function(input){
-        var lab=fieldLabel(input);
-        if(/Fiyat\s*\(TL\)/i.test(lab)||/Toplam\s*Tutar/i.test(lab))unlockInput(input);
-      });
-      var price=inputs.find(function(i){return /Fiyat\s*\(TL\)/i.test(fieldLabel(i))});
-      var total=inputs.find(function(i){return /Toplam\s*Tutar/i.test(fieldLabel(i))});
-      if(price&&!price.__ufukUnlock){
-        price.__ufukUnlock=true;
-        ['focus','click','keydown','input','change'].forEach(function(ev){price.addEventListener(ev,function(){unlockInput(price)},true)});
-      }
-      if(total&&!total.__ufukUnlock){
-        total.__ufukUnlock=true;
-        ['focus','click','keydown','input','change'].forEach(function(ev){total.addEventListener(ev,function(){unlockInput(total)},true)});
-        total.addEventListener('input',function(){total.dataset.ufukManualTotal='1'},true);
-      }
-      if(price&&total){
-        price.addEventListener('input',function(){
-          if(String(price.value||'').trim()===''){
-            total.dataset.ufukManualTotal='1';
-            unlockInput(total);
+      Array.from(root.querySelectorAll('input,textarea')).forEach(function(input){
+        if(!isTakasField(input))return;
+        makeEditable(input);
+        if(input.dataset.ufukTakasBound==='1')return;
+        input.dataset.ufukTakasBound='1';
+        input.addEventListener('keydown',function(e){
+          if((e.key==='Backspace'||e.key==='Delete') && !input.readOnly && !input.disabled){
+            if(input.selectionStart===0&&input.selectionEnd===input.value.length || e.key==='Delete' || (e.key==='Backspace'&&input.selectionStart!==input.selectionEnd&&input.selectionStart===0&&input.selectionEnd===input.value.length)){
+              e.preventDefault();
+              e.stopImmediatePropagation();
+              input.value='';
+              return;
+            }
+          }
+          if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='a'){
+            e.stopImmediatePropagation();
           }
         },true);
-      }
+        input.addEventListener('beforeinput',function(e){
+          if(e.inputType==='deleteContentBackward'||e.inputType==='deleteContentForward'||e.inputType==='deleteByCut'){
+            if(input.selectionStart===0&&input.selectionEnd===input.value.length){
+              e.preventDefault();
+              e.stopImmediatePropagation();
+              input.value='';
+            }
+          }
+        },true);
+        input.addEventListener('input',function(e){
+          makeEditable(input);
+          if(String(input.value||'').trim()==='')e.stopImmediatePropagation();
+        },true);
+        input.addEventListener('change',function(){makeEditable(input)},true);
+      });
     });
   }
-  function bindZiynetTakas(){unlockZiynetTakas()}
+  function bindZiynetTakas(){
+    unlockZiynetTakas();
+  }
 
   function start(){
     if(!document.body)return;
@@ -136,8 +149,8 @@
     bind();
     setTimeout(bind,250);setTimeout(bind,1000);
     setTimeout(bindCurrencyPrint,300);setTimeout(bindCurrencyPrint,1000);setTimeout(bindCurrencyPrint,2000);
-    setTimeout(bindZiynetTakas,250);setTimeout(bindZiynetTakas,800);setTimeout(bindZiynetTakas,1600);
-    setInterval(unlockZiynetTakas,300);
+    bindZiynetTakas();
+    setInterval(bindZiynetTakas,150);
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
 })();
