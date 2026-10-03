@@ -1,0 +1,17 @@
+name: Diagnose toptanci filter
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Find filter code
+        shell: bash
+        run: |
+          echo '--- TOOPTANCI MATCHES ---'
+          grep -n -i -E 'toptancı|toptanci|toptan' index.html | head -80 || true
+          echo '--- FILTRE MATCHES ---'
+          grep -n -i -E 'filtre|filter' index.html | head -120 || true
