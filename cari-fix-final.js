@@ -13,6 +13,59 @@
   function bind(){if(!grid())return;if(!bound){bound=true;document.addEventListener('click',function(e){var b=e.target&&e.target.closest?e.target.closest('button'):null;if(!b||TYPES.indexOf(text(b))<0||filterButtons().indexOf(b)<0)return;e.preventDefault();e.stopPropagation();active=text(b);apply()},true);document.addEventListener('input',function(e){if(e.target===searchInput())apply()})}apply()}
   function addCompactStyle(){if(document.getElementById('ufukCariCompactStyle'))return;var st=document.createElement('style');st.id='ufukCariCompactStyle';st.textContent='#cariCardGrid{gap:10px!important;align-items:start!important}#cariCardGrid>.card{padding:11px!important;min-height:0!important}#cariCardGrid>.card .section-head{margin-bottom:5px!important}#cariCardGrid>.card .section-head h3{font-size:15px!important}#cariCardGrid>.card .summary-row{padding:3px 0!important}#cariCardGrid>.card .btn{min-height:32px!important;padding:6px 9px!important;font-size:11px!important}@media(min-width:1200px){#cariCardGrid{grid-template-columns:repeat(4,minmax(0,1fr))!important}}@media(min-width:900px) and (max-width:1199px){#cariCardGrid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}';document.head.appendChild(st)}
   var mo=new MutationObserver(function(){if(grid()){addCompactStyle();bind()}});
-  function start(){if(!document.body)return;addCompactStyle();mo.observe(document.body,{childList:true,subtree:true});bind();setTimeout(bind,250);setTimeout(bind,1000)}
+
+  // Döviz satışında fiş başlığını doğru tipe çevir ve satış tamamlanınca
+  // geçmişe tekrar girmeden mevcut "Fiş Yazdır" aksiyonunu otomatik çalıştır.
+  var currencySalePending=false;
+  var currencyPrintDone=false;
+  function visible(el){if(!el)return false;var s=getComputedStyle(el);var r=el.getBoundingClientRect();return s.display!=='none'&&s.visibility!=='hidden'&&r.width>0&&r.height>0}
+  function visibleCurrencySale(){
+    var els=Array.from(document.querySelectorAll('button,[role="button"],h1,h2,h3,h4,.modal,.dialog,[class*="modal"],[class*="dialog"]'));
+    return els.some(function(el){return visible(el)&&/döviz\s+satış/i.test(text(el))});
+  }
+  function fixCurrencyReceiptTitle(){
+    var changed=false;
+    Array.from(document.querySelectorAll('*')).forEach(function(el){
+      if(!visible(el))return;
+      var t=text(el);
+      if(t==='ALTIN / ZİYNET İŞLEM FİŞİ'){
+        el.textContent='DÖVİZ İŞLEM FİŞİ';
+        changed=true;
+      }
+    });
+    return changed;
+  }
+  function autoPrintCurrencyReceipt(){
+    if(!currencySalePending||currencyPrintDone)return false;
+    fixCurrencyReceiptTitle();
+    var candidates=Array.from(document.querySelectorAll('button,[role="button"],a,input[type="button"],input[type="submit"]')).filter(visible);
+    var btn=candidates.find(function(el){return /^fiş\s*yazdır$/i.test(text(el)||el.value||'')});
+    if(!btn)btn=candidates.find(function(el){return /fiş\s*yazdır/i.test(text(el)||el.value||'')});
+    if(!btn)return false;
+    currencyPrintDone=true;
+    try{btn.click()}catch(e){console.error('Döviz fişi otomatik yazdırma:',e)}
+    return true;
+  }
+  function patchFinalize(){
+    if(typeof window.finalizeSale!=='function')return false;
+    if(window.finalizeSale.__ufukCurrencyPrint)return true;
+    var original=window.finalizeSale;
+    function wrapped(){
+      currencySalePending=visibleCurrencySale();
+      currencyPrintDone=false;
+      var result=original.apply(this,arguments);
+      [300,700,1200,2000,3500].forEach(function(ms){setTimeout(autoPrintCurrencyReceipt,ms)});
+      return result;
+    }
+    wrapped.__ufukCurrencyPrint=true;
+    wrapped.__original=original;
+    window.finalizeSale=wrapped;
+    return true;
+  }
+  function bindCurrencyPrint(){
+    patchFinalize();
+    autoPrintCurrencyReceipt();
+  }
+  function start(){if(!document.body)return;addCompactStyle();mo.observe(document.body,{childList:true,subtree:true});bind();setTimeout(bind,250);setTimeout(bind,1000);setTimeout(bindCurrencyPrint,300);setTimeout(bindCurrencyPrint,1000);setTimeout(bindCurrencyPrint,2000)}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
 })();
