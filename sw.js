@@ -1,5 +1,5 @@
-const C='asil-v6-83-production-safety-20261003-cari-v2';
-const FEATURES=['./features/cari-payment-gold-v1.js','./features/cari-history-v1.js'];
+const C='asil-v6-83-production-safety-20261003-cari-v3';
+const FEATURES=['./features/cari-payment-gold-v1.js','./features/cari-history-v1.js','./features/cari-payment-ledger-v1.js'];
 self.addEventListener('install',e=>{
   self.skipWaiting();
   e.waitUntil(caches.open(C).then(c=>c.addAll(['./','./index.html',...FEATURES])));
