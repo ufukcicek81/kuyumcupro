@@ -66,6 +66,50 @@
     patchFinalize();
     autoPrintCurrencyReceipt();
   }
-  function start(){if(!document.body)return;addCompactStyle();mo.observe(document.body,{childList:true,subtree:true});bind();setTimeout(bind,250);setTimeout(bind,1000);setTimeout(bindCurrencyPrint,300);setTimeout(bindCurrencyPrint,1000);setTimeout(bindCurrencyPrint,2000)}
+
+  // Takas/ziynet penceresinde Fiyat ve Toplam Tutar alanları kilitli olmasın.
+  // Fiyat boş bırakılabilir; bu durumda Toplam Tutar kullanıcı tarafından elle girilebilir.
+  var ziynetTakasBound=new WeakSet();
+  function ziynetTakasModal(el){
+    return /Müşteriden\s+Al\s*\/\s*Takas\s*Mahsubu/i.test(text(el));
+  }
+  function fieldLabel(input){
+    var p=input;
+    for(var i=0;i<5&&p;i++,p=p.parentElement){
+      var lab=p.querySelector&&p.querySelector('label');
+      if(lab){var t=text(lab);if(t)return t;}
+    }
+    var prev=input.previousElementSibling;
+    return prev?text(prev):'';
+  }
+  function unlockZiynetTakas(){
+    var roots=Array.from(document.querySelectorAll('.modal,.dialog,[role="dialog"],[class*="modal"],[class*="dialog"]')).filter(visible).filter(ziynetTakasModal);
+    roots.forEach(function(root){
+      if(ziynetTakasBound.has(root))return;
+      var inputs=Array.from(root.querySelectorAll('input,textarea,select'));
+      inputs.forEach(function(input){
+        var lab=fieldLabel(input);
+        if(!/Fiyat\s*\(TL\)|Toplam\s*Tutar/i.test(lab))return;
+        input.disabled=false;
+        input.readOnly=false;
+        input.removeAttribute('disabled');
+        input.removeAttribute('readonly');
+        input.style.pointerEvents='auto';
+        input.style.userSelect='text';
+      });
+      var price=inputs.find(function(i){return /Fiyat\s*\(TL\)/i.test(fieldLabel(i))});
+      var total=inputs.find(function(i){return /Toplam\s*Tutar/i.test(fieldLabel(i))});
+      if(price&&total){
+        price.addEventListener('input',function(e){
+          if(String(price.value||'').trim()==='')e.stopImmediatePropagation();
+        },true);
+        total.addEventListener('input',function(){total.dataset.ufukManualTotal='1';},true);
+      }
+      ziynetTakasBound.add(root);
+    });
+  }
+  function bindZiynetTakas(){unlockZiynetTakas();}
+
+  function start(){if(!document.body)return;addCompactStyle();mo.observe(document.body,{childList:true,subtree:true});bind();setTimeout(bind,250);setTimeout(bind,1000);setTimeout(bindCurrencyPrint,300);setTimeout(bindCurrencyPrint,1000);setTimeout(bindCurrencyPrint,2000);setTimeout(bindZiynetTakas,250);setTimeout(bindZiynetTakas,800);setTimeout(bindZiynetTakas,1600)}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
 })();
