@@ -23,18 +23,32 @@
   function bindCurrencyPrint(){patchFinalize();autoPrintCurrencyReceipt()}
 
   var currencySummaryOpen=false,currencySummaryBypass=false,currencySummaryTarget=null,currencySummaryKind='';
-  function currencyPanel(){var roots=Array.from(document.querySelectorAll('.modal,.dialog,[role="dialog"],[class*="modal"],[class*="dialog"],main,section')).filter(visible),hit=roots.filter(function(r){return /döviz\s+(alış|satış)/i.test(text(r))});return hit.length?hit.sort(function(a,b){return text(b).length-text(a).length})[0]:null}
+  function currencyPanel(btn){
+    var selector='.modal,.dialog,[role="dialog"],[class*="modal"],[class*="dialog"]';
+    if(btn){
+      var p=btn;
+      for(var level=0;level<9&&p;level++,p=p.parentElement){
+        if(visible(p)&&/döviz\s+(alış|satış)/i.test(text(p))&&p.querySelector('input:not([type="hidden"]),select,textarea'))return p;
+      }
+    }
+    var roots=Array.from(document.querySelectorAll(selector+',main,section')).filter(visible),hit=roots.filter(function(r){return /döviz\s+(alış|satış)/i.test(text(r))});
+    return hit.length?hit.sort(function(a,b){return text(a).length-text(b).length})[0]:null;
+  }
   function currencyKind(panel){var t=norm(text(panel));if(/döviz\s+alış/.test(t))return 'DÖVİZ ALIŞ';if(/döviz\s+satış/.test(t))return 'DÖVİZ SATIŞ';return ''}
   function labelText(label){return String(text(label)||'').replace(/\s+/g,' ').replace(/\*+$/,'').trim()}
   function controlDisplayValue(el){if(!el)return '';if(el.tagName&&el.tagName.toLowerCase()==='select'){var o=el.options&&el.options[el.selectedIndex];return String((o&&o.text)||el.value||'').trim()}return String(el.value||text(el)||'').trim()}
   function findControlForLabel(panel,rx){
-    var labels=Array.from(panel.querySelectorAll('label,th,.label,.form-label'));
+    var labels=Array.from(panel.querySelectorAll('label,th,.label,.form-label,[class*="label"]'));
     for(var i=0;i<labels.length;i++){
       var lab=labelText(labels[i]);
       if(!rx.test(lab))continue;
       var target=null,forId=labels[i].getAttribute('for');
       if(forId)target=document.getElementById(forId);
-      if(!target){var p=labels[i].parentElement;for(var level=0;level<3&&p&&!target;level++,p=p.parentElement){target=p.querySelector('input:not([type="hidden"]),select,textarea');}}
+      if(!target){var p=labels[i];for(var level=0;level<4&&p&&!target;level++,p=p.parentElement){target=p.querySelector('input:not([type="hidden"]),select,textarea');}}
+      if(!target&&labels[i].parentElement){
+        var siblings=Array.from(labels[i].parentElement.children),idx=siblings.indexOf(labels[i]);
+        for(var j=idx+1;j<siblings.length&&!target;j++){target=siblings[j].querySelector&&siblings[j].querySelector('input:not([type="hidden"]),select,textarea')}
+      }
       if(target&&visible(target))return target;
     }
     return null;
@@ -55,7 +69,7 @@
   function closeCurrencySummary(){var old=document.getElementById('ufukCurrencySummary');if(old)old.remove();currencySummaryOpen=false;currencySummaryTarget=null}
   function showCurrencySummary(panel,target,kind){if(currencySummaryOpen)return;currencySummaryOpen=true;currencySummaryTarget=target;currencySummaryKind=kind;var data=currencySummaryData(panel),box=document.createElement('div');box.id='ufukCurrencySummary';box.style.cssText='position:fixed;inset:0;z-index:2147483646;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px;font-family:Arial,sans-serif';var card=document.createElement('div');card.style.cssText='width:min(560px,96vw);max-height:90vh;overflow:auto;background:#fff;border-radius:14px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.3)';var title=document.createElement('h2');title.textContent=kind+' — İŞLEM ÖZETİ';title.style.cssText='margin:0 0 16px;font-size:21px';card.appendChild(title);data.forEach(function(row){var line=document.createElement('div');line.style.cssText='display:flex;justify-content:space-between;gap:20px;border-bottom:1px solid #eee;padding:10px 0';var a=document.createElement('b');a.textContent=row[0];var b=document.createElement('span');b.textContent=row[1];line.appendChild(a);line.appendChild(b);card.appendChild(line)});var actions=document.createElement('div');actions.style.cssText='display:flex;gap:10px;justify-content:flex-end;margin-top:20px';var cancel=document.createElement('button');cancel.textContent='VAZGEÇ';cancel.style.cssText='border:0;border-radius:8px;padding:12px 20px;background:#eee;font-weight:700;cursor:pointer';cancel.onclick=function(){closeCurrencySummary()};var ok=document.createElement('button');ok.textContent='ONAYLA VE İŞLEMİ TAMAMLA';ok.style.cssText='border:0;border-radius:8px;padding:12px 20px;background:#b38b2e;color:#fff;font-weight:700;cursor:pointer';ok.onclick=function(){var btn=currencySummaryTarget;closeCurrencySummary();if(btn){currencySummaryBypass=true;currencySalePending=true;currencyPrintDone=false;try{btn.click()}finally{currencySummaryBypass=false}}[500,1000,1800,3000,5000].forEach(function(ms){setTimeout(autoPrintCurrencyReceipt,ms)})};actions.appendChild(cancel);actions.appendChild(ok);card.appendChild(actions);box.appendChild(card);document.body.appendChild(box)}
   function isCurrencyConfirmButton(btn,panel){var t=norm(text(btn)||btn.value||'');if(!/onayla|tamamla|kaydet|satış\s+yap|alış\s+yap|işlemi\s+tamamla/.test(t))return false;return !!panel}
-  function bindCurrencySummary(){if(document.documentElement.dataset.ufukCurrencySummaryBound==='1')return;document.documentElement.dataset.ufukCurrencySummaryBound='1';document.addEventListener('click',function(e){if(currencySummaryBypass)return;var btn=e.target&&e.target.closest?e.target.closest('button,[role="button"],input[type="button"],input[type="submit"]'):null;if(!btn||!visible(btn))return;var panel=currencyPanel();if(!panel)return;var kind=currencyKind(panel);if(!kind||!isCurrencyConfirmButton(btn,panel))return;e.preventDefault();e.stopImmediatePropagation();showCurrencySummary(panel,btn,kind)},true)}
+  function bindCurrencySummary(){if(document.documentElement.dataset.ufukCurrencySummaryBound==='1')return;document.documentElement.dataset.ufukCurrencySummaryBound='1';document.addEventListener('click',function(e){if(currencySummaryBypass)return;var btn=e.target&&e.target.closest?e.target.closest('button,[role="button"],input[type="button"],input[type="submit"]'):null;if(!btn||!visible(btn))return;var panel=currencyPanel(btn);if(!panel)return;var kind=currencyKind(panel);if(!kind||!isCurrencyConfirmButton(btn,panel))return;e.preventDefault();e.stopImmediatePropagation();showCurrencySummary(panel,btn,kind)},true)}
 
   function ziynetTakasModal(el){return /Müşteriden\s+Al\s*\/\s*Takas\s*Mahsubu/i.test(text(el))}
   function fieldLabel(input){var p=input;for(var i=0;i<7&&p;i++,p=p.parentElement){var lab=p.querySelector&&p.querySelector('label');if(lab){var t=text(lab);if(t)return t}}var prev=input.previousElementSibling;return prev?text(prev):''}
