@@ -172,7 +172,7 @@ export default {
     const url = new URL(request.url);
     try {
       if (request.method === 'GET' && url.pathname === '/health') {
-        return json({ ok: true, service: 'Asil Kuyumcu Pro Worker', version: '6.30', openSanctions: Boolean(env.OPENSANCTIONS_API_KEY), nfcKv: Boolean(env.NFC_SESSIONS), invoice: Boolean(env.INVOICE_PROVIDER_URL) });
+        return json({ ok: true, service: 'Asil Kuyumcu Pro Worker', version: '6.83', openSanctions: Boolean(env.OPENSANCTIONS_API_KEY), nfcKv: Boolean(env.NFC_SESSIONS), invoice: Boolean(env.INVOICE_PROVIDER_URL) });
       }
       if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/price')) return await haremPrice();
       if (request.method !== 'POST') return json({ ok: false, message: 'Desteklenmeyen istek.' }, 405);
