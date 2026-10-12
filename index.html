@@ -4828,15 +4828,15 @@ function stockSummaryView(){
       <div class="labelled"><label>Fiyat (TL)</label><input id="tiPrice" class="input" type="number" step="0.01"></div>
       <div class="labelled"><label>Milyem</label><input id="tiPurity" class="input" readonly></div>
       <div class="labelled"><label>HAS</label><input id="tiHas" class="input" readonly></div>
-      <div class="labelled"><label>Toplam Tutar</label><input id="tiTotal" class="input" readonly></div>
+      <div class="labelled"><label>Toplam Tutar</label><input id="tiTotal" class="input" type="number" step="0.01"></div>
     </div>`,()=>{
       const item=items[Number(document.getElementById('tiItem').value)],n=Number(document.getElementById('tiQty').value||0),price=Number(document.getElementById('tiPrice').value||0),has=Number(document.getElementById('tiHas').value||0),total=Number(document.getElementById('tiTotal').value||0);
       if(n<=0||total<=0)return toast('Miktar ve fiyatı kontrol edin','err');
       saleDraft.payments.push({type:'Altın / Ziynet',amount:total,itemCode:item.code,itemName:item.name,itemKind:item.kind,unit:item.unit,nativeAmount:n,purity:item.purity,zGram:item.zGram||0,hasAmount:has,detail:`${item.name} · ${qty(n)} ${item.unit} · ${qty(has)} HAS`});closeModal();render();
     },'TAKASA EKLE');
     const itemEl=document.getElementById('tiItem'),qEl=document.getElementById('tiQty'),pEl=document.getElementById('tiPrice'),uEl=document.getElementById('tiUnit'),mEl=document.getElementById('tiPurity'),hEl=document.getElementById('tiHas'),tEl=document.getElementById('tiTotal');
-    const recalc=()=>{const item=items[Number(itemEl.value)],n=Number(qEl.value||0),gram=item.unit==='ADET'?n*Number(item.zGram||0):n,has=calcHas(gram,item.purity);let price=Number(pEl.value||0);if(!price){const px=state.prices.items.find(x=>x.code===item.priceCode||x.code===item.code);price=Number(px?.buy||0);if(!price&&item.unit==='GR')price=Number(state.prices.has.buy||0)*(item.purity/1000);if(!price&&item.unit==='ADET'){const unitHas=calcHas(Number(item.zGram||0),Number(item.purity||916));price=unitHas*Number(state.prices.has.buy||0);}pEl.value=price.toFixed(2);}uEl.value=item.unit;mEl.value=item.purity;hEl.value=has.toFixed(3);tEl.value=(n*price).toFixed(2);};
-    itemEl.addEventListener('change',()=>{pEl.value='';recalc();}); qEl.addEventListener('input',recalc);pEl.addEventListener('input',recalc);recalc();
+    const recalc=(autoPrice=false)=>{const item=items[Number(itemEl.value)],n=Number(qEl.value||0),gram=item.unit==='ADET'?n*Number(item.zGram||0):n,has=calcHas(gram,item.purity);let price=Number(pEl.value||0);if(!price&&autoPrice){const px=state.prices.items.find(x=>x.code===item.priceCode||x.code===item.code);price=Number(px?.buy||0);if(!price&&item.unit==='GR')price=Number(state.prices.has.buy||0)*(item.purity/1000);if(!price&&item.unit==='ADET'){const unitHas=calcHas(Number(item.zGram||0),Number(item.purity||916));price=unitHas*Number(state.prices.has.buy||0);}pEl.value=price.toFixed(2);}uEl.value=item.unit;mEl.value=item.purity;hEl.value=has.toFixed(3);tEl.value=(n*price).toFixed(2);};
+    itemEl.addEventListener('change',()=>{pEl.value='';recalc(true);}); qEl.addEventListener('input',()=>recalc());pEl.addEventListener('input',()=>recalc());tEl.addEventListener('input',()=>{const n=Number(qEl.value||0),t=Number(tEl.value||0);if(n>0)pEl.value=t>0?(t/n).toFixed(2):'';});recalc(true);
   }
 
   function openSupplierReturnFromSale(){
