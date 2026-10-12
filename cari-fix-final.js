@@ -53,7 +53,7 @@ function addRowsUi(m){
   var grid=m.querySelector('#stFx').closest('.form-grid');if(!grid)return;
   var wrap=document.createElement('div');wrap.style.cssText='margin-top:8px';
   var box=document.createElement('div');box.dataset.ufukExtraRows='1';box.style.cssText='margin:7px 0;width:100%';
-  var add=document.createElement('button');add.type='button';add.className='btn btn-outline';add.textContent='+ Döviz Ekle';
+  var add=document.createElement('button');add.type='button';add.className='btn btn-outline';add.textContent='+ Döviz Ekle';add.dataset.ufukAddRow='1';
   add.onclick=function(e){e.preventDefault();e.stopPropagation();addRow(box)};
   wrap.appendChild(add);wrap.appendChild(box);grid.parentNode.insertBefore(wrap,grid.nextSibling);
 }
@@ -62,14 +62,29 @@ function addRow(box){
   var sel=$('stFx').cloneNode(true);sel.removeAttribute('id');sel.value=$('stFx').value;
   function inp(ph,ro){var i=document.createElement('input');i.className='input';i.placeholder=ph;i.type=ro?'text':'number';i.step='any';i.readOnly=!!ro;return i}
   var amt=inp('Miktar'),rate=inp('Kur'),tot=inp('TL Toplam');
-  var del=document.createElement('button');del.type='button';del.className='btn btn-outline';del.textContent='×';del.onclick=function(){row.remove()};
+  /* Sil düğmesi klavye akışına girmez: Enter ile yanlışlıkla satır silinmesin, yalnızca fareyle/dokunarak silinir. */
+  var del=document.createElement('button');del.type='button';del.className='btn btn-outline';del.textContent='×';del.title='Satırı sil';del.tabIndex=-1;
+  del.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation()}},true);
+  del.onclick=function(e){if(e.detail===0)return;row.remove()}; // e.detail 0 = klavyeden tetiklenen tıklama
   function calc(){var a=num(amt.value),q=num(rate.value);tot.value=a&&q?(a*q).toFixed(2):''}
   sel.addEventListener('change',function(){rate.value=currentRate(sel.value);calc()});
   amt.addEventListener('input',calc);rate.addEventListener('input',calc);
   tot.addEventListener('input',function(){var a=num(amt.value),t=num(tot.value);if(a>0)rate.value=t>0?(t/a).toFixed(4):''});
   rate.value=currentRate(sel.value);
   [sel,amt,rate,tot,del].forEach(function(x){row.appendChild(x)});
-  box.appendChild(row);amt.focus();
+  /* Enter: Döviz → Miktar → Kur → TL Toplam → "+ Döviz Ekle". Uygulamanın genel Enter akışı bu satırda çalışmaz. */
+  var order=[sel,amt,rate,tot];
+  row.addEventListener('keydown',function(e){
+    if(e.key!=='Enter'||e.ctrlKey||e.altKey||e.metaKey)return;
+    var i=order.indexOf(e.target);if(i<0)return;
+    e.preventDefault();e.stopPropagation();
+    if(e.shiftKey){if(i>0)focusSel(order[i-1]);return}
+    if(i<order.length-1){focusSel(order[i+1]);return}
+    var addBtn=box.parentNode&&box.parentNode.querySelector('[data-ufuk-add-row]');if(addBtn)addBtn.focus();
+  },true);
+  box.appendChild(row);
+  try{row.scrollIntoView({block:'nearest'})}catch(_){}
+  amt.focus();
 }
 
 function overlay(title){
@@ -78,6 +93,7 @@ function overlay(title){
   var c=document.createElement('div');c.style.cssText='width:min(680px,96vw);max-height:90vh;overflow:auto;background:#fff;color:#111;border-radius:15px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.35)';
   var h=document.createElement('h2');h.textContent=title;h.style.margin='0 0 15px';c.appendChild(h);b.appendChild(c);document.body.appendChild(b);return c;
 }
+function focusSel(el){el.focus();try{if(el.select)el.select()}catch(_){}}
 function close(){var e=$('ufukCurrencySummary');if(e)e.remove()}
 function money(n){return n.toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})}
 

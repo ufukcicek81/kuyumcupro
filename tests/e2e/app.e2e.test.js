@@ -167,3 +167,22 @@ test('çoklu döviz işleminde tüm satırlar tek fişte basılır', async () =>
   assert.match(text, /6\.500,00/, 'toplam iki satırın toplamı olmalı');
   await p.context().close();
 });
+
+test('döviz satırında Enter satırı silmez, sırayla ilerler; × fareyle siler', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  await p.click('[data-home-trade="Döviz Alış"]');
+  await p.fill('#stQty', '100');
+  await p.click('text=+ Döviz Ekle');
+  const rows = p.locator('[data-ufuk-extra-rows] [data-row]');
+  await rows.first().locator('input').first().fill('50');
+  const focused = () => p.evaluate(() => document.activeElement.placeholder || document.activeElement.textContent);
+  await p.keyboard.press('Enter'); assert.equal(await focused(), 'Kur');
+  await p.keyboard.press('Enter'); assert.equal(await focused(), 'TL Toplam');
+  await p.keyboard.press('Enter'); assert.equal(await focused(), '+ Döviz Ekle');
+  await p.keyboard.press('Enter'); assert.equal(await focused(), 'Miktar');
+  assert.equal(await rows.count(), 2, 'Enter satır silmemeli, yeni satır açmalı');
+  assert.equal(await rows.first().locator('input').first().inputValue(), '50');
+  await rows.nth(1).locator('button').click();
+  assert.equal(await rows.count(), 1, '× fareyle satırı silmeli');
+  await p.context().close();
+});
