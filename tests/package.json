@@ -1,0 +1,14 @@
+{
+  "name": "asil-kuyumcu-pro-tests",
+  "private": true,
+  "version": "6.96.0",
+  "description": "Asil Kuyumcu Pro — kuyumcu stok, satış, cari ve kasa yönetimi",
+  "scripts": {
+    "test": "node --test *.test.js",
+    "test:e2e": "node --test --test-concurrency=1 e2e/*.e2e.test.js",
+    "check": "node ../scripts/check-syntax.js"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1"
+  }
+}

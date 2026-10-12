@@ -1,0 +1,27 @@
+name: Testler
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Bağımlılıklar
+        run: npm ci
+      - name: Sözdizimi kontrolü
+        run: npm run check
+      - name: Birim testleri (senkron birleştirme, şifreli yedek)
+        run: npm test
+      - name: Tarayıcı kurulumu
+        run: npx playwright install --with-deps chromium
+      - name: Uçtan uca testler
+        run: npm run test:e2e
