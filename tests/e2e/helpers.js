@@ -64,6 +64,8 @@ async function newDevice(browser, appUrl, firebase, { authConfig } = {}) {
   await ctx.route(/firebaseio\.com/, (r) => firebase.handle(r));
   await ctx.route(/googleapis\.com/, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ idToken: 'TEST_ID_TOKEN', id_token: 'TEST_ID_TOKEN', refreshToken: 'R', refresh_token: 'R', expiresIn: '3600', expires_in: '3600', localId: 'UID1', user_id: 'UID1', email: 'magaza@test.com' }) }));
   await ctx.route(/workers\.dev|jsdelivr|supabase|haremaltin/, (r) => r.abort());
+  // Excel okuyucu (SheetJS) CDN yerine yerel paketten verilir.
+  await ctx.route(/cdnjs\.cloudflare\.com\/ajax\/libs\/xlsx\//, (r) => r.fulfill({ status: 200, contentType: 'text/javascript', body: fs.readFileSync(require.resolve('xlsx/dist/xlsx.full.min.js')) }));
   if (authConfig) await ctx.addInitScript((c) => localStorage.setItem('asil_firebase_auth_v7', JSON.stringify(c)), authConfig);
   const page = await ctx.newPage();
   page.errors = [];

@@ -140,6 +140,7 @@ test('bulut girişi ekranından giriş yapılır ve sonraki istekler kimlikli gi
   const stored = await p.evaluate(() => JSON.parse(localStorage.getItem('asil_firebase_auth_v7')));
   assert.equal(stored.email, 'magaza@test.com');
   assert.ok(!JSON.stringify(stored).includes('sifre-123456'), 'şifre cihazda saklanmamalı');
+  await p.waitForTimeout(1500); // girişten önce açılmış eski bağlantıların kapanması için
   const n = fb.log.length;
   await p.click('#backupCloudPush', { timeout: 10000 }); await p.waitForTimeout(1500);
   assert.ok(fb.log.slice(n).filter((x) => x.path.startsWith('/kuyumcuProV5')).every((x) => x.auth === 'TEST_ID_TOKEN'));
@@ -168,21 +169,74 @@ test('çoklu döviz işleminde tüm satırlar tek fişte basılır', async () =>
   await p.context().close();
 });
 
-test('döviz satırında Enter satırı silmez, sırayla ilerler; × fareyle siler', async () => {
+test('döviz satırında Enter satır eklemez/silmez, işlemi tamamlamaya ilerler; satır fareyle eklenip silinir', async () => {
   const p = await newDevice(browser, appUrl, createFakeFirebase());
   await p.click('[data-home-trade="Döviz Alış"]');
   await p.fill('#stQty', '100');
   await p.click('text=+ Döviz Ekle');
   const rows = p.locator('[data-ufuk-extra-rows] [data-row]');
+  assert.equal(await rows.count(), 1, 'fare tıklaması satır eklemeli');
   await rows.first().locator('input').first().fill('50');
-  const focused = () => p.evaluate(() => document.activeElement.placeholder || document.activeElement.textContent);
+  const focused = () => p.evaluate(() => document.activeElement.id || document.activeElement.placeholder || document.activeElement.textContent);
   await p.keyboard.press('Enter'); assert.equal(await focused(), 'Kur');
   await p.keyboard.press('Enter'); assert.equal(await focused(), 'TL Toplam');
-  await p.keyboard.press('Enter'); assert.equal(await focused(), '+ Döviz Ekle');
-  await p.keyboard.press('Enter'); assert.equal(await focused(), 'Miktar');
-  assert.equal(await rows.count(), 2, 'Enter satır silmemeli, yeni satır açmalı');
-  assert.equal(await rows.first().locator('input').first().inputValue(), '50');
-  await rows.nth(1).locator('button').click();
-  assert.equal(await rows.count(), 1, '× fareyle satırı silmeli');
+  await p.keyboard.press('Enter'); assert.equal(await focused(), 'stTlAccount', 'satır sonunda Enter işleme devam etmeli');
+  assert.equal(await rows.count(), 1, 'Enter satır eklememeli/silmemeli');
+  for (let i = 0; i < 6 && !(await p.$('#ufukCurrencySummary')); i++) { await p.keyboard.press('Enter'); await p.waitForTimeout(150); }
+  assert.ok(await p.$('#ufukCurrencySummary'), 'Enter sonunda işlem özeti (kaydet) açılmalı');
+  assert.match(await p.innerText('#ufukCurrencySummary'), /1\. USD[\s\S]*2\. USD/, 'iki satır özette olmalı');
+  await p.click('#ufukCurrencySummary button:has-text("VAZGEÇ")');
+  await p.focus('[data-ufuk-add-row]'); await p.keyboard.press('Enter');
+  assert.equal(await rows.count(), 1, 'klavye ile yeni satır eklenmemeli');
+  await rows.first().locator('button').click();
+  assert.equal(await rows.count(), 0, '× fareyle satırı silmeli');
   await p.context().close();
+});
+
+test('Pusula Excel stok yükleme eski stokları siler, yenilerini yükler', async () => {
+  const XLSX = require('xlsx');
+  const os = require('node:os'); const path = require('node:path'); const fs = require('node:fs');
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'pusula-')), 'barkodlu.xlsx');
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ['BARKODLU STOK LİSTESİ'], [],
+    ['Barkod', 'Grup', 'Cins', 'Ayar', 'Gram', 'Has', 'Alış İşçilik', 'Satış İşçilik'],
+    ['YUZ0009001', 'YUZ', 'YÜZÜK', '14', 2.5, '', 0.4, 1.1],
+    ['KOL0009002', 'KOL', 'KOLYE', '22', 7.25, '', 0.3, 0.9],
+    ['BIL0009003', 'BIL', 'BİLEZİK', '22', 15.1, '', 0.2, 0.6],
+  ]), 'Stok');
+  XLSX.writeFile(wb, file);
+
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  const other = await newDevice(browser, appUrl, fb); // aynı anda açık ikinci cihaz
+  await p.click('[data-go="stocks"]');
+  await p.click('#pusulaImportV7');
+  await p.setInputFiles('#piFile', file);
+  await p.waitForFunction(() => /Yüklenecek:<\/b> 3 stok/.test(document.getElementById('piResult').innerHTML), null, { timeout: 10000 });
+  assert.match(await p.innerText('#piResult'), /Silinecek: 1691 eski stok/);
+  assert.match(await p.innerText('#piResult'), /YUZ0009001/);
+  p.removeAllListeners('dialog'); p.on('dialog', (d) => d.accept());
+  await p.click('#modalConfirm');
+  await p.waitForFunction(() => !document.getElementById('modalRoot'), null, { timeout: 15000 });
+  await p.waitForTimeout(4000);
+  const stocks = fb.db.state.stocks.filter((x) => x.period === 2026);
+  assert.deepEqual(stocks.map((x) => x.barcode).sort(), ['BIL0009003', 'KOL0009002', 'YUZ0009001']);
+  const k = stocks.find((x) => x.barcode === 'KOL0009002');
+  assert.equal(Number(k.purity), 916); assert.equal(Number(k.hasWeight), 6.641); assert.equal(Number(k.saleHas), 7.541);
+  // Satışta yeni barkod bulunur
+  await p.click('nav [data-route="sales"]');
+  await p.fill('#saleProductSearch', 'KOL0009002'); await p.press('#saleProductSearch', 'Enter');
+  await p.waitForSelector('#saleEntryPrice:not([disabled])', { timeout: 10000 });
+  assert.match(await p.inputValue('#saleEntryName'), /KOLYE/);
+  // İkinci cihaz yeni listeyi "veri kaybı" sanıp reddetmemeli
+  await other.waitForTimeout(3000);
+  await other.click('[data-go="stocks"]');
+  await other.click('[data-stock-view="list"]');
+  await other.waitForTimeout(500);
+  const otherText = await other.innerText('body');
+  assert.match(otherText, /YUZ0009001/, 'ikinci cihaz yeni stokları görmeli');
+  assert.doesNotMatch(otherText, /ALY0000744/, 'ikinci cihazda eski stok kalmamalı');
+  assert.deepEqual(p.errors, []);
+  await p.context().close(); await other.context().close();
 });
