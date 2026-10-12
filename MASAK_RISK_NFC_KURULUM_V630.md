@@ -58,7 +58,7 @@ Worker değişkenleri:
 
 ## 3) Android NFC Helper
 
-Kaynak klasör: `android-nfc-helper/`
+Kaynak proje bu repoda değildir; ayrı Android projesi olarak tutulur.
 
 Android Studio ile açılır. NFC'li gerçek telefonda test edilmelidir.
 
