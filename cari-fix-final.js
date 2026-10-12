@@ -54,7 +54,9 @@ function addRowsUi(m){
   var wrap=document.createElement('div');wrap.style.cssText='margin-top:8px';
   var box=document.createElement('div');box.dataset.ufukExtraRows='1';box.style.cssText='margin:0;width:100%';
   var add=document.createElement('button');add.type='button';add.className='btn btn-outline';add.textContent='+ Döviz Ekle';add.dataset.ufukAddRow='1';add.tabIndex=-1;
-  add.onclick=function(e){e.preventDefault();e.stopPropagation();addRow(box)};
+  /* Yeni döviz satırı yalnızca fare/dokunma ile eklenir; klavyeden (Enter/Boşluk) tetiklenmez. */
+  add.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation()}},true);
+  add.onclick=function(e){e.preventDefault();e.stopPropagation();if(e.detail===0)return;addRow(box)};
   add.style.marginTop='7px';wrap.appendChild(box);wrap.appendChild(add);
   /* Ek satırlar üstteki asıl döviz satırının (Döviz / Miktar / Kur / TL Toplam) hemen altında, tam genişlikte durur. */
   var totalCell=$('stTotal')&&$('stTotal').closest('.labelled');
@@ -77,15 +79,8 @@ function addRow(box){
   rate.value=currentRate(sel.value);
   [sel,amt,rate,tot,del].forEach(function(x){row.appendChild(x)});
   /* Enter: Döviz → Miktar → Kur → TL Toplam → "+ Döviz Ekle". Uygulamanın genel Enter akışı bu satırda çalışmaz. */
-  var order=[sel,amt,rate,tot];
-  row.addEventListener('keydown',function(e){
-    if(e.key!=='Enter'||e.ctrlKey||e.altKey||e.metaKey)return;
-    var i=order.indexOf(e.target);if(i<0)return;
-    e.preventDefault();e.stopPropagation();
-    if(e.shiftKey){if(i>0)focusSel(order[i-1]);return}
-    if(i<order.length-1){focusSel(order[i+1]);return}
-    var addBtn=box.parentNode&&box.parentNode.querySelector('[data-ufuk-add-row]');if(addBtn)addBtn.focus();
-  },true);
+  /* Enter, uygulamanın genel akışını izler: Döviz → Miktar → Kur → TL Toplam → sonraki satır →
+     TL Kasa … → Kaydet (işlem özeti). Yeni satır Enter ile açılmaz, yalnızca fareyle eklenir. */
   box.appendChild(row);
   try{row.scrollIntoView({block:'nearest'})}catch(_){}
   amt.focus();
@@ -97,7 +92,6 @@ function overlay(title){
   var c=document.createElement('div');c.style.cssText='width:min(680px,96vw);max-height:90vh;overflow:auto;background:#fff;color:#111;border-radius:15px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.35)';
   var h=document.createElement('h2');h.textContent=title;h.style.margin='0 0 15px';c.appendChild(h);b.appendChild(c);document.body.appendChild(b);return c;
 }
-function focusSel(el){el.focus();try{if(el.select)el.select()}catch(_){}}
 function close(){var e=$('ufukCurrencySummary');if(e)e.remove()}
 function money(n){return n.toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})}
 

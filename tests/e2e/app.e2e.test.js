@@ -168,21 +168,26 @@ test('çoklu döviz işleminde tüm satırlar tek fişte basılır', async () =>
   await p.context().close();
 });
 
-test('döviz satırında Enter satırı silmez, sırayla ilerler; × fareyle siler', async () => {
+test('döviz satırında Enter satır eklemez/silmez, işlemi tamamlamaya ilerler; satır fareyle eklenip silinir', async () => {
   const p = await newDevice(browser, appUrl, createFakeFirebase());
   await p.click('[data-home-trade="Döviz Alış"]');
   await p.fill('#stQty', '100');
   await p.click('text=+ Döviz Ekle');
   const rows = p.locator('[data-ufuk-extra-rows] [data-row]');
+  assert.equal(await rows.count(), 1, 'fare tıklaması satır eklemeli');
   await rows.first().locator('input').first().fill('50');
-  const focused = () => p.evaluate(() => document.activeElement.placeholder || document.activeElement.textContent);
+  const focused = () => p.evaluate(() => document.activeElement.id || document.activeElement.placeholder || document.activeElement.textContent);
   await p.keyboard.press('Enter'); assert.equal(await focused(), 'Kur');
   await p.keyboard.press('Enter'); assert.equal(await focused(), 'TL Toplam');
-  await p.keyboard.press('Enter'); assert.equal(await focused(), '+ Döviz Ekle');
-  await p.keyboard.press('Enter'); assert.equal(await focused(), 'Miktar');
-  assert.equal(await rows.count(), 2, 'Enter satır silmemeli, yeni satır açmalı');
-  assert.equal(await rows.first().locator('input').first().inputValue(), '50');
-  await rows.nth(1).locator('button').click();
-  assert.equal(await rows.count(), 1, '× fareyle satırı silmeli');
+  await p.keyboard.press('Enter'); assert.equal(await focused(), 'stTlAccount', 'satır sonunda Enter işleme devam etmeli');
+  assert.equal(await rows.count(), 1, 'Enter satır eklememeli/silmemeli');
+  for (let i = 0; i < 6 && !(await p.$('#ufukCurrencySummary')); i++) { await p.keyboard.press('Enter'); await p.waitForTimeout(150); }
+  assert.ok(await p.$('#ufukCurrencySummary'), 'Enter sonunda işlem özeti (kaydet) açılmalı');
+  assert.match(await p.innerText('#ufukCurrencySummary'), /1\. USD[\s\S]*2\. USD/, 'iki satır özette olmalı');
+  await p.click('#ufukCurrencySummary button:has-text("VAZGEÇ")');
+  await p.focus('[data-ufuk-add-row]'); await p.keyboard.press('Enter');
+  assert.equal(await rows.count(), 1, 'klavye ile yeni satır eklenmemeli');
+  await rows.first().locator('button').click();
+  assert.equal(await rows.count(), 0, '× fareyle satırı silmeli');
   await p.context().close();
 });
