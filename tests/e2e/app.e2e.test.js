@@ -123,8 +123,8 @@ test('şifreli yedek kaydedilir, dosyada veri okunamaz ve parola ile geri yükle
   assert.equal(env.format, 'ASIL_KUYUMCU_BACKUP_ENC_V1');
   assert.ok(!/ASİL KUYUMCULUK|pinHash|stocks/.test(env.data), 'veri şifreli olmalı');
   await p.setInputFiles('#backupFile', file);
-  await p.waitForTimeout(3000);
-  assert.match(await p.innerText('#toast-root'), /Yedek geri yüklendi/);
+  // Bildirim 2,8 sn görünür; sabit beklemek yerine görünmesini bekle.
+  await p.waitForFunction(() => document.getElementById('toast-root').innerText.includes('Yedek geri yüklendi'), null, { timeout: 15000 });
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
@@ -143,5 +143,46 @@ test('bulut girişi ekranından giriş yapılır ve sonraki istekler kimlikli gi
   const n = fb.log.length;
   await p.click('#backupCloudPush', { timeout: 10000 }); await p.waitForTimeout(1500);
   assert.ok(fb.log.slice(n).filter((x) => x.path.startsWith('/kuyumcuProV5')).every((x) => x.auth === 'TEST_ID_TOKEN'));
+  await p.context().close();
+});
+
+test('çoklu döviz işleminde tüm satırlar tek fişte basılır', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  const popups = [];
+  p.context().on('page', (pg) => popups.push(pg));
+  await p.click('[data-home-trade="Döviz Alış"]');
+  await p.fill('#stQty', '100'); await p.fill('#stPrice', '40');
+  await p.click('text=+ Döviz Ekle');
+  const row = p.locator('[data-ufuk-extra-rows] [data-row]').first();
+  await row.locator('select').selectOption('EUR');
+  await row.locator('input').nth(0).fill('50'); await row.locator('input').nth(1).fill('50');
+  await p.click('#modalConfirm');
+  await p.selectOption('#ufukCurrencySummary select', 'yes');
+  await p.click('text=ONAYLA VE İŞLEMİ TAMAMLA');
+  await p.waitForTimeout(8000);
+  assert.equal(popups.length, 1, 'tek fiş penceresi açılmalı');
+  const text = await popups[0].innerText('body');
+  assert.match(text, /DÖVİZ İŞLEM FİŞİ/);
+  assert.match(text, /USD/); assert.match(text, /EUR/);
+  assert.match(text, /6\.500,00/, 'toplam iki satırın toplamı olmalı');
+  await p.context().close();
+});
+
+test('döviz satırında Enter satırı silmez, sırayla ilerler; × fareyle siler', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  await p.click('[data-home-trade="Döviz Alış"]');
+  await p.fill('#stQty', '100');
+  await p.click('text=+ Döviz Ekle');
+  const rows = p.locator('[data-ufuk-extra-rows] [data-row]');
+  await rows.first().locator('input').first().fill('50');
+  const focused = () => p.evaluate(() => document.activeElement.placeholder || document.activeElement.textContent);
+  await p.keyboard.press('Enter'); assert.equal(await focused(), 'Kur');
+  await p.keyboard.press('Enter'); assert.equal(await focused(), 'TL Toplam');
+  await p.keyboard.press('Enter'); assert.equal(await focused(), '+ Döviz Ekle');
+  await p.keyboard.press('Enter'); assert.equal(await focused(), 'Miktar');
+  assert.equal(await rows.count(), 2, 'Enter satır silmemeli, yeni satır açmalı');
+  assert.equal(await rows.first().locator('input').first().inputValue(), '50');
+  await rows.nth(1).locator('button').click();
+  assert.equal(await rows.count(), 1, '× fareyle satırı silmeli');
   await p.context().close();
 });
