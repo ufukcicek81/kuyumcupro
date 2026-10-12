@@ -123,8 +123,8 @@ test('şifreli yedek kaydedilir, dosyada veri okunamaz ve parola ile geri yükle
   assert.equal(env.format, 'ASIL_KUYUMCU_BACKUP_ENC_V1');
   assert.ok(!/ASİL KUYUMCULUK|pinHash|stocks/.test(env.data), 'veri şifreli olmalı');
   await p.setInputFiles('#backupFile', file);
-  await p.waitForTimeout(3000);
-  assert.match(await p.innerText('#toast-root'), /Yedek geri yüklendi/);
+  // Bildirim 2,8 sn görünür; sabit beklemek yerine görünmesini bekle.
+  await p.waitForFunction(() => document.getElementById('toast-root').innerText.includes('Yedek geri yüklendi'), null, { timeout: 15000 });
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
