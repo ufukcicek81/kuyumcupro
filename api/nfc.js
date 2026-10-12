@@ -1,13 +1,20 @@
+import { randomInt } from 'node:crypto';
 const FIREBASE_BASE = 'https://asil-kuyumculuk-2feb6-default-rtdb.firebaseio.com/kuyumcuProV5/nfcSessions';
+// Firebase kuralları kilitlendiğinde sunucu, Vercel ortam değişkenindeki veritabanı
+// gizli anahtarıyla erişir (FIREBASE_DB_SECRET). Anahtar asla tarayıcıya gönderilmez.
+function fbUrl(code){
+  const secret=process.env.FIREBASE_DB_SECRET;
+  return `${FIREBASE_BASE}/${encodeURIComponent(code)}.json${secret?`?auth=${encodeURIComponent(secret)}`:''}`;
+}
 
 function cors(res){
   res.setHeader('Access-Control-Allow-Origin','*');
   res.setHeader('Access-Control-Allow-Headers','Content-Type, Authorization');
   res.setHeader('Access-Control-Allow-Methods','GET,POST,OPTIONS');
 }
+// Eşleştirme kodu tahmin edilemesin diye kriptografik rastgele sayı kullanılır.
 function code8(){
-  const n = Math.floor(Math.random()*100000000);
-  return String(n).padStart(8,'0');
+  return String(randomInt(0,100000000)).padStart(8,'0');
 }
 function clean(v){ return String(v ?? '').trim(); }
 function safePayload(p={}){
@@ -29,12 +36,12 @@ function safePayload(p={}){
   };
 }
 async function fbGet(code){
-  const r=await fetch(`${FIREBASE_BASE}/${encodeURIComponent(code)}.json`,{cache:'no-store'});
+  const r=await fetch(fbUrl(code),{cache:'no-store'});
   if(!r.ok) throw new Error(`Firebase GET ${r.status}`);
   return await r.json();
 }
 async function fbPut(code,data){
-  const r=await fetch(`${FIREBASE_BASE}/${encodeURIComponent(code)}.json`,{
+  const r=await fetch(fbUrl(code),{
     method:'PUT',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify(data)
@@ -42,7 +49,7 @@ async function fbPut(code,data){
   if(!r.ok) throw new Error(`Firebase PUT ${r.status}`);
 }
 async function fbDelete(code){
-  const r=await fetch(`${FIREBASE_BASE}/${encodeURIComponent(code)}.json`,{method:'DELETE'});
+  const r=await fetch(fbUrl(code),{method:'DELETE'});
   if(!r.ok) throw new Error(`Firebase DELETE ${r.status}`);
 }
 export default async function handler(req,res){

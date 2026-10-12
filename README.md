@@ -1,36 +1,36 @@
-# Asil Kuyumcu Pro v6.30 — MASAK Risk + NFC + Banka + e-Fatura
+# Asil Kuyumcu Pro
 
-Bu paket, kuyumcu barkod etiketini Pusula çıktısına yakın olacak şekilde yeniden düzenler.
+Kuyumcu stok, satış, cari, kasa/banka, ziynet/hurda/döviz, etiket ve fiş yönetimi.
+Tek sayfalık web uygulaması (`index.html`); Vercel üzerinde yayınlanır.
 
-## Yeni etiket düzeni
-- Varsayılan fiziksel etiket: **72 × 10 mm**
-- Tek ürün = tek 72×10 mm baskı sayfası
-- Sol etiket kafası: barkod, ürün kodu, ASİL KUYUMCULUK
-- Sağ etiket kafası: iki HAS fiyatı, ayar ve iç kod
-- Sağdaki uzun kuyruk boş bırakılır
-- ALY0001348 gibi alfanümerik kodlar için **CODE128** barkod kullanılır
+## Dosyalar
 
-## Yazıcı ayarları
-- **Pusula 72×10 Hazır Ayar** düğmesi
-- Yatay ve dikey milimetrik kaydırma
-- Sol ve sağ kafa X konumları
-- Sol ve sağ kafa genişlikleri
-- Üst HAS fiyat çarpanı (varsayılan 1.12)
-- Firma adı
-- 203 / 300 / 600 DPI
-- Tarayıcı veya QZ Tray baskısı
+| Yol | Açıklama |
+|---|---|
+| `index.html` | Uygulamanın kendisi |
+| `js/` | Bulut girişi, çakışmasız senkron ve şifreli yedek modülleri |
+| `cari-fix-final.js` | Döviz Alış/Satış çoklu satır ve işlem özeti |
+| `api/` | Vercel sunucu fonksiyonları (MASAK listesi, NFC köprüsü) |
+| `worker.js`, `wrangler.example.toml` | Cloudflare Worker (fiyat, risk tarama, e-fatura aktarımı) |
+| `database.rules.json` | Firebase güvenlik kuralları |
+| `sw.js` | Eski önbellekleri temizleyen güvenli service worker |
+| `digital-certificate.txt` | QZ Tray sessiz baskı sertifikası |
+| `BANKA_CSV_ORNEK.csv`, `MASAK_CSV_ORNEK.csv` | İçe aktarma örnek dosyaları |
+| `tests/`, `scripts/` | Otomatik testler ve sözdizimi kontrolü |
 
-## İlk kurulum
-Detaylı adımlar için `YAZICI_KURULUM.md` dosyasına bakın.
+## Kurulum rehberleri
+- Bulut güvenliği (önce bu): `FIREBASE_GUVENLIK_KURULUM.md`
+- Etiket yazıcısı: `YAZICI_KURULUM.md`
+- QZ Tray sessiz baskı: `QZ_SESSIZ_BASKI_KURULUM.md`
+- MASAK, risk tarama ve NFC: `MASAK_RISK_NFC_KURULUM_V630.md`
+- e-Fatura / e-Arşiv: `FATURA_ENTEGRASYON.md`
 
-
-## v6.15
-- Barkod Yazdır varsayılan olarak QZ Tray üzerinden doğrudan seçili/default etiket yazıcısına gönderilir.
-- Tarayıcı yazdırma önizlemesi doğrudan modda açılmaz.
-- İlk doğrudan baskıda default yazıcı otomatik bulunup kaydedilebilir.
-
-
-## v6.30
-- Ayrıntılar: `V6_30_DEGISIKLIKLER.md`
-- Kurulum: `MASAK_RISK_NFC_KURULUM_V630.md`
-- Android NFC kaynak projesi: `android-nfc-helper/`
+## Testler
+```
+cd tests
+npm ci
+npm run check      # sözdizimi
+npm test           # birim testleri
+npm run test:e2e   # tarayıcı testleri (Chromium gerekir)
+```
+Testler her push ve PR'da GitHub Actions ile çalışır (`.github/workflows/test.yml`).
