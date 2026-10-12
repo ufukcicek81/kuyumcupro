@@ -52,10 +52,14 @@ function addRowsUi(m){
   if(m.querySelector('[data-ufuk-extra-rows]'))return;
   var grid=m.querySelector('#stFx').closest('.form-grid');if(!grid)return;
   var wrap=document.createElement('div');wrap.style.cssText='margin-top:8px';
-  var box=document.createElement('div');box.dataset.ufukExtraRows='1';box.style.cssText='margin:7px 0;width:100%';
-  var add=document.createElement('button');add.type='button';add.className='btn btn-outline';add.textContent='+ Döviz Ekle';add.dataset.ufukAddRow='1';
+  var box=document.createElement('div');box.dataset.ufukExtraRows='1';box.style.cssText='margin:0;width:100%';
+  var add=document.createElement('button');add.type='button';add.className='btn btn-outline';add.textContent='+ Döviz Ekle';add.dataset.ufukAddRow='1';add.tabIndex=-1;
   add.onclick=function(e){e.preventDefault();e.stopPropagation();addRow(box)};
-  wrap.appendChild(add);wrap.appendChild(box);grid.parentNode.insertBefore(wrap,grid.nextSibling);
+  add.style.marginTop='7px';wrap.appendChild(box);wrap.appendChild(add);
+  /* Ek satırlar üstteki asıl döviz satırının (Döviz / Miktar / Kur / TL Toplam) hemen altında, tam genişlikte durur. */
+  var totalCell=$('stTotal')&&$('stTotal').closest('.labelled');
+  if(totalCell&&totalCell.parentNode===grid){wrap.style.cssText='grid-column:1/-1;margin:0';totalCell.parentNode.insertBefore(wrap,totalCell.nextSibling)}
+  else grid.parentNode.insertBefore(wrap,grid.nextSibling);
 }
 function addRow(box){
   var row=document.createElement('div');row.dataset.row='1';row.style.cssText='display:grid;grid-template-columns:minmax(80px,1fr) minmax(80px,1fr) minmax(80px,1fr) minmax(90px,1fr) 38px;gap:6px;margin-top:7px;align-items:center';
