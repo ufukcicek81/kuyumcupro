@@ -133,9 +133,16 @@ function printNew(m){
   wait(function(){var ids=receiptIds(m).filter(function(id){return known.indexOf(id)<0});return ids.length?ids:null},2500,function(ids){
     var f=finish();
     if(!ids){alert('Kayıt tamamlandı ancak fiş butonu bulunamadı. Fişi Geçmiş listesinden yazdırabilirsiniz.');return}
+    var closeM=function(){if($('modalRoot')===m){var x=m.querySelector('#modalX');if(x)x.click()}};
+    /* Tüm satırlar tek fişte basılır. */
+    if(typeof window.asilPrintTradeReceiptsV7==='function'){
+      closeM();
+      Promise.resolve(window.asilPrintTradeReceiptsV7(ids,f.copies)).catch(function(e){alert('Fiş yazdırılamadı: '+(e&&e.message||e))});
+      return;
+    }
     var jobs=[];for(var c=0;c<f.copies;c++)ids.forEach(function(id){jobs.push(id)});
     jobs.forEach(function(id,i){setTimeout(function(){var b=m.querySelector('[data-receipt-kind="trade"][data-receipt-id="'+id+'"]');if(b)b.click()},i*1200)});
-    setTimeout(function(){if($('modalRoot')===m){var x=m.querySelector('#modalX');if(x)x.click()}},jobs.length*1200+300);
+    setTimeout(closeM,jobs.length*1200+300);
   });
 }
 

@@ -7843,7 +7843,7 @@ function stockSummaryView(){
     body+=receiptPairV644('Karşılık',x.settlementLabel||x.settlementCurrency||'',false);
     body+=receiptPairV644('Hesap',x.accountName||'',false);
     body+=receiptPairV644('Kullanıcı',x.user||'',false);
-    return receiptDocV644('ALTIN / ZİYNET İŞLEM FİŞİ',x.docNo||x.id,x.date,x.customer||'',body);
+    return receiptDocV644(String(x.tradeType||'').startsWith('Döviz')?'DÖVİZ İŞLEM FİŞİ':'ALTIN / ZİYNET İŞLEM FİŞİ',x.docNo||x.id,x.date,x.customer||'',body);
   }
   function repairReceiptHtmlV644(x){
     var body='';
@@ -7867,6 +7867,32 @@ function stockSummaryView(){
   function printPurchaseReceiptV644(id){var x=state.purchases.find(function(s){return s.id===id;});if(!x)return toast('Alış kaydı bulunamadı','err');return printReceiptHtmlV644(purchaseReceiptHtmlV644(x),'Alış fişi');}
   function printCariReceiptV644(id){var x=state.customerMoves.find(function(s){return s.id===id;});if(!x)return toast('Cari hareket bulunamadı','err');return printReceiptHtmlV644(cariReceiptHtmlV644(x),'Cari hareket fişi');}
   function printFinanceReceiptV644(id){var x=state.financeMoves.find(function(s){return s.id===id;});if(!x)return toast('Finans hareketi bulunamadı','err');return printReceiptHtmlV644(financeReceiptHtmlV644(x),'Kasa / banka fişi');}
+  /* Aynı anda kaydedilen birden fazla döviz/altın işlemini tek fişte basar. */
+  function combinedTradeReceiptHtmlV7(moves){
+    var first=moves[0],isFx=moves.every(function(x){return String(x.tradeType||'').startsWith('Döviz');});
+    var types=[...new Set(moves.map(function(x){return x.tradeType||'';}))].join(' / ');
+    var body=receiptPairV644('İşlem',types,true)+'<div class="dash"></div>',total=0,totalHas=0;
+    moves.forEach(function(x,i){
+      total+=Number(x.totalTL||0);totalHas+=Number(x.totalHas||0);
+      body+=receiptPairV644((i+1)+'. '+(x.item||''),qty(x.quantity||0)+' '+String(x.unit||'')+(Number(x.unitPrice||0)?' × '+Number(x.unitPrice||0).toLocaleString('tr-TR',{maximumFractionDigits:4}):''),false);
+      body+=receiptPairV644('   Tutar',money(x.totalTL||0),false);
+    });
+    body+='<div class="dash"></div>'+receiptPairV644('Toplam TL',money(total),true);
+    if(!isFx)body+=receiptPairV644('Toplam HAS',qty(totalHas)+' HAS',true);
+    var accounts=[...new Set(moves.map(function(x){return x.accountName||'';}).filter(Boolean))].join(', ');
+    if(accounts)body+=receiptPairV644('Hesap',accounts,false);
+    body+=receiptPairV644('Kullanıcı',first.user||'',false);
+    var docs=moves.map(function(x){return x.docNo||x.id;});
+    return receiptDocV644(isFx?'DÖVİZ İŞLEM FİŞİ':'ALTIN / ZİYNET İŞLEM FİŞİ',docs.length>1?docs[0]+' … '+docs[docs.length-1]:docs[0],first.date,first.customer||'',body);
+  }
+  async function printTradeReceiptsCombinedV7(ids,copies){
+    var moves=(ids||[]).map(function(id){return state.tradeMoves.find(function(s){return s.id===id;});}).filter(Boolean).sort(function(a,b){return String(a.docNo||'').localeCompare(String(b.docNo||''),'tr',{numeric:true});});
+    if(!moves.length){toast('Fiş için işlem bulunamadı','err');return false;}
+    var html=combinedTradeReceiptHtmlV7(moves);
+    for(var c=0;c<Math.max(1,Number(copies||1));c++)await printReceiptHtmlV644(html,moves.length>1?'Toplu döviz fişi':'Döviz fişi');
+    return true;
+  }
+  window.asilPrintTradeReceiptsV7=printTradeReceiptsCombinedV7;
   function printTradeReceiptV644(id){var x=state.tradeMoves.find(function(s){return s.id===id;});if(!x)return toast('İşlem bulunamadı','err');return printReceiptHtmlV644(tradeReceiptHtmlV644(x),'Altın / ziynet fişi');}
   function printRepairReceiptV644(id){var x=state.repairs.find(function(s){return s.id===id;});if(!x)return toast('Tamir kaydı bulunamadı','err');return printReceiptHtmlV644(repairReceiptHtmlV644(x),'Tamir fişi');}
 

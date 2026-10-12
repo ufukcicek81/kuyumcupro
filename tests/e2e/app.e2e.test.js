@@ -145,3 +145,25 @@ test('bulut girişi ekranından giriş yapılır ve sonraki istekler kimlikli gi
   assert.ok(fb.log.slice(n).filter((x) => x.path.startsWith('/kuyumcuProV5')).every((x) => x.auth === 'TEST_ID_TOKEN'));
   await p.context().close();
 });
+
+test('çoklu döviz işleminde tüm satırlar tek fişte basılır', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  const popups = [];
+  p.context().on('page', (pg) => popups.push(pg));
+  await p.click('[data-home-trade="Döviz Alış"]');
+  await p.fill('#stQty', '100'); await p.fill('#stPrice', '40');
+  await p.click('text=+ Döviz Ekle');
+  const row = p.locator('[data-ufuk-extra-rows] [data-row]').first();
+  await row.locator('select').selectOption('EUR');
+  await row.locator('input').nth(0).fill('50'); await row.locator('input').nth(1).fill('50');
+  await p.click('#modalConfirm');
+  await p.selectOption('#ufukCurrencySummary select', 'yes');
+  await p.click('text=ONAYLA VE İŞLEMİ TAMAMLA');
+  await p.waitForTimeout(8000);
+  assert.equal(popups.length, 1, 'tek fiş penceresi açılmalı');
+  const text = await popups[0].innerText('body');
+  assert.match(text, /DÖVİZ İŞLEM FİŞİ/);
+  assert.match(text, /USD/); assert.match(text, /EUR/);
+  assert.match(text, /6\.500,00/, 'toplam iki satırın toplamı olmalı');
+  await p.context().close();
+});
