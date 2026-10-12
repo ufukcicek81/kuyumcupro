@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 const FIREBASE_BASE = 'https://asil-kuyumculuk-2feb6-default-rtdb.firebaseio.com/kuyumcuProV5/nfcSessions';
 
 function cors(res){
@@ -5,9 +6,9 @@ function cors(res){
   res.setHeader('Access-Control-Allow-Headers','Content-Type, Authorization');
   res.setHeader('Access-Control-Allow-Methods','GET,POST,OPTIONS');
 }
+// Eşleştirme kodu tahmin edilemesin diye kriptografik rastgele sayı kullanılır.
 function code8(){
-  const n = Math.floor(Math.random()*100000000);
-  return String(n).padStart(8,'0');
+  return String(randomInt(0,100000000)).padStart(8,'0');
 }
 function clean(v){ return String(v ?? '').trim(); }
 function safePayload(p={}){

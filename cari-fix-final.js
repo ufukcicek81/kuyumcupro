@@ -33,8 +33,8 @@ function mainRow(){return{currency:$('stFx').value,amount:$('stQty').value,rate:
 function collectRows(m){
   var base=mainRow(),rows=[base];
   m.querySelectorAll('[data-ufuk-extra-rows] [data-row]').forEach(function(r){
-    var cur=r.querySelector('select').value,inp=r.querySelectorAll('input'),amt=inp[0].value,rate=inp[1].value;
-    if(num(amt)>0&&num(rate)>0)rows.push({currency:cur,amount:amt,rate:rate,total:(num(amt)*num(rate)).toFixed(2),tl:base.tl,tlText:base.tlText,fx:cur===base.currency?base.fx:'',customer:base.customer});
+    var cur=r.querySelector('select').value,inp=r.querySelectorAll('input'),amt=inp[0].value,rate=inp[1].value,tot=num(inp[2].value)||num(amt)*num(rate);
+    if(num(amt)>0&&num(rate)>0)rows.push({currency:cur,amount:amt,rate:rate,total:tot.toFixed(2),tl:base.tl,tlText:base.tlText,fx:cur===base.currency?base.fx:'',customer:base.customer});
   });
   return rows.filter(function(r){return r.currency&&num(r.amount)>0&&num(r.rate)>0});
 }
@@ -42,6 +42,7 @@ function fill(r){
   setSelect($('stFx'),r.currency);
   setInput($('stQty'),r.amount);
   setInput($('stPrice'),r.rate);
+  if(num(r.total)>0)$('stTotal').value=num(r.total).toFixed(2);
   if(r.tl)setSelect($('stTlAccount'),r.tl);
   if(r.fx)setSelect($('stFxAccount'),r.fx);
   if($('stCustomer'))$('stCustomer').value=r.customer||'';
@@ -60,11 +61,12 @@ function addRow(box){
   var row=document.createElement('div');row.dataset.row='1';row.style.cssText='display:grid;grid-template-columns:minmax(80px,1fr) minmax(80px,1fr) minmax(80px,1fr) minmax(90px,1fr) 38px;gap:6px;margin-top:7px;align-items:center';
   var sel=$('stFx').cloneNode(true);sel.removeAttribute('id');sel.value=$('stFx').value;
   function inp(ph,ro){var i=document.createElement('input');i.className='input';i.placeholder=ph;i.type=ro?'text':'number';i.step='any';i.readOnly=!!ro;return i}
-  var amt=inp('Miktar'),rate=inp('Kur'),tot=inp('TL Toplam',true);
+  var amt=inp('Miktar'),rate=inp('Kur'),tot=inp('TL Toplam');
   var del=document.createElement('button');del.type='button';del.className='btn btn-outline';del.textContent='×';del.onclick=function(){row.remove()};
   function calc(){var a=num(amt.value),q=num(rate.value);tot.value=a&&q?(a*q).toFixed(2):''}
   sel.addEventListener('change',function(){rate.value=currentRate(sel.value);calc()});
   amt.addEventListener('input',calc);rate.addEventListener('input',calc);
+  tot.addEventListener('input',function(){var a=num(amt.value),t=num(tot.value);if(a>0)rate.value=t>0?(t/a).toFixed(4):''});
   rate.value=currentRate(sel.value);
   [sel,amt,rate,tot,del].forEach(function(x){row.appendChild(x)});
   box.appendChild(row);amt.focus();
@@ -82,7 +84,7 @@ function money(n){return n.toLocaleString('tr-TR',{minimumFractionDigits:2,maxim
 function showSummary(m,rows){
   var kind=kindOf(m),c=overlay(kind.toLocaleUpperCase('tr-TR')+' — İŞLEM ÖZETİ'),sum=0;
   rows.forEach(function(r,idx){
-    var t=num(r.amount)*num(r.rate);sum+=t;
+    var t=num(r.total)||num(r.amount)*num(r.rate);sum+=t;
     var d=document.createElement('div');d.style.cssText='padding:10px 0;border-bottom:1px solid #eee;display:flex;justify-content:space-between;gap:10px';
     var a=document.createElement('b');a.textContent=(idx+1)+'. '+r.currency;
     var s=document.createElement('span');s.textContent=r.amount+' × '+r.rate+' = '+money(t)+' TL';
