@@ -82,3 +82,13 @@ test('bulutta boş liste anahtarı yoksa cihazdaki boş liste silinmez, buluttak
   const remote = firebaseNormalize({ sales: [{ id: 'S1' }], stocks: [{ id: 'A' }] });
   assert.deepEqual(mergeState(b, local, remote, []).sales, [{ id: 'S1' }]);
 });
+
+test('başka cihazda silinen kayıtlar, bu cihazda boş alanlar farklı görünse de geri gelmez', () => {
+  const { firebaseNormalize } = require('../js/asil-cloud-merge.js');
+  const full = { stocks: [{ id: 'A', tags: [], note: null }, { id: 'B', tags: [], note: null }], meta: { x: 1 } };
+  const base = firebaseNormalize(full);
+  const local = firebaseNormalize(JSON.parse(JSON.stringify(full)));
+  const remote = firebaseNormalize({ stocks: [{ id: 'C' }], meta: { x: 1, stockReplaceV7: { id: 'R' } } });
+  const m = mergeState(base, local, remote, [], ['meta']);
+  assert.deepEqual(m.stocks.map((x) => x.id), ['C']);
+});
