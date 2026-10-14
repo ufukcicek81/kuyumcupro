@@ -21,6 +21,7 @@ Pusula'da barkodlu ürün listesini (stokta olan ürünler) açın ve **Excel'e 
 > **Listenin tamamı alınmalı.** Excel'e aktarım yarıda kesilirse (son satır yarım kalırsa) ya da
 > adet/gram stok özetindeki barkodlu toplamla tutmazsa program uyarır ve aktarımı durdurur;
 > aksi halde eksik ürünler programdan silinirdi. Grup ara toplam satırları ("122 Adet") atlanır.
+
 Bulunması gereken sütunlar:
 
 | Gerekli | Olursa iyi olur |
