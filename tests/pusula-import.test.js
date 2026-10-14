@@ -51,3 +51,37 @@ test('açık stok özeti okunur, adetli üründe has birim gramdan hesaplanır',
   assert.equal(r.stocks[1].unit, 'GR'); assert.equal(r.stocks[1].hasWeight, 3.0128);
   assert.ok(r.stocks[1].inventoryUnitCostHas > 0.58 && r.stocks[1].inventoryUnitCostHas < 0.59);
 });
+
+test('cari bakiye listesi: birim sütunları ve borç/alacak yönü tanınır', () => {
+  const rows = [
+    ['CARİ BAKİYE LİSTESİ'],
+    ['Cari Kodu', 'Cari Adı', 'Tür', 'Telefon', 'TL Bakiye', 'HAS', 'USD', '22 Ayar'],
+    ['202', 'AKBANK', 'Banka', '', '1.980,00', '', '', ''],
+    ['373', 'ALİ OSMAN YAĞIZ', 'Müşteri', '0555', '8900', '-1,25', '100', ''],
+    ['1156', 'ADEM KELEŞ', 'Müşteri', '', '', '', '', '-0,35'],
+    ['901', 'TOPTANCI A', 'Toptancı', '', '', '12,5', '', ''],
+    ['', 'GENEL TOPLAM', '', '', '10880', '', '', ''],
+  ];
+  const d = P.detect(rows, 'cari');
+  assert.equal(d.headerIndex, 1);
+  assert.equal(d.mapping.code, 0); assert.equal(d.mapping.name, 1);
+  const cols = P.detectBalances(d.headers, d.mapping);
+  assert.deepEqual(Object.values(cols).map((x) => x.unit), ['TL', 'HAS', 'USD', '22']);
+  const r = P.buildCariBalances(rows, d.headerIndex, d.mapping, cols, {});
+  assert.equal(r.customers.length, 4);
+  const ali = r.customers.find((c) => c.code === '373');
+  assert.deepEqual(ali.balances, { TL: 8900, HAS: -1.25, USD: 100 });
+  assert.equal(r.customers.find((c) => c.code === '901').type, 'Toptancı');
+  assert.equal(r.customers.find((c) => c.code === '202').type, 'Banka');
+  // + = müşteri alacaklı seçilirse işaret döner
+  const r2 = P.buildCariBalances(rows, d.headerIndex, d.mapping, cols, { positiveIsDebt: false });
+  assert.equal(r2.customers.find((c) => c.code === '373').balances.TL, -8900);
+});
+
+test('borç ve alacak ayrı sütunlarda ise netleştirilir', () => {
+  const rows = [['Kod', 'Ünvan', 'TL Borç', 'TL Alacak', 'HAS Borç', 'HAS Alacak'], ['1', 'X', '500', '200', '0', '3']];
+  const d = P.detect(rows, 'cari');
+  const cols = P.detectBalances(d.headers, d.mapping);
+  const r = P.buildCariBalances(rows, d.headerIndex, d.mapping, cols, {});
+  assert.deepEqual(r.customers[0].balances, { TL: 300, HAS: -3 });
+});

@@ -74,7 +74,72 @@
     {key:'zGram',label:'Birim Gram (adetli ürün)',syn:['zgram','birimgram','adetgram','gramadet','ortgram']},
     {key:'costHas',label:'Maliyet (HAS)',syn:['maliyet','maliyethas','toplammaliyet']}
   ];
-  var MODES={barcode:BARCODE_FIELDS,open:OPEN_FIELDS};
+  var CARI_FIELDS=[
+    {key:'code',label:'Cari Kodu',syn:['carikodu','kod','hesapkodu','carino','kodu','musterikodu']},
+    {key:'name',label:'Cari Adı / Ünvan',syn:['cariadi','unvan','cariunvani','adsoyad','adisoyadi','musteri','musteriadi','cari','hesapadi','adi','isim','ad']},
+    {key:'type',label:'Cari Türü',syn:['tur','turu','caritipi','tip','grup','carigrubu','hesapturu']},
+    {key:'phone',label:'Telefon',syn:['telefon','tel','gsm','ceptelefonu','cep','telefonno']}
+  ];
+  var MODES={barcode:BARCODE_FIELDS,open:OPEN_FIELDS,cari:CARI_FIELDS};
+  var BALANCE_UNITS=['TL','HAS','USD','EUR','GBP','CHF','24','22','21','18','14','8'];
+
+  /* Başlıktan bakiye birimi ve yönü: "TL Bakiye" → TL(+), "USD Alacak" → USD(-), "22 Ayar" → 22. */
+  function balanceSpecOf(header){
+    var h=norm(header);if(!h)return null;
+    var sign=/alacak/.test(h)?-1:1;
+    if(/kod|adi|unvan|telefon|tel$|tur|tip|adres|vergi|tckn|eposta|mail|tarih|not$|aciklama/.test(h)&&!/bakiye|borc|alacak/.test(h))return null;
+    var unit=null;
+    if(/(^|[^a-z])?(usd|dolar)/.test(h))unit='USD';
+    else if(/eur|euro|avro/.test(h))unit='EUR';
+    else if(/gbp|sterlin/.test(h))unit='GBP';
+    else if(/chf|frank/.test(h))unit='CHF';
+    else if(/has/.test(h))unit='HAS';
+    else{var m=/^(24|22|21|18|14|8)(ayar|k|ayarbakiye|bakiye|gr|gram)?/.exec(h);if(m)unit=m[1];}
+    if(!unit&&/^tl|tl$|tlbakiye|bakiyetl|^lira|turklirasi/.test(h))unit='TL';
+    if(!unit&&/^(bakiye|borc|alacak|tutar)$/.test(h))unit='TL';
+    return unit?{unit:unit,sign:sign}:null;
+  }
+  function detectBalances(headers,mapping){
+    var used={};Object.keys(mapping||{}).forEach(function(k){used[mapping[k]]=1});
+    var out={};
+    (headers||[]).forEach(function(h,i){if(used[i])return;var sp=balanceSpecOf(h);if(sp)out[i]=sp;});
+    return out;
+  }
+  function cariTypeOf(v){
+    var t=norm(v);
+    if(/toptan|tedarik|firma|imalat/.test(t))return 'Toptancı';
+    if(/banka/.test(t))return 'Banka';
+    if(/ozel|personel|ortak/.test(t))return 'Özel';
+    return 'Müşteri';
+  }
+  /* Cari bakiye listesi → cari ve birim bazında bakiye.
+     balanceCols: {sütunIndex:{unit,sign}}; positiveIsDebt=true ise + değer müşterinin borcu (bize borçlu). */
+  function buildCariBalances(rows,headerIndex,mapping,balanceCols,opts){
+    opts=opts||{};
+    var positiveIsDebt=opts.positiveIsDebt!==false,out=[],errors=[],warnings=[],index={};
+    for(var r=headerIndex+1;r<rows.length;r++){
+      var row=rows[r];if(isEmptyRow(row))continue;
+      var line=r+1,code=text(cell(row,mapping,'code')),name=text(cell(row,mapping,'name'));
+      if(!code&&!name)continue;
+      if(/toplam|genel/i.test(name)&&!code)continue;
+      var balances={},any=false;
+      Object.keys(balanceCols||{}).forEach(function(c){
+        var sp=balanceCols[c];if(!sp||!sp.unit)return;
+        var v=num(row[c]);if(!v)return;
+        v=v*(sp.sign||1)*(positiveIsDebt?1:-1);
+        balances[sp.unit]=round((balances[sp.unit]||0)+v,6);any=true;
+      });
+      var key=code?'K:'+code:'N:'+norm(name);
+      if(index[key]!==undefined){
+        // Aynı cari birden fazla satırda (birim başına satır) olabilir: bakiyeleri birleştir.
+        var prev=out[index[key]];Object.keys(balances).forEach(function(u){prev.balances[u]=round((prev.balances[u]||0)+balances[u],6)});continue;
+      }
+      if(!name)warnings.push({line:line,message:'Cari adı boş (kod '+code+')'});
+      index[key]=out.length;
+      out.push({code:code,name:name||code,type:cariTypeOf(cell(row,mapping,'type')),phone:text(cell(row,mapping,'phone')),balances:balances,line:line});
+    }
+    return {customers:out,errors:errors,warnings:warnings};
+  }
 
   /* İlk satırlar arasında en çok tanınan başlığı içeren satırı başlık kabul eder. */
   function detect(rows,mode){
@@ -189,5 +254,5 @@
     return {stocks:out,errors:errors,warnings:warnings};
   }
 
-  return {norm:norm,num:num,purityOf:purityOf,detect:detect,buildBarcodeStocks:buildBarcodeStocks,buildOpenStocks:buildOpenStocks,MODES:MODES};
+  return {norm:norm,num:num,purityOf:purityOf,detect:detect,buildBarcodeStocks:buildBarcodeStocks,buildOpenStocks:buildOpenStocks,buildCariBalances:buildCariBalances,detectBalances:detectBalances,balanceSpecOf:balanceSpecOf,BALANCE_UNITS:BALANCE_UNITS,MODES:MODES};
 });
