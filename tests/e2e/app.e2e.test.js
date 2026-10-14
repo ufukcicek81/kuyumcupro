@@ -240,3 +240,43 @@ test('Pusula Excel stok yükleme eski stokları siler, yenilerini yükler', asyn
   assert.deepEqual(p.errors, []);
   await p.context().close(); await other.context().close();
 });
+
+test('Pusula cari bakiye aktarımı bakiyeleri eşitler, farkı devir hareketi olarak yazar', async () => {
+  const XLSX = require('xlsx');
+  const os = require('node:os'); const path = require('node:path'); const fs = require('node:fs');
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'pusula-cari-')), 'cari.xlsx');
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ['CARİ BAKİYE LİSTESİ'],
+    ['Cari Kodu', 'Cari Adı', 'Tür', 'TL Bakiye', 'HAS', 'USD'],
+    ['373', 'ALI OSMAN YAGıZ', 'Müşteri', 10000, '-1,5', ''],
+    ['9999', 'YENİ MÜŞTERİ', 'Müşteri', 250, '', '40'],
+  ]), 'Cari');
+  XLSX.writeFile(wb, file);
+
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  await p.click('[data-go="backup"]');
+  await p.click('#pusulaImportBackupV7');
+  await p.selectOption('#piMode', 'cari');
+  await p.setInputFiles('#piFile', file);
+  await p.waitForFunction(() => /Excel'de:<\/b> 2 cari/.test(document.getElementById('piResult').innerHTML), null, { timeout: 10000 });
+  const txt = await p.innerText('#piResult');
+  assert.match(txt, /Yeni: 1/); assert.match(txt, /YENİ MÜŞTERİ/);
+  p.removeAllListeners('dialog'); p.on('dialog', (d) => d.accept());
+  await p.click('#modalConfirm');
+  await p.waitForFunction(() => !document.getElementById('modalRoot'), null, { timeout: 15000 });
+  await p.waitForTimeout(4000);
+  const st = fb.db.state;
+  const ali = st.customers.find((c) => String(c.code) === '373');
+  assert.equal(Number(ali.tlBalance), 10000); assert.equal(Number(ali.hasBalance), -1.5);
+  const yeni = st.customers.find((c) => String(c.code) === '9999');
+  assert.equal(Number(yeni.tlBalance), 250); assert.equal(Number(yeni.otherBalances.USD), 40);
+  const akbank = st.customers.find((c) => String(c.code) === '202');
+  assert.equal(Number(akbank.tlBalance || 0), 0, "Excel'de olmayan cari sıfırlanmalı");
+  // Hareket defteri bakiye ile tutarlı: Ali'nin TL hareketleri toplamı = 10000
+  const sum = st.customerMoves.filter((m) => m.customerId === ali.id && m.unit === 'TL').reduce((n, m) => n + Number(m.debit || 0) - Number(m.credit || 0), 0);
+  assert.equal(Math.round(sum * 100) / 100, 10000);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});

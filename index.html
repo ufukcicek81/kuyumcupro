@@ -2756,7 +2756,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function currentCountSession(){ return state.countSessions.find(x=>x.period===state.activePeriod && x.status==='Aktif') || null; }
   function stockHeaderTabs(){
     const tabs=[['summary','Stok + Kasa Özeti'],['list','Barkodlu Ürünler'],['cards','Stok Kartları'],['labels','Barkod / Etiket'],['moves','Stok Hareketleri']];
-    return `<div class="stock-tabs">${tabs.map(([k,t])=>`<button class="btn ${stockView===k?'active':''}" data-stock-view="${k}">${t}</button>`).join('')}<button class="btn btn-primary" id="newStockCard">+ Stok Kartı Tanımla</button><button class="btn btn-outline" id="pusulaImportV7">📥 Pusula Excel Stok Yükle</button></div>`;
+    return `<div class="stock-tabs">${tabs.map(([k,t])=>`<button class="btn ${stockView===k?'active':''}" data-stock-view="${k}">${t}</button>`).join('')}<button class="btn btn-primary" id="newStockCard">+ Stok Kartı Tanımla</button><button class="btn btn-outline" id="pusulaImportV7">📥 Pusula'dan Excel Aktar</button></div>`;
   }
 
   function barcodeStockSummary(){
@@ -3185,64 +3185,151 @@ function stockSummaryView(){
     loadXlsxV7.p=new Promise((resolve,reject)=>{const sc=document.createElement('script');sc.src=XLSX_CDN_V7;sc.onload=()=>window.XLSX?resolve(window.XLSX):reject(new Error('Excel okuyucu yüklenemedi'));sc.onerror=()=>{loadXlsxV7.p=null;reject(new Error('Excel okuyucu indirilemedi; internet bağlantısını kontrol edin'));};document.head.appendChild(sc);});
     return loadXlsxV7.p;
   }
+  function pusulaOldCountV7(mode,period){
+    if(mode==='barcode')return state.stocks.filter(x=>x.period===period&&x.status!=='Satıldı').length;
+    if(mode==='open')return (state.openStocks||[]).filter(x=>x.period===period).length;
+    return (state.customers||[]).length;
+  }
+  function cariBalancesOfV7(c){
+    const b={};if(Number(c.tlBalance||0))b.TL=Number(c.tlBalance);if(Number(c.hasBalance||0))b.HAS=Number(c.hasBalance);
+    Object.entries(c.otherBalances||{}).forEach(([u,v])=>{if(Number(v||0))b[String(u).toUpperCase()]=Number(v);});
+    return b;
+  }
+  function findCariForImportV7(x){
+    const P=AsilPusulaImport;
+    return (x.code&&state.customers.find(c=>String(c.code||'')===String(x.code)))||state.customers.find(c=>P.norm(c.name)===P.norm(x.name))||null;
+  }
+  /* Cari bakiyeleri: Excel'deki bakiye ile mevcut bakiye arasındaki fark "DEVİR" hareketi olarak yazılır;
+     böylece cari hareket defteri ile bakiye tutarlı kalır. */
+  function planCariImportV7(list,zeroMissing){
+    const plan=[],matched=new Set();let created=0,updated=0,zeroed=0;
+    list.forEach(x=>{
+      const c=findCariForImportV7(x);if(c)matched.add(c.id);
+      const cur=c?cariBalancesOfV7(c):{},diffs={};
+      new Set([...Object.keys(cur),...Object.keys(x.balances)]).forEach(u=>{const d=Number(x.balances[u]||0)-Number(cur[u]||0);if(Math.abs(d)>1e-9)diffs[u]=d;});
+      if(!c)created++;else if(Object.keys(diffs).length)updated++;
+      plan.push({src:x,customer:c,diffs});
+    });
+    if(zeroMissing)(state.customers||[]).forEach(c=>{
+      if(matched.has(c.id)||c.id==='CASH')return;
+      const cur=cariBalancesOfV7(c),diffs={};Object.keys(cur).forEach(u=>{diffs[u]=-cur[u];});
+      if(Object.keys(diffs).length){zeroed++;plan.push({src:null,customer:c,diffs});}
+    });
+    return {plan,created,updated,zeroed};
+  }
+  function applyCariImportV7(list,zeroMissing,fileName){
+    const {plan,created,updated,zeroed}=planCariImportV7(list,zeroMissing),date=now(),doc='PUSULA-AKTARIM-'+date.slice(0,10);let moves=0;
+    plan.forEach(p=>{
+      let c=p.customer;
+      if(!c){
+        const x=p.src,id=x.code&&!state.customers.some(k=>k.id==='C-'+x.code)?'C-'+x.code:uid('C');
+        c={id,code:x.code||'',name:x.name,type:x.type||'Müşteri',accountingNature:x.type==='Banka'?'Varlık':'Nötr',phone:x.phone||'',email:'',address:'',tlBalance:0,hasBalance:0,otherBalances:{},openingBalances:{}};
+        state.customers.push(c);
+      }else if(p.src){if(p.src.phone&&!c.phone)c.phone=p.src.phone;}
+      Object.entries(p.diffs).forEach(([u,d])=>{
+        const debit=d>0?d:0,credit=d<0?-d:0;
+        applyCariBalance(c,u,debit,credit);
+        state.customerMoves.unshift({id:uid('CM'),customerId:c.id,period:state.activePeriod,date,code:'DV',type:'DEVİR / AÇILIŞ',unit:u,debit,credit,description:p.src?'Pusula cari bakiye aktarımı':'Pusula aktarımı: Excel\'de olmayan cari sıfırlandı',user:session?.name||'Sistem',sourceType:'opening',sourceDocNo:doc});
+        moves++;
+      });
+    });
+    return {created,updated,zeroed,moves};
+  }
   function openPusulaImportV7(){
-    if(!v5Guard('canManageDefinitions','Stok yükleme için tanımlama yetkisi gerekir'))return;
+    if(!v5Guard('canManageDefinitions','Pusula aktarımı için tanımlama yetkisi gerekir'))return;
     if(!window.AsilPusulaImport)return toast('İçe aktarma modülü yüklenemedi','err');
     const P=AsilPusulaImport,period=state.activePeriod;
-    const ctx={rows:null,sheets:[],wb:null,detect:null,result:null};
-    modal('Pusula Excel Stok Yükle',`<div class="form-grid">
-      <div class="notice span-4"><b>Dikkat:</b> Yükleme onaylanınca <b>${period}</b> dönemindeki seçilen türdeki stoklar silinir ve Excel'deki stoklar yüklenir. Satılmış ürün kayıtları satış geçmişi için korunur. Yüklemeden önce otomatik yedek alınır.</div>
-      <div class="labelled span-2"><label>Stok türü</label><select id="piMode" class="select"><option value="barcode">Barkodlu stok listesi</option><option value="open">Açık (barkodsuz) stok / stok özeti</option></select></div>
+    const ctx={rows:null,sheets:[],wb:null,detect:null,result:null,balanceCols:{}};
+    modal('Pusula\'dan Excel Aktarım',`<div class="form-grid">
+      <div class="notice span-4" id="piNotice"></div>
+      <div class="labelled span-2"><label>Aktarılacak veri</label><select id="piMode" class="select"><option value="barcode">Barkodlu stoklar</option><option value="open">Barkodsuz (açık) stoklar</option><option value="cari">Güncel cari bakiyeleri</option></select></div>
       <div class="labelled span-2"><label>Pusula Excel dosyası (.xlsx, .xls, .csv)</label><input id="piFile" type="file" class="input" accept=".xlsx,.xls,.csv"></div>
       <div class="labelled span-2" id="piSheetWrap" style="display:none"><label>Sayfa</label><select id="piSheet" class="select"></select></div>
+      <div class="span-4" id="piCariOpts" style="display:none"><div class="form-grid">
+        <div class="labelled span-2"><label>Excel'deki artı (+) bakiye</label><select id="piSign" class="select"><option value="debt">Cari bize BORÇLU (bizim alacağımız)</option><option value="credit">Cari ALACAKLI (bizim borcumuz)</option></select></div>
+        <label class="span-2" style="display:flex;align-items:center;gap:8px;margin-top:22px"><input type="checkbox" id="piZero" checked> Excel'de olmayan carilerin bakiyesini sıfırla</label>
+      </div></div>
       <div class="span-4" id="piResult"><div class="muted">Dosya seçin. Sütunlar otomatik tanınır; tanınmayanı aşağıda elle seçebilirsiniz.</div></div>
     </div>`,async()=>{
-      const r=ctx.result;
-      if(!r||!r.stocks.length)return toast('Yüklenecek stok yok. Dosyayı ve sütun eşleştirmesini kontrol edin','err');
-      const mode=document.getElementById('piMode').value,isBarcode=mode==='barcode';
-      const oldCount=isBarcode?state.stocks.filter(x=>x.period===period&&x.status!=='Satıldı').length:(state.openStocks||[]).filter(x=>x.period===period).length;
-      if(!confirm(`${period} dönemindeki ${oldCount} ${isBarcode?'barkodlu':'açık'} stok SİLİNECEK ve Excel'deki ${r.stocks.length} stok yüklenecek.${r.errors.length?`\n${r.errors.length} satır hatalı olduğu için atlanacak.`:''}\n\nDevam edilsin mi?`))return;
-      const btn=document.getElementById('modalConfirm');if(btn){btn.disabled=true;btn.textContent='YÜKLENİYOR…';}
+      const r=ctx.result,mode=document.getElementById('piMode').value;
+      const items=r?(mode==='cari'?r.customers:r.stocks):[];
+      if(!items.length)return toast('Aktarılacak kayıt yok. Dosyayı ve sütun eşleştirmesini kontrol edin','err');
+      const oldCount=pusulaOldCountV7(mode,period),zero=document.getElementById('piZero')?.checked;
+      let question;
+      if(mode==='cari'){const pl=planCariImportV7(items,zero);question=`${items.length} carinin bakiyesi Excel'deki değerlere eşitlenecek.\n${pl.created} yeni cari açılacak, ${pl.updated} carinin bakiyesi değişecek${zero?`, Excel'de olmayan ${pl.zeroed} carinin bakiyesi sıfırlanacak`:''}.\nFarklar "DEVİR / AÇILIŞ" hareketi olarak yazılır.`;}
+      else question=`${period} dönemindeki ${oldCount} ${mode==='barcode'?'barkodlu':'barkodsuz'} stok SİLİNECEK ve Excel'deki ${items.length} stok yüklenecek.`;
+      if(!confirm(question+(r.errors.length?`\n${r.errors.length} hatalı satır atlanacak.`:'')+'\n\nDevam edilsin mi?'))return;
+      const btn=document.getElementById('modalConfirm');if(btn){btn.disabled=true;btn.textContent='AKTARILIYOR…';}
       try{
-        await idbRollingSnapshotV682(true,'PUSULA STOK YÜKLEME ÖNCESİ').catch(()=>false);
-        if(state.cloudSync?.enabled)await cloudBackupV5('PUSULA STOK YÜKLEME ÖNCESİ').catch(()=>false);
-        if(isBarcode){
-          const keep=state.stocks.filter(x=>!(x.period===period&&x.status!=='Satıldı'));
-          const ids=new Set(keep.map(x=>x.id));
-          r.stocks.forEach(x=>{if(ids.has(x.id))x.id=x.id+'-'+Date.now().toString(36);});
-          state.stocks=keep.concat(r.stocks);
+        await idbRollingSnapshotV682(true,'PUSULA AKTARIM ÖNCESİ').catch(()=>false);
+        if(state.cloudSync?.enabled)await cloudBackupV5('PUSULA AKTARIM ÖNCESİ').catch(()=>false);
+        let msg;
+        if(mode==='cari'){
+          const res=applyCariImportV7(items,zero,ctx.fileName);
+          msg=`Cari bakiyeleri aktarıldı: ${res.created} yeni, ${res.updated} güncellendi${zero?`, ${res.zeroed} sıfırlandı`:''}`;
+          audit(`Pusula Excel cari bakiye aktarımı · ${items.length} cari · ${res.created} yeni · ${res.updated} güncellendi · ${res.zeroed} sıfırlandı · ${res.moves} devir hareketi · ${ctx.fileName||''}`,'Cari');
         }else{
-          state.openStocks=(state.openStocks||[]).filter(x=>x.period!==period).concat(r.stocks);
+          if(mode==='barcode'){
+            const keep=state.stocks.filter(x=>!(x.period===period&&x.status!=='Satıldı')),ids=new Set(keep.map(x=>x.id));
+            items.forEach(x=>{if(ids.has(x.id))x.id=x.id+'-'+Date.now().toString(36);});
+            state.stocks=keep.concat(items);
+          }else state.openStocks=(state.openStocks||[]).filter(x=>x.period!==period).concat(items);
+          state.meta=state.meta||{};state.meta.stockReplaceV7={id:uid('SR'),at:now(),mode,count:items.length,removed:oldCount,file:ctx.fileName||''};
+          msg=`${items.length} stok yüklendi, ${oldCount} eski stok silindi`;
+          audit(`Pusula Excel ${mode==='barcode'?'barkodlu':'barkodsuz'} stok yükleme · ${oldCount} eski stok silindi · ${items.length} stok yüklendi · ${ctx.fileName||''}`,'Stok');
         }
-        state.meta=state.meta||{};state.meta.stockReplaceV7={id:uid('SR'),at:now(),mode,count:r.stocks.length,removed:oldCount,file:ctx.fileName||''};
-        audit(`Pusula Excel ${isBarcode?'barkodlu':'açık'} stok yükleme · ${oldCount} eski stok silindi · ${r.stocks.length} stok yüklendi · ${ctx.fileName||''}`,'Stok');
-        save();closeModal();render();
-        toast(`${r.stocks.length} stok yüklendi, ${oldCount} eski stok silindi`);
-      }catch(e){if(btn){btn.disabled=false;btn.textContent='ESKİ STOKLARI SİL VE YÜKLE';}toast('Stok yüklenemedi: '+(e?.message||e),'err');}
-    },'ESKİ STOKLARI SİL VE YÜKLE');
+        save();closeModal();render();toast(msg);
+      }catch(e){if(btn){btn.disabled=false;btn.textContent='AKTARIMI ONAYLA';}toast('Aktarım yapılamadı: '+(e?.message||e),'err');}
+    },'AKTARIMI ONAYLA');
     const modeEl=document.getElementById('piMode'),fileEl=document.getElementById('piFile'),sheetEl=document.getElementById('piSheet'),out=document.getElementById('piResult');
+    const notice=()=>{
+      const m=modeEl.value;
+      document.getElementById('piCariOpts').style.display=m==='cari'?'':'none';
+      document.getElementById('piNotice').innerHTML=m==='cari'
+        ?'<b>Cari bakiyeleri:</b> Excel\'deki her carinin bakiyesi Excel\'deki değere eşitlenir; fark "DEVİR / AÇILIŞ" hareketi olarak yazılır. Bulunamayan cari yeni açılır. Cari kartları silinmez. Aktarımdan önce otomatik yedek alınır.'
+        :`<b>Dikkat:</b> Onaylanınca <b>${period}</b> dönemindeki ${m==='barcode'?'barkodlu':'barkodsuz'} stoklar silinir ve Excel'deki stoklar yüklenir. Satılmış ürün kayıtları satış geçmişi için korunur. Aktarımdan önce otomatik yedek alınır.`;
+    };
+    const fmtBal=b=>Object.entries(b).map(([u,v])=>`${qty(v)} ${esc(u)}${/^\d+$/.test(u)?' ayar':''}`).join(' · ')||'0';
     const rebuild=()=>{
       if(!ctx.rows)return;
-      const mode=modeEl.value,d=ctx.detect,fields=P.MODES[mode];
-      ctx.result=mode==='barcode'?P.buildBarcodeStocks(ctx.rows,d.headerIndex,d.mapping,{period}):P.buildOpenStocks(ctx.rows,d.headerIndex,d.mapping,{period});
-      const r=ctx.result,cols=d.headers.map((h,i)=>({i,h:h||('Sütun '+(i+1))}));
-      const mapHtml=fields.map(f=>`<div class="labelled"><label>${esc(f.label)}</label><select class="select" data-pi-field="${f.key}"><option value="">— yok —</option>${cols.map(c=>`<option value="${c.i}" ${d.mapping[f.key]===c.i?'selected':''}>${esc(c.h)}</option>`).join('')}</select></div>`).join('');
-      const prev=r.stocks.slice(0,6),isB=mode==='barcode';
-      const table=`<div class="table-wrap"><table class="table"><thead><tr>${isB?'<th>Barkod</th><th>Ürün</th><th>Ayar</th><th class="num">Gram</th><th class="num">Has</th><th class="num">Maliyet HAS</th><th class="num">Satış HAS</th>':'<th>Kod</th><th>Ürün</th><th>Ayar</th><th class="num">Miktar</th><th>Birim</th><th class="num">Has</th>'}</tr></thead><tbody>${prev.map(x=>isB?`<tr><td>${esc(x.barcode)}</td><td>${esc(x.name)}</td><td>${esc(x.karat)}</td><td class="num">${qty(x.amount)}</td><td class="num">${qty(x.hasWeight)}</td><td class="num">${qty(x.costHas)}</td><td class="num">${qty(x.saleHas)}</td></tr>`:`<tr><td>${esc(x.pusulaCode)}</td><td>${esc(x.name)}</td><td>${esc(String(x.purity))}</td><td class="num">${qty(x.amount)}</td><td>${esc(x.unit)}</td><td class="num">${qty(x.hasWeight)}</td></tr>`).join('')}</tbody></table></div>`;
-      const totGram=r.stocks.reduce((n,x)=>n+Number(x.amount||0),0),totHas=r.stocks.reduce((n,x)=>n+Number(x.hasWeight||0),0);
-      const oldCount=isB?state.stocks.filter(x=>x.period===period&&x.status!=='Satıldı').length:(state.openStocks||[]).filter(x=>x.period===period).length;
+      const mode=modeEl.value,d=ctx.detect,fields=P.MODES[mode],isCari=mode==='cari',isB=mode==='barcode';
+      if(isCari)ctx.result=P.buildCariBalances(ctx.rows,d.headerIndex,d.mapping,ctx.balanceCols,{positiveIsDebt:document.getElementById('piSign').value==='debt'});
+      else ctx.result=isB?P.buildBarcodeStocks(ctx.rows,d.headerIndex,d.mapping,{period}):P.buildOpenStocks(ctx.rows,d.headerIndex,d.mapping,{period});
+      const r=ctx.result,items=isCari?r.customers:r.stocks,cols=d.headers.map((h,i)=>({i,h:h||('Sütun '+(i+1))}));
+      let mapHtml=fields.map(f=>`<div class="labelled"><label>${esc(f.label)}</label><select class="select" data-pi-field="${f.key}"><option value="">— yok —</option>${cols.map(c=>`<option value="${c.i}" ${d.mapping[f.key]===c.i?'selected':''}>${esc(c.h)}</option>`).join('')}</select></div>`).join('');
+      if(isCari){
+        const used=new Set(Object.values(d.mapping));
+        mapHtml+=`<div class="span-4" style="margin-top:6px"><b>Bakiye sütunları</b> <span class="muted">(her sütunun birimini ve borç/alacak yönünü seçin)</span></div>`+cols.filter(c=>!used.has(c.i)).map(c=>{const sp=ctx.balanceCols[c.i]||{};return `<div class="labelled"><label>${esc(c.h)}</label><div style="display:flex;gap:4px"><select class="select" data-pi-bal-unit="${c.i}"><option value="">— bakiye değil —</option>${P.BALANCE_UNITS.map(u=>`<option ${sp.unit===u?'selected':''}>${u}</option>`).join('')}</select><select class="select" data-pi-bal-sign="${c.i}" style="max-width:110px"><option value="1" ${sp.sign!==-1?'selected':''}>Borç/Net</option><option value="-1" ${sp.sign===-1?'selected':''}>Alacak</option></select></div></div>`;}).join('');
+      }
+      const prev=items.slice(0,6);
+      const head=isCari?'<th>Kod</th><th>Cari</th><th>Tür</th><th>Excel bakiyesi</th><th>Programdaki bakiye</th>':isB?'<th>Barkod</th><th>Ürün</th><th>Ayar</th><th class="num">Gram</th><th class="num">Has</th><th class="num">Maliyet HAS</th><th class="num">Satış HAS</th>':'<th>Kod</th><th>Ürün</th><th>Ayar</th><th class="num">Miktar</th><th>Birim</th><th class="num">Has</th>';
+      const body=prev.map(x=>{
+        if(isCari){const c=findCariForImportV7(x);return `<tr><td>${esc(x.code)}</td><td>${esc(x.name)}${c?'':' <span class="badge gold">YENİ</span>'}</td><td>${esc(x.type)}</td><td>${fmtBal(x.balances)}</td><td>${c?fmtBal(cariBalancesOfV7(c)):'—'}</td></tr>`;}
+        if(isB)return `<tr><td>${esc(x.barcode)}</td><td>${esc(x.name)}</td><td>${esc(x.karat)}</td><td class="num">${qty(x.amount)}</td><td class="num">${qty(x.hasWeight)}</td><td class="num">${qty(x.costHas)}</td><td class="num">${qty(x.saleHas)}</td></tr>`;
+        return `<tr><td>${esc(x.pusulaCode)}</td><td>${esc(x.name)}</td><td>${esc(String(x.purity))}</td><td class="num">${qty(x.amount)}</td><td>${esc(x.unit)}</td><td class="num">${qty(x.hasWeight)}</td></tr>`;
+      }).join('');
+      let summary;
+      if(isCari){
+        const pl=planCariImportV7(items,document.getElementById('piZero').checked),tot={};items.forEach(x=>Object.entries(x.balances).forEach(([u,v])=>{tot[u]=(tot[u]||0)+v;}));
+        summary=`<b>Excel'de:</b> ${items.length} cari · <b>Yeni:</b> ${pl.created} · <b>Bakiyesi değişecek:</b> ${pl.updated}${document.getElementById('piZero').checked?` · <b>Sıfırlanacak:</b> ${pl.zeroed}`:''}<br><b>Toplam:</b> ${fmtBal(tot)}${!Object.keys(ctx.balanceCols).length?'<br><span style="color:var(--red,#c33)"><b>Bakiye sütunu tanınamadı; aşağıdan seçin.</b></span>':''}`;
+      }else{
+        const totGram=items.reduce((n,x)=>n+Number(x.amount||0),0),totHas=items.reduce((n,x)=>n+Number(x.hasWeight||0),0);
+        summary=`<b>Yüklenecek:</b> ${items.length} stok${isB?` · ${qty(totGram)} gr`:''} · ${qty(totHas)} HAS · <b>Silinecek:</b> ${pusulaOldCountV7(mode,period)} eski stok`;
+      }
       const issues=r.errors.concat(r.warnings);
-      out.innerHTML=`<div class="notice" style="margin:8px 0"><b>Başlık satırı:</b> ${d.headerIndex>=0?(d.headerIndex+1)+'. satır':'bulunamadı'} · <b>Yüklenecek:</b> ${r.stocks.length} stok${isB?` · ${qty(totGram)} gr`:''} · ${qty(totHas)} HAS · <b>Silinecek:</b> ${oldCount} eski stok${r.errors.length?` · <span style="color:var(--red,#c33)"><b>${r.errors.length} hatalı satır atlanacak</b></span>`:''}</div>
-        <details ${d.headerIndex<0||!r.stocks.length?'open':''}><summary style="cursor:pointer;font-weight:700;margin:6px 0">Sütun eşleştirme</summary><div class="form-grid">${mapHtml}</div></details>
-        <div style="margin-top:8px"><b>Önizleme</b> (ilk ${prev.length})</div>${table}
+      out.innerHTML=`<div class="notice" style="margin:8px 0"><b>Başlık satırı:</b> ${d.headerIndex>=0?(d.headerIndex+1)+'. satır':'bulunamadı'} · ${summary}${r.errors.length?` · <span style="color:var(--red,#c33)"><b>${r.errors.length} hatalı satır atlanacak</b></span>`:''}</div>
+        <details ${d.headerIndex<0||!items.length||(isCari&&!Object.keys(ctx.balanceCols).length)?'open':''}><summary style="cursor:pointer;font-weight:700;margin:6px 0">Sütun eşleştirme</summary><div class="form-grid">${mapHtml}</div></details>
+        <div style="margin-top:8px"><b>Önizleme</b> (ilk ${prev.length})</div><div class="table-wrap"><table class="table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>
         ${issues.length?`<details style="margin-top:8px"><summary style="cursor:pointer">Uyarılar / hatalar (${issues.length})</summary><div class="muted" style="max-height:160px;overflow:auto">${issues.slice(0,200).map(x=>`${x.line}. satır: ${esc(x.message)}`).join('<br>')}</div></details>`:''}`;
-      out.querySelectorAll('[data-pi-field]').forEach(sel=>sel.addEventListener('change',()=>{const v=sel.value;if(v==='')delete ctx.detect.mapping[sel.dataset.piField];else ctx.detect.mapping[sel.dataset.piField]=Number(v);rebuild();}));
+      out.querySelectorAll('[data-pi-field]').forEach(sel=>sel.addEventListener('change',()=>{const v=sel.value;if(v==='')delete ctx.detect.mapping[sel.dataset.piField];else ctx.detect.mapping[sel.dataset.piField]=Number(v);if(modeEl.value==='cari')Object.keys(ctx.balanceCols).forEach(k=>{if(Object.values(ctx.detect.mapping).includes(Number(k)))delete ctx.balanceCols[k];});rebuild();}));
+      out.querySelectorAll('[data-pi-bal-unit]').forEach(sel=>sel.addEventListener('change',()=>{const i=sel.dataset.piBalUnit;if(!sel.value)delete ctx.balanceCols[i];else ctx.balanceCols[i]={unit:sel.value,sign:Number(out.querySelector(`[data-pi-bal-sign="${i}"]`).value)||1};rebuild();}));
+      out.querySelectorAll('[data-pi-bal-sign]').forEach(sel=>sel.addEventListener('change',()=>{const i=sel.dataset.piBalSign;if(ctx.balanceCols[i]){ctx.balanceCols[i].sign=Number(sel.value)||1;rebuild();}}));
     };
+    const redetect=()=>{ctx.detect=P.detect(ctx.rows,modeEl.value);ctx.balanceCols=modeEl.value==='cari'?P.detectBalances(ctx.detect.headers,ctx.detect.mapping):{};rebuild();};
     const readSheet=()=>{
       const ws=ctx.wb.Sheets[sheetEl.value||ctx.sheets[0]];
       ctx.rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
-      ctx.detect=P.detect(ctx.rows,modeEl.value);
-      rebuild();
+      redetect();
     };
     fileEl.addEventListener('change',async()=>{
       const f=fileEl.files[0];if(!f)return;ctx.fileName=f.name;
@@ -3257,7 +3344,10 @@ function stockSummaryView(){
       }catch(e){ctx.rows=null;ctx.result=null;out.innerHTML=`<div class="notice" style="color:var(--red,#c33)">Dosya okunamadı: ${esc(e?.message||e)}</div>`;}
     });
     sheetEl.addEventListener('change',()=>{if(ctx.wb)readSheet();});
-    modeEl.addEventListener('change',()=>{if(ctx.rows){ctx.detect=P.detect(ctx.rows,modeEl.value);rebuild();}});
+    modeEl.addEventListener('change',()=>{notice();if(ctx.rows)redetect();});
+    document.getElementById('piSign').addEventListener('change',rebuild);
+    document.getElementById('piZero').addEventListener('change',rebuild);
+    notice();
   }
   function pageStocks(){
     const rows=state.stocks.filter(x=>x.period===state.activePeriod && x.status!=='Satıldı');
@@ -3551,7 +3641,7 @@ function stockSummaryView(){
   }
 
   function pageCustomers(){
-    return `<div class="page-title"><div><h1>Cari Hesap İşlemleri</h1><p>Cari, kasa ve finans tek işlem motorunda bağlı çalışır. NT/NO işlemleri kasayı otomatik etkiler.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline ${cariView==='cards'?'active':''}" data-cari-view="cards">Cari Kartları</button><button class="btn btn-outline ${cariView==='moves'?'active':''}" data-cari-view="moves">Tüm Cari Hareketler</button><button class="btn btn-outline" id="cariLegacyCleanupV677">🧹 Bilanço Korumalı Temizlik</button><button class="btn btn-primary" id="newCustomer">+ Cari Aç</button></div></div>
+    return `<div class="page-title"><div><h1>Cari Hesap İşlemleri</h1><p>Cari, kasa ve finans tek işlem motorunda bağlı çalışır. NT/NO işlemleri kasayı otomatik etkiler.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" id="pusulaImportCariV7">📥 Pusula'dan Cari Bakiye Aktar</button><button class="btn btn-outline ${cariView==='cards'?'active':''}" data-cari-view="cards">Cari Kartları</button><button class="btn btn-outline ${cariView==='moves'?'active':''}" data-cari-view="moves">Tüm Cari Hareketler</button><button class="btn btn-outline" id="cariLegacyCleanupV677">🧹 Bilanço Korumalı Temizlik</button><button class="btn btn-primary" id="newCustomer">+ Cari Aç</button></div></div>
       <div class="notice"><strong>Tek Cari İşlem Ekranı:</strong> ${CARI_MOVE_TYPES.map(x=>x.code).join(' · ')}. Tüm hareketler aynı ekranda Cins/Tutar/Kur → Karşılığı → BORÇ/ALACAK mantığıyla çalışır; altın ve hurda işlemlerinde stok alanları aynı ekranın içinde açılır.</div>
       ${cariView==='moves'?customerMovesCenterView():customerCardsView()}`;
   }
@@ -4315,6 +4405,11 @@ function stockSummaryView(){
           <p class="muted">Asil Kuyumcu Pro yedek dosyasını seçin. Geri yükleme mevcut yerel veriyi değiştirir.</p>
           <input type="file" id="backupFile" accept="application/json,.json" class="input">
           <div class="muted" style="margin-top:9px;font-size:12px">Yeni şifresiz yedekler doğrudan açılır. Eski şifreli yedekler yalnız bu cihazda eski anahtar hâlâ varsa geriye dönük uyumluluk için açılabilir.</div>
+        </div>
+        <div class="card" style="border:2px solid rgba(214,177,95,.35)"><div class="section-head"><h3>📥 Pusula'dan Aktarım</h3><span class="badge gold">İLK KURULUM</span></div>
+          <p class="muted">Pusula'dan aldığınız Excel dosyalarıyla güncel verileri bu programa aktarın. Sırayla: <b>1)</b> Barkodlu stoklar <b>2)</b> Barkodsuz (açık) stoklar <b>3)</b> Cari bakiyeleri. Her aktarımdan önce otomatik yedek alınır.</p>
+          <button class="btn btn-primary" id="pusulaImportBackupV7" style="width:100%;min-height:46px">PUSULA EXCEL AKTARIMINI AÇ</button>
+          <div class="muted" style="margin-top:8px;font-size:12px">Son aktarım: ${state.meta?.stockReplaceV7?esc(trDate(state.meta.stockReplaceV7.at)+' · '+(state.meta.stockReplaceV7.file||'')):'—'}</div>
         </div>
         <div class="card"><div class="section-head"><h3>☁ Merkezi Bulut</h3><span class="badge ${window.AsilCloudAuth?.isConfigured()?'green':'red'}">${window.AsilCloudAuth?.isConfigured()?'GİRİŞLİ':'KORUMASIZ'}</span></div>
           <p class="muted">Mağaza PC'si, tablet ve diğer bilgisayarlar aynı merkezi veri setini kullanır. Aynı anda farklı cihazlarda yapılan işlemler birleştirilir, biri diğerini silmez.</p>
@@ -5498,6 +5593,7 @@ function stockSummaryView(){
   }
 
   function bindCustomers(){
+    document.getElementById('pusulaImportCariV7')?.addEventListener('click',()=>{openPusulaImportV7();const m=document.getElementById('piMode');if(m){m.value='cari';m.dispatchEvent(new Event('change'));}});
     document.getElementById('newCustomer')?.addEventListener('click',()=>openAccountCardModal());
     document.getElementById('cariLegacyCleanupV677')?.addEventListener('click',openCariLegacyCleanupV677);
     document.querySelectorAll('[data-cari-view]').forEach(b=>b.addEventListener('click',()=>{cariView=b.dataset.cariView;render();}));
@@ -6559,6 +6655,7 @@ function stockSummaryView(){
     document.getElementById('backupCloudPush')?.addEventListener('click',()=>cloudPushV5(true));
     document.getElementById('backupCloudPull')?.addEventListener('click',()=>cloudPullV5(true));
     document.getElementById('cloudAuthOpen')?.addEventListener('click',openCloudAuthV7);
+    document.getElementById('pusulaImportBackupV7')?.addEventListener('click',openPusulaImportV7);
     document.getElementById('backupDownloadEncrypted')?.addEventListener('click',saveEncryptedBackupV7);
     document.getElementById('cloudBackupNow')?.addEventListener('click',async()=>{if(!v5Guard('canCloudSync'))return;const ok=await cloudBackupV5('MANUEL BULUT');toast(ok?'Manuel bulut yedeği alındı':'Bulut yedeği alınamadı',ok?'ok':'err');if(ok)audit('Manuel bulut yedeği alındı','Yedek');});
     document.getElementById('backupDownload')?.addEventListener('click',async()=>{

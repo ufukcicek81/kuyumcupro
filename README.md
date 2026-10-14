@@ -22,6 +22,7 @@ Tek sayfalık web uygulaması (`index.html`); Vercel üzerinde yayınlanır.
 - Bulut güvenliği (önce bu): `FIREBASE_GUVENLIK_KURULUM.md`
 - Etiket yazıcısı: `YAZICI_KURULUM.md`
 - QZ Tray sessiz baskı: `QZ_SESSIZ_BASKI_KURULUM.md`
+- Pusula'dan aktarım (stoklar, cari bakiyeleri): `PUSULA_AKTARIM.md`
 - MASAK, risk tarama ve NFC: `MASAK_RISK_NFC_KURULUM_V630.md`
 - e-Fatura / e-Arşiv: `FATURA_ENTEGRASYON.md`
 
