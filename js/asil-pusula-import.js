@@ -40,8 +40,8 @@
 
   /* Alan tanımları: anahtar, ekranda görünen ad, başlık eş anlamlıları (normalize edilmiş). */
   var BARCODE_FIELDS=[
-    {key:'barcode',label:'Barkod',syn:['barkod','barkodno','barkodu','etiketno','etiket','barkodnumarasi']},
-    {key:'code',label:'Stok / Ürün Kodu',syn:['stokkodu','urunkodu','kod','stokno','urunno','kodu','pusulakodu']},
+    {key:'barcode',label:'Barkod',syn:['barkod','barkodno','barkodu','etiketno','etiket','barkodnumarasi','urunkodu']},
+    {key:'code',label:'Stok / Ürün Kodu',syn:['kod','stokkodu','stokno','urunno','kodu','pusulakodu']},
     {key:'group',label:'Grup',syn:['grup','grupkodu','stokgrubu','urungrubu','grubu','grupadi']},
     {key:'name',label:'Ürün Adı / Cins',syn:['cins','urunadi','stokadi','urun','tanim','aciklama','cinsi','malinadi','urunismi','adi']},
     {key:'karat',label:'Ayar',syn:['ayar','ayari','karat','ayarkodu']},
@@ -51,7 +51,9 @@
     {key:'work',label:'Alış İşçilik (HAS)',syn:['iscilik','alisiscilik','alisisc','maliyetiscilik','isc','gelisiscilik','alisiscilikhas','iscilikhas']},
     {key:'saleWork',label:'Satış İşçilik (HAS)',syn:['satisiscilik','satisisc','satisiscilikhas','satiscilik']},
     {key:'costHas',label:'Maliyet (HAS)',syn:['maliyet','maliyethas','alishas','toplammaliyet','maliyethasi']},
-    {key:'saleHas',label:'Satış (HAS)',syn:['satishas','satis','satisfiyati','satisfiyatihas','etikethas','satishasi']},
+    {key:'saleHas',label:'Satış (HAS)',syn:['satishas','satis','satisfiyati','satfiyati','satisfiyatihas','etikethas','satishasi']},
+    {key:'unit',label:'İşçilik Birimi',syn:['birim','birimi']},
+    {key:'resultGram',label:'Sonuç Gram',syn:['sonucgr','sonucgram']},
     {key:'count',label:'Adet',syn:['adet','adedi','miktaradet']},
     {key:'model',label:'Model',syn:['model','modeli','modelno']},
     {key:'stone',label:'Taş',syn:['tas','tasli','tasbilgisi','tasgram']},
@@ -59,7 +61,7 @@
     {key:'supplier',label:'Tedarikçi',syn:['tedarikci','firma','toptanci','alinanfirma','cari','carikodu']},
     {key:'showcase',label:'Vitrin',syn:['vitrin','vitrinno']},
     {key:'banko',label:'Banko',syn:['banko']},
-    {key:'origin',label:'Menşei',syn:['mensei','mense','uretici']},
+    {key:'origin',label:'Orj. Kod / Menşei',syn:['orjkod','orjinalkod','orijinalkod','mensei','mense','uretici']},
     {key:'location',label:'Depo / Yer',syn:['depo','yer','lokasyon','sube','konum']}
   ];
   var OPEN_FIELDS=[
@@ -76,12 +78,12 @@
   ];
   var CARI_FIELDS=[
     {key:'code',label:'Cari Kodu',syn:['carikodu','kod','hesapkodu','carino','kodu','musterikodu']},
-    {key:'name',label:'Cari Adı / Ünvan',syn:['cariadi','unvan','cariunvani','adsoyad','adisoyadi','musteri','musteriadi','cari','hesapadi','adi','isim','ad']},
+    {key:'name',label:'Cari Adı / Ünvan',syn:['firmaunvani','firmaadi','cariadi','unvan','cariunvani','adsoyad','adisoyadi','musteri','musteriadi','cari','hesapadi','adi','isim','ad']},
     {key:'type',label:'Cari Türü',syn:['tur','turu','caritipi','tip','grup','carigrubu','hesapturu']},
     {key:'phone',label:'Telefon',syn:['telefon','tel','gsm','ceptelefonu','cep','telefonno']}
   ];
   var MODES={barcode:BARCODE_FIELDS,open:OPEN_FIELDS,cari:CARI_FIELDS};
-  var BALANCE_UNITS=['TL','HAS','USD','EUR','GBP','CHF','24','22','21','18','14','8'];
+  var BALANCE_UNITS=['TL','HAS','USD','EUR','GBP','CHF','SAR','CAD','AUD','CEY','GRM','GMS','24','22','21','18','14','8'];
 
   /* Başlıktan bakiye birimi ve yönü: "TL Bakiye" → TL(+), "USD Alacak" → USD(-), "22 Ayar" → 22. */
   function balanceSpecOf(header){
@@ -93,6 +95,12 @@
     else if(/eur|euro|avro/.test(h))unit='EUR';
     else if(/gbp|sterlin/.test(h))unit='GBP';
     else if(/chf|frank/.test(h))unit='CHF';
+    else if(/^sar|riyal/.test(h))unit='SAR';
+    else if(/^cad|kanada/.test(h))unit='CAD';
+    else if(/^aud|avustralya/.test(h))unit='AUD';
+    else if(/^cey|ceyrek/.test(h))unit='CEY';
+    else if(/^grm$|^gramaltin/.test(h))unit='GRM';
+    else if(/^gms$|gumus/.test(h))unit='GMS';
     else if(/has/.test(h))unit='HAS';
     else{var m=/^(24|22|21|18|14|8)(ayar|k|ayarbakiye|bakiye|gr|gram)?/.exec(h);if(m)unit=m[1];}
     if(!unit&&/^tl|tl$|tlbakiye|bakiyetl|^lira|turklirasi/.test(h))unit='TL';
@@ -105,8 +113,11 @@
     (headers||[]).forEach(function(h,i){if(used[i])return;var sp=balanceSpecOf(h);if(sp)out[i]=sp;});
     return out;
   }
-  function cariTypeOf(v){
+  /* Tür sütunu yoksa addan tahmin: Pusula iç hesapları "Özel", bankalar "Banka". */
+  var INTERNAL_CARI=/^(donemkz|donemkarzarar|genelgider|karhesabi|karzarar|hurdakarzarar|iskonto|sermaye|stokduzeltme|kkartikomisyon|kredikartikomisyon|kasa$|havale$|caricislemler|cariislemler|dovizas$)/;
+  function cariTypeOf(v,name){
     var t=norm(v);
+    if(!t&&name){var n=norm(name);if(INTERNAL_CARI.test(n))return 'Özel';if(/bank|bankasi$/.test(n))return 'Banka';}
     if(/toptan|tedarik|firma|imalat/.test(t))return 'Toptancı';
     if(/banka/.test(t))return 'Banka';
     if(/ozel|personel|ortak/.test(t))return 'Özel';
@@ -136,7 +147,7 @@
       }
       if(!name)warnings.push({line:line,message:'Cari adı boş (kod '+code+')'});
       index[key]=out.length;
-      out.push({code:code,name:name||code,type:cariTypeOf(cell(row,mapping,'type')),phone:text(cell(row,mapping,'phone')),balances:balances,line:line});
+      out.push({code:code,name:name||code,type:cariTypeOf(cell(row,mapping,'type'),name),phone:text(cell(row,mapping,'phone')),balances:balances,line:line});
     }
     return {customers:out,errors:errors,warnings:warnings};
   }
@@ -171,6 +182,8 @@
   function cell(row,mapping,key){var c=mapping[key];return c===undefined||c===null||c===''?undefined:row[c]}
   function isEmptyRow(row){return !row||!row.some(function(v){return text(v)!==''})}
 
+  /* Pusula grup kodu → ürün adı (Excel'de ürün adı sütunu olmadığında). */
+  var GROUP_NAMES={ALY:'ALYANS',BIL:'BİLEKLİK',KOL:'KOLYE',KUP:'KÜPE',YUZ:'YÜZÜK',ZIN:'ZİNCİR',NZL:'NAZARLIK',KEL:'KELEPÇE'};
   function splitBarcode(barcode){var m=/^([A-Za-zÇĞİÖŞÜçğıöşü]+)0*(\d+)$/.exec(barcode);return m?{group:m[1].toLocaleUpperCase('tr-TR'),num:m[2]}:null}
 
   /* Barkodlu stok listesi → program stok kayıtları. */
@@ -209,15 +222,15 @@
       if(!saleHas)saleHas=has+saleWork;
       if(!gram)warnings.push({line:line,message:barcode+': gram 0'});
       if(!purity)warnings.push({line:line,message:barcode+': ayar tanınamadı ('+karat+')'});
-      var name=text(cell(row,mapping,'name'))||group||'ÜRÜN';
+      var name=text(cell(row,mapping,'name'))||(opts.groupNames&&opts.groupNames[group])||GROUP_NAMES[group]||group||'ÜRÜN';
       out.push({
         id:'PB-'+barcode,period:period,source:'Pusula Barkodlu Stok Excel',stockMode:'Barkodlu',
         barcode:barcode,code:barcode,pusulaCode:String(code||''),group:group,category:name,name:name,type:name,
         karat:purity?String(purity):karat,purity:purity,amount:gram,qty:gram,count:Math.max(1,Math.round(num(cell(row,mapping,'count'))||1)),
         hasWeight:has,materialHas:has,workmanshipEntryValue:round(work,4),workmanshipTotalHas:round(work,4),
-        saleWorkmanshipTotalHas:round(saleWork,4),workmanshipUnit:'HAS',costHas:round(costHas,4),saleHas:round(saleHas,4),
+        saleWorkmanshipTotalHas:round(saleWork,4),workmanshipUnit:text(cell(row,mapping,'unit')).toLocaleUpperCase('tr-TR')||'HAS',costHas:round(costHas,4),saleHas:round(saleHas,4),
         model:text(cell(row,mapping,'model')),banko:text(cell(row,mapping,'banko')),stone:text(cell(row,mapping,'stone')),
-        origin:text(cell(row,mapping,'origin')),size:num(cell(row,mapping,'size')),resultGram:0,
+        origin:text(cell(row,mapping,'origin')),size:num(cell(row,mapping,'size')),resultGram:num(cell(row,mapping,'resultGram')),
         supplier:text(cell(row,mapping,'supplier')),showcase:text(cell(row,mapping,'showcase')),
         location:text(cell(row,mapping,'location'))||'Mağaza',status:'Stokta',saleTo:'',saleDate:'',
         importedAt:opts.importedAt||new Date().toISOString()
@@ -257,5 +270,62 @@
     return {stocks:out,errors:errors,warnings:warnings};
   }
 
-  return {norm:norm,num:num,purityOf:purityOf,detect:detect,buildBarcodeStocks:buildBarcodeStocks,buildOpenStocks:buildOpenStocks,buildCariBalances:buildCariBalances,detectBalances:detectBalances,balanceSpecOf:balanceSpecOf,BALANCE_UNITS:BALANCE_UNITS,MODES:MODES};
+  /* Pusula "Stok Özeti" raporu: bölümler (TIP) — 0 altın/ziynet açık stok, 1 barkodlu toplamları,
+     2 hurda, 3 özel ürün, 4 kasa. Bölüm sütunu yoksa TOPLAM satırlarına göre ayrılır. */
+  function isStockSummary(rows){
+    for(var r=0;r<Math.min(rows.length,10);r++){var h=(rows[r]||[]).map(norm);if(h.indexOf('tanim')>=0&&h.indexOf('miktar')>=0&&h.indexOf('has')>=0)return r}
+    return -1;
+  }
+  function parseStockSummary(rows,opts){
+    opts=opts||{};
+    var hi=isStockSummary(rows);if(hi<0)return null;
+    var H=(rows[hi]||[]).map(norm),col=function(n){return H.indexOf(n)};
+    var cName=col('tanim'),cAyar=col('ayar'),cQty=col('miktar'),cHas=col('has'),cWork=col('iscilik'),cAvg=col('ortalama'),cType=col('tip');
+    var cCode=cAvg>0?cAvg-1:-1,cTip=Math.max(H.length-1,0);
+    var period=opts.period||new Date().getFullYear(),out={open:[],scrap:[],cash:[],barcodeSummary:{count:0,gram:0,has:0,rows:[]},skipped:[],headerIndex:hi};
+    var section='open';
+    for(var r=hi+1;r<rows.length;r++){
+      var row=rows[r]||[];if(isEmptyRow(row))continue;
+      var name=text(row[cName]),n=norm(name),tip=row[cTip];
+      if(/^toplam/.test(n)){if(n==='toplamaltin')section='barcode';else if(n==='toplambarkodlualtin')section='scrap';else if(n==='toplamhurda')section='special';continue}
+      if(n==='kasa'){section='cash';continue}
+      if(typeof tip==='number'&&tip>=0&&tip<=4&&row.length>cTip)section=['open','barcode','scrap','special','cash'][tip];
+      var line=r+1,ayar=num(row[cAyar]),qtyV=num(row[cQty]),has=num(row[cHas]),work=num(row[cWork]);
+      if(section==='open'){
+        var code=text(row[cCode]);
+        var piece=ayar>1000||/gram|kulce|külçe/i.test(name);
+        var purity=piece?(/^24|24\s*ayar/i.test(name)?995:916):ayar;
+        var typeValue=cType>=0&&typeof row[cType]==='number'?row[cType]:'';
+        out.open.push({
+          id:'OPEN-'+(code||n),period:period,source:'Pusula Stok Özeti Excel',stockMode:'Açık',name:name,productCode:code,pusulaCode:code,
+          displayAyar:ayar,purity:purity,amount:round(qtyV,3),unit:piece?'ADET':'GR',hasWeight:round(has,4),workmanshipTotalHas:round(work,4),
+          averageWorkmanship:cAvg>=0?num(row[cAvg]):0,typeValue:typeValue,count:piece?Math.round(qtyV):0,zGram:piece&&purity?round(ayar/purity,4):0,
+          location:'Açık Stok',stockCardId:'SC-OPEN-'+(code||n),
+          inventoryUnitCostHas:round(typeValue?typeValue/1000:(qtyV>0?(has+work)/qtyV:ayar/1000),6),
+          costBasisSource:'Pusula stok özeti içe aktarma',line:line
+        });
+      }else if(section==='barcode'){
+        var c=num(String(cAvg>=0?row[cAvg]:''));
+        out.barcodeSummary.count+=c;out.barcodeSummary.gram+=qtyV;out.barcodeSummary.has+=has;out.barcodeSummary.rows.push({name:name,ayar:ayar,count:c,gram:qtyV,has:has});
+      }else if(section==='scrap'){
+        out.scrap.push({id:'SCR-'+(text(row[cCode])||n),period:period,name:name,milyem:ayar,amount:round(qtyV,3),hasWeight:round(has,4),unit:'GR',line:line});
+      }else if(section==='cash'){
+        var cur=text(row[cAyar]).replace(/\./g,'').toLocaleUpperCase('tr-TR');if(!cur)continue;
+        var debt=num(row[cQty]),credit=num(row[cHas]);
+        out.cash.push({currency:cur==='TL'?'TL':cur,amount:round(debt-credit,4),line:line});
+      }else out.skipped.push({line:line,name:name,qty:qtyV,unit:text(row[5])});
+    }
+    out.barcodeSummary.gram=round(out.barcodeSummary.gram,3);out.barcodeSummary.has=round(out.barcodeSummary.has,4);
+    return out;
+  }
+  /* Excel'den alınan liste yarıda kesilmiş mi? (son satırın sütunları eksik) */
+  function looksTruncated(rows,headerIndex){
+    var data=rows.slice(headerIndex+1).filter(function(r){return !isEmptyRow(r)});
+    if(data.length<5)return false;
+    var filled=function(r){return r.filter(function(v){return text(v)!==''}).length};
+    var last=data[data.length-1],typical=filled(data[Math.floor(data.length/2)]);
+    return filled(last)<typical-2;
+  }
+
+  return {cariTypeOf:cariTypeOf,parseStockSummary:parseStockSummary,isStockSummary:isStockSummary,looksTruncated:looksTruncated,GROUP_NAMES:GROUP_NAMES,norm:norm,num:num,purityOf:purityOf,detect:detect,buildBarcodeStocks:buildBarcodeStocks,buildOpenStocks:buildOpenStocks,buildCariBalances:buildCariBalances,detectBalances:detectBalances,balanceSpecOf:balanceSpecOf,BALANCE_UNITS:BALANCE_UNITS,MODES:MODES};
 });

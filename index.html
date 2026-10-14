@@ -3191,20 +3191,25 @@ function stockSummaryView(){
     return (state.customers||[]).length;
   }
   function cariBalancesOfV7(c){
-    const b={};if(Number(c.tlBalance||0))b.TL=Number(c.tlBalance);if(Number(c.hasBalance||0))b.HAS=Number(c.hasBalance);
+    const b={},tl=cariDisplayTlBalance(c);if(Number(tl||0))b.TL=Number(tl);if(Number(c.hasBalance||0))b.HAS=Number(c.hasBalance);
     Object.entries(c.otherBalances||{}).forEach(([u,v])=>{if(Number(v||0))b[String(u).toUpperCase()]=Number(v);});
     return b;
   }
-  function findCariForImportV7(x){
-    const P=AsilPusulaImport;
-    return (x.code&&state.customers.find(c=>String(c.code||'')===String(x.code)))||state.customers.find(c=>P.norm(c.name)===P.norm(x.name))||null;
+  /* Önce koda göre eşleştirir. Ada göre eşleştirme yalnızca kodu Excel'de başka satırda geçmeyen ve
+     henüz eşleşmemiş bir cari için yapılır (ör. "FATıH KOZ" 989 ile "FATİH KOZ" 897 ayrı kalır). */
+  function matchCarisForImportV7(list){
+    const P=AsilPusulaImport,codes=new Set(list.map(x=>String(x.code||'')).filter(Boolean)),used=new Set(),out=new Map();
+    list.forEach(x=>{if(!x.code)return;const c=state.customers.find(c=>String(c.code||'')===String(x.code));if(c&&!used.has(c.id)){out.set(x,c);used.add(c.id);}});
+    list.forEach(x=>{if(out.has(x))return;const c=state.customers.find(c=>!used.has(c.id)&&!(c.code&&codes.has(String(c.code)))&&P.norm(c.name)===P.norm(x.name));if(c){out.set(x,c);used.add(c.id);}});
+    return out;
   }
+  function findCariForImportV7(x,matches){return matches?(matches.get(x)||null):(matchCarisForImportV7([x]).get(x)||null);}
   /* Cari bakiyeleri: Excel'deki bakiye ile mevcut bakiye arasındaki fark "DEVİR" hareketi olarak yazılır;
      böylece cari hareket defteri ile bakiye tutarlı kalır. */
   function planCariImportV7(list,zeroMissing){
-    const plan=[],matched=new Set();let created=0,updated=0,zeroed=0;
+    const plan=[],matched=new Set(),matches=matchCarisForImportV7(list);let created=0,updated=0,zeroed=0;
     list.forEach(x=>{
-      const c=findCariForImportV7(x);if(c)matched.add(c.id);
+      const c=matches.get(x)||null;if(c)matched.add(c.id);
       const cur=c?cariBalancesOfV7(c):{},diffs={};
       new Set([...Object.keys(cur),...Object.keys(x.balances)]).forEach(u=>{const d=Number(x.balances[u]||0)-Number(cur[u]||0);if(Math.abs(d)>1e-9)diffs[u]=d;});
       if(!c)created++;else if(Object.keys(diffs).length)updated++;
@@ -3228,12 +3233,69 @@ function stockSummaryView(){
       }else if(p.src){if(p.src.phone&&!c.phone)c.phone=p.src.phone;}
       Object.entries(p.diffs).forEach(([u,d])=>{
         const debit=d>0?d:0,credit=d<0?-d:0;
+        // Banka/POS hesabına bağlı carinin TL bakiyesi o hesaptan okunur; fark hesaba da işlenir.
+        const fin=u==='TL'?(linkedBankForCari(c)?{key:'Banka:'+linkedBankForCari(c).id}:linkedPosForCari(c)?{key:'POS:'+linkedPosForCari(c).id}:null):null;
+        if(fin&&adjustAccount(fin.key,d)){addFinanceMove({direction:d>0?'Giriş':'Çıkış',type:'Pusula banka devri',accountKey:fin.key,accountAmount:Math.abs(d),accountCurrency:'TL',tlAmount:Math.abs(d),customer:c.name,description:'Pusula cari bakiye aktarımı (banka/POS eşitleme)',sourceDocNo:doc,sourceCategory:'Devir'});}
         applyCariBalance(c,u,debit,credit);
+        // Kayan nokta farkı kalmasın: bakiye hedef değere tam eşitlenir.
+        const target=p.src?Number(p.src.balances[u]||0):0,r6=v=>Math.round(v*1e6)/1e6;
+        if(u==='TL')c.tlBalance=r6(target);else if(u==='HAS')c.hasBalance=r6(target);else{c.otherBalances=c.otherBalances||{};c.otherBalances[u]=r6(target);}
+        if(fin){const a=accountByKey(fin.key).account;if(a)a.balance=r6(target);syncLinkedFinanceCariBalance(c);}
         state.customerMoves.unshift({id:uid('CM'),customerId:c.id,period:state.activePeriod,date,code:'DV',type:'DEVİR / AÇILIŞ',unit:u,debit,credit,description:p.src?'Pusula cari bakiye aktarımı':'Pusula aktarımı: Excel\'de olmayan cari sıfırlandı',user:session?.name||'Sistem',sourceType:'opening',sourceDocNo:doc});
         moves++;
       });
     });
     return {created,updated,zeroed,moves};
+  }
+  /* Pusula stok özeti: açık stoklar (mevcut kartın birim gramı, ayarı ve maliyet esası korunur), hurda, kasa. */
+  function applyStockSummaryV7(sum,period,{scrap,cash},fileName){
+    const existing=(state.openStocks||[]).filter(x=>x.period===period),byCode=new Map(existing.map(x=>[String(x.pusulaCode||x.productCode||''),x]));
+    const open=sum.open.map(x=>{
+      const ex=byCode.get(String(x.pusulaCode));const n={...x};delete n.line;
+      if(ex){
+        n.id=ex.id;n.stockCardId=ex.stockCardId||n.stockCardId;
+        if(Number(ex.zGram||0)>0&&n.unit==='ADET')n.zGram=Number(ex.zGram);
+        if(ex.unit)n.unit=ex.unit;if(Number(ex.purity||0)>0)n.purity=Number(ex.purity);
+        const c=Number(ex.inventoryUnitCostHas??ex.openingUnitCostHas);if(Number.isFinite(c)&&c>0)n.inventoryUnitCostHas=c;
+        if(n.unit==='ADET')n.count=Math.round(n.amount);
+      }
+      n.openingUnitCostHas=n.inventoryUnitCostHas;n.openingCostHas=Number(n.inventoryUnitCostHas||0)*Number(n.amount||0);
+      return n;
+    });
+    state.openStocks=(state.openStocks||[]).filter(x=>x.period!==period).concat(open);
+    let scrapCount=0,cashMoves=0;
+    if(scrap){
+      const P=AsilPusulaImport,old=(state.scrapStocks||[]).filter(x=>x.period===period),byName=new Map(old.map(x=>[P.norm(x.name),x]));
+      const next=sum.scrap.map(x=>{const n={...x};delete n.line;const ex=byName.get(P.norm(x.name));if(ex)n.id=ex.id;return n;});
+      state.scrapStocks=(state.scrapStocks||[]).filter(x=>x.period!==period).concat(next);scrapCount=next.length;
+    }
+    if(cash){
+      sum.cash.forEach(c=>{
+        const cur=String(c.currency).toUpperCase();
+        let acc=state.cashAccounts.find(a=>a.id==='KASA-'+cur)||state.cashAccounts.find(a=>String(a.currency).toUpperCase()===cur);
+        if(!acc){acc={id:'KASA-'+cur,name:'Merkez '+cur+' Kasa',currency:cur,balance:0,accountingNature:'Varlık'};state.cashAccounts.push(acc);}
+        const diff=Number(c.amount||0)-Number(acc.balance||0);if(Math.abs(diff)<1e-9)return;
+        const key='Kasa:'+acc.id;adjustAccount(key,diff);acc.balance=Number(c.amount||0); // kayan nokta farkı kalmasın
+        addFinanceMove({direction:diff>0?'Giriş':'Çıkış',type:'Pusula kasa devri',accountKey:key,accountAmount:Math.abs(diff),accountCurrency:cur,tlAmount:cur==='TL'?Math.abs(diff):undefined,description:`Pusula stok özeti kasa bakiyesi: ${qty(c.amount)} ${cur}`,sourceDocNo:'PUSULA-AKTARIM-'+now().slice(0,10),sourceCategory:'Devir'});
+        cashMoves++;
+      });
+    }
+    state.meta=state.meta||{};
+    state.meta.pusulaBarcodeSummaryV7={count:sum.barcodeSummary.count,gram:sum.barcodeSummary.gram,has:sum.barcodeSummary.has,at:now(),file:fileName||''};
+    state.meta.stockReplaceV7={id:uid('SR'),at:now(),mode:'open',count:open.length,removed:existing.length,file:fileName||''};
+    return {open:open.length,removed:existing.length,scrap:scrapCount,cash:cashMoves};
+  }
+  /* Barkodlu dosya eksik mi? Son satır yarımsa veya stok özetindeki barkodlu toplamla tutmuyorsa uyarır. */
+  function barcodeImportProblemsV7(rows,headerIndex,stocks){
+    const P=AsilPusulaImport,out=[];
+    if(P.looksTruncated(rows,headerIndex))out.push('Dosyanın son satırı yarım; Excel\'e aktarım yarıda kesilmiş görünüyor.');
+    const ref=state.meta?.pusulaBarcodeSummaryV7;
+    if(ref&&ref.count){
+      const gram=stocks.reduce((n,x)=>n+Number(x.amount||0),0);
+      if(Math.abs(stocks.length-ref.count)>Math.max(2,ref.count*0.01)||Math.abs(gram-ref.gram)>Math.max(1,ref.gram*0.01))
+        out.push(`Stok özetine göre ${ref.count} adet / ${qty(ref.gram)} gr barkodlu ürün olmalı; bu dosyada ${stocks.length} adet / ${qty(gram)} gr var.`);
+    }
+    return out;
   }
   function openPusulaImportV7(){
     if(!v5Guard('canManageDefinitions','Pusula aktarımı için tanımlama yetkisi gerekir'))return;
@@ -3242,17 +3304,37 @@ function stockSummaryView(){
     const ctx={rows:null,sheets:[],wb:null,detect:null,result:null,balanceCols:{}};
     modal('Pusula\'dan Excel Aktarım',`<div class="form-grid">
       <div class="notice span-4" id="piNotice"></div>
-      <div class="labelled span-2"><label>Aktarılacak veri</label><select id="piMode" class="select"><option value="barcode">Barkodlu stoklar</option><option value="open">Barkodsuz (açık) stoklar</option><option value="cari">Güncel cari bakiyeleri</option></select></div>
+      <div class="labelled span-2"><label>Aktarılacak veri</label><select id="piMode" class="select"><option value="barcode">Barkodlu stoklar</option><option value="open">Barkodsuz stok + hurda + kasa (Pusula stok özeti)</option><option value="cari">Güncel cari bakiyeleri</option></select></div>
       <div class="labelled span-2"><label>Pusula Excel dosyası (.xlsx, .xls, .csv)</label><input id="piFile" type="file" class="input" accept=".xlsx,.xls,.csv"></div>
       <div class="labelled span-2" id="piSheetWrap" style="display:none"><label>Sayfa</label><select id="piSheet" class="select"></select></div>
       <div class="span-4" id="piCariOpts" style="display:none"><div class="form-grid">
         <div class="labelled span-2"><label>Excel'deki artı (+) bakiye</label><select id="piSign" class="select"><option value="debt">Cari bize BORÇLU (bizim alacağımız)</option><option value="credit">Cari ALACAKLI (bizim borcumuz)</option></select></div>
         <label class="span-2" style="display:flex;align-items:center;gap:8px;margin-top:22px"><input type="checkbox" id="piZero" checked> Excel'de olmayan carilerin bakiyesini sıfırla</label>
       </div></div>
+      <div class="span-4" id="piSummaryOpts" style="display:none"><div class="form-grid">
+        <label class="span-2" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="piScrap" checked> Hurda stoklarını da güncelle</label>
+        <label class="span-2" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="piCash" checked> Kasa bakiyelerini de güncelle</label>
+      </div></div>
+      <div class="span-4" id="piForceWrap" style="display:none"><label style="display:flex;align-items:center;gap:8px;color:var(--red,#c33);font-weight:700"><input type="checkbox" id="piForce"> Dosya eksik görünüyor; yine de aktarmak istiyorum</label></div>
       <div class="span-4" id="piResult"><div class="muted">Dosya seçin. Sütunlar otomatik tanınır; tanınmayanı aşağıda elle seçebilirsiniz.</div></div>
     </div>`,async()=>{
       const r=ctx.result,mode=document.getElementById('piMode').value;
+      if(mode==='open'&&ctx.summary){
+        const sm=ctx.summary,sc=document.getElementById('piScrap').checked,ca=document.getElementById('piCash').checked;
+        if(!sm.open.length)return toast('Stok özetinde açık stok bulunamadı','err');
+        if(!confirm(`${period} dönemindeki ${pusulaOldCountV7('open',period)} barkodsuz stok SİLİNECEK, stok özetindeki ${sm.open.length} stok yüklenecek.${sc?`\nHurda: ${sm.scrap.length} kalem güncellenecek.`:''}${ca?`\nKasa: ${sm.cash.map(c=>qty(c.amount)+' '+c.currency).join(', ')} olarak eşitlenecek.`:''}\n\nDevam edilsin mi?`))return;
+        const btn=document.getElementById('modalConfirm');if(btn){btn.disabled=true;btn.textContent='AKTARILIYOR…';}
+        try{
+          await idbRollingSnapshotV682(true,'PUSULA AKTARIM ÖNCESİ').catch(()=>false);
+          if(state.cloudSync?.enabled)await cloudBackupV5('PUSULA AKTARIM ÖNCESİ').catch(()=>false);
+          const res=applyStockSummaryV7(sm,period,{scrap:sc,cash:ca},ctx.fileName);
+          audit(`Pusula stok özeti aktarımı · ${res.open} açık stok (${res.removed} eski silindi) · ${res.scrap} hurda · ${res.cash} kasa düzeltmesi · ${ctx.fileName||''}`,'Stok');
+          save();closeModal();render();toast(`${res.open} barkodsuz stok, ${res.scrap} hurda yüklendi; ${res.cash} kasa bakiyesi güncellendi`);
+        }catch(e){if(btn){btn.disabled=false;btn.textContent='AKTARIMI ONAYLA';}toast('Aktarım yapılamadı: '+(e?.message||e),'err');}
+        return;
+      }
       const items=r?(mode==='cari'?r.customers:r.stocks):[];
+      if(mode==='barcode'&&ctx.problems?.length&&!document.getElementById('piForce').checked)return toast('Dosya eksik görünüyor. Pusula\'dan listeyi tam olarak yeniden alın ya da "yine de aktar" kutusunu işaretleyin','err');
       if(!items.length)return toast('Aktarılacak kayıt yok. Dosyayı ve sütun eşleştirmesini kontrol edin','err');
       const oldCount=pusulaOldCountV7(mode,period),zero=document.getElementById('piZero')?.checked;
       let question;
@@ -3285,16 +3367,26 @@ function stockSummaryView(){
     const notice=()=>{
       const m=modeEl.value;
       document.getElementById('piCariOpts').style.display=m==='cari'?'':'none';
+      document.getElementById('piSummaryOpts').style.display=m==='open'?'':'none';
+      if(m!=='barcode')document.getElementById('piForceWrap').style.display='none';
       document.getElementById('piNotice').innerHTML=m==='cari'
         ?'<b>Cari bakiyeleri:</b> Excel\'deki her carinin bakiyesi Excel\'deki değere eşitlenir; fark "DEVİR / AÇILIŞ" hareketi olarak yazılır. Bulunamayan cari yeni açılır. Cari kartları silinmez. Aktarımdan önce otomatik yedek alınır.'
-        :`<b>Dikkat:</b> Onaylanınca <b>${period}</b> dönemindeki ${m==='barcode'?'barkodlu':'barkodsuz'} stoklar silinir ve Excel'deki stoklar yüklenir. Satılmış ürün kayıtları satış geçmişi için korunur. Aktarımdan önce otomatik yedek alınır.`;
+        :m==='open'
+        ?`<b>Pusula stok özeti:</b> Onaylanınca <b>${period}</b> dönemindeki barkodsuz (altın/ziynet) stoklar silinir ve stok özetindekiler yüklenir; seçerseniz hurda ve kasa bakiyeleri de eşitlenir. Mevcut ürünlerin birim gramı ve maliyet esası korunur. Önce bu dosyayı aktarmanız önerilir: barkodlu toplamı kontrol için kullanılır.`
+        :`<b>Dikkat:</b> Onaylanınca <b>${period}</b> dönemindeki barkodlu stoklar silinir ve Excel'deki stoklar yüklenir. Satılmış ürün kayıtları satış geçmişi için korunur. Aktarımdan önce otomatik yedek alınır.`;
     };
     const fmtBal=b=>Object.entries(b).map(([u,v])=>`${qty(v)} ${esc(u)}${/^\d+$/.test(u)?' ayar':''}`).join(' · ')||'0';
     const rebuild=()=>{
       if(!ctx.rows)return;
+      if(modeEl.value==='open'&&ctx.summary){renderSummary();return;}
       const mode=modeEl.value,d=ctx.detect,fields=P.MODES[mode],isCari=mode==='cari',isB=mode==='barcode';
-      if(isCari)ctx.result=P.buildCariBalances(ctx.rows,d.headerIndex,d.mapping,ctx.balanceCols,{positiveIsDebt:document.getElementById('piSign').value==='debt'});
-      else ctx.result=isB?P.buildBarcodeStocks(ctx.rows,d.headerIndex,d.mapping,{period}):P.buildOpenStocks(ctx.rows,d.headerIndex,d.mapping,{period});
+      if(isCari){ctx.result=P.buildCariBalances(ctx.rows,d.headerIndex,d.mapping,ctx.balanceCols,{positiveIsDebt:document.getElementById('piSign').value==='debt'});ctx.cariMatches=matchCarisForImportV7(ctx.result.customers);}
+      else{
+        const groupNames={};state.stocks.forEach(x=>{if(x.group&&x.category&&x.category!==x.group)groupNames[x.group]=x.category;});
+        ctx.result=isB?P.buildBarcodeStocks(ctx.rows,d.headerIndex,d.mapping,{period,groupNames}):P.buildOpenStocks(ctx.rows,d.headerIndex,d.mapping,{period});
+      }
+      ctx.problems=isB?barcodeImportProblemsV7(ctx.rows,d.headerIndex,ctx.result.stocks):[];
+      document.getElementById('piForceWrap').style.display=ctx.problems.length?'':'none';
       const r=ctx.result,items=isCari?r.customers:r.stocks,cols=d.headers.map((h,i)=>({i,h:h||('Sütun '+(i+1))}));
       let mapHtml=fields.map(f=>`<div class="labelled"><label>${esc(f.label)}</label><select class="select" data-pi-field="${f.key}"><option value="">— yok —</option>${cols.map(c=>`<option value="${c.i}" ${d.mapping[f.key]===c.i?'selected':''}>${esc(c.h)}</option>`).join('')}</select></div>`).join('');
       if(isCari){
@@ -3304,7 +3396,7 @@ function stockSummaryView(){
       const prev=items.slice(0,6);
       const head=isCari?'<th>Kod</th><th>Cari</th><th>Tür</th><th>Excel bakiyesi</th><th>Programdaki bakiye</th>':isB?'<th>Barkod</th><th>Ürün</th><th>Ayar</th><th class="num">Gram</th><th class="num">Has</th><th class="num">Maliyet HAS</th><th class="num">Satış HAS</th>':'<th>Kod</th><th>Ürün</th><th>Ayar</th><th class="num">Miktar</th><th>Birim</th><th class="num">Has</th>';
       const body=prev.map(x=>{
-        if(isCari){const c=findCariForImportV7(x);return `<tr><td>${esc(x.code)}</td><td>${esc(x.name)}${c?'':' <span class="badge gold">YENİ</span>'}</td><td>${esc(x.type)}</td><td>${fmtBal(x.balances)}</td><td>${c?fmtBal(cariBalancesOfV7(c)):'—'}</td></tr>`;}
+        if(isCari){const c=findCariForImportV7(x,ctx.cariMatches);return `<tr><td>${esc(x.code)}</td><td>${esc(x.name)}${c?'':' <span class="badge gold">YENİ</span>'}</td><td>${esc(x.type)}</td><td>${fmtBal(x.balances)}</td><td>${c?fmtBal(cariBalancesOfV7(c)):'—'}</td></tr>`;}
         if(isB)return `<tr><td>${esc(x.barcode)}</td><td>${esc(x.name)}</td><td>${esc(x.karat)}</td><td class="num">${qty(x.amount)}</td><td class="num">${qty(x.hasWeight)}</td><td class="num">${qty(x.costHas)}</td><td class="num">${qty(x.saleHas)}</td></tr>`;
         return `<tr><td>${esc(x.pusulaCode)}</td><td>${esc(x.name)}</td><td>${esc(String(x.purity))}</td><td class="num">${qty(x.amount)}</td><td>${esc(x.unit)}</td><td class="num">${qty(x.hasWeight)}</td></tr>`;
       }).join('');
@@ -3317,7 +3409,7 @@ function stockSummaryView(){
         summary=`<b>Yüklenecek:</b> ${items.length} stok${isB?` · ${qty(totGram)} gr`:''} · ${qty(totHas)} HAS · <b>Silinecek:</b> ${pusulaOldCountV7(mode,period)} eski stok`;
       }
       const issues=r.errors.concat(r.warnings);
-      out.innerHTML=`<div class="notice" style="margin:8px 0"><b>Başlık satırı:</b> ${d.headerIndex>=0?(d.headerIndex+1)+'. satır':'bulunamadı'} · ${summary}${r.errors.length?` · <span style="color:var(--red,#c33)"><b>${r.errors.length} hatalı satır atlanacak</b></span>`:''}</div>
+      out.innerHTML=(ctx.problems.length?`<div class="notice" style="margin:8px 0;border-color:var(--red,#c33);color:var(--red,#c33)"><b>⚠ DOSYA EKSİK GÖRÜNÜYOR</b><br>${ctx.problems.map(esc).join('<br>')}<br>Bu dosyayla aktarım yapılırsa eksik ürünler programdan silinir. Pusula'dan listeyi tam olarak yeniden alın.</div>`:'')+`<div class="notice" style="margin:8px 0"><b>Başlık satırı:</b> ${d.headerIndex>=0?(d.headerIndex+1)+'. satır':'bulunamadı'} · ${summary}${r.errors.length?` · <span style="color:var(--red,#c33)"><b>${r.errors.length} hatalı satır atlanacak</b></span>`:''}</div>
         <details ${d.headerIndex<0||!items.length||(isCari&&!Object.keys(ctx.balanceCols).length)?'open':''}><summary style="cursor:pointer;font-weight:700;margin:6px 0">Sütun eşleştirme</summary><div class="form-grid">${mapHtml}</div></details>
         <div style="margin-top:8px"><b>Önizleme</b> (ilk ${prev.length})</div><div class="table-wrap"><table class="table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>
         ${issues.length?`<details style="margin-top:8px"><summary style="cursor:pointer">Uyarılar / hatalar (${issues.length})</summary><div class="muted" style="max-height:160px;overflow:auto">${issues.slice(0,200).map(x=>`${x.line}. satır: ${esc(x.message)}`).join('<br>')}</div></details>`:''}`;
@@ -3325,10 +3417,20 @@ function stockSummaryView(){
       out.querySelectorAll('[data-pi-bal-unit]').forEach(sel=>sel.addEventListener('change',()=>{const i=sel.dataset.piBalUnit;if(!sel.value)delete ctx.balanceCols[i];else ctx.balanceCols[i]={unit:sel.value,sign:Number(out.querySelector(`[data-pi-bal-sign="${i}"]`).value)||1};rebuild();}));
       out.querySelectorAll('[data-pi-bal-sign]').forEach(sel=>sel.addEventListener('change',()=>{const i=sel.dataset.piBalSign;if(ctx.balanceCols[i]){ctx.balanceCols[i].sign=Number(sel.value)||1;rebuild();}}));
     };
-    const redetect=()=>{ctx.detect=P.detect(ctx.rows,modeEl.value);ctx.balanceCols=modeEl.value==='cari'?P.detectBalances(ctx.detect.headers,ctx.detect.mapping):{};rebuild();};
+    const renderSummary=()=>{
+      const sm=ctx.summary,tb=(head,rows)=>`<div class="table-wrap"><table class="table"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+      const oldOpen=pusulaOldCountV7('open',period);
+      const bs=sm.barcodeSummary,cashRows=sm.cash.map(c=>{const a=state.cashAccounts.find(x=>x.id==='KASA-'+c.currency)||state.cashAccounts.find(x=>String(x.currency).toUpperCase()===c.currency);return `<tr><td>${esc(c.currency)}</td><td class="num">${a?qty(a.balance):'— (yeni kasa)'}</td><td class="num"><b>${qty(c.amount)}</b></td></tr>`;}).join('');
+      out.innerHTML=`<div class="notice" style="margin:8px 0"><b>Pusula stok özeti tanındı.</b> Açık stok: <b>${sm.open.length}</b> (silinecek eski: ${oldOpen}) · Hurda: <b>${sm.scrap.length}</b> · Kasa: <b>${sm.cash.length}</b> döviz${bs.count?`<br>Barkodlu kontrol toplamı: <b>${bs.count} adet · ${qty(bs.gram)} gr · ${qty(bs.has)} HAS</b> (barkodlu aktarımda karşılaştırılır)`:''}${sm.skipped.length?`<br><span class="muted">Aktarılmayan: ${sm.skipped.map(x=>esc(x.name)+' '+qty(x.qty)+' '+esc(x.unit)).join(', ')}</span>`:''}</div>
+        <div style="margin-top:6px"><b>Altın / ziynet (barkodsuz)</b></div>${tb('<th>Kod</th><th>Ürün</th><th>Birim</th><th class="num">Miktar</th><th class="num">Has</th><th class="num">İşçilik</th>',sm.open.map(x=>`<tr><td>${esc(x.pusulaCode)}</td><td>${esc(x.name)}</td><td>${esc(x.unit)}</td><td class="num">${qty(x.amount)}</td><td class="num">${qty(x.hasWeight)}</td><td class="num">${qty(x.workmanshipTotalHas)}</td></tr>`).join(''))}
+        <div style="margin-top:8px"><b>Hurda</b></div>${tb('<th>Hurda</th><th class="num">Milyem</th><th class="num">Gram</th><th class="num">Has</th>',sm.scrap.map(x=>`<tr><td>${esc(x.name)}</td><td class="num">${qty(x.milyem)}</td><td class="num">${qty(x.amount)}</td><td class="num">${qty(x.hasWeight)}</td></tr>`).join(''))}
+        <div style="margin-top:8px"><b>Kasa</b></div>${tb('<th>Döviz</th><th class="num">Programda</th><th class="num">Pusula</th>',cashRows)}`;
+    };
+    const redetect=()=>{if(modeEl.value==='open'&&ctx.summary){renderSummary();return;}ctx.detect=P.detect(ctx.rows,modeEl.value);ctx.balanceCols=modeEl.value==='cari'?P.detectBalances(ctx.detect.headers,ctx.detect.mapping):{};rebuild();};
     const readSheet=()=>{
       const ws=ctx.wb.Sheets[sheetEl.value||ctx.sheets[0]];
       ctx.rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+      ctx.summary=P.isStockSummary(ctx.rows)>=0?P.parseStockSummary(ctx.rows,{period}):null;
       redetect();
     };
     fileEl.addEventListener('change',async()=>{

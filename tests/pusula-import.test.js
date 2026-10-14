@@ -93,3 +93,66 @@ test('grup ara toplam satırları ("122 ADET") ürün sayılmaz', () => {
   assert.deepEqual(r.stocks.map((x) => x.barcode), ['ALY0001265', 'KOL0000001']);
   assert.equal(r.errors.length + r.warnings.length, 0);
 });
+
+// Pusula "Stok Özeti" raporunun yapısını taklit eden örnek (gerçek veri değil).
+const OZET = [
+  ['TANIM ', 'AYAR ', 'MIKTAR ', 'HAS ', 'ISCILIK ', 'BIRIM ', ' ', ' ', ' ', 'ORTALAMA ', 'Adet ', 'TIP ', ' '],
+  ['14 K ', 585, 4, 2.34, -0.03, 'HAS ', 'HAS ', 7, 2, -0.0075, 0, 578.39, 0],
+  ['CEYREK ', 1605, 10, 16.05, 0.15, 'HAS ', 'HAS ', 7, 5, 0.015, 0, 1608.6, 0],
+  ['22 Ayar 0,5 Gram ', 458, 4, 1.83, 0.02, 'HAS ', 'HAS ', 7, 38, 0.005, 0, 462, 0],
+  ['24 Ayar 1 Gram ', 995, 3, 2.99, 0, 'HAS ', 'HAS ', 7, 39, 0, 0, 995.6, 0],
+  ['TOPLAM ALTIN ', ' ', 21, 23.21, 0.14, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+  ['14 K ', 585, 100, 58.5, 10, 'HAS ', 'HAS ', ' ', ' ', '40 ADET ', ' ', ' ', 1],
+  ['22 K ', 916, 20, 18.32, 1, 'HAS ', 'HAS ', ' ', ' ', '5 ADET ', ' ', ' ', 1],
+  ['TOPLAM BARKODLU ALTIN ', ' ', 120, 76.82, 11, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+  [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+  ['14 HURDASI ', 556.9, 10, 5.57, ' ', ' ', 'HAS ', 8, 3, ' ', ' ', ' ', 2],
+  ['TOPLAM HURDA ', ' ', 10, 5.57, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+  ['ÖZEL ÜRÜN ', ' ', 5, ' ', 100, 'USD ', 'USD ', 7, 13, 20, ' ', ' ', 3],
+  ['KASA ', ' ', 'BORÇ ', 'ALACAK ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+  [' ', 'TL. ', 1500.5, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 4],
+  [' ', 'USD ', 20, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 4],
+];
+
+test('Pusula stok özeti bölümlere ayrılır: açık stok, barkodlu toplam, hurda, kasa', () => {
+  const o = P.parseStockSummary(OZET, { period: 2026 });
+  assert.deepEqual(o.open.map((x) => [x.pusulaCode, x.unit, x.purity, x.zGram]), [['2', 'GR', 585, 0], ['5', 'ADET', 916, 1.7522], ['38', 'ADET', 916, 0.5], ['39', 'ADET', 995, 1]]);
+  assert.equal(o.open[1].count, 10); assert.equal(o.open[1].hasWeight, 16.05);
+  assert.deepEqual(o.barcodeSummary.count, 45); assert.equal(o.barcodeSummary.gram, 120);
+  assert.deepEqual(o.scrap.map((x) => [x.name, x.milyem, x.amount]), [['14 HURDASI', 556.9, 10]]);
+  assert.deepEqual(o.cash, [{ currency: 'TL', amount: 1500.5, line: 15 }, { currency: 'USD', amount: 20, line: 16 }]);
+  assert.equal(o.skipped[0].name, 'ÖZEL ÜRÜN');
+});
+
+test('yarıda kesilmiş barkodlu liste fark edilir', () => {
+  const full = [['URUN KODU', 'AYAR', 'MIKTAR', 'HAS', 'Grup', 'Kod', 'BOY']];
+  for (let i = 1; i <= 10; i++) full.push([`KUP000${i}`, 585, 1, 0.58, 'KUP', i, 0]);
+  assert.equal(P.looksTruncated(full, 0), false);
+  const cut = full.concat([['KUP0099', 585, 1, '', '', '', '']]);
+  assert.equal(P.looksTruncated(cut, 0), true);
+});
+
+test('Pusula barkodlu listesi: URUN KODU barkod, SAT.FİYATI satış HAS, grup kodundan ürün adı', () => {
+  const rows = [['URUN KODU ', 'AYAR ', 'MIKTAR ', 'HAS ', 'ISCILIK ', 'BIRIM ', 'MALIYET ', 'SAT.FİYATI ', 'MODEL ', 'Grup ', 'Kod ', 'BANKO ', 'TAŞ ', ' ', 'ORJKOD ', 'BOY ', 'SONUC GR '],
+    ['ALY0001265 ', 585, 5.25, 3.07, 0.5, 'HAS ', 3.57, 6.43, ' ', 'ALY ', 1265, ' ', ' ', ' ', ' ', 0, 0],
+    ['122 Adet ', ' ', 232.63, 136.16, 42.56, ' ', 178.72, ' ']];
+  const d = P.detect(rows, 'barcode');
+  const r = P.buildBarcodeStocks(rows, d.headerIndex, d.mapping, {});
+  assert.equal(r.stocks.length, 1);
+  const x = r.stocks[0];
+  assert.equal(x.barcode, 'ALY0001265'); assert.equal(x.pusulaCode, '1265'); assert.equal(x.name, 'ALYANS');
+  assert.equal(x.costHas, 3.57); assert.equal(x.saleHas, 6.43); assert.equal(x.workmanshipTotalHas, 0.5);
+});
+
+test('Pusula bakiye listesi: FIRMA UNVANI, TL., CEY sütunları; iç hesaplar Özel türünde', () => {
+  const rows = [['FIRMA UNVANI ', 'KOD ', 'GRM ', 'GMS ', 22, 'HAS ', 'TL. ', 'USD ', 'EUR ', 'CHF ', 'GBP ', 'CEY ', 'CAD ', 'AUD ', ' ', 'Kons. '],
+    ['DONEM K/Z 2012 ', 494, ' ', ' ', ' ', ' ', 1000, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0],
+    ['SERMAYE ', 6, ' ', ' ', ' ', -3.5, 900, ' ', ' ', ' ', ' ', 18, ' ', ' ', ' ', 0],
+    ['TOPLAM ', ' ', ' ', ' ', ' ', -3.5, 1900, ' ', ' ', ' ', ' ', 18, ' ', ' ', ' ', ' ']];
+  const d = P.detect(rows, 'cari');
+  const cols = P.detectBalances(d.headers, d.mapping);
+  const r = P.buildCariBalances(rows, d.headerIndex, d.mapping, cols, {});
+  assert.equal(r.customers.length, 2);
+  assert.deepEqual(r.customers[1].balances, { HAS: -3.5, TL: 900, CEY: 18 });
+  assert.deepEqual(r.customers.map((c) => c.type), ['Özel', 'Özel']);
+});
