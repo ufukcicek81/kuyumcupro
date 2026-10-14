@@ -251,6 +251,7 @@ test('Pusula cari bakiye aktarımı bakiyeleri eşitler, farkı devir hareketi o
     ['Cari Kodu', 'Cari Adı', 'Tür', 'TL Bakiye', 'HAS', 'USD'],
     ['373', 'ALI OSMAN YAGıZ', 'Müşteri', 10000, '-1,5', ''],
     ['9999', 'YENİ MÜŞTERİ', 'Müşteri', 250, '', '40'],
+    ['361', 'İŞ BANKASI', '', 5000, '', ''],
   ]), 'Cari');
   XLSX.writeFile(wb, file);
 
@@ -260,9 +261,9 @@ test('Pusula cari bakiye aktarımı bakiyeleri eşitler, farkı devir hareketi o
   await p.click('#pusulaImportBackupV7');
   await p.selectOption('#piMode', 'cari');
   await p.setInputFiles('#piFile', file);
-  await p.waitForFunction(() => /Excel'de:<\/b> 2 cari/.test(document.getElementById('piResult').innerHTML), null, { timeout: 10000 });
+  await p.waitForFunction(() => /Excel'de:<\/b> 3 cari/.test(document.getElementById('piResult').innerHTML), null, { timeout: 10000 });
   const txt = await p.innerText('#piResult');
-  assert.match(txt, /Yeni: 1/); assert.match(txt, /YENİ MÜŞTERİ/);
+  assert.match(txt, /Yeni: 1 /); assert.match(txt, /YENİ MÜŞTERİ/);
   p.removeAllListeners('dialog'); p.on('dialog', (d) => d.accept());
   await p.click('#modalConfirm');
   await p.waitForFunction(() => !document.getElementById('modalRoot'), null, { timeout: 15000 });
@@ -274,9 +275,66 @@ test('Pusula cari bakiye aktarımı bakiyeleri eşitler, farkı devir hareketi o
   assert.equal(Number(yeni.tlBalance), 250); assert.equal(Number(yeni.otherBalances.USD), 40);
   const akbank = st.customers.find((c) => String(c.code) === '202');
   assert.equal(Number(akbank.tlBalance || 0), 0, "Excel'de olmayan cari sıfırlanmalı");
+  assert.equal(Number(st.bankAccounts.find((b) => b.id === 'BNK-IS').balance), 5000, 'bankaya bağlı carinin TL bakiyesi banka hesabına işlenmeli');
   // Hareket defteri bakiye ile tutarlı: Ali'nin TL hareketleri toplamı = 10000
   const sum = st.customerMoves.filter((m) => m.customerId === ali.id && m.unit === 'TL').reduce((n, m) => n + Number(m.debit || 0) - Number(m.credit || 0), 0);
   assert.equal(Math.round(sum * 100) / 100, 10000);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
+test('Pusula stok özeti açık stok, hurda ve kasayı aktarır; sonra eksik barkodlu dosya engellenir', async () => {
+  const XLSX = require('xlsx');
+  const os = require('node:os'); const path = require('node:path'); const fs = require('node:fs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pusula-ozet-'));
+  const ozet = path.join(dir, 'ozet.xlsx'), barkod = path.join(dir, 'barkod.xlsx');
+  let wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ['TANIM ', 'AYAR ', 'MIKTAR ', 'HAS ', 'ISCILIK ', 'BIRIM ', ' ', ' ', ' ', 'ORTALAMA ', 'Adet ', 'TIP ', ' '],
+    ['CEYREK ', 1605, 50, 80.25, 0.1, 'HAS ', 'HAS ', 7, 5, 0.002, 0, 1608, 0],
+    ['22 BILEZIK ', 916, 1000, 916, 10, 'HAS ', 'HAS ', 7, 34, 0.01, 0, 926, 0],
+    ['TOPLAM ALTIN ', ' ', 1050, 996.25, 10.1, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+    ['14 K ', 585, 500, 292.5, 50, 'HAS ', 'HAS ', ' ', ' ', '200 ADET ', ' ', ' ', 1],
+    ['TOPLAM BARKODLU ALTIN ', ' ', 500, 292.5, 50, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+    ['14 HURDASI ', 556.9, 30, 16.7, ' ', ' ', 'HAS ', 8, 3, ' ', ' ', ' ', 2],
+    ['TOPLAM HURDA ', ' ', 30, 16.7, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+    ['KASA ', ' ', 'BORÇ ', 'ALACAK ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+    [' ', 'TL. ', 12345.67, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 4],
+    [' ', 'USD ', 300, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 4],
+  ]), 'Sayfa1');
+  XLSX.writeFile(wb, ozet);
+  wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['URUN KODU', 'AYAR', 'MIKTAR', 'HAS', 'ISCILIK', 'Grup', 'Kod'], ['KUP0000001', 585, 2, 1.17, 0.1, 'KUP', 1], ['KUP0000002', 585, 3, 1.75, 0.1, 'KUP', 2]]), 'Sayfa1');
+  XLSX.writeFile(wb, barkod);
+
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  p.removeAllListeners('dialog'); p.on('dialog', (d) => d.accept());
+  await p.click('[data-go="backup"]');
+  await p.click('#pusulaImportBackupV7');
+  await p.selectOption('#piMode', 'open');
+  await p.setInputFiles('#piFile', ozet);
+  await p.waitForFunction(() => /stok özeti tanındı/i.test(document.getElementById('piResult').innerText), null, { timeout: 10000 });
+  assert.match(await p.innerText('#piResult'), /200 adet · 500 gr/);
+  await p.click('#modalConfirm');
+  await p.waitForFunction(() => !document.getElementById('modalRoot'), null, { timeout: 15000 });
+  await p.waitForTimeout(5000);
+  const st = fb.db.state;
+  const ce = st.openStocks.find((x) => x.name === 'CEYREK' && x.period === 2026);
+  assert.equal(Number(ce.amount), 50); assert.equal(ce.id, 'OPEN-5', 'mevcut kart kimliği korunur'); assert.equal(Number(ce.zGram), 1.75, 'mevcut birim gram korunur');
+  assert.equal(st.scrapStocks.find((x) => x.name === '14 HURDASI').amount, 30);
+  assert.equal(Number(st.cashAccounts.find((a) => a.id === 'KASA-TL').balance), 12345.67);
+  assert.equal(Number(st.cashAccounts.find((a) => a.id === 'KASA-USD').balance), 300);
+
+  // Barkodlu dosya (2 ürün) stok özetiyle (200 adet) tutmuyor → engellenir
+  await p.click('#pusulaImportBackupV7');
+  await p.selectOption('#piMode', 'barcode');
+  await p.setInputFiles('#piFile', barkod);
+  await p.waitForFunction(() => /DOSYA EKSİK/.test(document.getElementById('piResult').innerText), null, { timeout: 10000 });
+  await p.click('#modalConfirm');
+  await p.waitForTimeout(800);
+  assert.ok(await p.$('#modalRoot'), 'eksik dosyada aktarım yapılmamalı');
+  assert.ok(fb.db.state.stocks.filter((x) => x.period === 2026).length > 100, 'eski stoklar silinmemeli');
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
