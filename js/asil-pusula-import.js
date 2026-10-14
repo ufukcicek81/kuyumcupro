@@ -180,7 +180,10 @@
     for(var r=headerIndex+1;r<rows.length;r++){
       var row=rows[r];if(isEmptyRow(row))continue;
       var line=r+1;
-      var barcode=text(cell(row,mapping,'barcode')).toLocaleUpperCase('tr-TR').replace(/\s+/g,'');
+      var rawBarcode=text(cell(row,mapping,'barcode'));
+      // Pusula grup ara toplam satırları ("122 ADET") ürün değildir; sessizce atla.
+      if(/^\d+([.,]\d+)?\s*(adet|ad|tane|ad\.)$/i.test(rawBarcode))continue;
+      var barcode=rawBarcode.toLocaleUpperCase('tr-TR').replace(/\s+/g,'');
       var code=text(cell(row,mapping,'code'));
       var group=text(cell(row,mapping,'group')).toLocaleUpperCase('tr-TR');
       if(!barcode&&code&&group)barcode=group+String(code).replace(/\D/g,'').padStart(7,'0');

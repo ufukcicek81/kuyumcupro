@@ -85,3 +85,11 @@ test('borç ve alacak ayrı sütunlarda ise netleştirilir', () => {
   const r = P.buildCariBalances(rows, d.headerIndex, d.mapping, cols, {});
   assert.deepEqual(r.customers[0].balances, { TL: 300, HAS: -3 });
 });
+
+test('grup ara toplam satırları ("122 ADET") ürün sayılmaz', () => {
+  const rows = [['Barkod', 'Ayar', 'Gram'], ['ALY0001265', '14', '5,25'], ['122 ADET', '', '410,5'], ['1 ADET', '', '2'], ['KOL0000001', '22', '3']];
+  const d = P.detect(rows, 'barcode');
+  const r = P.buildBarcodeStocks(rows, d.headerIndex, d.mapping, {});
+  assert.deepEqual(r.stocks.map((x) => x.barcode), ['ALY0001265', 'KOL0000001']);
+  assert.equal(r.errors.length + r.warnings.length, 0);
+});
