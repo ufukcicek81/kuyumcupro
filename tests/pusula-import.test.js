@@ -237,3 +237,18 @@ test('Pusula bilanço raporu okunur (grup satırları, toplam, kur farkı, kâr/
   assert.equal(P.balanceKey('MUSTERI', 'TL.'), P.balanceKey('MUSTERI ', 'TL'));
   assert.equal(P.isBalanceSheet([['FIRMA UNVANI', 'KOD', 'HAS']]), false);
 });
+
+test('cari temizleme listesi okunur: KALSIN / TEMİZLE / yeni grup, anlaşılmayan işlem hata', () => {
+  const r = P.parseCariCleanup([
+    ['KOD', 'CARİ', 'TÜR', 'TL', 'İŞLEM (KALSIN / TEMİZLE)', 'YENİ GRUP (boşsa değişmez)'],
+    ['1', 'A', 'Müşteri', 10, 'TEMİZLE', ''],
+    ['2', 'B', 'Müşteri', 5, 'kalsın', 'personel'],
+    ['3', 'C', 'Müşteri', 5, '', ''],
+    ['4', 'D', 'Müşteri', 5, 'belki', ''],
+    ['', '', '', '', '', ''],
+  ]);
+  assert.deepEqual(r.items.map((x) => [x.code, x.action, x.group]), [['1', 'clear', ''], ['2', 'keep', 'PERSONEL'], ['3', 'keep', '']]);
+  assert.equal(r.errors.length, 1);
+  assert.equal(r.errors[0].line, 5);
+  assert.throws(() => P.parseCariCleanup([['FIRMA', 'TL']]), /başlığı/);
+});

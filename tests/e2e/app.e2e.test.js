@@ -518,3 +518,97 @@ test('bilanço Pusula düzeninde: kasa bir kez sayılır, hesap grubu değiştir
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('cari temizleme listesi: işaretli cari sıfırlanır, karşılığı düzeltme hesabına yazılır, grup değişir', async () => {
+  const XLSX = require('xlsx');
+  const os = require('node:os'); const path = require('node:path'); const fs = require('node:fs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cari-temizle-'));
+  const cariFile = path.join(dir, 'cari.xlsx'), listFile = path.join(dir, 'liste.xlsx');
+  let wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['FIRMA UNVANI ', 'KOD ', 'HAS ', 'TL. '], ['TEST TEMIZ ', 7001, '', 1500], ['TEST KALSIN ', 7002, -2, '']]), 'Cari');
+  XLSX.writeFile(wb, cariFile);
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  p.removeAllListeners('dialog'); p.on('dialog', (d) => d.accept());
+  await p.click('[data-go="backup"]'); await p.click('#pusulaImportBackupV7');
+  await p.selectOption('#piMode', 'cari'); await p.setInputFiles('#piFile', cariFile);
+  await p.waitForFunction(() => /Excel'de:<\/b> 2 cari/.test(document.getElementById('piResult').innerHTML), null, { timeout: 10000 });
+  await p.click('#modalConfirm');
+  await p.waitForFunction(() => !document.getElementById('modalRoot'), null, { timeout: 15000 });
+
+  wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ['KOD', 'CARİ', 'TÜR', 'ŞU ANKİ GRUP', 'TL', 'HAS', 'İŞLEM (KALSIN / TEMİZLE)', 'YENİ GRUP (boşsa değişmez)'],
+    ['7001', 'TEST TEMIZ', 'Müşteri', 'MUSTERI', 1500, '', 'TEMİZLE', ''],
+    ['7002', 'TEST KALSIN', 'Müşteri', 'MUSTERI', '', -2, 'kalsın', 'personel'],
+  ]), 'Cariler');
+  XLSX.writeFile(wb, listFile);
+  await p.evaluate(() => (document.querySelector('[data-route="customers"]') || document.querySelector('[data-go="customers"]')).click());
+  await p.click('#cariCleanupV7');
+  await p.setInputFiles('#ccFileV7', listFile);
+  await p.waitForFunction(() => /1<\/b> cari temizlenecek/.test(document.getElementById('ccResultV7').innerHTML), null, { timeout: 10000 });
+  await p.click('#modalConfirm');
+  await p.waitForFunction(() => !document.getElementById('modalRoot'), null, { timeout: 15000 });
+  await p.waitForTimeout(4000);
+  const st = fb.db.state;
+  const a = st.customers.find((c) => String(c.code) === '7001'), b = st.customers.find((c) => String(c.code) === '7002');
+  const adj = st.customers.find((c) => c.name === 'CARİ BAKİYE DÜZELTME');
+  assert.equal(Number(a.tlBalance || 0), 0);
+  assert.equal(Number(adj.tlBalance), 1500, 'temizlenen tutar düzeltme hesabına yazılmalı');
+  assert.equal(adj.balanceGroupV7, 'GIDER');
+  assert.equal(Number(b.hasBalance), -2, 'KALSIN işaretli cari değişmemeli');
+  assert.equal(b.balanceGroupV7, 'PERSONEL');
+  const led = st.customerMoves.filter((m) => m.customerId === a.id && m.unit === 'TL').reduce((n, m) => n + Number(m.debit || 0) - Number(m.credit || 0), 0);
+  assert.equal(Math.round(led * 100), 0, 'hareket defteri bakiye ile tutarlı olmalı');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
+test('Pusula öncesi deneme kayıtları silinir; bakiyeler değişmez, cari defteri denkleşir, buluta yazılır', async () => {
+  const XLSX = require('xlsx');
+  const os = require('node:os'); const path = require('node:path'); const fs = require('node:fs');
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'deneme-sil-')), 'cari.xlsx');
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  // Deneme işlemi: ziynet alışı (Pusula aktarımından önce)
+  await p.click('[data-home-trade="Ziynet Alış"]');
+  await p.fill('#stQty', '2'); await p.fill('#stPrice', '5000');
+  await p.click('#modalConfirm');
+  await p.waitForTimeout(1500);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['FIRMA UNVANI ', 'KOD ', 'TL. '], ['DENEME CARI ', 7101, 2500]]), 'Cari');
+  XLSX.writeFile(wb, file);
+  p.removeAllListeners('dialog'); p.on('dialog', (d) => d.accept());
+  await p.evaluate(() => (document.querySelector('[data-route="backup"]') || document.querySelector('[data-go="backup"]')).click()); await p.click('#pusulaImportBackupV7');
+  await p.selectOption('#piMode', 'cari'); await p.setInputFiles('#piFile', file);
+  await p.waitForFunction(() => /Excel'de:<\/b> 1 cari/.test(document.getElementById('piResult').innerHTML), null, { timeout: 10000 });
+  await p.click('#modalConfirm');
+  await p.waitForFunction(() => !document.getElementById('modalRoot'), null, { timeout: 15000 });
+  await p.waitForTimeout(4000);
+  const before = JSON.parse(JSON.stringify(fb.db.state));
+  assert.ok((before.tradeMoves || []).length >= 1, 'deneme işlemi bulutta olmalı');
+  const cash = (st) => st.cashAccounts.map((a) => a.currency + ':' + Number(a.balance)).sort().join(',');
+  const bal = (st) => st.customers.map((c) => c.id + ':' + Number(c.tlBalance || 0) + ':' + Number(c.hasBalance || 0)).sort().join(',');
+
+  await p.evaluate(() => (document.querySelector('[data-route="backup"]') || document.querySelector('[data-go="backup"]')).click());
+  await p.click('#trialPurgeV7');
+  // Dakika hassasiyeti: sınırı bir dakika sonrasına al ki az önceki deneme işlemi kapsansın.
+  await p.evaluate(() => { const d = new Date(Date.now() + 60000); const el = document.getElementById('tpCutV7'); el.value = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); el.dispatchEvent(new Event('change')); });
+  assert.ok(await p.isChecked('[data-tp="tradeMoves"]'));
+  await p.click('#modalConfirm');
+  await p.waitForFunction(() => !document.getElementById('modalRoot'), null, { timeout: 15000 });
+  await p.waitForTimeout(5000);
+  assert.equal(await p.locator('.critical-alert').count(), 0, 'güvenlik uyarısı çıkmamalı');
+  const after = fb.db.state;
+  assert.equal((after.tradeMoves || []).length, 0, 'deneme işlemleri buluttan da silinmeli');
+  assert.equal(cash(after), cash(before), 'kasa bakiyeleri değişmemeli');
+  assert.equal(bal(after), bal(before), 'cari bakiyeleri değişmemeli');
+  // Her carinin hareket defteri bakiyesine eşit
+  for (const c of after.customers) {
+    const sum = (after.customerMoves || []).filter((m) => m.customerId === c.id && String(m.unit || 'TL').toUpperCase() === 'TL').reduce((n, m) => n + Number(m.debit || 0) - Number(m.credit || 0), 0);
+    assert.equal(Math.round(sum * 100), Math.round(Number(c.tlBalance || 0) * 100), c.name + ' defteri bakiye ile tutmalı');
+  }
+  assert.ok(after.meta.trialPurgeV7, 'temizlik işareti olmalı');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});

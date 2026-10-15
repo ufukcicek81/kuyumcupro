@@ -450,5 +450,27 @@
     return out;
   }
 
-  return {parseBalanceSheet:parseBalanceSheet,isBalanceSheet:isBalanceSheet,balanceKey:balanceKey,balanceUnitOf:balanceUnitOf,buildSpecialStocks:buildSpecialStocks,fileGrandTotal:fileGrandTotal,SPECIAL_GROUP_NAMES:SPECIAL_GROUP_NAMES,cariTypeOf:cariTypeOf,parseStockSummary:parseStockSummary,isStockSummary:isStockSummary,looksTruncated:looksTruncated,GROUP_NAMES:GROUP_NAMES,norm:norm,num:num,purityOf:purityOf,detect:detect,buildBarcodeStocks:buildBarcodeStocks,buildOpenStocks:buildOpenStocks,buildCariBalances:buildCariBalances,detectBalances:detectBalances,balanceSpecOf:balanceSpecOf,BALANCE_UNITS:BALANCE_UNITS,MODES:MODES};
+  /* ---- Cari temizleme listesi (KOD, CARİ, İŞLEM: KALSIN / TEMİZLE, YENİ GRUP) ---- */
+  function parseCariCleanup(rows){
+    var h=-1,cols=null,i;
+    for(i=0;i<Math.min(rows.length,10);i++){
+      var r=(rows[i]||[]).map(norm),code=r.indexOf('kod'),name=-1,act=-1,grp=-1;
+      r.forEach(function(c,j){if(name<0&&/^cari(adi|unvan)?$|^firmaunvani$/.test(c))name=j;if(act<0&&/^islem/.test(c))act=j;if(grp<0&&/^yenigrup/.test(c))grp=j;});
+      if(act>=0&&(code>=0||name>=0)){h=i;cols={code:code,name:name,action:act,group:grp};break;}
+    }
+    if(h<0)throw new Error('Cari temizleme listesi başlığı (KOD / CARİ / İŞLEM) bulunamadı');
+    var items=[],errors=[];
+    for(i=h+1;i<rows.length;i++){
+      var row=rows[i]||[];if(isEmptyRow(row))continue;
+      var code=cols.code>=0?text(row[cols.code]):'',name=cols.name>=0?text(row[cols.name]):'';
+      if(!code&&!name)continue;
+      var a=norm(row[cols.action]),action=!a||/^kal/.test(a)?'keep':/^temiz|^sil|^sifir/.test(a)?'clear':null;
+      if(!action){errors.push({line:i+1,message:'İŞLEM anlaşılamadı: "'+text(row[cols.action])+'" (KALSIN ya da TEMİZLE yazın)'});continue;}
+      var g=cols.group>=0?text(row[cols.group]).toLocaleUpperCase('tr-TR'):'';
+      items.push({code:code,name:name||code,action:action,group:g,line:i+1});
+    }
+    return {items:items,errors:errors};
+  }
+
+  return {parseCariCleanup:parseCariCleanup,parseBalanceSheet:parseBalanceSheet,isBalanceSheet:isBalanceSheet,balanceKey:balanceKey,balanceUnitOf:balanceUnitOf,buildSpecialStocks:buildSpecialStocks,fileGrandTotal:fileGrandTotal,SPECIAL_GROUP_NAMES:SPECIAL_GROUP_NAMES,cariTypeOf:cariTypeOf,parseStockSummary:parseStockSummary,isStockSummary:isStockSummary,looksTruncated:looksTruncated,GROUP_NAMES:GROUP_NAMES,norm:norm,num:num,purityOf:purityOf,detect:detect,buildBarcodeStocks:buildBarcodeStocks,buildOpenStocks:buildOpenStocks,buildCariBalances:buildCariBalances,detectBalances:detectBalances,balanceSpecOf:balanceSpecOf,BALANCE_UNITS:BALANCE_UNITS,MODES:MODES};
 });

@@ -1317,6 +1317,9 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     };
     // Bilerek yapılan Pusula stok yüklemesi (yeni işaret) stok düşüşünü veri kaybı saymaz.
     const replaceA=candidate?.meta?.stockReplaceV7?.id,replaceB=remote?.meta?.stockReplaceV7?.id,intentionalStockReplace=Boolean(replaceA&&replaceA!==replaceB);
+    // Bilerek yapılan deneme kaydı temizliği (yeni işaret) satış/cari/finans düşüşünü veri kaybı saymaz.
+    const purgeA=candidate?.meta?.trialPurgeV7?.id,purgeB=remote?.meta?.trialPurgeV7?.id;
+    if(purgeA&&purgeA!==purgeB)return {issues:[],candidate:a,remote:b};
     if(!intentionalStockReplace)check('stocks','Barkodlu stok',50,.70);
     check('cards','Stok kartı',10,.70);
     check('sales','Satış kaydı',20,.55);
@@ -3426,6 +3429,142 @@ function stockSummaryView(){
     });
     return {created,updated,zeroed,moves};
   }
+  /* ---- Cari temizleme: işaretli carilerin unutulmuş bakiyeleri sıfırlanır, karşılığı CARİ BAKİYE DÜZELTME
+     hesabına (bilançoda GIDER grubu) yazılır; böylece kâr/zarar ve sermayeye yansır. ---- */
+  function cariAdjustmentAccountV7(){
+    let c=state.customers.find(x=>x.sysKeyV7==='duzeltme')||state.customers.find(x=>AsilPusulaImport.norm(x.name)==='caribakiyeduzeltme');
+    if(!c){c={id:'SYS-CBD',code:state.customers.some(x=>String(x.code)==='CBD')?'CBD-'+Date.now().toString(36):'CBD',name:'CARİ BAKİYE DÜZELTME',type:'Özel',accountingNature:'Gider',balanceGroupV7:'GIDER',phone:'',email:'',address:'',tlBalance:0,hasBalance:0,otherBalances:{},openingBalances:{}};state.customers.push(c);}
+    c.sysKeyV7='duzeltme';if(!c.balanceGroupV7)c.balanceGroupV7='GIDER';return c;
+  }
+  function planCariCleanupV7(items){
+    const matches=matchCarisForImportV7(items),clear=[],groups=[],missing=[],skipped=[];
+    items.forEach(x=>{const c=matches.get(x);if(!c){if(x.action==='clear'||x.group)missing.push(x);return;}
+      if(x.group&&x.group!==balanceGroupOfV7(c))groups.push({c,group:x.group});
+      if(x.action!=='clear')return;
+      if(balanceGroupOfV7(c)==='KASA'||c.sysKeyV7==='duzeltme'){skipped.push({c,why:balanceGroupOfV7(c)==='KASA'?'kasa hesabından okunur':'düzeltme hesabı'});return;}
+      const b=cariBalancesOfV7(c);if(Object.keys(b).length)clear.push({c,b});});
+    return {clear,groups,missing,skipped};
+  }
+  function applyCariCleanupV7(plan,fileName){
+    const date=now(),doc='CARI-TEMIZLEME-'+date.slice(0,10),adj=plan.clear.length?cariAdjustmentAccountV7():null,r6=v=>Math.round(v*1e6)/1e6;let moves=0;
+    const move=(c,u,debit,credit,desc)=>{state.customerMoves.unshift({id:uid('CM'),customerId:c.id,period:state.activePeriod,date,code:'DV',type:'BAKİYE TEMİZLEME',unit:u,debit,credit,description:desc,user:session?.name||'Sistem',sourceType:'opening',sourceDocNo:doc});moves++;};
+    plan.clear.forEach(({c,b})=>Object.entries(b).forEach(([u,v])=>{
+      if(Math.abs(v)<1e-9)return;
+      const d=-v,debit=d>0?d:0,credit=d<0?-d:0;
+      // Banka/POS hesabına bağlı carinin TL bakiyesi hesaptan okunur: hesap da sıfırlanır.
+      const fin=u==='TL'?(linkedBankForCari(c)?{key:'Banka:'+linkedBankForCari(c).id}:linkedPosForCari(c)?{key:'POS:'+linkedPosForCari(c).id}:null):null;
+      if(fin&&adjustAccount(fin.key,d))addFinanceMove({direction:d>0?'Giriş':'Çıkış',type:'Bakiye temizleme',accountKey:fin.key,accountAmount:Math.abs(d),accountCurrency:'TL',tlAmount:Math.abs(d),customer:c.name,description:'Unutulmuş bakiye temizlendi',sourceDocNo:doc,sourceCategory:'Devir'});
+      applyCariBalance(c,u,debit,credit);
+      if(u==='TL')c.tlBalance=0;else if(u==='HAS')c.hasBalance=0;else if(c.otherBalances)delete c.otherBalances[u];
+      if(fin){const a=accountByKey(fin.key).account;if(a)a.balance=0;syncLinkedFinanceCariBalance(c);}
+      move(c,u,debit,credit,`Unutulmuş bakiye temizlendi → ${adj.name}`);
+      applyCariBalance(adj,u,credit,debit);move(adj,u,credit,debit,`${c.name} bakiyesi temizlendi (${qty(v)} ${u})`);
+      if(u==='TL')adj.tlBalance=r6(adj.tlBalance);else if(u==='HAS')adj.hasBalance=r6(adj.hasBalance);else adj.otherBalances[u]=r6(adj.otherBalances[u]||0);
+    }));
+    plan.groups.forEach(({c,group})=>{if(group===balanceGroupAutoV7(c))delete c.balanceGroupV7;else c.balanceGroupV7=group;});
+    audit(`Cari temizleme listesi: ${plan.clear.length} cari sıfırlandı (${moves} hareket), ${plan.groups.length} carinin bilanço grubu değişti · ${fileName||''}`,'Cari');
+    return {cleared:plan.clear.length,groups:plan.groups.length,moves};
+  }
+  async function exportCariCleanupListV7(){
+    const units=['TL','HAS','USD','EUR','CHF','GBP','22','CEY'],iso=now();
+    const list=(state.customers||[]).filter(c=>c.id!=='CASH').map(c=>({c,b:cariBalancesOfV7(c),g:balanceGroupOfV7(c)})).filter(x=>Object.keys(x.b).length)
+      .sort((a,b)=>balanceGroupRankV7(a.g)-balanceGroupRankV7(b.g)||String(a.c.name).localeCompare(String(b.c.name),'tr'));
+    const extra=[...new Set(list.flatMap(x=>Object.keys(x.b)).filter(u=>!units.includes(u)))],all=[...units,...extra];
+    const aoa=[['KOD','CARİ','TÜR','ŞU ANKİ GRUP',...all,'HAS KARŞILIĞI','İŞLEM (KALSIN / TEMİZLE)','YENİ GRUP (boşsa değişmez)','NOT']];
+    list.forEach(({c,b,g})=>aoa.push([String(c.code||''),c.name,c.type||'',g,...all.map(u=>b[u]===undefined?'':Math.round(b[u]*100)/100),Math.round(Object.entries(b).reduce((a,[u,v])=>a+reportToHasV656(u,v,iso),0)*1000)/1000,'KALSIN','',g==='KASA'?'Kasa hesabından okunur, temizlenmez':'']));
+    try{const X=await loadXlsxV7(),wb=X.utils.book_new(),ws=X.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:8},{wch:30},{wch:10},{wch:14},...all.map(()=>({wch:12})),{wch:12},{wch:24},{wch:22},{wch:30}];X.utils.book_append_sheet(wb,ws,'Cariler');X.writeFile(wb,`CARI_TEMIZLEME_LISTESI_${iso.slice(0,10)}.xlsx`);}
+    catch(e){toast('Excel oluşturulamadı: '+(e?.message||e),'err');}
+  }
+  function openCariCleanupV7(){
+    if(!v5Guard('canManageDefinitions','Cari temizleme için tanımlama yetkisi gerekir'))return;
+    let plan=null,fileName='';
+    modal('Cari Temizleme (Unutulmuş Bakiyeler)',`<div class="notice">1) <b>Listeyi indirin</b>. 2) Her carinin <b>İŞLEM</b> sütununa <b>KALSIN</b> ya da <b>TEMİZLE</b> yazın; isterseniz <b>YENİ GRUP</b> sütununa bilanço grubunu yazın. 3) Dosyayı buradan yükleyin.<br><small>TEMİZLE yazılan carinin tüm bakiyeleri sıfırlanır; karşılığı <b>CARİ BAKİYE DÜZELTME</b> hesabına (bilançoda GIDER) yazılır, kâr/zarar ve sermayeye yansır. Bankaya bağlı carinin banka hesabı da sıfırlanır. İşlemden önce otomatik yedek alınır.</small></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-outline" id="ccListV7" type="button">📤 Listeyi İndir</button><label class="btn btn-outline" style="cursor:pointer">📥 İşaretli Listeyi Yükle<input id="ccFileV7" type="file" accept=".xlsx,.xls" style="display:none"></label></div>
+      <div id="ccResultV7" style="margin-top:12px"></div>`,async()=>{
+      if(!plan)return toast('Önce işaretli listeyi yükleyin','err');
+      if(!plan.clear.length&&!plan.groups.length)return toast('Temizlenecek ya da grubu değişecek cari yok','err');
+      if(!confirm(`${plan.clear.length} carinin tüm bakiyeleri SIFIRLANACAK${plan.groups.length?`, ${plan.groups.length} carinin bilanço grubu değişecek`:''}.\n\nDevam edilsin mi?`))return;
+      const btn=document.getElementById('modalConfirm');if(btn){btn.disabled=true;btn.textContent='UYGULANIYOR…';}
+      try{
+        await idbRollingSnapshotV682(true,'CARİ TEMİZLEME ÖNCESİ').catch(()=>false);
+        if(state.cloudSync?.enabled)await cloudBackupV5('CARİ TEMİZLEME ÖNCESİ').catch(()=>false);
+        const r=applyCariCleanupV7(plan,fileName);save();closeModal();render();toast(`${r.cleared} cari temizlendi, ${r.groups} carinin grubu değişti`);
+      }catch(e){if(btn){btn.disabled=false;btn.textContent='UYGULA';}toast('Temizleme yapılamadı: '+(e?.message||e),'err');}
+    },'UYGULA');
+    const modalEl=document.querySelector('#modalRoot .modal');if(modalEl)modalEl.style.width='min(1000px,97vw)';
+    document.getElementById('ccListV7')?.addEventListener('click',exportCariCleanupListV7);
+    document.getElementById('ccFileV7')?.addEventListener('change',async e=>{const f=e.target.files?.[0];if(!f)return;
+      try{const X=await loadXlsxV7(),wb=X.read(await f.arrayBuffer(),{type:'array'}),rows=X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:'',raw:true});
+        const p=AsilPusulaImport.parseCariCleanup(rows);plan=planCariCleanupV7(p.items);fileName=f.name;
+        const fmt=b=>Object.entries(b).map(([u,v])=>`${qty(v)} ${esc(u)}`).join(' · ');
+        document.getElementById('ccResultV7').innerHTML=`<div class="notice"><b>${esc(f.name)}</b> · ${p.items.length} satır · <b>${plan.clear.length}</b> cari temizlenecek · <b>${plan.groups.length}</b> grup değişikliği${plan.missing.length?` · <span class="negative">${plan.missing.length} cari bulunamadı</span>`:''}${plan.skipped.length?` · ${plan.skipped.length} atlandı`:''}${p.errors.length?` · <span class="negative">${p.errors.length} hatalı satır</span>`:''}</div>
+          ${plan.clear.length?`<h4 style="margin:10px 0 6px">Sıfırlanacak bakiyeler</h4><div class="table-wrap" style="max-height:34vh"><table class="table"><thead><tr><th>Kod</th><th>Cari</th><th>Grup</th><th>Bakiye</th></tr></thead><tbody>${plan.clear.map(({c,b})=>`<tr><td>${esc(String(c.code||''))}</td><td><b>${esc(c.name)}</b></td><td>${esc(balanceGroupOfV7(c))}</td><td>${fmt(b)}</td></tr>`).join('')}</tbody></table></div>`:''}
+          ${plan.groups.length?`<h4 style="margin:10px 0 6px">Bilanço grubu değişecek</h4><div style="font-size:13px">${plan.groups.map(({c,group})=>`${esc(c.name)}: ${esc(balanceGroupOfV7(c))} → <b>${esc(group)}</b>`).join('<br>')}</div>`:''}
+          ${plan.missing.length?`<h4 style="margin:10px 0 6px" class="negative">Bulunamayan cariler</h4><div style="font-size:13px">${plan.missing.map(x=>`${esc(x.line)}. satır: ${esc(x.code)} ${esc(x.name)}`).join('<br>')}</div>`:''}
+          ${plan.skipped.length?`<h4 style="margin:10px 0 6px">Atlananlar</h4><div style="font-size:13px">${plan.skipped.map(x=>`${esc(x.c.name)} (${esc(x.why)})`).join('<br>')}</div>`:''}
+          ${p.errors.length?`<h4 style="margin:10px 0 6px" class="negative">Hatalı satırlar</h4><div style="font-size:13px">${p.errors.map(x=>`${x.line}. satır: ${esc(x.message)}`).join('<br>')}</div>`:''}`;
+      }catch(err){plan=null;toast(err.message||String(err),'err');}});
+  }
+
+  /* ---- Pusula öncesi deneme kayıtları: aktarım tarihinden önceki işlemler silinir. Bakiyeler (stok, cari, kasa)
+     Pusula aktarımıyla zaten eşitlendiği için değişmez; cari hareket defteri tek bir açılış satırıyla denkleştirilir. ---- */
+  /* Varsayılan sınır: son Pusula aktarımının yapıldığı gündeki ilk aktarım anı (daha önceki deneme aktarımları sayılmaz). */
+  function pusulaCutoffV7(){
+    const pus=x=>String(x.sourceDocNo||'').startsWith('PUSULA-AKTARIM');
+    const ds=[...(state.customerMoves||[]).filter(pus),...(state.financeMoves||[]).filter(pus)].map(m=>String(m.date||'')).concat(state.meta?.stockReplaceV7?.at||'').filter(Boolean).sort();
+    if(!ds.length)return '';
+    const day=new Date(ds[ds.length-1]).toDateString();
+    return ds.find(d=>new Date(d).toDateString()===day)||ds[0];
+  }
+  const TRIAL_KINDS_V7=[['sales','Satış fişleri'],['tradeMoves','Döviz / ziynet / hurda alış-satış'],['purchases','Alış belgeleri'],['expenses','Giderler'],['financeMoves','Kasa / banka hareketleri'],['customerMoves','Cari hareketleri'],['stockMoves','Stok hareketleri'],['soldStocks','Satılmış (stokta olmayan) eski barkodlar'],['cancelledDocuments','İptal arşivi']];
+  function trialRecordsV7(cutoff){
+    const before=x=>{const d=String(x?.date||x?.saleDate||x?.entryDate||'');return d&&d<cutoff;},pus=x=>/^PUSULA-/.test(String(x?.sourceDocNo||''));
+    return {
+      sales:(state.sales||[]).filter(before),tradeMoves:(state.tradeMoves||[]).filter(before),purchases:(state.purchases||[]).filter(before),expenses:(state.expenses||[]).filter(before),
+      financeMoves:(state.financeMoves||[]).filter(x=>before(x)&&!pus(x)),customerMoves:(state.customerMoves||[]).filter(x=>before(x)&&!pus(x)),stockMoves:(state.stockMoves||[]).filter(before),
+      soldStocks:(state.stocks||[]).filter(x=>x.status!=='Stokta'&&String(x.saleDate||x.entryDate||'')<cutoff),cancelledDocuments:(state.cancelledDocuments||[]).filter(before)
+    };
+  }
+  function applyTrialPurgeV7(cutoff,kinds){
+    const rec=trialRecordsV7(cutoff),counts={};
+    kinds.forEach(k=>{const del=new Set(rec[k]);counts[k]=del.size;if(!del.size)return;const key=k==='soldStocks'?'stocks':k;state[key]=(state[key]||[]).filter(x=>!del.has(x));});
+    if(kinds.includes('customerMoves')){
+      // Hareket defteri = bakiye: silinen hareketler ve Pusula aktarım düzeltmeleri yerine tek açılış satırı.
+      state.customerMoves=(state.customerMoves||[]).filter(m=>!String(m.sourceDocNo||'').startsWith('PUSULA-AKTARIM'));
+      const led=new Map();state.customerMoves.forEach(m=>{const k=m.customerId+'|'+String(m.unit||'TL').toUpperCase();led.set(k,(led.get(k)||0)+Number(m.debit||0)-Number(m.credit||0));});
+      let open=0;(state.customers||[]).forEach(c=>{
+        const b={TL:Number(c.tlBalance||0),HAS:Number(c.hasBalance||0)};Object.entries(c.otherBalances||{}).forEach(([u,v])=>b[String(u).toUpperCase()]=Number(v||0));
+        Object.entries(b).forEach(([u,v])=>{const d=Math.round((v-(led.get(c.id+'|'+u)||0))*1e6)/1e6;if(Math.abs(d)<1e-6)return;
+          state.customerMoves.push({id:uid('CM'),customerId:c.id,period:state.activePeriod,date:cutoff,code:'DV',type:'DEVİR / AÇILIŞ',unit:u,debit:d>0?d:0,credit:d<0?-d:0,description:'Pusula açılış bakiyesi',user:session?.name||'Sistem',sourceType:'opening',sourceDocNo:'PUSULA-ACILIS'});open++;});
+      });
+      counts.openingMoves=open;
+    }
+    state.meta=state.meta||{};state.meta.trialPurgeV7={id:uid('TP'),at:now(),cutoff,counts};
+    return counts;
+  }
+  function openTrialPurgeV7(){
+    if(!v5Guard('canManageDefinitions','Bu işlem için tanımlama yetkisi gerekir'))return;
+    const c0=pusulaCutoffV7();if(!c0)return toast('Pusula aktarımı bulunamadı; önce Pusula aktarımını yapın','err');
+    const local=iso=>{const d=new Date(iso);return isNaN(d)?'':new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);};
+    modal('Pusula Öncesi Deneme Kayıtlarını Sil',`<div class="notice">Pusula aktarımından <b>önceki</b> deneme işlemleri <b>kalıcı olarak silinir</b>. Stok, cari ve kasa <b>bakiyeleri değişmez</b> (Pusula aktarımıyla zaten eşitlendi); cari hareket defteri tek bir "Pusula açılış bakiyesi" satırıyla denkleştirilir. İşlemden önce otomatik yedek alınır.</div>
+      <div class="labelled" style="margin-top:10px;max-width:300px"><label>Bu tarihten önceki kayıtlar</label><input id="tpCutV7" class="input" type="datetime-local" value="${local(c0)}"></div>
+      <div id="tpListV7" style="margin-top:10px"></div>`,async()=>{
+      const cut=new Date(document.getElementById('tpCutV7').value).toISOString(),kinds=[...document.querySelectorAll('[data-tp]:checked')].map(x=>x.dataset.tp);
+      if(!kinds.length)return toast('Silinecek kayıt türü seçin','err');
+      if(!confirm(`${trDate(cut)} öncesindeki seçili deneme kayıtları KALICI OLARAK silinecek. Geri alınamaz (yalnız otomatik yedekten dönülebilir).\n\nDevam edilsin mi?`))return;
+      const btn=document.getElementById('modalConfirm');if(btn){btn.disabled=true;btn.textContent='SİLİNİYOR…';}
+      try{
+        await idbRollingSnapshotV682(true,'DENEME KAYITLARI SİLİNMEDEN ÖNCE').catch(()=>false);
+        if(state.cloudSync?.enabled)await cloudBackupV5('DENEME KAYITLARI SİLİNMEDEN ÖNCE').catch(()=>false);
+        const r=applyTrialPurgeV7(cut,kinds);
+        audit(`Pusula öncesi deneme kayıtları silindi (${trDate(cut)} öncesi): ${TRIAL_KINDS_V7.filter(([k])=>r[k]).map(([k,t])=>`${t} ${r[k]}`).join(', ')}`,'Yedek');
+        save();closeModal();render();toast('Deneme kayıtları silindi');
+      }catch(e){if(btn){btn.disabled=false;btn.textContent='SİL';}toast('Silinemedi: '+(e?.message||e),'err');}
+    },'SİL');
+    const draw=()=>{const v=document.getElementById('tpCutV7')?.value;if(!v)return;const rec=trialRecordsV7(new Date(v).toISOString());
+      document.getElementById('tpListV7').innerHTML=TRIAL_KINDS_V7.map(([k,t])=>`<label style="display:flex;gap:8px;align-items:center;padding:4px 0"><input type="checkbox" data-tp="${k}" ${rec[k].length?'checked':'disabled'}> ${esc(t)}: <b>${rec[k].length}</b></label>`).join('');};
+    document.getElementById('tpCutV7')?.addEventListener('change',draw);draw();
+  }
   /* Pusula stok özeti: açık stoklar (mevcut kartın birim gramı ve ayarı korunur, maliyet Pusula'dan), hurda, kasa. */
   function applyStockSummaryV7(sum,period,{scrap,cash},fileName){
     const existing=(state.openStocks||[]).filter(x=>x.period===period),byCode=new Map(existing.map(x=>[String(x.pusulaCode||x.productCode||''),x]));
@@ -3937,7 +4076,7 @@ function stockSummaryView(){
   }
 
   function pageCustomers(){
-    return `<div class="page-title"><div><h1>Cari Hesap İşlemleri</h1><p>Cari, kasa ve finans tek işlem motorunda bağlı çalışır. NT/NO işlemleri kasayı otomatik etkiler.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" id="pusulaImportCariV7">📥 Pusula'dan Cari Bakiye Aktar</button><button class="btn btn-outline" id="systemCariV7Btn">⚙ Sistem Hesapları</button><button class="btn btn-outline ${cariView==='cards'?'active':''}" data-cari-view="cards">Cari Kartları</button><button class="btn btn-outline ${cariView==='moves'?'active':''}" data-cari-view="moves">Tüm Cari Hareketler</button><button class="btn btn-outline" id="cariLegacyCleanupV677">🧹 Bilanço Korumalı Temizlik</button><button class="btn btn-primary" id="newCustomer">+ Cari Aç</button></div></div>
+    return `<div class="page-title"><div><h1>Cari Hesap İşlemleri</h1><p>Cari, kasa ve finans tek işlem motorunda bağlı çalışır. NT/NO işlemleri kasayı otomatik etkiler.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" id="pusulaImportCariV7">📥 Pusula'dan Cari Bakiye Aktar</button><button class="btn btn-outline" id="cariCleanupV7">🧹 Cari Temizleme</button><button class="btn btn-outline" id="systemCariV7Btn">⚙ Sistem Hesapları</button><button class="btn btn-outline ${cariView==='cards'?'active':''}" data-cari-view="cards">Cari Kartları</button><button class="btn btn-outline ${cariView==='moves'?'active':''}" data-cari-view="moves">Tüm Cari Hareketler</button><button class="btn btn-outline" id="cariLegacyCleanupV677">🧹 Bilanço Korumalı Temizlik</button><button class="btn btn-primary" id="newCustomer">+ Cari Aç</button></div></div>
       <div class="notice"><strong>Tek Cari İşlem Ekranı:</strong> ${CARI_MOVE_TYPES.map(x=>x.code).join(' · ')}. Tüm hareketler aynı ekranda Cins/Tutar/Kur → Karşılığı → BORÇ/ALACAK mantığıyla çalışır; altın ve hurda işlemlerinde stok alanları aynı ekranın içinde açılır.</div>
       ${cariView==='moves'?customerMovesCenterView():customerCardsView()}`;
   }
@@ -4866,6 +5005,7 @@ function stockSummaryView(){
         <div class="card" style="border:2px solid rgba(214,177,95,.35)"><div class="section-head"><h3>📥 Pusula'dan Aktarım</h3><span class="badge gold">İLK KURULUM</span></div>
           <p class="muted">Pusula'dan aldığınız Excel dosyalarıyla güncel verileri bu programa aktarın. Sırayla: <b>1)</b> Barkodlu stoklar <b>2)</b> Barkodsuz (açık) stoklar <b>3)</b> Cari bakiyeleri. Her aktarımdan önce otomatik yedek alınır.</p>
           <button class="btn btn-primary" id="pusulaImportBackupV7" style="width:100%;min-height:46px">PUSULA EXCEL AKTARIMINI AÇ</button>
+          <button class="btn btn-outline" id="trialPurgeV7" style="width:100%;min-height:40px;margin-top:8px">🧹 PUSULA ÖNCESİ DENEME KAYITLARINI SİL</button>
           <div class="muted" style="margin-top:8px;font-size:12px">Son aktarım: ${state.meta?.stockReplaceV7?esc(trDate(state.meta.stockReplaceV7.at)+' · '+(state.meta.stockReplaceV7.file||'')):'—'}</div>
         </div>
         <div class="card"><div class="section-head"><h3>☁ Merkezi Bulut</h3><span class="badge ${window.AsilCloudAuth?.isConfigured()?'green':'red'}">${window.AsilCloudAuth?.isConfigured()?'GİRİŞLİ':'KORUMASIZ'}</span></div>
@@ -6051,6 +6191,7 @@ function stockSummaryView(){
 
   function bindCustomers(){
     document.getElementById('systemCariV7Btn')?.addEventListener('click',openSystemCariV7);
+    document.getElementById('cariCleanupV7')?.addEventListener('click',openCariCleanupV7);
     document.getElementById('pusulaImportCariV7')?.addEventListener('click',()=>{openPusulaImportV7();const m=document.getElementById('piMode');if(m){m.value='cari';m.dispatchEvent(new Event('change'));}});
     document.getElementById('newCustomer')?.addEventListener('click',()=>openAccountCardModal());
     document.getElementById('cariLegacyCleanupV677')?.addEventListener('click',openCariLegacyCleanupV677);
@@ -7114,6 +7255,7 @@ function stockSummaryView(){
     document.getElementById('backupCloudPull')?.addEventListener('click',()=>cloudPullV5(true));
     document.getElementById('cloudAuthOpen')?.addEventListener('click',openCloudAuthV7);
     document.getElementById('pusulaImportBackupV7')?.addEventListener('click',openPusulaImportV7);
+    document.getElementById('trialPurgeV7')?.addEventListener('click',openTrialPurgeV7);
     document.getElementById('backupDownloadEncrypted')?.addEventListener('click',saveEncryptedBackupV7);
     document.getElementById('cloudBackupNow')?.addEventListener('click',async()=>{if(!v5Guard('canCloudSync'))return;const ok=await cloudBackupV5('MANUEL BULUT');toast(ok?'Manuel bulut yedeği alındı':'Bulut yedeği alınamadı',ok?'ok':'err');if(ok)audit('Manuel bulut yedeği alındı','Yedek');});
     document.getElementById('backupDownload')?.addEventListener('click',async()=>{

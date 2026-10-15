@@ -104,6 +104,18 @@ altında stoklar, kur farkı, kâr/zarar (dönem ve TOPLAM) ve sermaye.
 - Pusula'nın cari listesinde ILS sütunu yoktur; ILS bakiyeleri elle girilmelidir.
 - Çeyrek (CEY) bakiyesi Pusula'daki gibi HAS karşılığında 0 sayılır.
 
+## Cari temizleme (unutulmuş bakiyeler)
+Cari → **🧹 Cari Temizleme**: listeyi indirin, her carinin İŞLEM sütununa KALSIN / TEMİZLE yazın
+(isterseniz YENİ GRUP sütununa bilanço grubunu), dosyayı yükleyin. TEMİZLE yazılan carinin bakiyeleri sıfırlanır,
+karşılığı **CARİ BAKİYE DÜZELTME** hesabına (GIDER grubu) yazılır. Bankaya bağlı carinin banka hesabı da sıfırlanır;
+KASA carisi atlanır. Öncesinde otomatik yedek alınır.
+
+## Pusula öncesi deneme kayıtlarını silme
+Yedek · Bulut → **🧹 Pusula öncesi deneme kayıtlarını sil**: varsayılan sınır son Pusula aktarımının başladığı
+andır. Bu tarihten önceki satış, alış-satış, gider, finans, cari ve stok hareketleri ile satılmış eski barkodlar
+kalıcı olarak silinir. Bakiyeler değişmez; her carinin hareket defteri tek bir "Pusula açılış bakiyesi" satırıyla
+denkleştirilir. Öncesinde otomatik yedek alınır.
+
 ## Kontrol
 Aktarımdan sonra Stok · Stok + Kasa Özeti ve Cari sayfasındaki toplamları Pusula'daki
 raporlarla karşılaştırın. Bir şey yanlışsa **Yedek · Bulut → Bulut Yedek Geçmişi**
