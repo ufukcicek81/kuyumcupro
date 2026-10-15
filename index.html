@@ -3826,7 +3826,7 @@ function stockSummaryView(){
     const analyzed=(state.customers||[]).map(c=>({c,b:cariBalanceBreakdownV674(c)}));
     const legacyCount=analyzed.filter(x=>x.b.sourceStatus==='legacy').length,unknownCount=analyzed.filter(x=>x.b.sourceStatus==='unknown').length,currentCount=analyzed.filter(x=>x.b.sourceStatus==='current').length;
     return `<div class="card" style="margin-top:14px"><div class="section-head"><h3>Cari Çağır</h3><span id="cariCardCount">${state.customers.length} cari</span></div><div class="filter-panel" style="grid-template-columns:minmax(260px,1.2fr) minmax(150px,.55fr) minmax(190px,.7fr) auto"><input id="cariCardSearch" class="input" autocomplete="off" placeholder="Cari / toptancı adı, hesap kodu, telefon veya tür ara"><select id="cariBalanceFilter" class="select"><option value="">Tüm Bakiyeler</option><option value="debt">Borçlu</option><option value="credit">Alacaklı</option><option value="mixed">Karışık Borç/Alacak</option><option value="zero">Bakiyesiz</option></select><select id="cariSourceFilter" class="select"><option value="">Tüm Bakiye Kaynakları</option><option value="unknown">Kaynağı Belirsiz Eski</option><option value="legacy">Devir / Açılış</option><option value="current">Sadece Güncel İşlem</option><option value="finance">Finans Bağlı</option><option value="clean">Bakiyesiz</option></select><button class="btn btn-outline" id="cariCardClear">Filtreleri Temizle</button></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${types.map(t=>`<button class="btn ${cariTypeFilter===t?'btn-primary':'btn-outline'}" data-cari-type-filter="${t}">${t}</button>`).join('')}</div><div class="notice" style="margin-top:10px"><strong>Bakiye ayrımı:</strong> <span class="badge gold">${legacyCount} devir/açılış</span> <span class="badge red">${unknownCount} kaynağı belirsiz eski bakiye</span> <span class="badge green">${currentCount} sadece güncel işlem</span><br><small><b>Kaynağı belirsiz eski bakiye</b>, mevcut bakiyede var fakat cari hareketleriyle açıklanamayan kısımdır. Bunları silmiyoruz; önce incelemek için ayırıyoruz.</small></div></div>
-    <div class="grid grid-3" id="cariCardGrid" style="margin-top:14px">${analyzed.map(({c,b})=>{const displayTl=cariDisplayTlBalance(c);const other=Object.entries(c.otherBalances||{}).filter(([,v])=>Math.abs(Number(v||0))>0.000001).map(([u,v])=>`<div class="summary-row"><span>${esc(u)} Bakiye</span><strong>${qty(Math.abs(v))} ${esc(u)} ${v>0?'Borç':'Alacak'}</strong></div>`).join('');const search=[c.name,c.code,c.phone,c.mobile,c.type,c.email].filter(Boolean).join(' ').toLocaleLowerCase('tr-TR');const sourceBadge=b.sourceStatus==='unknown'?'red':b.sourceStatus==='legacy'?'gold':b.sourceStatus==='current'?'green':'blue';return `<div class="card" data-cari-card="${c.id}" data-cari-type="${esc(c.type||'')}" data-cari-search="${esc(search)}" data-cari-balance="${b.balanceStatus}" data-cari-source="${b.sourceStatus}"><div class="section-head"><h3>${esc(c.name)}</h3><span class="badge ${c.type==='Toptancı'?'gold':'blue'}">${esc(c.type)}</span></div>${c.code?`<div class="muted" style="margin-bottom:8px">Hesap Kodu: <strong>${esc(c.code)}</strong></div>`:''}<div style="margin-bottom:8px"><span class="badge ${sourceBadge}">${esc(b.sourceLabel)}</span></div><div class="summary-row"><span>${c.type==='Banka'?'Banka Bakiyesi':'TL Bakiye'}</span><strong class="${c.type==='Banka'?'positive':displayTl>0?'negative':displayTl<0?'positive':''}">${money(Math.abs(displayTl))} ${c.type==='Banka'?'TL':displayTl>0?'Borç':displayTl<0?'Alacak':''}</strong></div><div class="summary-row"><span>HAS Bakiye</span><strong class="${c.hasBalance<0?'positive':c.hasBalance>0?'negative':''}">${qty(Math.abs(c.hasBalance))} HAS ${c.hasBalance<0?'Alacak':c.hasBalance>0?'Borç':''}</strong></div>${other}${c.type!=='Banka'?`<div class="summary-row"><span>Eski / Devir</span><strong>${esc(cariBalanceMapTextV674(b.legacy))}</strong></div><div class="summary-row"><span>Güncel İşlemler</span><strong>${esc(cariBalanceMapTextV674(b.recent))}</strong></div>`:'' }<div style="display:flex;gap:8px;margin-top:14px"><button class="btn grow" data-cari-move="${c.id}">Cari İşlem</button><button class="btn btn-outline" data-cari-detail="${c.id}">Ekstre</button></div></div>`}).join('')}</div>`;
+    <div class="grid grid-3" id="cariCardGrid" style="margin-top:14px">${analyzed.map(({c,b})=>{const displayTl=cariDisplayTlBalance(c);const other=Object.entries(c.otherBalances||{}).filter(([,v])=>Math.abs(Number(v||0))>0.000001).map(([u,v])=>`<div class="summary-row"><span>${esc(u)} Bakiye</span><strong>${qty(Math.abs(v))} ${esc(u)} ${v>0?'Borç':'Alacak'}</strong></div>`).join('');const search=[c.name,c.code,c.phone,c.mobile,c.type,c.email].filter(Boolean).join(' ').toLocaleLowerCase('tr-TR');const sourceBadge=b.sourceStatus==='unknown'?'red':b.sourceStatus==='legacy'?'gold':b.sourceStatus==='current'?'green':'blue';return `<div class="card" data-cari-card="${c.id}" data-cari-type="${esc(c.type||'')}" data-cari-search="${esc(search)}" data-cari-balance="${b.balanceStatus}" data-cari-source="${b.sourceStatus}"><div class="section-head"><h3>${esc(c.name)}</h3><span class="badge ${c.type==='Toptancı'?'gold':'blue'}">${esc(c.type)}</span></div>${c.code?`<div class="muted" style="margin-bottom:8px">Hesap Kodu: <strong>${esc(c.code)}</strong></div>`:''}<div style="margin-bottom:8px"><span class="badge ${sourceBadge}">${esc(b.sourceLabel)}</span></div><div class="summary-row"><span>${c.type==='Banka'?'Banka Bakiyesi':'TL Bakiye'}</span><strong class="${c.type==='Banka'?'positive':displayTl>0?'negative':displayTl<0?'positive':''}">${money(Math.abs(displayTl))} ${c.type==='Banka'?'TL':displayTl>0?'Borç':displayTl<0?'Alacak':''}</strong></div><div class="summary-row"><span>HAS Bakiye</span><strong class="${c.hasBalance<0?'positive':c.hasBalance>0?'negative':''}">${qty(Math.abs(c.hasBalance))} HAS ${c.hasBalance<0?'Alacak':c.hasBalance>0?'Borç':''}</strong></div>${other}${c.type!=='Banka'?`<div class="summary-row"><span>Eski / Devir</span><strong>${esc(cariBalanceMapTextV674(b.legacy))}</strong></div><div class="summary-row"><span>Güncel İşlemler</span><strong>${esc(cariBalanceMapTextV674(b.recent))}</strong></div>`:'' }<div style="display:flex;gap:8px;margin-top:14px"><button class="btn grow" data-cari-move="${c.id}">Cari İşlem</button><button class="btn btn-outline" data-cari-detail="${c.id}">Ekstre</button><button class="btn btn-outline" data-cari-edit="${c.id}" title="Cari kartını düzenle">✎</button></div></div>`}).join('')}</div>`;
   }
   function customerMovesCenterView(){
     const rows=state.customerMoves.filter(x=>x.period===state.activePeriod).slice().sort((a,b)=>b.date.localeCompare(a.date));
@@ -6195,6 +6195,62 @@ function stockSummaryView(){
     const typeEl=document.getElementById('acType'),nature=document.getElementById('acNature'),finance=document.getElementById('accountFinanceFields');const sync=()=>{nature.value=defaultNatureForType(typeEl.value);finance.style.display=['Banka','Kasa'].includes(typeEl.value)?'block':'none';};typeEl.addEventListener('change',sync);if(presetType&&types.includes(presetType))typeEl.value=presetType;sync();
   }
 
+  /* Cari kartı: ad / kod / tür / telefon düzenleme, banka carisini satışta kullanılacak banka hesabına bağlama, silme. */
+  function openCariCardEditV7(id){
+    const c=state.customers.find(x=>x.id===id);if(!c)return;
+    if(!v5Guard('canManageDefinitions','Cari kartı düzenlemek için tanımlama yetkisi gerekir'))return;
+    const types=[...new Set([...(state.definitions.accountTypes||['Müşteri','Toptancı','Kasa','Banka','Personel','Özel','Gelir','Gider']).filter(x=>x!=='POS'),c.type||'Müşteri'])];
+    const bank=linkedBankForCari(c),bal=cariBalancesOfV7(c),fmt=Object.entries(bal).map(([u,v])=>`${qty(v)} ${esc(u)}`).join(' · ')||'Bakiye yok';
+    modal(`Cari Kartı — ${esc(c.name)}`,`<div class="form-grid">
+      <div class="labelled span-2"><label>Hesap Tanımı / Ünvan</label><input id="ceName" class="input" value="${esc(c.name||'')}"></div>
+      <div class="labelled"><label>Hesap Kodu</label><input id="ceCode" class="input" value="${esc(String(c.code||''))}"></div>
+      <div class="labelled"><label>Hesap Tipi</label><select id="ceType" class="select">${types.map(t=>`<option ${t===c.type?'selected':''}>${esc(t)}</option>`).join('')}</select></div>
+      <div class="labelled"><label>Telefon</label><input id="cePhone" class="input" value="${esc(c.phone||'')}"></div>
+      <div class="labelled span-3"><label>Bakiye</label><input class="input" readonly value="${fmt}"></div></div>
+      <div id="ceBankBox" class="card" style="margin-top:12px"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:8px;flex-wrap:wrap"><small class="muted">Bakiyesi olan cari silinemez (önce Cari Temizleme ile sıfırlayın).</small><button class="btn btn-danger" id="ceDelete" type="button" style="background:#d92d20;color:#fff">🗑 Cariyi Sil</button></div>`,()=>{
+      const name=document.getElementById('ceName').value.trim(),code=document.getElementById('ceCode').value.trim(),type=document.getElementById('ceType').value;
+      if(!name)return toast('Hesap tanımı boş olamaz','err');
+      if(code&&state.customers.some(x=>x.id!==c.id&&String(x.code||'')===code))return toast(`${code} kodu başka bir caride kullanılıyor`,'err');
+      const link=document.getElementById('ceLink')?.checked;
+      if(type==='Banka'&&link&&!linkedBankForCari({...c,type:'Banka'})){
+        const bid=uid('BNK');
+        state.bankAccounts.push({id:bid,customerId:c.id,bank:name,name:'Banka Hesabı',iban:'',currency:'TL',balance:Number(c.tlBalance||0),accountingNature:'Varlık',posEnabled:document.getElementById('cePos').value!=='0',posCommission:Number(document.getElementById('ceCommission').value||0),valuationDays:Math.max(0,Number(document.getElementById('ceValor').value||0)),commissionAccount:'K.KARTI KOMİSYONU'});
+        c.financeAccountId=bid;
+        audit(`${name} carisi banka hesabına bağlandı (TL bakiye ${money(c.tlBalance||0)} hesaba taşındı)`,'Kasa/Finans');
+      }
+      const old=c.name;c.name=name;c.code=code;c.type=type;c.phone=document.getElementById('cePhone').value.trim();
+      const b=linkedBankForCari(c);if(b)b.bank=name;
+      audit(`Cari kartı güncellendi: ${old}${old!==name?' → '+name:''}`,'Cari');closeModal();save();render();toast('Cari kartı kaydedildi');
+    },'KAYDET');
+    const box=document.getElementById('ceBankBox'),typeEl=document.getElementById('ceType');
+    const drawBank=()=>{
+      if(typeEl.value!=='Banka'){box.style.display='none';return;}box.style.display='';
+      if(bank){box.innerHTML=`<div class="section-head"><h3>Banka hesabı</h3><span class="badge green">BAĞLI</span></div><div class="muted" style="font-size:13px">Satış ekranında <b>Kredi Kartı</b>${bank.posEnabled===false?' (POS pasif)':''} ve <b>Havale / EFT</b> seçeneklerinde görünür. Komisyon %${Number(bank.posCommission||0).toFixed(2)} · Valör ${Number(bank.valuationDays||0)} gün.</div><button class="btn btn-outline" id="ceBankSettings" type="button" style="margin-top:8px">Komisyon / POS Ayarları</button>`;
+        document.getElementById('ceBankSettings')?.addEventListener('click',()=>openBankEditModal(bank.id));return;}
+      box.innerHTML=`<div class="section-head"><h3>Banka hesabı</h3><span class="badge gold">BAĞLI DEĞİL</span></div>
+        <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="ceLink" checked> Bu cariyi banka hesabı olarak kullan (satış ekranında <b>Kredi Kartı</b> ve <b>Havale / EFT</b>'de görünsün)</label>
+        <div class="form-grid" style="margin-top:8px"><div class="labelled"><label>Kart / POS Komisyon %</label><input id="ceCommission" class="input" type="number" step="0.01" min="0" value="0"></div><div class="labelled"><label>Kredi kartında</label><select id="cePos" class="select"><option value="1">Görünsün</option><option value="0">Görünmesin (yalnız havale)</option></select></div><div class="labelled"><label>POS Valör Günü</label><input id="ceValor" class="input" type="number" step="1" min="0" value="0"></div></div>
+        <div class="muted" style="font-size:12px;margin-top:6px">Carinin TL bakiyesi (${money(c.tlBalance||0)}) banka hesabının bakiyesi olur; toplamlar değişmez.</div>`;};
+    typeEl.addEventListener('change',drawBank);drawBank();
+    document.getElementById('ceDelete')?.addEventListener('click',()=>deleteCariV7(c.id));
+  }
+  function deleteCariV7(id){
+    const c=state.customers.find(x=>x.id===id);if(!c)return;
+    if(!canDeleteDefinitions())return toast('Bu kullanıcı cari silemez','err');
+    if(c.id==='CASH'||c.sysKeyV7)return toast('Sistem carisi silinemez','err');
+    if(Object.keys(cariBalancesOfV7(c)).length)return toast('Bakiyesi olan cari silinemez. Önce bakiyeyi kapatın (Cari Temizleme).','err');
+    const sales=(state.sales||[]).filter(s=>s.customerId===c.id).length;
+    if(sales)return toast(`Bu cariye bağlı ${sales} satış fişi var; cari silinemez.`,'err');
+    const bank=linkedBankForCari(c);
+    if(bank&&((state.financeMoves||[]).some(x=>x.accountKind==='Banka'&&x.accountId===bank.id)||Math.abs(Number(bank.balance||0))>.0001))return toast('Bağlı banka hesabının hareketi var; cari silinemez.','err');
+    const moves=(state.customerMoves||[]).filter(m=>m.customerId===c.id).length;
+    if(!confirm(`${c.name} carisi silinsin mi?${moves?`\nBu cariye ait ${moves} eski hareket de silinecek (bakiye 0).`:''}`))return;
+    state.customers=state.customers.filter(x=>x.id!==c.id);
+    state.customerMoves=(state.customerMoves||[]).filter(m=>m.customerId!==c.id);
+    if(bank)state.bankAccounts=state.bankAccounts.filter(x=>x.id!==bank.id);
+    audit(`${c.name} carisi silindi (${moves} hareket)`,'Cari');closeModal();save();render();toast('Cari silindi');
+  }
   function bindCustomers(){
     document.getElementById('systemCariV7Btn')?.addEventListener('click',openSystemCariV7);
     document.getElementById('cariCleanupV7')?.addEventListener('click',openCariCleanupV7);
@@ -6204,6 +6260,7 @@ function stockSummaryView(){
     document.querySelectorAll('[data-cari-view]').forEach(b=>b.addEventListener('click',()=>{cariView=b.dataset.cariView;render();}));
     document.querySelectorAll('[data-cari-move]').forEach(b=>b.addEventListener('click',()=>openCariMove(b.dataset.cariMove)));
     document.querySelectorAll('[data-cari-detail]').forEach(b=>b.addEventListener('click',()=>openCariDetail(b.dataset.cariDetail)));
+    document.querySelectorAll('[data-cari-edit]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();openCariCardEditV7(b.dataset.cariEdit);}));
     document.querySelectorAll('[data-cari-all-delete]').forEach(b=>b.addEventListener('click',()=>deleteAnyCariMove(b.dataset.cariAllDelete)));
     const apply=()=>document.querySelectorAll('#allCariMovesTable tbody tr[data-search]').forEach(r=>{const q=(document.getElementById('cariMoveSearch')?.value||'').toLocaleLowerCase('tr-TR'),acct=document.getElementById('cariMoveAccountType')?.value||'',cid=document.getElementById('cariMoveCustomer')?.value||'',typ=document.getElementById('cariMoveType')?.value||'',unit=document.getElementById('cariMoveUnit')?.value||'';r.style.display=(!q||r.dataset.search.toLocaleLowerCase('tr-TR').includes(q))&&(!acct||r.dataset.customerType===acct)&&(!cid||r.dataset.customer===cid)&&(!typ||r.dataset.type===typ)&&(!unit||r.dataset.unit===unit)?'':'none';});
     document.getElementById('cariMoveSearch')?.addEventListener('input',apply); document.getElementById('cariMoveAccountType')?.addEventListener('change',apply); document.getElementById('cariMoveCustomer')?.addEventListener('change',apply); document.getElementById('cariMoveType')?.addEventListener('change',apply); document.getElementById('cariMoveUnit')?.addEventListener('change',apply);
