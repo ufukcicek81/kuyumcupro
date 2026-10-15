@@ -156,3 +156,38 @@ test('Pusula bakiye listesi: FIRMA UNVANI, TL., CEY sütunları; iç hesaplar Ö
   assert.deepEqual(r.customers[1].balances, { HAS: -3.5, TL: 900, CEY: 18 });
   assert.deepEqual(r.customers.map((c) => c.type), ['Özel', 'Özel']);
 });
+
+test('özel ürünler: TL/USD fiyatlar okunur, satış birimi grup ara toplamından düzeltilir', () => {
+  const H = ['URUN KODU ', 'AYAR ', 'MIKTAR ', 'HAS ', 'ISCILIK ', 'BIRIM ', 'MALIYET ', 'SAT.FİYATI ', 'MODEL ', 'Grup ', 'Kod '];
+  const rows = [H,
+    ['SAA0000001 ', ' ', 1, ' ', ' ', 'USD ', 20, 44, ' ', 'SAA ', 1],
+    ['SAA0000002 ', ' ', 1, ' ', ' ', 'USD ', 30, 1500, ' ', 'SAA ', 2],   // satışı aslında TL
+    ['SAA0000003 ', ' ', 1, ' ', ' ', 'USD ', 25, 55, ' ', 'SAA ', 3],
+    ['CASIO 3 Adet ', ' ', 3, ' ', ' ', 'USD ', 75, 1500, 'TL. ', ' '],
+    [' ', ' ', ' ', ' ', ' ', ' ', ' ', 99, 'USD ', ' '],
+    ['TOPLAM MLYT ', ' ', ' ', ' ', ' ', 'USD ', 75, ' '],
+    ['TOPLAM SATIŞ ', ' ', ' ', ' ', ' ', 'USD ', ' ', 99],
+    ['TOPLAM SATIŞ ', ' ', ' ', ' ', ' ', 'TL. ', ' ', 1500],
+  ];
+  const d = P.detect(rows, 'barcode');
+  const r = P.buildSpecialStocks(rows, d.headerIndex, d.mapping, { period: 2026 });
+  assert.equal(r.stocks.length, 3);
+  assert.deepEqual(r.stocks.map((x) => [x.barcode, x.priceCurrency, x.saleCurrency]), [['SAA0000001', 'USD', 'USD'], ['SAA0000002', 'USD', 'TL'], ['SAA0000003', 'USD', 'USD']]);
+  assert.deepEqual(r.totals.sale, r.fileTotals.sale);
+  assert.deepEqual(r.totals.cost, r.fileTotals.cost);
+  assert.equal(r.stocks[0].name, 'SAAT'); assert.equal(r.stocks[0].specialV7, true);
+  assert.equal(r.currencyFixes.length, 1); assert.equal(r.currencyFixes[0].unique, true);
+});
+
+test('Pusula barkodlu: gerçek işçilik maliyet − has; gram başı işçilik tanınır', () => {
+  const rows = [['URUN KODU', 'AYAR', 'MIKTAR', 'HAS', 'ISCILIK', 'BIRIM', 'MALIYET', 'SAT.FİYATI', 'Grup', 'Kod'],
+    ['BIL0000132', 585, 4.05, 2.37, 0.13, 'HAS', 2.9, 4.35, 'BIL', 132],
+    ['ALY0001265', 585, 5.25, 3.07, 0.5, 'HAS', 3.57, 6.43, 'ALY', 1265],
+    ['2 Adet', '', 9.3, 5.44, 0.63, '', 6.47, '']];
+  const d = P.detect(rows, 'barcode');
+  const r = P.buildBarcodeStocks(rows, d.headerIndex, d.mapping, {});
+  assert.equal(r.stocks[0].workmanshipTotalHas, 0.53); assert.equal(r.stocks[0].workmanshipMode, 'Gram İşçilik'); assert.equal(r.stocks[0].workmanshipEntryValue, 0.13);
+  assert.equal(r.stocks[1].workmanshipTotalHas, 0.5); assert.equal(r.stocks[1].workmanshipMode, 'Birim İşçilik');
+  assert.deepEqual(P.fileGrandTotal(rows, d.mapping), { count: 2, gram: 9.3, line: 4 });
+  assert.equal(P.looksTruncated(rows, d.headerIndex), false);
+});

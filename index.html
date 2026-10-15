@@ -2532,7 +2532,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const entryUnit=isBarcode?'GR':(openLooksGram?'GR':(openItem?.unit||''));
     const entryAmount=isBarcode?stockAmount(barcodeItem):(openItem?(openItem.unit==='ADET'?1:Math.min(1,Number(openItem.amount||0))):'');
     const entryKarat=isBarcode?(barcodeItem.purity||barcodeItem.karat||''):(openItem?.purity||'');
-    const entryPriceTl=isBarcode?(Number(barcodeItem.saleHas||stockCounterHas(barcodeItem)||0)*Number(state.prices.has.sell||0)):(openItem?openStockSaleDefaultPrice(openItem,1):0);
+    const entryPriceTl=isBarcode?(barcodeItem.specialV7&&Number(barcodeItem.saleNative||0)?specialSaleTlV7(barcodeItem):Number(barcodeItem.saleHas||stockCounterHas(barcodeItem)||0)*Number(state.prices.has.sell||0)):(openItem?openStockSaleDefaultPrice(openItem,1):0);
     const entryPrice=saleNativeFromTl(entryPriceTl,saleCur);
     const entryPayable=isBarcode?entryPrice:(Number(entryAmount||0)*Number(entryPrice||0));
     const entryPayableTl=entryPayable*saleRate;
@@ -3198,15 +3198,19 @@ function stockSummaryView(){
     open.forEach(x=>{const q=n(x.amount),h=n(x.hasWeight),w=n(x.workmanshipTotalHas);tq+=q;th+=h;tw+=w;
       rows.push({kind:'open',cells:[x.name,n(x.displayAyar||x.purity),q,h,w,'HAS',q?w/q:0,0,q?(h+w)/q*1000:'']});});
     rows.push({kind:'total',cells:['TOPLAM ALTIN','',tq,th,tw,'','','','']});
-    const by={};activeStock().forEach(x=>{const p=Math.round(n(x.purity));const k=String(p);if(!by[k])by[k]={p,q:0,h:0,w:0,c:0};by[k].q+=stockAmount(x);by[k].h+=stockHas(x);by[k].w+=stockWorkmanshipHas(x);by[k].c++;});
+    const by={};activeStock().filter(x=>!isSpecialStockV7(x)).forEach(x=>{const p=Math.round(n(x.purity));const k=String(p);if(!by[k])by[k]={p,q:0,h:0,w:0,c:0};by[k].q+=stockAmount(x);by[k].h+=stockHas(x);by[k].w+=stockWorkmanshipHas(x);by[k].c++;});
     let bq=0,bh=0,bw=0,bc=0;
     Object.values(by).sort((a,b)=>String(PURITY_LABEL_V7[a.p]||a.p).localeCompare(String(PURITY_LABEL_V7[b.p]||b.p),'tr',{numeric:true})).forEach(x=>{bq+=x.q;bh+=x.h;bw+=x.w;bc+=x.c;rows.push({kind:'barcode',purity:x.p,cells:[PURITY_LABEL_V7[x.p]||(x.p+' MİLYEM'),x.p,x.q,x.h,x.w,'HAS',`${x.c} ADET`,'','']});});
     rows.push({kind:'total',cells:['TOPLAM BARKOD','',bq,bh,bw,'',`${bc} ADET`,'','']});
     rows.push({kind:'gap'});
     let sq=0,sh=0;(state.scrapStocks||[]).filter(x=>x.period===period).forEach(x=>{sq+=n(x.amount);sh+=n(x.hasWeight);rows.push({kind:'scrap',cells:[x.name,n(x.milyem),n(x.amount),n(x.hasWeight),'','','','','']});});
     rows.push({kind:'total',cells:['TOPLAM HURDA','',sq,sh,'','','','','']});
-    const sp=(state.specialProducts||[]).filter(x=>!x.period||x.period===period);
-    if(sp.length){rows.push({kind:'gap'});rows.push({kind:'special',cells:['ÖZEL ÜRÜN','',sp.length,'','','','','','']});}
+    // Özel ürünler (barkodlu, TL/USD/HAS fiyatlı) ve Pusula stok özetindeki barkodsuz özel ürün kalemi.
+    const sp=activeStock().filter(isSpecialStockV7),spBy={};sp.forEach(x=>{const c=String(x.priceCurrency||'TL').toUpperCase();if(!spBy[c])spBy[c]={n:0,cost:0};spBy[c].n++;spBy[c].cost+=n(x.costNative??x.costTl??0);});
+    const lot=state.meta?.pusulaSpecialLotV7;
+    if(sp.length||lot){rows.push({kind:'gap'});
+      if(lot)rows.push({kind:'special',cells:['ÖZEL ÜRÜN','',n(lot.qty),'',n(lot.cost),lot.currency||'USD',n(lot.avg),'','']});
+      Object.keys(spBy).sort().forEach(c=>rows.push({kind:'special',cells:['ÖZEL ÜRÜN (BARKODLU)','',spBy[c].n,'',spBy[c].cost,c==='TL'?'TL.':c,spBy[c].n?spBy[c].cost/spBy[c].n:0,'','']}));}
     rows.push({kind:'gap'});
     rows.push({kind:'kasa',cells:['KASA','','BORÇ','ALACAK','','','','','']});
     const cur={};(state.cashAccounts||[]).forEach(a=>{const c=String(a.currency||'TL').toUpperCase();cur[c]=(cur[c]||0)+n(a.balance);});
@@ -3226,7 +3230,7 @@ function stockSummaryView(){
     return `<table class="gold-stock-v7"><tbody>${rows.map(r=>{
       if(r.kind==='gap')return '<tr class="gap"><td colspan="9">&nbsp;</td></tr>';
       const tag=r.kind==='head'?'th':'td';
-      return `<tr class="${r.kind}"${r.purity?` data-gold-purity="${r.purity}" title="Barkodlu ürün listesi"`:''}>${r.cells.map((c,i)=>`<${tag} class="${i>0&&i!==5?'num':''}">${goldStockFmtV7(c,i)}</${tag}>`).join('')}</tr>`;}).join('')}</tbody></table>`;
+      return `<tr class="${r.kind}"${r.purity?` data-gold-purity="${r.purity}" title="Barkodlu ürün listesi"`:''}>${r.cells.map((c,i)=>`<${tag} class="${i>0&&i!==5?'num':''}">${r.kind==='special'&&i===6&&typeof c==='number'?c.toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}):goldStockFmtV7(c,i)}</${tag}>`).join('')}</tr>`;}).join('')}</tbody></table>`;
   }
   function openGoldStocksV7(){
     const rows=goldStockRowsV7();
@@ -3354,8 +3358,14 @@ function stockSummaryView(){
     document.getElementById('sysEnableV7')?.addEventListener('click',()=>{if(!confirm('Bundan sonraki gider, komisyon, iskonto ve kâr/zarar kayıtları sistem carilerine otomatik yazılsın mı?'))return;enableSystemCariV7(now());audit('Sistem carileri (Pusula muhasebe mantığı) otomatik kaydı açıldı','Cari');save();closeModal();toast('Otomatik sistem kaydı açıldı');openSystemCariV7();});
     document.getElementById('sysCloseV7')?.addEventListener('click',()=>{const y=prompt('Kapatılacak dönem (yıl):',String(year));if(!y||!/^\d{4}$/.test(y.trim()))return;if(!confirm(`Gider, komisyon, iskonto ve kâr/zarar hesaplarının bakiyesi "DONEM K/Z ${y.trim()}" carisine aktarılacak ve bu hesaplar sıfırlanacak. Devam edilsin mi?`))return;const r=closeSystemPeriodV7(y.trim());audit(`${y.trim()} dönem K/Z kapanışı · ${r.n} bakiye ${r.target.name} carisine aktarıldı`,'Cari');save();closeModal();toast(`Dönem kapanışı yapıldı → ${r.target.name}`);});
   }
+  function isSpecialStockV7(x){return !!(x&&(x.specialV7||x.source==='Özel Ürün'));}
+  /* Özel ürün fiyatı TL/USD/HAS cinsinden saklanır; TL karşılığı o günün kuruyla hesaplanır. */
+  function nativeToTlV7(amount,cur,side){cur=String(cur||'TL').toUpperCase();amount=Number(amount||0);if(cur==='TL')return amount;if(cur==='HAS')return amount*Number(state.prices.has?.[side]||0);return amount*Number(currencyTlRate(cur,side)||0);}
+  function specialSaleTlV7(x){return nativeToTlV7(x.saleNative,x.saleCurrency||x.priceCurrency,'sell');}
+  function specialCostHasV7(x){const tl=nativeToTlV7(x.costNative,x.priceCurrency,'buy');return String(x.priceCurrency).toUpperCase()==='HAS'?Number(x.costNative||0):tl/Math.max(1,Number(state.prices.has?.buy||1));}
   function pusulaOldCountV7(mode,period){
-    if(mode==='barcode')return state.stocks.filter(x=>x.period===period&&x.status!=='Satıldı').length;
+    if(mode==='special')return state.stocks.filter(x=>x.period===period&&x.status!=='Satıldı'&&isSpecialStockV7(x)).length;
+    if(mode==='barcode')return state.stocks.filter(x=>x.period===period&&x.status!=='Satıldı'&&!isSpecialStockV7(x)).length;
     if(mode==='open')return (state.openStocks||[]).filter(x=>x.period===period).length;
     return (state.customers||[]).length;
   }
@@ -3450,6 +3460,7 @@ function stockSummaryView(){
       });
     }
     state.meta=state.meta||{};
+    const lot=(sum.skipped||[]).find(x=>/ozel/i.test(AsilPusulaImport.norm(x.name)));state.meta.pusulaSpecialLotV7=lot?{qty:lot.qty,cost:lot.cost,avg:lot.avg,currency:lot.currency,at:now()}:null;
     state.meta.pusulaBarcodeSummaryV7={count:sum.barcodeSummary.count,gram:sum.barcodeSummary.gram,has:sum.barcodeSummary.has,at:now(),file:fileName||''};
     state.meta.stockReplaceV7={id:uid('SR'),at:now(),mode:'open',count:open.length,removed:existing.length,file:fileName||''};
     return {open:open.length,removed:existing.length,scrap:scrapCount,cash:cashMoves};
@@ -3457,7 +3468,9 @@ function stockSummaryView(){
   /* Barkodlu dosya eksik mi? Son satır yarımsa veya stok özetindeki barkodlu toplamla tutmuyorsa uyarır. */
   function barcodeImportProblemsV7(rows,headerIndex,stocks){
     const P=AsilPusulaImport,out=[];
-    if(P.looksTruncated(rows,headerIndex))out.push('Dosyanın son satırı yarım; Excel\'e aktarım yarıda kesilmiş görünüyor.');
+    const grand=P.fileGrandTotal(rows);
+    if(grand&&grand.count&&grand.count!==stocks.length)out.push(`Dosyanın sonundaki toplam ${grand.count} adet diyor; okunabilen ürün ${stocks.length}.`);
+    else if(!grand&&P.looksTruncated(rows,headerIndex))out.push('Dosyanın son satırı yarım; Excel\'e aktarım yarıda kesilmiş görünüyor.');
     const ref=state.meta?.pusulaBarcodeSummaryV7;
     if(ref&&ref.count){
       const gram=stocks.reduce((n,x)=>n+Number(x.amount||0),0);
@@ -3473,7 +3486,7 @@ function stockSummaryView(){
     const ctx={rows:null,sheets:[],wb:null,detect:null,result:null,balanceCols:{}};
     modal('Pusula\'dan Excel Aktarım',`<div class="form-grid">
       <div class="notice span-4" id="piNotice"></div>
-      <div class="labelled span-2"><label>Aktarılacak veri</label><select id="piMode" class="select"><option value="barcode">Barkodlu stoklar</option><option value="open">Barkodsuz stok + hurda + kasa (Pusula stok özeti)</option><option value="cari">Güncel cari bakiyeleri</option></select></div>
+      <div class="labelled span-2"><label>Aktarılacak veri</label><select id="piMode" class="select"><option value="barcode">Barkodlu stoklar</option><option value="open">Barkodsuz stok + hurda + kasa (Pusula stok özeti)</option><option value="special">Özel ürünler (gümüş, saat, pırlanta, tesbih…)</option><option value="cari">Güncel cari bakiyeleri</option></select></div>
       <div class="labelled span-2"><label>Pusula Excel dosyası (.xlsx, .xls, .csv)</label><input id="piFile" type="file" class="input" accept=".xlsx,.xls,.csv"></div>
       <div class="labelled span-2" id="piSheetWrap" style="display:none"><label>Sayfa</label><select id="piSheet" class="select"></select></div>
       <div class="span-4" id="piCariOpts" style="display:none"><div class="form-grid">
@@ -3508,7 +3521,7 @@ function stockSummaryView(){
       const oldCount=pusulaOldCountV7(mode,period),zero=document.getElementById('piZero')?.checked;
       let question;
       if(mode==='cari'){const pl=planCariImportV7(items,zero);question=`${items.length} carinin bakiyesi Excel'deki değerlere eşitlenecek.\n${pl.created} yeni cari açılacak, ${pl.updated} carinin bakiyesi değişecek${zero?`, Excel'de olmayan ${pl.zeroed} carinin bakiyesi sıfırlanacak`:''}.\nFarklar "DEVİR / AÇILIŞ" hareketi olarak yazılır.`;}
-      else question=`${period} dönemindeki ${oldCount} ${mode==='barcode'?'barkodlu':'barkodsuz'} stok SİLİNECEK ve Excel'deki ${items.length} stok yüklenecek.`;
+      else question=`${period} dönemindeki ${oldCount} ${mode==='barcode'?'barkodlu altın':mode==='special'?'özel ürün':'barkodsuz'} stok SİLİNECEK ve Excel'deki ${items.length} kayıt yüklenecek.`;
       if(!confirm(question+(r.errors.length?`\n${r.errors.length} hatalı satır atlanacak.`:'')+'\n\nDevam edilsin mi?'))return;
       const btn=document.getElementById('modalConfirm');if(btn){btn.disabled=true;btn.textContent='AKTARILIYOR…';}
       try{
@@ -3522,14 +3535,16 @@ function stockSummaryView(){
           msg=`Cari bakiyeleri aktarıldı: ${res.created} yeni, ${res.updated} güncellendi${zero?`, ${res.zeroed} sıfırlandı`:''}`;
           audit(`Pusula Excel cari bakiye aktarımı · ${items.length} cari · ${res.created} yeni · ${res.updated} güncellendi · ${res.zeroed} sıfırlandı · ${res.moves} devir hareketi · ${ctx.fileName||''}`,'Cari');
         }else{
-          if(mode==='barcode'){
-            const keep=state.stocks.filter(x=>!(x.period===period&&x.status!=='Satıldı')),ids=new Set(keep.map(x=>x.id));
+          if(mode==='barcode'||mode==='special'){
+            const keep=state.stocks.filter(x=>!(x.period===period&&x.status!=='Satıldı'&&(mode==='special'?isSpecialStockV7(x):!isSpecialStockV7(x)))),ids=new Set(keep.map(x=>x.id));
+            if(mode==='special'){items.forEach(x=>{x.costHas=specialCostHasV7(x);x.saleHas=specialSaleTlV7(x)/Math.max(1,Number(state.prices.has?.sell||1));});
+              state.specialProducts=(state.specialProducts||[]).filter(x=>!(x.period===period&&x.status!=='Satıldı'&&x.pusulaV7)).concat(items.map(x=>({id:'SP-'+x.barcode,period,type:x.name,name:x.name,code:x.pusulaCode,barcode:x.barcode,weight:x.amount,costNative:x.costNative,costCurrency:x.priceCurrency,saleNative:x.saleNative,saleCurrency:x.saleCurrency,stockId:x.id,status:'Stokta',date:now(),pusulaV7:true})));}
             items.forEach(x=>{if(ids.has(x.id))x.id=x.id+'-'+Date.now().toString(36);});
             state.stocks=keep.concat(items);
           }else state.openStocks=(state.openStocks||[]).filter(x=>x.period!==period).concat(items);
           state.meta=state.meta||{};state.meta.stockReplaceV7={id:uid('SR'),at:now(),mode,count:items.length,removed:oldCount,file:ctx.fileName||''};
-          msg=`${items.length} stok yüklendi, ${oldCount} eski stok silindi`;
-          audit(`Pusula Excel ${mode==='barcode'?'barkodlu':'barkodsuz'} stok yükleme · ${oldCount} eski stok silindi · ${items.length} stok yüklendi · ${ctx.fileName||''}`,'Stok');
+          msg=`${items.length} ${mode==='special'?'özel ürün':'stok'} yüklendi, ${oldCount} eski kayıt silindi`;
+          audit(`Pusula Excel ${mode==='barcode'?'barkodlu':mode==='special'?'özel ürün':'barkodsuz'} stok yükleme · ${oldCount} eski stok silindi · ${items.length} stok yüklendi · ${ctx.fileName||''}`,'Stok');
         }
         save();closeModal();render();toast(msg);
       }catch(e){if(btn){btn.disabled=false;btn.textContent='AKTARIMI ONAYLA';}toast('Aktarım yapılamadı: '+(e?.message||e),'err');}
@@ -3542,6 +3557,8 @@ function stockSummaryView(){
       if(m!=='barcode')document.getElementById('piForceWrap').style.display='none';
       document.getElementById('piNotice').innerHTML=m==='cari'
         ?'<b>Cari bakiyeleri:</b> Excel\'deki her carinin bakiyesi Excel\'deki değere eşitlenir; fark "DEVİR / AÇILIŞ" hareketi olarak yazılır. Bulunamayan cari yeni açılır. Cari kartları silinmez. Aktarımdan önce otomatik yedek alınır.'
+        :m==='special'
+        ?`<b>Özel ürünler:</b> Onaylanınca <b>${period}</b> dönemindeki özel ürünler (altın dışı barkodlu ürünler) silinir ve Excel'dekiler yüklenir. Maliyet ve satış fiyatları TL/USD/HAS cinsinden saklanır; satışta o günün kuruyla TL'ye çevrilir. Altın barkodlu stoklara dokunulmaz.`
         :m==='open'
         ?`<b>Pusula stok özeti:</b> Onaylanınca <b>${period}</b> dönemindeki barkodsuz (altın/ziynet) stoklar silinir ve stok özetindekiler yüklenir; seçerseniz hurda ve kasa bakiyeleri de eşitlenir. Mevcut ürünlerin birim gramı ve maliyet esası korunur. Önce bu dosyayı aktarmanız önerilir: barkodlu toplamı kontrol için kullanılır.`
         :`<b>Dikkat:</b> Onaylanınca <b>${period}</b> dönemindeki barkodlu stoklar silinir ve Excel'deki stoklar yüklenir. Satılmış ürün kayıtları satış geçmişi için korunur. Aktarımdan önce otomatik yedek alınır.`;
@@ -3550,11 +3567,11 @@ function stockSummaryView(){
     const rebuild=()=>{
       if(!ctx.rows)return;
       if(modeEl.value==='open'&&ctx.summary){renderSummary();return;}
-      const mode=modeEl.value,d=ctx.detect,fields=P.MODES[mode],isCari=mode==='cari',isB=mode==='barcode';
+      const mode=modeEl.value,d=ctx.detect,fields=P.MODES[mode==='special'?'barcode':mode],isCari=mode==='cari',isB=mode==='barcode',isSp=mode==='special';
       if(isCari){ctx.result=P.buildCariBalances(ctx.rows,d.headerIndex,d.mapping,ctx.balanceCols,{positiveIsDebt:document.getElementById('piSign').value==='debt'});ctx.cariMatches=matchCarisForImportV7(ctx.result.customers);}
       else{
         const groupNames={};state.stocks.forEach(x=>{if(x.group&&x.category&&x.category!==x.group)groupNames[x.group]=x.category;});
-        ctx.result=isB?P.buildBarcodeStocks(ctx.rows,d.headerIndex,d.mapping,{period,groupNames}):P.buildOpenStocks(ctx.rows,d.headerIndex,d.mapping,{period});
+        ctx.result=mode==='special'?P.buildSpecialStocks(ctx.rows,d.headerIndex,d.mapping,{period}):isB?P.buildBarcodeStocks(ctx.rows,d.headerIndex,d.mapping,{period,groupNames}):P.buildOpenStocks(ctx.rows,d.headerIndex,d.mapping,{period});
       }
       ctx.problems=isB?barcodeImportProblemsV7(ctx.rows,d.headerIndex,ctx.result.stocks):[];
       document.getElementById('piForceWrap').style.display=ctx.problems.length?'':'none';
@@ -3565,9 +3582,10 @@ function stockSummaryView(){
         mapHtml+=`<div class="span-4" style="margin-top:6px"><b>Bakiye sütunları</b> <span class="muted">(her sütunun birimini ve borç/alacak yönünü seçin)</span></div>`+cols.filter(c=>!used.has(c.i)).map(c=>{const sp=ctx.balanceCols[c.i]||{};return `<div class="labelled"><label>${esc(c.h)}</label><div style="display:flex;gap:4px"><select class="select" data-pi-bal-unit="${c.i}"><option value="">— bakiye değil —</option>${P.BALANCE_UNITS.map(u=>`<option ${sp.unit===u?'selected':''}>${u}</option>`).join('')}</select><select class="select" data-pi-bal-sign="${c.i}" style="max-width:110px"><option value="1" ${sp.sign!==-1?'selected':''}>Borç/Net</option><option value="-1" ${sp.sign===-1?'selected':''}>Alacak</option></select></div></div>`;}).join('');
       }
       const prev=items.slice(0,6);
-      const head=isCari?'<th>Kod</th><th>Cari</th><th>Tür</th><th>Excel bakiyesi</th><th>Programdaki bakiye</th>':isB?'<th>Barkod</th><th>Ürün</th><th>Ayar</th><th class="num">Gram</th><th class="num">Has</th><th class="num">Maliyet HAS</th><th class="num">Satış HAS</th>':'<th>Kod</th><th>Ürün</th><th>Ayar</th><th class="num">Miktar</th><th>Birim</th><th class="num">Has</th>';
+      const head=isSp?'<th>Barkod</th><th>Ürün</th><th class="num">Gram</th><th class="num">Maliyet</th><th class="num">Satış</th>':isCari?'<th>Kod</th><th>Cari</th><th>Tür</th><th>Excel bakiyesi</th><th>Programdaki bakiye</th>':isB?'<th>Barkod</th><th>Ürün</th><th>Ayar</th><th class="num">Gram</th><th class="num">Has</th><th class="num">Maliyet HAS</th><th class="num">Satış HAS</th>':'<th>Kod</th><th>Ürün</th><th>Ayar</th><th class="num">Miktar</th><th>Birim</th><th class="num">Has</th>';
       const body=prev.map(x=>{
         if(isCari){const c=findCariForImportV7(x,ctx.cariMatches);return `<tr><td>${esc(x.code)}</td><td>${esc(x.name)}${c?'':' <span class="badge gold">YENİ</span>'}</td><td>${esc(x.type)}</td><td>${fmtBal(x.balances)}</td><td>${c?fmtBal(cariBalancesOfV7(c)):'—'}</td></tr>`;}
+        if(isSp)return `<tr><td>${esc(x.barcode)}</td><td>${esc(x.name)}</td><td class="num">${qty(x.amount)}</td><td class="num">${qty(x.costNative)} ${esc(x.priceCurrency)}</td><td class="num">${qty(x.saleNative)} ${esc(x.saleCurrency)}</td></tr>`;
         if(isB)return `<tr><td>${esc(x.barcode)}</td><td>${esc(x.name)}</td><td>${esc(x.karat)}</td><td class="num">${qty(x.amount)}</td><td class="num">${qty(x.hasWeight)}</td><td class="num">${qty(x.costHas)}</td><td class="num">${qty(x.saleHas)}</td></tr>`;
         return `<tr><td>${esc(x.pusulaCode)}</td><td>${esc(x.name)}</td><td>${esc(String(x.purity))}</td><td class="num">${qty(x.amount)}</td><td>${esc(x.unit)}</td><td class="num">${qty(x.hasWeight)}</td></tr>`;
       }).join('');
@@ -3575,6 +3593,10 @@ function stockSummaryView(){
       if(isCari){
         const pl=planCariImportV7(items,document.getElementById('piZero').checked),tot={};items.forEach(x=>Object.entries(x.balances).forEach(([u,v])=>{tot[u]=(tot[u]||0)+v;}));
         summary=`<b>Excel'de:</b> ${items.length} cari · <b>Yeni:</b> ${pl.created} · <b>Bakiyesi değişecek:</b> ${pl.updated}${document.getElementById('piZero').checked?` · <b>Sıfırlanacak:</b> ${pl.zeroed}`:''}<br><b>Toplam:</b> ${fmtBal(tot)}${!Object.keys(ctx.balanceCols).length?'<br><span style="color:var(--red,#c33)"><b>Bakiye sütunu tanınamadı; aşağıdan seçin.</b></span>':''}`;
+      }else if(isSp){
+        const fm=o=>Object.entries(o||{}).map(([c,v])=>`${qty(v)} ${esc(c)}`).join(' · ')||'—',same=(a,b)=>Object.keys({...a,...b}).every(k=>Math.abs((a[k]||0)-(b[k]||0))<0.01);
+        const fx=r.currencyFixes||[],amb=fx.filter(f=>!f.unique),un=r.currencyUnresolved||[];
+        summary=`<b>Yüklenecek:</b> ${items.length} özel ürün · <b>Silinecek:</b> ${pusulaOldCountV7('special',period)} eski özel ürün<br><b>Maliyet:</b> ${fm(r.totals.cost)} ${Object.keys(r.fileTotals.cost).length?(same(r.totals.cost,r.fileTotals.cost)?'✓ Pusula toplamıyla aynı':'<span style="color:var(--red,#c33)">✗ Pusula: '+fm(r.fileTotals.cost)+'</span>'):''}<br><b>Satış:</b> ${fm(r.totals.sale)} ${Object.keys(r.fileTotals.sale).length?(same(r.totals.sale,r.fileTotals.sale)?'✓ Pusula toplamıyla aynı':'<span style="color:var(--red,#c33)">✗ Pusula: '+fm(r.fileTotals.sale)+'</span>'):''}${fx.length?`<br><span class="muted">Satış birimi grup ara toplamlarından düzeltildi: ${fx.length} grup${amb.length?` (${amb.length} grupta birden fazla eşleşme olası: ${amb.map(f=>esc(f.group)).join(', ')})`:''}</span>`:''}${un.length?`<br><span style="color:var(--red,#c33)">Çözülemeyen: ${un.map(u=>esc(u.group)).join(', ')} — bu gruptaki fiyatları ürün kartından kontrol edin.</span>`:''}`;
       }else{
         const totGram=items.reduce((n,x)=>n+Number(x.amount||0),0),totHas=items.reduce((n,x)=>n+Number(x.hasWeight||0),0);
         summary=`<b>Yüklenecek:</b> ${items.length} stok${isB?` · ${qty(totGram)} gr`:''} · ${qty(totHas)} HAS · <b>Silinecek:</b> ${pusulaOldCountV7(mode,period)} eski stok`;
@@ -3597,7 +3619,7 @@ function stockSummaryView(){
         <div style="margin-top:8px"><b>Hurda</b></div>${tb('<th>Hurda</th><th class="num">Milyem</th><th class="num">Gram</th><th class="num">Has</th>',sm.scrap.map(x=>`<tr><td>${esc(x.name)}</td><td class="num">${qty(x.milyem)}</td><td class="num">${qty(x.amount)}</td><td class="num">${qty(x.hasWeight)}</td></tr>`).join(''))}
         <div style="margin-top:8px"><b>Kasa</b></div>${tb('<th>Döviz</th><th class="num">Programda</th><th class="num">Pusula</th>',cashRows)}`;
     };
-    const redetect=()=>{if(modeEl.value==='open'&&ctx.summary){renderSummary();return;}ctx.detect=P.detect(ctx.rows,modeEl.value);ctx.balanceCols=modeEl.value==='cari'?P.detectBalances(ctx.detect.headers,ctx.detect.mapping):{};rebuild();};
+    const redetect=()=>{if(modeEl.value==='open'&&ctx.summary){renderSummary();return;}ctx.detect=P.detect(ctx.rows,modeEl.value==='special'?'barcode':modeEl.value);ctx.balanceCols=modeEl.value==='cari'?P.detectBalances(ctx.detect.headers,ctx.detect.mapping):{};rebuild();};
     const readSheet=()=>{
       const ws=ctx.wb.Sheets[sheetEl.value||ctx.sheets[0]];
       ctx.rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
@@ -7578,7 +7600,7 @@ function stockSummaryView(){
     const lastEnc=new Date(state.meta?.lastEncryptedBackup||0).getTime();
     if(Date.now()-lastEnc>7*86400000)setTimeout(()=>toast('Hatırlatma: Son 7 günde şifreli harici yedek alınmadı (Yedek · Bulut → Şifreli Yedek Kaydet)','info'),4000);
   }
-  function saleLineFromStockV5(s){const saleHas=Number(s.saleHas||stockCounterHas(s)||0),unitPrice=saleHas*Number(state.prices.has.sell||1);return {sourceType:'barcode',stockId:s.id,code:s.barcode||s.code,name:s.name||s.type,karat:String(s.purity||s.karat||''),weight:stockAmount(s),displayAmount:stockAmount(s),unit:'GR',qty:stockAmount(s),pieceCount:1,unitPrice,price:unitPrice,total:unitPrice,costHas:Number(s.costHas||0),saleHas,cost:Number(s.costHas||0)*Number(state.prices.has.buy||1),note:'Ürün değişimi'};}
+  function saleLineFromStockV5(s){const saleHas=s.specialV7&&Number(s.saleNative||0)?specialSaleTlV7(s)/Number(state.prices.has.sell||1):Number(s.saleHas||stockCounterHas(s)||0),unitPrice=saleHas*Number(state.prices.has.sell||1);return {sourceType:'barcode',stockId:s.id,code:s.barcode||s.code,name:s.name||s.type,karat:String(s.purity||s.karat||''),weight:stockAmount(s),displayAmount:stockAmount(s),unit:'GR',qty:stockAmount(s),pieceCount:1,unitPrice,price:unitPrice,total:unitPrice,costHas:Number(s.costHas||0),saleHas,cost:Number(s.costHas||0)*Number(state.prices.has.buy||1),note:'Ürün değişimi'};}
   function openExchangeV5(){
     if(!v5Guard('canReturn'))return;const sales=(state.sales||[]).filter(s=>s.period===state.activePeriod&&s.status==='Tamamlandı'&&(s.lines||[]).some(l=>l.stockId));if(!sales.length)return toast('Değişime uygun satış bulunamadı','err');
     const repl=activeStock();if(!repl.length)return toast('Yeni ürün için barkodlu stok yok','err');
