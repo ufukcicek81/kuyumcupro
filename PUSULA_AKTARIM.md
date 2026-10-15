@@ -98,6 +98,8 @@ altında stoklar, kur farkı, kâr/zarar (dönem ve TOPLAM) ve sermaye.
   GENEL GIDERLER, K.KARTI KOMISYONU, STOK DUZELTME, HURDA KAR/ZARAR → GIDER; KAR HESABI → KAR / ZARAR …),
   diğerleri cari türünden gruplanır. Pusula'dakinden farklı olanları **Hesap Grupları** ekranından düzeltin.
 - KASA grubu kasa hesaplarından, banka/POS'a bağlı cariler hesap bakiyesinden okunur (çift sayılmaz).
+- **📤 Excel'e Aktar:** bilançoyu Pusula'nın bilanço Excel'i ile aynı sütunlarda indirir; ayrıca cari bazında
+  detay (her carinin grubu, birimi, bakiyesi) ve karşılaştırma yüklüyse fark listesi sayfaları vardır.
 - **📥 Pusula bilançosu ile karşılaştır:** Pusula'daki bilançoyu Excel'e aktarıp seçin; satır satır fark tablosu çıkar.
 - Pusula'nın cari listesinde ILS sütunu yoktur; ILS bakiyeleri elle girilmelidir.
 - Çeyrek (CEY) bakiyesi çeyrek alış milyemiyle HAS'a çevrilir (Pusula 0 gösterir).

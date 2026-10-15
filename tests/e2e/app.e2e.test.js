@@ -499,6 +499,22 @@ test('bilanço Pusula düzeninde: kasa bir kez sayılır, hesap grubu değiştir
   const cmp = await p.innerText('#balResult');
   assert.match(cmp, /satır farklı/);
   assert.match(cmp, /Toplam HAS Alacağımız/);
+
+  // Excel'e aktar: Pusula düzeninde bilanço + cari detay + karşılaştırma; dosya bu programa geri okunabilir.
+  const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#balExcelV7')]);
+  const out = path.join(path.dirname(file), 'bizim-bilanco.xlsx');
+  await dl.saveAs(out);
+  const book = XLSX.readFile(out);
+  assert.deepEqual(book.SheetNames, ['Bilanço', 'Cari Detay', 'Karşılaştırma']);
+  const P = require('../../js/asil-pusula-import.js');
+  const aoa = XLSX.utils.sheet_to_json(book.Sheets['Bilanço'], { header: 1, defval: '' });
+  assert.equal(P.isBalanceSheet(aoa), true);
+  const back = P.parseBalanceSheet(aoa);
+  assert.ok(back.rows.some((r) => r.group === 'KASA' && r.unit === 'TL'));
+  assert.ok(back.rows.some((r) => r.group === 'PERSONEL'));
+  assert.ok(back.totals && back.capital.remaining !== undefined);
+  const detail = XLSX.utils.sheet_to_json(book.Sheets['Cari Detay'], { header: 1, defval: '' });
+  assert.ok(detail.some((r) => r[0] === 'KASA' && /kasa\/banka hesabından/.test(r[7])), 'KASA carisi detayda işaretli olmalı');
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
