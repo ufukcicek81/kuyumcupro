@@ -338,3 +338,58 @@ test('Pusula stok özeti açık stok, hurda ve kasayı aktarır; sonra eksik bar
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('sistem carileri: ziynet kârı KAR HESABI carisine bir kez yazılır, dönem kapanışı DONEM K/Z carisine aktarır', async () => {
+  const fb = createFakeFirebase();
+  const a = await newDevice(browser, appUrl, fb);
+  const b = await newDevice(browser, appUrl, fb);
+  a.removeAllListeners('dialog'); a.on('dialog', (d) => d.accept(d.type() === 'prompt' ? '2026' : undefined));
+  await a.click('[data-go="customers"]');
+  await a.click('#systemCariV7Btn');
+  await a.click('#sysEnableV7');
+  await a.waitForTimeout(500);
+  await a.click('#modalX');
+  // Ziynet satışı (kârlı)
+  await a.evaluate(() => document.querySelector('[data-route="dashboard"]')?.click());
+  await a.waitForSelector('[data-home-trade="Ziynet Satış"]');
+  await a.click('[data-home-trade="Ziynet Satış"]');
+  await a.fill('#stQty', '1'); await a.fill('#stPrice', '20000');
+  await a.click('#modalConfirm'); await a.waitForTimeout(300);
+  if (await a.$('#modalRoot #modalConfirm')) { await a.click('#modalConfirm').catch(() => {}); }
+  await a.waitForTimeout(8000);
+  const st = fb.db.state;
+  const kar = st.customers.find((c) => c.sysKeyV7 === 'kar');
+  assert.ok(kar, 'KAR HESABI carisi olmalı');
+  const karMoves = st.customerMoves.filter((m) => m.customerId === kar.id && m.sourceType === 'systemV7');
+  assert.equal(karMoves.length, 1, 'kâr bir kez yazılmalı (iki cihaz açıkken de)');
+  assert.ok(karMoves[0].credit > 0, 'kâr alacak olarak yazılır');
+  const ledger = st.customerMoves.filter((m) => m.customerId === kar.id).reduce((n, m) => n + Number(m.debit || 0) - Number(m.credit || 0), 0);
+  assert.ok(Math.abs(Number(kar.hasBalance || 0) - ledger) < 1e-6, 'bakiye = hareket toplamı');
+  // Dönem kapanışı
+  await a.evaluate(() => document.querySelector('[data-route="customers"]')?.click());
+  await a.waitForSelector('#systemCariV7Btn');
+  await a.click('#systemCariV7Btn');
+  await a.click('#sysCloseV7');
+  await a.waitForTimeout(6000);
+  const st2 = fb.db.state;
+  const kar2 = st2.customers.find((c) => c.sysKeyV7 === 'kar');
+  assert.equal(Math.round(Number(kar2.hasBalance || 0) * 1e6), 0, 'kapanıştan sonra KAR HESABI sıfır');
+  const donem = st2.customers.find((c) => /DONEM K\/Z 2026/.test(c.name));
+  assert.ok(donem && Number(donem.hasBalance) < 0, 'kâr DONEM K/Z 2026 carisine alacak olarak aktarılmalı');
+  assert.deepEqual([...a.errors, ...b.errors], []);
+  await a.context().close(); await b.context().close();
+});
+
+test('ALTIN STOKLARI penceresi F9 ile açılır; açık stok, barkodlu toplam ve kasa bölümleri vardır', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  await p.keyboard.press('F9');
+  await p.waitForSelector('table.gold-stock-v7');
+  const t = await p.innerText('table.gold-stock-v7');
+  for (const s of ['TANIM', 'CEYREK', 'TOPLAM ALTIN', 'TOPLAM BARKOD', 'TOPLAM HURDA', 'KASA', 'BORÇ', 'ALACAK', 'TL.']) assert.ok(t.includes(s), s + ' görünmeli');
+  assert.match(t, /1691 ADET/);
+  await p.click('#modalCancel');
+  await p.click('[data-gold-stocks]');
+  await p.waitForSelector('table.gold-stock-v7');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
