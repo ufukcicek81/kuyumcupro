@@ -4791,15 +4791,22 @@ function stockSummaryView(){
   }
   async function saveEncryptedBackupV7(){
     if(!window.AsilBackupCrypto)return toast('Şifreleme modülü yüklenemedi','err');
+    const file=backupFileNameV664().replace('.json','_SIFRELI.json');
+    // Kaydetme penceresi parola ve şifrelemeden ÖNCE açılır: tarayıcı pencereyi yalnız tıklamadan hemen sonra izin verir.
+    let handle=null;
+    if(typeof window.showSaveFilePicker==='function'){
+      try{handle=await window.showSaveFilePicker({suggestedName:file,types:[{description:'Asil Kuyumcu Şifreli Yedek',accept:{'application/json':['.json']}}]});}
+      catch(err){if(err?.name==='AbortError')return;handle=null;}
+    }
     const pw=prompt('Yedek parolası (en az 8 karakter). Bu parolayı unutursanız yedek açılamaz:');if(!pw)return;
     if(pw.length<8)return toast('Parola en az 8 karakter olmalı','err');
     if(prompt('Parolayı tekrar girin:')!==pw)return toast('Parolalar eşleşmedi','err');
     try{
       const inner=await localBackupEnvelopeV664();
       const env=await AsilBackupCrypto.encrypt(inner,pw,{createdAt:inner.createdAt,appVersion:APP_VERSION,business:inner.business});
-      const file=backupFileNameV664().replace('.json','_SIFRELI.json');
-      const saved=await saveTextAsV672(JSON.stringify(env),file,'application/json');
-      if(!saved.ok)return;
+      const text=JSON.stringify(env);let saved;
+      if(handle){const w=await handle.createWritable();await w.write(new Blob([text],{type:'application/json'}));await w.close();saved={ok:true,name:handle.name||file};}
+      else{downloadText(text,file,'application/json');saved={ok:true,name:file};}
       state.meta=state.meta||{};state.meta.lastEncryptedBackup=now();save(false);
       audit(`Şifreli harici yedek kaydedildi · ${saved.name}`,'Yedek');toast('Şifreli yedek kaydedildi');
     }catch(e){toast('Şifreli yedek oluşturulamadı: '+(e?.message||e),'err');}
@@ -7780,7 +7787,8 @@ function stockSummaryView(){
         return {ok:true,name:handle.name||name,method:'picker'};
       }catch(err){
         if(err?.name==='AbortError')return {ok:false,cancelled:true};
-        throw err;
+        // Tıklamanın üzerinden zaman geçtiyse tarayıcı pencereyi açmaz; dosya indirme klasörüne kaydedilir.
+        if(err?.name!=='SecurityError'&&err?.name!=='NotAllowedError')throw err;
       }
     }
     // Tarayıcı klasör seçme API'sini desteklemiyorsa klasik indirme kullanılır.
