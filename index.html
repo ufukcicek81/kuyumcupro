@@ -7591,12 +7591,16 @@ function stockSummaryView(){
   async function cloudPackV7(obj){
     if(!obj||typeof CompressionStream!=='function')return obj;
     const buf=await new Response(new Blob([JSON.stringify(obj)]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer();
-    return {format:'ASIL_GZ_V1',gz:cloudB64V7(new Uint8Array(buf)),updatedAt:String(obj?.meta?.updatedAt||''),stats:stateStatsV682(obj)};
+    // Firebase tek metin değerini 10 MB ile sınırlar: büyük veri 4 MB'lık parçalara bölünür.
+    const b64=cloudB64V7(new Uint8Array(buf)),CH=4*1024*1024,out={format:'ASIL_GZ_V1',updatedAt:String(obj?.meta?.updatedAt||''),stats:stateStatsV682(obj)};
+    if(b64.length<=CH)out.gz=b64;else{out.gzParts=[];for(let i=0;i<b64.length;i+=CH)out.gzParts.push(b64.slice(i,i+CH));}
+    return out;
   }
   async function cloudUnpackV7(raw){
-    if(raw?.format!=='ASIL_GZ_V1'||typeof raw.gz!=='string')return raw;
+    const gz=raw?.format==='ASIL_GZ_V1'?(typeof raw.gz==='string'?raw.gz:Array.isArray(raw.gzParts)?raw.gzParts.join(''):null):null;
+    if(gz==null)return raw;
     if(typeof DecompressionStream!=='function')throw new Error('Bu tarayıcı sıkıştırılmış bulut verisini açamıyor; tarayıcıyı güncelleyin');
-    return JSON.parse(await new Response(new Blob([cloudUnb64V7(raw.gz)]).stream().pipeThrough(new DecompressionStream('gzip'))).text());
+    return JSON.parse(await new Response(new Blob([cloudUnb64V7(gz)]).stream().pipeThrough(new DecompressionStream('gzip'))).text());
   }
   const cloudNormV7=v=>window.AsilCloudMerge?AsilCloudMerge.firebaseNormalize(v)??null:JSON.parse(JSON.stringify(v));
   // Cihaz verisi de bulutun saklayacağı biçime (boş liste/null'sız) çevrilir; yoksa değişmemiş
@@ -7726,12 +7730,13 @@ function stockSummaryView(){
       state.cloudSync.lastStatus='Gönderiliyor';state.meta.updatedAt=now();if(state.meta)delete state.meta.freshSeedV7;
       const payload=cloudSafeStateV5();
       const headers={'Content-Type':'application/json'};if(etag&&!forceDangerous)headers['if-match']=etag;
-      // Sıkıştırılmış yazılır; print=silent: Firebase yazılanı geri göndermez (indirme kotası harcanmaz).
-      const r=await fetch(CLOUD_STATE_URL+'?print=silent',{method:'PUT',headers,body:JSON.stringify(await cloudPackV7(payload))});
+      // Sıkıştırılmış yazılır. Koşullu yazımda (if-match) Firebase print=silent kabul etmez (HTTP 400);
+      // bu yüzden yalnız koşulsuz yazımda kullanılır. Yanıt zaten sıkıştırılmış ve küçüktür.
+      const r=await fetch(CLOUD_STATE_URL+(headers['if-match']?'':'?print=silent'),{method:'PUT',headers,body:JSON.stringify(await cloudPackV7(payload))});
       // 412: Okuma ile yazma arasında başka cihaz yazdı; yeniden oku, birleştir, tekrar dene.
       if(r.status===412&&attempt<3)return await cloudPushCoreV7(manual,forceDangerous,attempt+1);
       if(r.status===401||r.status===403)throw new Error('Bulut erişimi reddedildi. Yedek · Bulut sayfasından Bulut Girişi yapın.');
-      if(!r.ok)throw new Error(`HTTP ${r.status}`);
+      if(!r.ok){const t=await r.text().catch(()=>'');throw new Error(`HTTP ${r.status}${t?' · '+t.slice(0,160):''}`);}
       const written=await r.json().catch(()=>null);
       if(written&&Array.isArray(written.stocks)){
         const ws=stateStatsV682(written),ls=stateStatsV682(payload);
