@@ -61,7 +61,9 @@
     if(!refreshing)refreshing=refresh(c).finally(function(){refreshing=null});
     return refreshing;
   }
-  function isDbUrl(u){try{return DB_HOST_RE.test(new URL(u,root.location&&root.location.href).hostname)}catch(_){return false}}
+  // Kimlik yalnız programın kendi veritabanına eklenir (ASIL_CLOUD_DB_HOST); başka Firebase projeleri
+  // (ör. fiyat ekranı) bu projenin anahtarıyla 401 vermesin.
+  function isDbUrl(u){try{var h=new URL(u,root.location&&root.location.href).host;return root.ASIL_CLOUD_DB_HOST?h===root.ASIL_CLOUD_DB_HOST:DB_HOST_RE.test(h.split(':')[0])}catch(_){return false}}
   async function authUrl(url){
     if(!isDbUrl(url))return url;
     var t=await token();if(!t)return url;

@@ -1,5 +1,13 @@
 # Firebase Bulut Güvenliği Kurulumu (V6.96)
 
+> **Proje:** Program kendi Firebase projesini kullanır: `kuyumpro-f33c2`
+> (`https://kuyumpro-f33c2-default-rtdb.europe-west1.firebasedatabase.app`). Fiyat ekranı eski
+> `asil-kuyumculuk-2feb6` projesinde kalır; iki sistemin kotaları birbirini etkilemez.
+>
+> **Veri kullanımı:** Durum buluta gzip ile sıkıştırılmış yazılır; cihazlar yalnız küçük
+> `kuyumcuProV5/rev` kaydını dinler ve veriyi ancak başka bir cihaz değiştirdiğinde indirir.
+> Yedek temizliği yedek içeriklerini indirmez; otomatik/açılış yedekleri 3 gün tutulur.
+
 Bu adımlar tamamlanana kadar bulut veritabanı **herkese açıktır**: adresi bilen
 herkes müşteri, kimlik, bakiye ve stok verisini okuyabilir, değiştirebilir veya silebilir.
 Kod tarafı hazırdır; aşağıdaki adımları Firebase konsolunda **sırasıyla** yapın.
@@ -36,7 +44,7 @@ Vercel → Proje → Settings → **Environment Variables** → `FIREBASE_DB_SEC
 Realtime Database → **Rules** → bu repodaki `database.rules.json` içeriğini yapıştırın → **Publish**.
 
 ## 8. Kontrol
-- Tarayıcıda giriş yapmadan `https://asil-kuyumculuk-2feb6-default-rtdb.firebaseio.com/kuyumcuProV5/state.json`
+- Tarayıcıda giriş yapmadan `https://kuyumpro-f33c2-default-rtdb.europe-west1.firebasedatabase.app/kuyumcuProV5/state.json`
   adresini açın: **"Permission denied"** görmelisiniz.
 - Programda Yedek · Bulut sayfasında rozet **GİRİŞLİ**, durum **Bağlı** olmalı.
 

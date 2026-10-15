@@ -25,43 +25,60 @@ function startStaticServer() {
   return new Promise((resolve) => server.listen(0, () => resolve({ server, url: `http://localhost:${server.address().port}/index.html` })));
 }
 
-/* Firebase Realtime Database REST davranışını taklit eder: ETag, if-match (412), auth kontrolü. */
+/* Firebase Realtime Database REST davranışını taklit eder: ETag, if-match (412), auth kontrolü,
+   print=silent, sığ okuma ve olay akışı (SSE). Program durumu sıkıştırılmış yazar; testler için
+   db.state çözülmüş hâli verir. */
 function createFakeFirebase({ requireAuth = false } = {}) {
-  const db = { state: null, backups: {} };
+  const zlib = require('node:zlib');
+  const db = { raw: null, rev: null, backups: {} };
+  const unpack = (v) => (v && v.format === 'ASIL_GZ_V1' && typeof v.gz === 'string') ? JSON.parse(zlib.gunzipSync(Buffer.from(v.gz, 'base64')).toString('utf8')) : v;
+  Object.defineProperty(db, 'state', { get: () => unpack(db.raw), set: (v) => { db.raw = v; } });
   const log = [];
   const etagOf = (v) => crypto.createHash('md5').update(JSON.stringify(v ?? null)).digest('hex');
   async function handle(route) {
     const req = route.request();
     const u = new URL(req.url());
     const auth = u.searchParams.get('auth');
+    const silent = u.searchParams.get('print') === 'silent';
     log.push({ method: req.method(), path: u.pathname, auth });
     const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Expose-Headers': 'ETag', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': '*' };
+    const json = (body, extra = {}) => route.fulfill({ status: 200, headers: { ...cors, ...extra }, contentType: 'application/json', body: JSON.stringify(body ?? null) });
+    const written = (body, extra = {}) => silent ? route.fulfill({ status: 204, headers: { ...cors, ...extra }, body: '' }) : json(body, extra);
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
     if (requireAuth && auth !== 'TEST_ID_TOKEN') return route.fulfill({ status: 401, headers: cors, contentType: 'application/json', body: '{"error":"Permission denied"}' });
+    const sse = (data) => route.fulfill({ status: 200, headers: { ...cors, 'Content-Type': 'text/event-stream' }, body: `retry: 500\nevent: put\ndata: ${JSON.stringify({ path: '/', data })}\n\n` });
     if (u.pathname === '/kuyumcuProV5/state.json') {
-      if ((req.headers()['accept'] || '').includes('text/event-stream')) {
-        return route.fulfill({ status: 200, headers: { ...cors, 'Content-Type': 'text/event-stream' }, body: `retry: 500\nevent: put\ndata: ${JSON.stringify({ path: '/', data: db.state })}\n\n` });
-      }
-      if (req.method() === 'GET') return route.fulfill({ status: 200, headers: { ...cors, ETag: etagOf(db.state) }, contentType: 'application/json', body: JSON.stringify(db.state) });
+      if ((req.headers()['accept'] || '').includes('text/event-stream')) return sse(db.raw);
+      if (req.method() === 'GET') return json(db.raw, { ETag: etagOf(db.raw) });
       if (req.method() === 'PUT') {
         const ifMatch = req.headers()['if-match'];
-        if (ifMatch && ifMatch !== etagOf(db.state)) return route.fulfill({ status: 412, headers: cors, body: '{"error":"ETag mismatch"}' });
-        db.state = firebaseNormalize(JSON.parse(req.postData())) ?? null; // Firebase boş dizi/nesne ve null saklamaz
-        return route.fulfill({ status: 200, headers: { ...cors, ETag: etagOf(db.state) }, contentType: 'application/json', body: JSON.stringify(db.state) });
+        if (ifMatch && ifMatch !== etagOf(db.raw)) return route.fulfill({ status: 412, headers: cors, body: '{"error":"ETag mismatch"}' });
+        db.raw = firebaseNormalize(JSON.parse(req.postData())) ?? null; // Firebase boş dizi/nesne ve null saklamaz
+        return written(db.raw, { ETag: etagOf(db.raw) });
       }
     }
-    if (u.pathname.startsWith('/kuyumcuProV5/backups')) {
-      if (req.method() === 'PUT') { db.backups[u.pathname] = true; return route.fulfill({ status: 200, headers: cors, body: '{}' }); }
-      return route.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: '{}' });
+    if (u.pathname === '/kuyumcuProV5/rev.json') {
+      if ((req.headers()['accept'] || '').includes('text/event-stream')) return sse(db.rev);
+      if (req.method() === 'PUT') { db.rev = JSON.parse(req.postData()); return written(db.rev); }
+      return json(db.rev);
     }
-    return route.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: 'null' });
+    if (u.pathname.startsWith('/kuyumcuProV5/backups')) {
+      const rest = u.pathname.slice('/kuyumcuProV5/backups'.length).replace(/\.json$/, '').split('/').filter(Boolean);
+      if (req.method() === 'PUT') { db.backups[decodeURIComponent(rest[0])] = JSON.parse(req.postData()); return written({}); }
+      if (req.method() === 'DELETE') { delete db.backups[decodeURIComponent(rest[0])]; return json(null); }
+      if (!rest.length) return json(u.searchParams.get('shallow') ? Object.fromEntries(Object.keys(db.backups).map((k) => [k, true])) : db.backups);
+      let v = db.backups[decodeURIComponent(rest[0])];
+      for (const k of rest.slice(1)) v = v == null ? null : v[k];
+      return json(v);
+    }
+    return json(null);
   }
   return { db, log, handle };
 }
 
 async function newDevice(browser, appUrl, firebase, { authConfig } = {}) {
   const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
-  await ctx.route(/firebaseio\.com/, (r) => firebase.handle(r));
+  await ctx.route(/firebasedatabase\.app|firebaseio\.com/, (r) => firebase.handle(r));
   await ctx.route(/googleapis\.com/, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ idToken: 'TEST_ID_TOKEN', id_token: 'TEST_ID_TOKEN', refreshToken: 'R', refresh_token: 'R', expiresIn: '3600', expires_in: '3600', localId: 'UID1', user_id: 'UID1', email: 'magaza@test.com' }) }));
   await ctx.route(/workers\.dev|jsdelivr|supabase|haremaltin/, (r) => r.abort());
   // Excel okuyucu (SheetJS) CDN yerine yerel paketten verilir.
