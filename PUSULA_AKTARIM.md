@@ -102,7 +102,7 @@ altında stoklar, kur farkı, kâr/zarar (dönem ve TOPLAM) ve sermaye.
   detay (her carinin grubu, birimi, bakiyesi) ve karşılaştırma yüklüyse fark listesi sayfaları vardır.
 - **📥 Pusula bilançosu ile karşılaştır:** Pusula'daki bilançoyu Excel'e aktarıp seçin; satır satır fark tablosu çıkar.
 - Pusula'nın cari listesinde ILS sütunu yoktur; ILS bakiyeleri elle girilmelidir.
-- Çeyrek (CEY) bakiyesi çeyrek alış milyemiyle HAS'a çevrilir (Pusula 0 gösterir).
+- Çeyrek (CEY) bakiyesi Pusula'daki gibi HAS karşılığında 0 sayılır.
 
 ## Kontrol
 Aktarımdan sonra Stok · Stok + Kasa Özeti ve Cari sayfasındaki toplamları Pusula'daki

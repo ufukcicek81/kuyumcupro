@@ -4193,8 +4193,9 @@ function stockSummaryView(){
     const key={USD:'usdBuy',EUR:'eurBuy',GBP:'gbpBuy',CHF:'chfBuy',SAR:'sarBuy',CAD:'cadBuy'}[u];
     const direct=Number(key?snap?.[key]:0)||Number(state.prices[u.toLowerCase()]?.buy||0);if(direct)return direct;
     const hasTl=Number(snap?.hasBuy||state.prices.has?.buy||0),item=code=>(state.prices.items||[]).find(x=>String(x.code).toUpperCase()===code);
-    // Cari birimleri: çeyrek (adet), gram altın, gümüş; kuru girilmemiş Suudi riyali dolara sabit kurdan.
-    if(u==='CEY'){const c=item('CEYREK');return Number(c?.buy||0)||(Number(c?.buyMilyem||1605)/1000)*hasTl;}
+    // Çeyrek (CEY) cari bakiyesi Pusula'daki gibi HAS'a çevrilmez (0); gram altın ve kuru girilmemiş
+    // Suudi riyali (dolara sabit kurdan) çevrilir.
+    if(u==='CEY')return 0;
     if(u==='GRM'){const c=item('24G1');return Number(c?.buy||0)||.995*hasTl;}
     if(u==='SAR'){const usd=Number(snap?.usdBuy||state.prices.usd?.buy||0);if(usd)return usd/3.75;}
     return 1;
