@@ -102,7 +102,21 @@ altında stoklar, kur farkı, kâr/zarar (dönem ve TOPLAM) ve sermaye.
   detay (her carinin grubu, birimi, bakiyesi) ve karşılaştırma yüklüyse fark listesi sayfaları vardır.
 - **📥 Pusula bilançosu ile karşılaştır:** Pusula'daki bilançoyu Excel'e aktarıp seçin; satır satır fark tablosu çıkar.
 - Pusula'nın cari listesinde ILS sütunu yoktur; ILS bakiyeleri elle girilmelidir.
-- Çeyrek (CEY) bakiyesi çeyrek alış milyemiyle HAS'a çevrilir (Pusula 0 gösterir).
+- Çeyrek (CEY) bakiyesi Pusula'daki gibi HAS karşılığında 0 sayılır.
+
+## Cari temizleme (unutulmuş bakiyeler)
+Cari → **🧹 Cari Temizleme**: listeyi indirin, her carinin İŞLEM sütununa KALSIN / TEMİZLE yazın
+(isterseniz YENİ GRUP sütununa bilanço grubunu), dosyayı yükleyin. TEMİZLE yazılan carilerin bakiyeleri
+(TL, HAS, döviz, ayar…) bugünkü kurla HAS'a çevrilir, borç ile alacak birbirinden düşülür ve kalan net tutar
+**CARİ BAKİYE DÜZELTME** hesabına (kendi grubu: CARİ DÜZELTME) tek bir HAS bakiyesi olarak aktarılır.
+Kasa, banka ve stok değişmez; bilanço toplamı, kur farkı, kâr/zarar ve sermaye o gün aynı kalır.
+Bankaya/POS'a bağlı cariler ve KASA carisi atlanır. Öncesinde otomatik yedek alınır.
+
+## Pusula öncesi deneme kayıtlarını silme
+Yedek · Bulut → **🧹 Pusula öncesi deneme kayıtlarını sil**: varsayılan sınır son Pusula aktarımının başladığı
+andır. Bu tarihten önceki satış, alış-satış, gider, finans, cari ve stok hareketleri ile satılmış eski barkodlar
+kalıcı olarak silinir. Bakiyeler değişmez; her carinin hareket defteri tek bir "Pusula açılış bakiyesi" satırıyla
+denkleştirilir. Öncesinde otomatik yedek alınır.
 
 ## Kontrol
 Aktarımdan sonra Stok · Stok + Kasa Özeti ve Cari sayfasındaki toplamları Pusula'daki
