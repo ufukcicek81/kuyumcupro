@@ -6203,11 +6203,15 @@ function stockSummaryView(){
     const apply=()=>document.querySelectorAll('#allCariMovesTable tbody tr[data-search]').forEach(r=>{const q=(document.getElementById('cariMoveSearch')?.value||'').toLocaleLowerCase('tr-TR'),acct=document.getElementById('cariMoveAccountType')?.value||'',cid=document.getElementById('cariMoveCustomer')?.value||'',typ=document.getElementById('cariMoveType')?.value||'',unit=document.getElementById('cariMoveUnit')?.value||'';r.style.display=(!q||r.dataset.search.toLocaleLowerCase('tr-TR').includes(q))&&(!acct||r.dataset.customerType===acct)&&(!cid||r.dataset.customer===cid)&&(!typ||r.dataset.type===typ)&&(!unit||r.dataset.unit===unit)?'':'none';});
     document.getElementById('cariMoveSearch')?.addEventListener('input',apply); document.getElementById('cariMoveAccountType')?.addEventListener('change',apply); document.getElementById('cariMoveCustomer')?.addEventListener('change',apply); document.getElementById('cariMoveType')?.addEventListener('change',apply); document.getElementById('cariMoveUnit')?.addEventListener('change',apply);
     const cardSearch=document.getElementById('cariCardSearch');
-    const filterCards=()=>{const q=(cardSearch?.value||'').trim().toLocaleLowerCase('tr-TR');let visible=0,first='';document.querySelectorAll('[data-cari-card]').forEach(card=>{const typeOk=cariTypeFilter==='Tümü'||String(card.dataset.cariType||'')===cariTypeFilter;const ok=typeOk&&(!q||String(card.dataset.cariSearch||'').toLocaleLowerCase('tr-TR').includes(q));card.style.display=ok?'':'none';if(ok){visible++;if(!first)first=card.dataset.cariCard;}});const count=document.getElementById('cariCardCount');if(count)count.textContent=`${visible} cari`;return {visible,first};};
+    // Tür, bakiye ve bakiye kaynağı filtreleri ile arama birlikte uygulanır; sayfa yeniden çizilmez (arama metni kalır).
+    const filterCards=()=>{const q=(cardSearch?.value||'').trim().toLocaleLowerCase('tr-TR'),bal=document.getElementById('cariBalanceFilter')?.value||'',src=document.getElementById('cariSourceFilter')?.value||'';let visible=0,first='';document.querySelectorAll('[data-cari-card]').forEach(card=>{const typeOk=cariTypeFilter==='Tümü'||String(card.dataset.cariType||'')===cariTypeFilter;const ok=typeOk&&(!bal||card.dataset.cariBalance===bal)&&(!src||card.dataset.cariSource===src)&&(!q||String(card.dataset.cariSearch||'').toLocaleLowerCase('tr-TR').includes(q));card.style.display=ok?'':'none';if(ok){visible++;if(!first)first=card.dataset.cariCard;}});const count=document.getElementById('cariCardCount');if(count)count.textContent=`${visible} cari`;return {visible,first};};
     cardSearch?.addEventListener('input',filterCards);
-    document.querySelectorAll('[data-cari-type-filter]').forEach(b=>b.addEventListener('click',()=>{cariTypeFilter=b.dataset.cariTypeFilter||'Tümü';render();}));
+    document.getElementById('cariBalanceFilter')?.addEventListener('change',filterCards);
+    document.getElementById('cariSourceFilter')?.addEventListener('change',filterCards);
+    document.querySelectorAll('[data-cari-type-filter]').forEach(b=>b.addEventListener('click',()=>{cariTypeFilter=b.dataset.cariTypeFilter||'Tümü';document.querySelectorAll('[data-cari-type-filter]').forEach(x=>{const on=x.dataset.cariTypeFilter===cariTypeFilter;x.classList.toggle('btn-primary',on);x.classList.toggle('btn-outline',!on);});filterCards();}));
+    filterCards();
     cardSearch?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();const r=filterCards();if(r.first)openCariMove(r.first);else toast('Cari bulunamadı','err');}});
-    document.getElementById('cariCardClear')?.addEventListener('click',()=>{if(cardSearch){cardSearch.value='';filterCards();cardSearch.focus();}});
+    document.getElementById('cariCardClear')?.addEventListener('click',()=>{if(cardSearch)cardSearch.value='';['cariBalanceFilter','cariSourceFilter'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});cariTypeFilter='Tümü';document.querySelectorAll('[data-cari-type-filter]').forEach(x=>{const on=x.dataset.cariTypeFilter==='Tümü';x.classList.toggle('btn-primary',on);x.classList.toggle('btn-outline',!on);});filterCards();cardSearch?.focus();});
     setTimeout(()=>cardSearch?.focus(),0);
   }
 
@@ -8924,6 +8928,7 @@ function stockSummaryView(){
     return null;
   }
   function filter(type){
+    if(document.querySelector('[data-cari-card]'))return; // uygulamanın kendi filtresi var
     var input=findInput(); if(!input)return;
     var grid=findGrid(input); if(!grid)return;
     var cards=grid.querySelectorAll('.card');
@@ -9027,6 +9032,9 @@ function stockSummaryView(){
     if(head)head.insertAdjacentElement('afterend',box);
   }
   function apply(){
+    // Uygulamanın kendi cari kartları varsa filtreyi uygulama yapar; burada yalnız kart görünümü sıkılaştırılır.
+    var own=document.querySelectorAll('[data-cari-card]');
+    if(own.length){own.forEach(function(c){c.classList.add('ufuk-cari-card-compact');if(c.style.display!=='none'){revealExistingBalance(c);addBalanceIfPresent(c)}});return}
     var q=norm(input()&&input().value);
     cards().forEach(function(c){
       var cc=cardCat(c);
