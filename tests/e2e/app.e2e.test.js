@@ -646,3 +646,21 @@ test('cari kartları: tür filtresi arama alanını gizlemez; tür, bakiye ve ar
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('ana menüde Genel Satış Raporu; rapor HAS ya da TL gösterilir ve seçim hatırlanır', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  await p.click('.home-tile[data-go="salesreport"]');
+  await p.waitForSelector('#prResult table');
+  assert.match(await p.innerText('#prResult'), /Satış Raporu Genel/);
+  assert.match(await p.innerText('#prResult thead'), /Satış HAS/);
+  await p.selectOption('#prUnit', 'TL');
+  await p.waitForFunction(() => /Satış TL/.test(document.querySelector('#prResult thead')?.innerText || ''));
+  await p.click('#modalCancel');
+  await p.click('.home-tile[data-go="salesreport"]');
+  await p.waitForSelector('#prResult table');
+  assert.equal(await p.inputValue('#prUnit'), 'TL', 'seçim hatırlanmalı');
+  assert.match(await p.innerText('#prResult thead'), /Kâr TL/);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
