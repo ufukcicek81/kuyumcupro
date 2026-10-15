@@ -409,5 +409,46 @@
     return {fixes:fixes,unresolved:unresolved};
   }
 
-  return {buildSpecialStocks:buildSpecialStocks,fileGrandTotal:fileGrandTotal,SPECIAL_GROUP_NAMES:SPECIAL_GROUP_NAMES,cariTypeOf:cariTypeOf,parseStockSummary:parseStockSummary,isStockSummary:isStockSummary,looksTruncated:looksTruncated,GROUP_NAMES:GROUP_NAMES,norm:norm,num:num,purityOf:purityOf,detect:detect,buildBarcodeStocks:buildBarcodeStocks,buildOpenStocks:buildOpenStocks,buildCariBalances:buildCariBalances,detectBalances:detectBalances,balanceSpecOf:balanceSpecOf,BALANCE_UNITS:BALANCE_UNITS,MODES:MODES};
+  /* ---- Pusula bilanço raporu (Hesap Tanimi, Cins, Borcumuz, Alacağımız, HAS Borcumuz, HAS Alacağımız) ---- */
+  function balanceUnitOf(v){
+    var u=text(v).toUpperCase().replace(/\s+\d+$/,'').replace(/\.$/,'').trim();
+    if(u==='TL'||u==='TL.')return 'TL';
+    return u;
+  }
+  /* Karşılaştırma anahtarı: hesap grubu + birim. Gram/adet stok satırlarında birim yazımı farklı olabilir. */
+  function balanceKey(group,unit){
+    var u=balanceUnitOf(unit);if(u==='GR'||u==='ADET')u='';
+    return norm(group)+'|'+u;
+  }
+  function isBalanceSheet(rows){
+    for(var i=0;i<Math.min(rows.length,5);i++){var r=rows[i]||[];if(/^hesaptanimi/.test(norm(r[0]))&&/^cins/.test(norm(r[1])))return true;}
+    return false;
+  }
+  function parseBalanceSheet(rows){
+    var out={rows:[],totals:null,kur:{},period:{},total:{},capital:{},periodLabel:''},start=-1,i;
+    for(i=0;i<rows.length;i++){var r0=rows[i]||[];if(/^hesaptanimi/.test(norm(r0[0]))){start=i+1;break;}}
+    if(start<0)throw new Error('Pusula bilanço başlığı (Hesap Tanimi / Cins) bulunamadı');
+    var plKeys={satiskari:'salesProfit',iskonto:'discount',gider:'expense',gelir:'income',kurfarki:'fx',netkarzarar:'net'};
+    for(i=start;i<rows.length;i++){
+      var r=rows[i]||[],g=text(r[0]),c=text(r[1]),lbl3=norm(r[3]),lbl5=norm(r[5]);
+      if(g&&norm(g)==='toplam'){out.totals={debtHas:num(r[5]),recvHas:num(r[6])};continue;}
+      if(g&&c){
+        out.rows.push({group:g.replace(/\s+/g,' '),rawGroup:g,unit:balanceUnitOf(c),note:(/\s(\d+)\s*$/.exec(c)||[])[1]||'',debt:num(r[2]),recv:num(r[3]),debtHas:num(r[5]),recvHas:num(r[6]),line:i+1});
+        continue;
+      }
+      if(lbl3==='kurfarki'&&!out.periodLabel&&text(r[6])!==''&&text(r[5])===''){out.kur.total=num(r[6]);continue;}
+      if(lbl3==='eskikurfarki'){out.kur.old=num(r[6]);continue;}
+      if(lbl3==='gunlukkurfarki'){out.kur.daily=num(r[6]);continue;}
+      if(norm(r[6])==='toplam'&&text(r[5])){out.periodLabel=text(r[5]);continue;}
+      if(lbl3&&plKeys[lbl3]&&out.periodLabel){out.period[plKeys[lbl3]]=num(r[5]);out.total[plKeys[lbl3]]=num(r[6]);continue;}
+      if(lbl5==='sermaye')out.capital.capital=num(r[6]);
+      else if(lbl5==='demirbas')out.capital.fixed=num(r[6]);
+      else if(lbl5==='netkarzarar')out.capital.net=num(r[6]);
+      else if(lbl5==='kalansermaye')out.capital.remaining=num(r[6]);
+    }
+    if(!out.rows.length)throw new Error('Pusula bilançosunda hesap satırı bulunamadı');
+    return out;
+  }
+
+  return {parseBalanceSheet:parseBalanceSheet,isBalanceSheet:isBalanceSheet,balanceKey:balanceKey,balanceUnitOf:balanceUnitOf,buildSpecialStocks:buildSpecialStocks,fileGrandTotal:fileGrandTotal,SPECIAL_GROUP_NAMES:SPECIAL_GROUP_NAMES,cariTypeOf:cariTypeOf,parseStockSummary:parseStockSummary,isStockSummary:isStockSummary,looksTruncated:looksTruncated,GROUP_NAMES:GROUP_NAMES,norm:norm,num:num,purityOf:purityOf,detect:detect,buildBarcodeStocks:buildBarcodeStocks,buildOpenStocks:buildOpenStocks,buildCariBalances:buildCariBalances,detectBalances:detectBalances,balanceSpecOf:balanceSpecOf,BALANCE_UNITS:BALANCE_UNITS,MODES:MODES};
 });

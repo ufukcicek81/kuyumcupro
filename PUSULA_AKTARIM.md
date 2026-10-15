@@ -90,6 +90,18 @@ Pusula'da cari bakiye listesini (tüm cariler, birim bazında bakiye) Excel'e ak
 - "Excel'de olmayan carilerin bakiyesini sıfırla" işaretliyse listede olmayan carilerin
   bakiyesi sıfırlanır.
 
+## Bilanço karşılaştırma
+Raporlar → **BİLANÇO** Pusula'nın bilanço düzenindedir: hesap grupları (MUSTERI, OZEL, TOPTANCI, GIDER, KASA,
+ISKONTO, KAR / ZARAR, SERMAYE, POS, BANKA, PERSONEL, KREDILER…) birim bazında borç/alacak ve HAS karşılığı;
+altında stoklar, kur farkı, kâr/zarar (dönem ve TOPLAM) ve sermaye.
+- Pusula'nın cari listesinde hesap tipi sütunu yoktur. İç hesaplar adından (DONEM K/Z, SERMAYE → SERMAYE;
+  GENEL GIDERLER, K.KARTI KOMISYONU, STOK DUZELTME, HURDA KAR/ZARAR → GIDER; KAR HESABI → KAR / ZARAR …),
+  diğerleri cari türünden gruplanır. Pusula'dakinden farklı olanları **Hesap Grupları** ekranından düzeltin.
+- KASA grubu kasa hesaplarından, banka/POS'a bağlı cariler hesap bakiyesinden okunur (çift sayılmaz).
+- **📥 Pusula bilançosu ile karşılaştır:** Pusula'daki bilançoyu Excel'e aktarıp seçin; satır satır fark tablosu çıkar.
+- Pusula'nın cari listesinde ILS sütunu yoktur; ILS bakiyeleri elle girilmelidir.
+- Çeyrek (CEY) bakiyesi çeyrek alış milyemiyle HAS'a çevrilir (Pusula 0 gösterir).
+
 ## Kontrol
 Aktarımdan sonra Stok · Stok + Kasa Özeti ve Cari sayfasındaki toplamları Pusula'daki
 raporlarla karşılaştırın. Bir şey yanlışsa **Yedek · Bulut → Bulut Yedek Geçmişi**
