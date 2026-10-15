@@ -1077,6 +1077,8 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   const ASIL_PRICE_SETTINGS_URL = 'https://asil-kuyumculuk-2feb6-default-rtdb.firebaseio.com/ayarlar.json';
   // Programın kendi Firebase projesi (fiyat ekranı ayrı projede kalır; kotalar birbirini etkilemez).
   const CLOUD_DB_BASE = 'https://kuyumpro-f33c2-default-rtdb.europe-west1.firebasedatabase.app';
+  // Firebase web API anahtarı gizli değildir (yalnız projeyi tanımlar); erişimi kurallar ve kullanıcı girişi korur.
+  const CLOUD_WEB_API_KEY = 'AIzaSyBOtGVdJbh3yQQowNWYHOvTTJ48JxGWdL8';
   const CLOUD_STATE_URL = CLOUD_DB_BASE+'/kuyumcuProV5/state.json';
   const CLOUD_REV_URL = CLOUD_DB_BASE+'/kuyumcuProV5/rev.json';
   const CLOUD_BACKUP_BASE = CLOUD_DB_BASE+'/kuyumcuProV5/backups';
@@ -4969,7 +4971,7 @@ function stockSummaryView(){
     const st=AsilCloudAuth.status();
     modal('Bulut Girişi (Firebase)',`<div class="form-grid">
       <div class="notice span-4">Bu giriş, bulut veritabanını yetkisiz erişime karşı korur. Her cihazda bir kez yapılır; şifre cihazda saklanmaz. Kurulum adımları: <b>FIREBASE_GUVENLIK_KURULUM.md</b></div>
-      <div class="labelled span-4"><label>Firebase Web API Anahtarı</label><input id="caApiKey" class="input" autocomplete="off" value="${esc(st.apiKey||'')}" placeholder="AIza..."></div>
+      <div class="labelled span-4"><label>Firebase Web API Anahtarı</label><input id="caApiKey" class="input" autocomplete="off" value="${esc(st.apiKey||CLOUD_WEB_API_KEY)}" placeholder="AIza..."></div>
       <div class="labelled span-2"><label>E-posta</label><input id="caEmail" class="input" type="email" autocomplete="username" value="${esc(st.email||'')}"></div>
       <div class="labelled span-2"><label>Şifre</label><input id="caPassword" class="input" type="password" autocomplete="current-password"></div>
       <div class="span-4 muted">Durum: <b>${st.configured?'Giriş yapıldı · '+esc(st.email):'Giriş yapılmadı'}</b>${st.uid?` · UID: <code>${esc(st.uid)}</code>`:''}</div>
