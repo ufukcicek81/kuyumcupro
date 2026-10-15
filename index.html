@@ -2405,7 +2405,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
   function accountOptions(currency='TL', includePos=true){
     const cur=String(currency).toUpperCase();
-    const rows=[...state.cashAccounts.filter(x=>x.currency===cur).map(x=>({key:`Kasa:${x.id}`,name:`Kasa — ${x.name}`})),...state.bankAccounts.filter(x=>x.currency===cur).map(x=>({key:`Banka:${x.id}`,name:`Banka — ${x.bank||x.name}`}))];
+    const rows=[...state.cashAccounts.filter(x=>x.currency===cur).map(x=>({key:`Kasa:${x.id}`,name:`Kasa — ${x.name}`})),...state.bankAccounts.filter(x=>x.currency===cur&&!x.inactive).map(x=>({key:`Banka:${x.id}`,name:`Banka — ${x.bank||x.name}`}))];
     return rows;
   }
   function adjustAccount(key,delta){
@@ -3023,7 +3023,15 @@ function stockSummaryView(){
     qzSecurityConfigured=true;return q;
   }
   async function qzConnect(){
-    const q=await qzLoad();if(!q?.websocket)throw new Error('QZ Tray API bulunamadı');if(!qzHasLocalSigningKey())throw new Error('Sessiz baskı için önce Yazıcı Ayarları > QZ Yetkilendir bölümünden private-key.pem dosyanı bir kez seç.');await qzConfigureSecurity(q);if(!q.websocket.isActive())await q.websocket.connect({retries:2,delay:1});return q;
+    const q=await qzLoad();if(!q?.websocket)throw new Error('QZ Tray API bulunamadı');if(!qzHasLocalSigningKey())throw new Error('Sessiz baskı için önce Yazıcı Ayarları > QZ Yetkilendir bölümünden private-key.pem dosyanı bir kez seç.');await qzConfigureSecurity(q);if(q.websocket.isActive())return q;
+    // Aynı anda gelen bağlantı istekleri tek bağlantıyı bekler ("connection attempt has not returned yet" hatası olmasın).
+    if(!qzConnect.pending)qzConnect.pending=q.websocket.connect({retries:2,delay:1}).finally(()=>{qzConnect.pending=null;});
+    try{await qzConnect.pending;}catch(e){
+      if(!/not returned yet|already exists/i.test(String(e?.message||e)))throw e;
+      for(let i=0;i<40&&!q.websocket.isActive();i++)await new Promise(r=>setTimeout(r,250));
+      if(!q.websocket.isActive())throw new Error('QZ Tray bağlantısı kurulamadı. QZ Tray programının açık olduğunu kontrol edin.');
+    }
+    return q;
   }
   async function qzPrinterList(){const q=await qzConnect();return await q.printers.find();}
   async function printLabelsQz(rows,s=printerSettings()){
@@ -5719,7 +5727,7 @@ function stockSummaryView(){
     if(type==='Ödeme')return openCashLikePayment('Ödeme',true);
     if(type==='Altın / Ziynet')return openTradeInPayment();
     if(type==='Kredi Kartı'){
-      const remain=Math.max(0,t.remain),banks=state.bankAccounts.filter(x=>String(x.currency||'TL').toUpperCase()==='TL'&&x.posEnabled!==false);
+      const remain=Math.max(0,t.remain),banks=state.bankAccounts.filter(x=>String(x.currency||'TL').toUpperCase()==='TL'&&x.posEnabled!==false&&!x.inactive);
       if(!banks.length)return toast('Önce Kasa / Banka ekranından bir TL banka hesabı tanımlayın','err');
       modal('Kredi Kartı',`<div class="form-grid"><div class="labelled span-2"><label>Banka</label><select id="ccBank" class="select">${banks.map(x=>`<option value="${x.id}">${esc(x.bank||x.name)} · Komisyon %${Number(x.posCommission||0).toFixed(2)}</option>`).join('')}</select></div><div class="labelled"><label>Karttan Çekilen Tutar</label><input id="ccAmount" class="input" type="number" step="0.01" value="${remain.toFixed(2)}"></div><div class="labelled"><label>Komisyon</label><input id="ccCommission" class="input" readonly></div><div class="labelled"><label>Bankaya Net Geçecek</label><input id="ccNet" class="input" readonly></div><div class="notice span-4">Ayrı POS hesabı yoktur. Karttan çekilen brüt tutar satış borcunu kapatır; komisyon gider yazılır, kalan net para doğrudan seçilen banka bakiyesine eklenir.</div></div>`,()=>{const id=document.getElementById('ccBank').value,bank=state.bankAccounts.find(x=>x.id===id),amount=Number(document.getElementById('ccAmount').value||0);if(!bank||amount<=0)return toast('Banka ve tutar seçin','err');saleDraft.payments.push({type:'Kredi Kartı',amount,nativeAmount:amount,currency:'TL',accountKey:`Banka:${id}`,commissionRate:Number(bank.posCommission||0),detail:`${bank.bank||bank.name} · Kart %${qty(bank.posCommission||0)}`});closeModal();render();},'KARTA EKLE');
       const sync=()=>{const bank=state.bankAccounts.find(x=>x.id===document.getElementById('ccBank').value),a=Number(document.getElementById('ccAmount').value||0);const fee=a*Number(bank?.posCommission||0)/100;document.getElementById('ccCommission').value=fee.toFixed(2);document.getElementById('ccNet').value=Math.max(0,a-fee).toFixed(2);};document.getElementById('ccBank')?.addEventListener('change',sync);document.getElementById('ccAmount')?.addEventListener('input',sync);sync();return;
@@ -6226,8 +6234,11 @@ function stockSummaryView(){
     const box=document.getElementById('ceBankBox'),typeEl=document.getElementById('ceType');
     const drawBank=()=>{
       if(typeEl.value!=='Banka'){box.style.display='none';return;}box.style.display='';
-      if(bank){box.innerHTML=`<div class="section-head"><h3>Banka hesabı</h3><span class="badge green">BAĞLI</span></div><div class="muted" style="font-size:13px">Satış ekranında <b>Kredi Kartı</b>${bank.posEnabled===false?' (POS pasif)':''} ve <b>Havale / EFT</b> seçeneklerinde görünür. Komisyon %${Number(bank.posCommission||0).toFixed(2)} · Valör ${Number(bank.valuationDays||0)} gün.</div><button class="btn btn-outline" id="ceBankSettings" type="button" style="margin-top:8px">Komisyon / POS Ayarları</button>`;
-        document.getElementById('ceBankSettings')?.addEventListener('click',()=>openBankEditModal(bank.id));return;}
+      if(bank&&bank.inactive){box.innerHTML=`<div class="section-head"><h3>Banka hesabı</h3><span class="badge red">KULLANIM DIŞI</span></div><div class="muted" style="font-size:13px">Satış ekranında ve kasa/banka işlemlerinde görünmüyor. Geçmiş hareketleri korunuyor.</div><button class="btn btn-outline" id="ceBankActive" type="button" style="margin-top:8px">Tekrar kullanıma aç</button>`;
+        document.getElementById('ceBankActive')?.addEventListener('click',()=>{bank.inactive=false;audit(`${bank.bank} banka hesabı tekrar kullanıma açıldı`,'Kasa/Finans');save();closeModal();render();toast('Banka hesabı tekrar kullanımda');});return;}
+      if(bank){box.innerHTML=`<div class="section-head"><h3>Banka hesabı</h3><span class="badge green">BAĞLI</span></div><div class="muted" style="font-size:13px">Satış ekranında <b>Kredi Kartı</b>${bank.posEnabled===false?' (POS pasif)':''} ve <b>Havale / EFT</b> seçeneklerinde görünür. Komisyon %${Number(bank.posCommission||0).toFixed(2)} · Valör ${Number(bank.valuationDays||0)} gün.</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn btn-outline" id="ceBankSettings" type="button">Komisyon / POS Ayarları</button><button class="btn btn-outline" id="ceBankInactive" type="button">🚫 Kullanım dışı bırak</button></div><div class="muted" style="font-size:12px;margin-top:6px">Kullanım dışı bırakılan banka satış ekranında (Kredi Kartı, Havale / EFT) ve kasa/banka işlemlerinde görünmez; geçmiş hareketleri silinmez.</div>`;
+        document.getElementById('ceBankSettings')?.addEventListener('click',()=>openBankEditModal(bank.id));
+        document.getElementById('ceBankInactive')?.addEventListener('click',()=>{if(Math.abs(Number(bank.balance||0))>.0001)return toast(`${bank.bank} hesabında ${money(bank.balance)} bakiye var. Önce bakiyeyi başka hesaba aktarın (virman) ya da sıfırlayın.`,'err');if(!confirm(`${bank.bank} kullanım dışı bırakılsın mı? Satış ekranında artık görünmez.`))return;bank.inactive=true;audit(`${bank.bank} banka hesabı kullanım dışı bırakıldı`,'Kasa/Finans');save();closeModal();render();toast('Banka hesabı kullanım dışı');});return;}
       box.innerHTML=`<div class="section-head"><h3>Banka hesabı</h3><span class="badge gold">BAĞLI DEĞİL</span></div>
         <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="ceLink" checked> Bu cariyi banka hesabı olarak kullan (satış ekranında <b>Kredi Kartı</b> ve <b>Havale / EFT</b>'de görünsün)</label>
         <div class="form-grid" style="margin-top:8px"><div class="labelled"><label>Kart / POS Komisyon %</label><input id="ceCommission" class="input" type="number" step="0.01" min="0" value="0"></div><div class="labelled"><label>Kredi kartında</label><select id="cePos" class="select"><option value="1">Görünsün</option><option value="0">Görünmesin (yalnız havale)</option></select></div><div class="labelled"><label>POS Valör Günü</label><input id="ceValor" class="input" type="number" step="1" min="0" value="0"></div></div>
@@ -6243,7 +6254,7 @@ function stockSummaryView(){
     const sales=(state.sales||[]).filter(s=>s.customerId===c.id).length;
     if(sales)return toast(`Bu cariye bağlı ${sales} satış fişi var; cari silinemez.`,'err');
     const bank=linkedBankForCari(c);
-    if(bank&&((state.financeMoves||[]).some(x=>x.accountKind==='Banka'&&x.accountId===bank.id)||Math.abs(Number(bank.balance||0))>.0001))return toast('Bağlı banka hesabının hareketi var; cari silinemez.','err');
+    if(bank&&((state.financeMoves||[]).some(x=>x.accountKind==='Banka'&&x.accountId===bank.id)||Math.abs(Number(bank.balance||0))>.0001))return toast('Bu bankanın geçmiş hareketleri var, silinemez. Satış ekranından kaldırmak için bu pencerede "Kullanım dışı bırak" düğmesini kullanın.','err');
     const moves=(state.customerMoves||[]).filter(m=>m.customerId===c.id).length;
     if(!confirm(`${c.name} carisi silinsin mi?${moves?`\nBu cariye ait ${moves} eski hareket de silinecek (bakiye 0).`:''}`))return;
     state.customers=state.customers.filter(x=>x.id!==c.id);

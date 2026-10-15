@@ -706,3 +706,36 @@ test('cari kartı: banka carisi banka hesabına bağlanır (bakiye taşınır), 
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('cari kartı: bakiyesiz banka hesabı kullanım dışı bırakılır ve tekrar açılır', async () => {
+  const XLSX = require('xlsx');
+  const os = require('node:os'); const path = require('node:path'); const fs = require('node:fs');
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'banka-pasif-')), 'cari.xlsx');
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['FIRMA UNVANI ', 'KOD ', 'TL. '], ['VAKIBANK ', 9132, '']]), 'Cari');
+  XLSX.writeFile(wb, file);
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  p.removeAllListeners('dialog'); p.on('dialog', (d) => d.accept());
+  await p.click('[data-go="backup"]'); await p.click('#pusulaImportBackupV7');
+  await p.selectOption('#piMode', 'cari'); await p.setInputFiles('#piFile', file);
+  await p.waitForFunction(() => /Excel'de:<\/b> 1 cari/.test(document.getElementById('piResult').innerHTML), null, { timeout: 10000 });
+  await p.click('#modalConfirm');
+  await p.waitForFunction(() => !document.getElementById('modalRoot'), null, { timeout: 15000 });
+  await p.evaluate(() => (document.querySelector('[data-route="customers"]') || document.querySelector('[data-go="customers"]')).click());
+  await p.waitForSelector('[data-cari-edit]');
+  const id = await p.evaluate(() => [...document.querySelectorAll('[data-cari-card]')].find((x) => x.textContent.includes('9132'))?.dataset.cariCard);
+  await p.click(`[data-cari-edit="${id}"]`); await p.click('#modalConfirm');
+  await p.waitForFunction(() => !document.getElementById('modalRoot'), null, { timeout: 10000 });
+  await p.click(`[data-cari-edit="${id}"]`); await p.click('#ceBankInactive');
+  await p.waitForFunction(() => !document.getElementById('modalRoot'), null, { timeout: 10000 });
+  await p.waitForTimeout(3000);
+  const acc = () => { const st = fb.db.state, c = st.customers.find((x) => x.id === id); return st.bankAccounts.find((b) => b.id === c.financeAccountId); };
+  assert.equal(acc().inactive, true, 'banka kullanım dışı olmalı');
+  await p.click(`[data-cari-edit="${id}"]`); await p.click('#ceBankActive');
+  await p.waitForFunction(() => !document.getElementById('modalRoot'), null, { timeout: 10000 });
+  await p.waitForTimeout(3000);
+  assert.equal(acc().inactive, false, 'tekrar kullanıma açılmalı');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
