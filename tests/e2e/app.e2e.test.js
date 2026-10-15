@@ -519,7 +519,7 @@ test('bilanço Pusula düzeninde: kasa bir kez sayılır, hesap grubu değiştir
   await p.context().close();
 });
 
-test('cari temizleme listesi: işaretli cari sıfırlanır, karşılığı düzeltme hesabına yazılır, grup değişir', async () => {
+test('cari temizleme listesi: işaretli cariler net HAS olarak düzeltme hesabına aktarılır; kasa ve bilanço sonucu değişmez', async () => {
   const XLSX = require('xlsx');
   const os = require('node:os'); const path = require('node:path'); const fs = require('node:fs');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cari-temizle-'));
@@ -543,6 +543,16 @@ test('cari temizleme listesi: işaretli cari sıfırlanır, karşılığı düze
     ['7002', 'TEST KALSIN', 'Müşteri', 'MUSTERI', '', -2, 'kalsın', 'personel'],
   ]), 'Cariler');
   XLSX.writeFile(wb, listFile);
+  const kalan = async () => {
+    await p.evaluate(() => (document.querySelector('[data-route="reports"]') || document.querySelector('[data-go="reports"]')).click());
+    await p.click('[data-pusula-report="balance_sheet"]'); await p.waitForSelector('#balResult table');
+    const t = await p.innerText('#balResult'); await p.click('#modalCancel');
+    return (/Kalan Sermaye\s+([-\d.,]+)/.exec(t) || [])[1];
+  };
+  await p.waitForTimeout(1500);
+  const kalanBefore = await kalan();
+  assert.ok(kalanBefore, 'bilançoda Kalan Sermaye okunmalı');
+  const cashBefore = JSON.stringify(fb.db.state.cashAccounts.map((a) => [a.id, a.balance]));
   await p.evaluate(() => (document.querySelector('[data-route="customers"]') || document.querySelector('[data-go="customers"]')).click());
   await p.click('#cariCleanupV7');
   await p.setInputFiles('#ccFileV7', listFile);
@@ -554,8 +564,11 @@ test('cari temizleme listesi: işaretli cari sıfırlanır, karşılığı düze
   const a = st.customers.find((c) => String(c.code) === '7001'), b = st.customers.find((c) => String(c.code) === '7002');
   const adj = st.customers.find((c) => c.name === 'CARİ BAKİYE DÜZELTME');
   assert.equal(Number(a.tlBalance || 0), 0);
-  assert.equal(Number(adj.tlBalance), 1500, 'temizlenen tutar düzeltme hesabına yazılmalı');
-  assert.equal(adj.balanceGroupV7, 'GIDER');
+  assert.equal(Number(adj.tlBalance || 0), 0, 'düzeltme hesabı yalnız HAS tutar');
+  assert.ok(Number(adj.hasBalance) > 0, 'net alacak HAS olarak düzeltme hesabına aktarılmalı');
+  assert.equal(adj.balanceGroupV7, 'CARİ DÜZELTME');
+  assert.equal(JSON.stringify(st.cashAccounts.map((x) => [x.id, x.balance])), cashBefore, 'kasa değişmemeli');
+  assert.equal(await kalan(), kalanBefore, 'bilançodaki Kalan Sermaye değişmemeli');
   assert.equal(Number(b.hasBalance), -2, 'KALSIN işaretli cari değişmemeli');
   assert.equal(b.balanceGroupV7, 'PERSONEL');
   const led = st.customerMoves.filter((m) => m.customerId === a.id && m.unit === 'TL').reduce((n, m) => n + Number(m.debit || 0) - Number(m.credit || 0), 0);

@@ -3429,41 +3429,42 @@ function stockSummaryView(){
     });
     return {created,updated,zeroed,moves};
   }
-  /* ---- Cari temizleme: işaretli carilerin unutulmuş bakiyeleri sıfırlanır, karşılığı CARİ BAKİYE DÜZELTME
-     hesabına (bilançoda GIDER grubu) yazılır; böylece kâr/zarar ve sermayeye yansır. ---- */
+  /* ---- Cari temizleme: işaretli carilerin unutulmuş bakiyeleri (tüm birimler) bugünkü kurla HAS'a çevrilip
+     birbirinden düşülür; kalan net tutar tek bir HAS bakiyesi olarak CARİ BAKİYE DÜZELTME hesabına aktarılır.
+     Kasa, banka ve stok değişmez; düzeltme hesabı kendi grubunda durduğu için bilanço toplamı, kur farkı,
+     kâr/zarar ve sermaye o gün aynı kalır. ---- */
+  const CARI_ADJ_GROUP_V7='CARİ DÜZELTME';
   function cariAdjustmentAccountV7(){
     let c=state.customers.find(x=>x.sysKeyV7==='duzeltme')||state.customers.find(x=>AsilPusulaImport.norm(x.name)==='caribakiyeduzeltme');
-    if(!c){c={id:'SYS-CBD',code:state.customers.some(x=>String(x.code)==='CBD')?'CBD-'+Date.now().toString(36):'CBD',name:'CARİ BAKİYE DÜZELTME',type:'Özel',accountingNature:'Gider',balanceGroupV7:'GIDER',phone:'',email:'',address:'',tlBalance:0,hasBalance:0,otherBalances:{},openingBalances:{}};state.customers.push(c);}
-    c.sysKeyV7='duzeltme';if(!c.balanceGroupV7)c.balanceGroupV7='GIDER';return c;
+    if(!c){c={id:'SYS-CBD',code:state.customers.some(x=>String(x.code)==='CBD')?'CBD-'+Date.now().toString(36):'CBD',name:'CARİ BAKİYE DÜZELTME',type:'Özel',accountingNature:'Nötr',phone:'',email:'',address:'',tlBalance:0,hasBalance:0,otherBalances:{},openingBalances:{}};state.customers.push(c);}
+    c.sysKeyV7='duzeltme';c.balanceGroupV7=CARI_ADJ_GROUP_V7;return c;
   }
   function planCariCleanupV7(items){
-    const matches=matchCarisForImportV7(items),clear=[],groups=[],missing=[],skipped=[];
+    const matches=matchCarisForImportV7(items),clear=[],groups=[],missing=[],skipped=[],iso=now();let netHas=0;
     items.forEach(x=>{const c=matches.get(x);if(!c){if(x.action==='clear'||x.group)missing.push(x);return;}
       if(x.group&&x.group!==balanceGroupOfV7(c))groups.push({c,group:x.group});
       if(x.action!=='clear')return;
-      if(balanceGroupOfV7(c)==='KASA'||c.sysKeyV7==='duzeltme'){skipped.push({c,why:balanceGroupOfV7(c)==='KASA'?'kasa hesabından okunur':'düzeltme hesabı'});return;}
-      const b=cariBalancesOfV7(c);if(Object.keys(b).length)clear.push({c,b});});
-    return {clear,groups,missing,skipped};
+      const why=balanceGroupOfV7(c)==='KASA'?'kasa hesabından okunur':c.sysKeyV7==='duzeltme'?'düzeltme hesabının kendisi':(linkedBankForCari(c)||linkedPosForCari(c))?'banka/POS hesabına bağlı; banka bakiyesi değişmesin diye atlandı':'';
+      if(why){skipped.push({c,why});return;}
+      const b=cariBalancesOfV7(c);if(!Object.keys(b).length)return;
+      const has=Object.entries(b).reduce((n,[u,v])=>n+reportToHasV656(u,v,iso),0);netHas+=has;clear.push({c,b,has});});
+    return {clear,groups,missing,skipped,netHas:Math.round(netHas*1e4)/1e4};
   }
   function applyCariCleanupV7(plan,fileName){
-    const date=now(),doc='CARI-TEMIZLEME-'+date.slice(0,10),adj=plan.clear.length?cariAdjustmentAccountV7():null,r6=v=>Math.round(v*1e6)/1e6;let moves=0;
+    const date=now(),doc='CARI-TEMIZLEME-'+date.slice(0,10);let moves=0;
     const move=(c,u,debit,credit,desc)=>{state.customerMoves.unshift({id:uid('CM'),customerId:c.id,period:state.activePeriod,date,code:'DV',type:'BAKİYE TEMİZLEME',unit:u,debit,credit,description:desc,user:session?.name||'Sistem',sourceType:'opening',sourceDocNo:doc});moves++;};
-    plan.clear.forEach(({c,b})=>Object.entries(b).forEach(([u,v])=>{
-      if(Math.abs(v)<1e-9)return;
-      const d=-v,debit=d>0?d:0,credit=d<0?-d:0;
-      // Banka/POS hesabına bağlı carinin TL bakiyesi hesaptan okunur: hesap da sıfırlanır.
-      const fin=u==='TL'?(linkedBankForCari(c)?{key:'Banka:'+linkedBankForCari(c).id}:linkedPosForCari(c)?{key:'POS:'+linkedPosForCari(c).id}:null):null;
-      if(fin&&adjustAccount(fin.key,d))addFinanceMove({direction:d>0?'Giriş':'Çıkış',type:'Bakiye temizleme',accountKey:fin.key,accountAmount:Math.abs(d),accountCurrency:'TL',tlAmount:Math.abs(d),customer:c.name,description:'Unutulmuş bakiye temizlendi',sourceDocNo:doc,sourceCategory:'Devir'});
-      applyCariBalance(c,u,debit,credit);
-      if(u==='TL')c.tlBalance=0;else if(u==='HAS')c.hasBalance=0;else if(c.otherBalances)delete c.otherBalances[u];
-      if(fin){const a=accountByKey(fin.key).account;if(a)a.balance=0;syncLinkedFinanceCariBalance(c);}
-      move(c,u,debit,credit,`Unutulmuş bakiye temizlendi → ${adj.name}`);
-      applyCariBalance(adj,u,credit,debit);move(adj,u,credit,debit,`${c.name} bakiyesi temizlendi (${qty(v)} ${u})`);
-      if(u==='TL')adj.tlBalance=r6(adj.tlBalance);else if(u==='HAS')adj.hasBalance=r6(adj.hasBalance);else adj.otherBalances[u]=r6(adj.otherBalances[u]||0);
-    }));
+    const adj=plan.clear.length?cariAdjustmentAccountV7():null;
+    plan.clear.forEach(({c,b,has})=>{
+      Object.entries(b).forEach(([u,v])=>{if(Math.abs(v)<1e-9)return;const debit=v<0?-v:0,credit=v>0?v:0;applyCariBalance(c,u,debit,credit);
+        if(u==='TL')c.tlBalance=0;else if(u==='HAS')c.hasBalance=0;else if(c.otherBalances)delete c.otherBalances[u];
+        move(c,u,debit,credit,`Unutulmuş bakiye → ${adj.name} (HAS'a çevrildi)`);});
+      const h=Math.round(has*1e4)/1e4;if(Math.abs(h)<1e-9)return;
+      applyCariBalance(adj,'HAS',h>0?h:0,h<0?-h:0);adj.hasBalance=Math.round(Number(adj.hasBalance||0)*1e6)/1e6;
+      move(adj,'HAS',h>0?h:0,h<0?-h:0,`${c.name}: ${Object.entries(b).map(([u,v])=>`${qty(v)} ${u}`).join(' · ')} → ${qty(h)} HAS`);
+    });
     plan.groups.forEach(({c,group})=>{if(group===balanceGroupAutoV7(c))delete c.balanceGroupV7;else c.balanceGroupV7=group;});
-    audit(`Cari temizleme listesi: ${plan.clear.length} cari sıfırlandı (${moves} hareket), ${plan.groups.length} carinin bilanço grubu değişti · ${fileName||''}`,'Cari');
-    return {cleared:plan.clear.length,groups:plan.groups.length,moves};
+    audit(`Cari temizleme listesi: ${plan.clear.length} cari düzeltme hesabına aktarıldı (net ${qty(plan.netHas)} HAS, ${moves} hareket), ${plan.groups.length} carinin bilanço grubu değişti · ${fileName||''}`,'Cari');
+    return {cleared:plan.clear.length,groups:plan.groups.length,moves,netHas:plan.netHas};
   }
   async function exportCariCleanupListV7(){
     const units=['TL','HAS','USD','EUR','CHF','GBP','22','CEY'],iso=now();
@@ -3471,24 +3472,24 @@ function stockSummaryView(){
       .sort((a,b)=>balanceGroupRankV7(a.g)-balanceGroupRankV7(b.g)||String(a.c.name).localeCompare(String(b.c.name),'tr'));
     const extra=[...new Set(list.flatMap(x=>Object.keys(x.b)).filter(u=>!units.includes(u)))],all=[...units,...extra];
     const aoa=[['KOD','CARİ','TÜR','ŞU ANKİ GRUP',...all,'HAS KARŞILIĞI','İŞLEM (KALSIN / TEMİZLE)','YENİ GRUP (boşsa değişmez)','NOT']];
-    list.forEach(({c,b,g})=>aoa.push([String(c.code||''),c.name,c.type||'',g,...all.map(u=>b[u]===undefined?'':Math.round(b[u]*100)/100),Math.round(Object.entries(b).reduce((a,[u,v])=>a+reportToHasV656(u,v,iso),0)*1000)/1000,'KALSIN','',g==='KASA'?'Kasa hesabından okunur, temizlenmez':'']));
+    list.forEach(({c,b,g})=>aoa.push([String(c.code||''),c.name,c.type||'',g,...all.map(u=>b[u]===undefined?'':Math.round(b[u]*100)/100),Math.round(Object.entries(b).reduce((a,[u,v])=>a+reportToHasV656(u,v,iso),0)*1000)/1000,'KALSIN','',g==='KASA'?'Kasa hesabından okunur, temizlenmez':(linkedBankForCari(c)||linkedPosForCari(c))?'Banka/POS hesabına bağlı, temizlenmez':'']));
     try{const X=await loadXlsxV7(),wb=X.utils.book_new(),ws=X.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:8},{wch:30},{wch:10},{wch:14},...all.map(()=>({wch:12})),{wch:12},{wch:24},{wch:22},{wch:30}];X.utils.book_append_sheet(wb,ws,'Cariler');X.writeFile(wb,`CARI_TEMIZLEME_LISTESI_${iso.slice(0,10)}.xlsx`);}
     catch(e){toast('Excel oluşturulamadı: '+(e?.message||e),'err');}
   }
   function openCariCleanupV7(){
     if(!v5Guard('canManageDefinitions','Cari temizleme için tanımlama yetkisi gerekir'))return;
     let plan=null,fileName='';
-    modal('Cari Temizleme (Unutulmuş Bakiyeler)',`<div class="notice">1) <b>Listeyi indirin</b>. 2) Her carinin <b>İŞLEM</b> sütununa <b>KALSIN</b> ya da <b>TEMİZLE</b> yazın; isterseniz <b>YENİ GRUP</b> sütununa bilanço grubunu yazın. 3) Dosyayı buradan yükleyin.<br><small>TEMİZLE yazılan carinin tüm bakiyeleri sıfırlanır; karşılığı <b>CARİ BAKİYE DÜZELTME</b> hesabına (bilançoda GIDER) yazılır, kâr/zarar ve sermayeye yansır. Bankaya bağlı carinin banka hesabı da sıfırlanır. İşlemden önce otomatik yedek alınır.</small></div>
+    modal('Cari Temizleme (Unutulmuş Bakiyeler)',`<div class="notice">1) <b>Listeyi indirin</b>. 2) Her carinin <b>İŞLEM</b> sütununa <b>KALSIN</b> ya da <b>TEMİZLE</b> yazın; isterseniz <b>YENİ GRUP</b> sütununa bilanço grubunu yazın. 3) Dosyayı buradan yükleyin.<br><small>TEMİZLE yazılan carilerin bakiyeleri (hangi birimde olursa olsun) bugünkü kurla HAS'a çevrilir, borç ile alacak birbirinden düşülür ve kalan net tutar <b>CARİ BAKİYE DÜZELTME</b> hesabına tek bir HAS bakiyesi olarak aktarılır. <b>Kasa, banka ve stok değişmez</b>; bilanço toplamı, kâr/zarar ve sermaye aynı kalır. Bankaya/POS'a bağlı cariler ve KASA atlanır. İşlemden önce otomatik yedek alınır.</small></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-outline" id="ccListV7" type="button">📤 Listeyi İndir</button><label class="btn btn-outline" style="cursor:pointer">📥 İşaretli Listeyi Yükle<input id="ccFileV7" type="file" accept=".xlsx,.xls" style="display:none"></label></div>
       <div id="ccResultV7" style="margin-top:12px"></div>`,async()=>{
       if(!plan)return toast('Önce işaretli listeyi yükleyin','err');
       if(!plan.clear.length&&!plan.groups.length)return toast('Temizlenecek ya da grubu değişecek cari yok','err');
-      if(!confirm(`${plan.clear.length} carinin tüm bakiyeleri SIFIRLANACAK${plan.groups.length?`, ${plan.groups.length} carinin bilanço grubu değişecek`:''}.\n\nDevam edilsin mi?`))return;
+      if(!confirm(`${plan.clear.length} carinin bakiyeleri CARİ BAKİYE DÜZELTME hesabına aktarılacak (net ${qty(plan.netHas)} HAS)${plan.groups.length?`, ${plan.groups.length} carinin bilanço grubu değişecek`:''}.\nKasa ve banka bakiyeleri değişmez.\n\nDevam edilsin mi?`))return;
       const btn=document.getElementById('modalConfirm');if(btn){btn.disabled=true;btn.textContent='UYGULANIYOR…';}
       try{
         await idbRollingSnapshotV682(true,'CARİ TEMİZLEME ÖNCESİ').catch(()=>false);
         if(state.cloudSync?.enabled)await cloudBackupV5('CARİ TEMİZLEME ÖNCESİ').catch(()=>false);
-        const r=applyCariCleanupV7(plan,fileName);save();closeModal();render();toast(`${r.cleared} cari temizlendi, ${r.groups} carinin grubu değişti`);
+        const r=applyCariCleanupV7(plan,fileName);save();closeModal();render();toast(`${r.cleared} cari düzeltme hesabına aktarıldı (net ${qty(r.netHas)} HAS), ${r.groups} carinin grubu değişti`);
       }catch(e){if(btn){btn.disabled=false;btn.textContent='UYGULA';}toast('Temizleme yapılamadı: '+(e?.message||e),'err');}
     },'UYGULA');
     const modalEl=document.querySelector('#modalRoot .modal');if(modalEl)modalEl.style.width='min(1000px,97vw)';
@@ -3497,8 +3498,8 @@ function stockSummaryView(){
       try{const X=await loadXlsxV7(),wb=X.read(await f.arrayBuffer(),{type:'array'}),rows=X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:'',raw:true});
         const p=AsilPusulaImport.parseCariCleanup(rows);plan=planCariCleanupV7(p.items);fileName=f.name;
         const fmt=b=>Object.entries(b).map(([u,v])=>`${qty(v)} ${esc(u)}`).join(' · ');
-        document.getElementById('ccResultV7').innerHTML=`<div class="notice"><b>${esc(f.name)}</b> · ${p.items.length} satır · <b>${plan.clear.length}</b> cari temizlenecek · <b>${plan.groups.length}</b> grup değişikliği${plan.missing.length?` · <span class="negative">${plan.missing.length} cari bulunamadı</span>`:''}${plan.skipped.length?` · ${plan.skipped.length} atlandı`:''}${p.errors.length?` · <span class="negative">${p.errors.length} hatalı satır</span>`:''}</div>
-          ${plan.clear.length?`<h4 style="margin:10px 0 6px">Sıfırlanacak bakiyeler</h4><div class="table-wrap" style="max-height:34vh"><table class="table"><thead><tr><th>Kod</th><th>Cari</th><th>Grup</th><th>Bakiye</th></tr></thead><tbody>${plan.clear.map(({c,b})=>`<tr><td>${esc(String(c.code||''))}</td><td><b>${esc(c.name)}</b></td><td>${esc(balanceGroupOfV7(c))}</td><td>${fmt(b)}</td></tr>`).join('')}</tbody></table></div>`:''}
+        document.getElementById('ccResultV7').innerHTML=`<div class="notice"><b>${esc(f.name)}</b> · ${p.items.length} satır · <b>${plan.clear.length}</b> cari temizlenecek (net <b>${qty(plan.netHas)} HAS</b> düzeltme hesabına) · <b>${plan.groups.length}</b> grup değişikliği${plan.missing.length?` · <span class="negative">${plan.missing.length} cari bulunamadı</span>`:''}${plan.skipped.length?` · ${plan.skipped.length} atlandı`:''}${p.errors.length?` · <span class="negative">${p.errors.length} hatalı satır</span>`:''}</div>
+          ${plan.clear.length?`<h4 style="margin:10px 0 6px">Sıfırlanacak bakiyeler</h4><div class="table-wrap" style="max-height:34vh"><table class="table"><thead><tr><th>Kod</th><th>Cari</th><th>Grup</th><th>Bakiye</th><th class="num">HAS karşılığı</th></tr></thead><tbody>${plan.clear.map(({c,b,has})=>`<tr><td>${esc(String(c.code||''))}</td><td><b>${esc(c.name)}</b></td><td>${esc(balanceGroupOfV7(c))}</td><td>${fmt(b)}</td><td class="num">${qty(has)}</td></tr>`).join('')}<tr style="font-weight:900"><td colspan="4">NET → CARİ BAKİYE DÜZELTME</td><td class="num">${qty(plan.netHas)} HAS</td></tr></tbody></table></div>`:''}
           ${plan.groups.length?`<h4 style="margin:10px 0 6px">Bilanço grubu değişecek</h4><div style="font-size:13px">${plan.groups.map(({c,group})=>`${esc(c.name)}: ${esc(balanceGroupOfV7(c))} → <b>${esc(group)}</b>`).join('<br>')}</div>`:''}
           ${plan.missing.length?`<h4 style="margin:10px 0 6px" class="negative">Bulunamayan cariler</h4><div style="font-size:13px">${plan.missing.map(x=>`${esc(x.line)}. satır: ${esc(x.code)} ${esc(x.name)}`).join('<br>')}</div>`:''}
           ${plan.skipped.length?`<h4 style="margin:10px 0 6px">Atlananlar</h4><div style="font-size:13px">${plan.skipped.map(x=>`${esc(x.c.name)} (${esc(x.why)})`).join('<br>')}</div>`:''}

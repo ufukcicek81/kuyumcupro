@@ -106,9 +106,11 @@ altında stoklar, kur farkı, kâr/zarar (dönem ve TOPLAM) ve sermaye.
 
 ## Cari temizleme (unutulmuş bakiyeler)
 Cari → **🧹 Cari Temizleme**: listeyi indirin, her carinin İŞLEM sütununa KALSIN / TEMİZLE yazın
-(isterseniz YENİ GRUP sütununa bilanço grubunu), dosyayı yükleyin. TEMİZLE yazılan carinin bakiyeleri sıfırlanır,
-karşılığı **CARİ BAKİYE DÜZELTME** hesabına (GIDER grubu) yazılır. Bankaya bağlı carinin banka hesabı da sıfırlanır;
-KASA carisi atlanır. Öncesinde otomatik yedek alınır.
+(isterseniz YENİ GRUP sütununa bilanço grubunu), dosyayı yükleyin. TEMİZLE yazılan carilerin bakiyeleri
+(TL, HAS, döviz, ayar…) bugünkü kurla HAS'a çevrilir, borç ile alacak birbirinden düşülür ve kalan net tutar
+**CARİ BAKİYE DÜZELTME** hesabına (kendi grubu: CARİ DÜZELTME) tek bir HAS bakiyesi olarak aktarılır.
+Kasa, banka ve stok değişmez; bilanço toplamı, kur farkı, kâr/zarar ve sermaye o gün aynı kalır.
+Bankaya/POS'a bağlı cariler ve KASA carisi atlanır. Öncesinde otomatik yedek alınır.
 
 ## Pusula öncesi deneme kayıtlarını silme
 Yedek · Bulut → **🧹 Pusula öncesi deneme kayıtlarını sil**: varsayılan sınır son Pusula aktarımının başladığı
