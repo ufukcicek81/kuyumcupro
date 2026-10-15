@@ -739,3 +739,25 @@ test('cari kartı: bakiyesiz banka hesabı kullanım dışı bırakılır ve tek
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('bulut verisi sıkıştırılmış yazılır; diğer cihaz yalnız sürüm kaydını dinler, kendi yazdığını indirmez', async () => {
+  const fb = createFakeFirebase();
+  const a = await newDevice(browser, appUrl, fb);
+  const b = await newDevice(browser, appUrl, fb);
+  await a.waitForTimeout(3000);
+  assert.equal(fb.db.raw?.format, 'ASIL_GZ_V1', 'bulut kaydı sıkıştırılmış olmalı');
+  assert.ok(Array.isArray(fb.db.state.stocks), 'sıkıştırılmış kayıt açılabilmeli');
+  // A işlem yapar → rev güncellenir → B değişikliği alır
+  await a.click('[data-home-trade="Ziynet Alış"]');
+  await a.fill('#stQty', '1'); await a.fill('#stPrice', '5000');
+  await a.click('#modalConfirm');
+  await a.waitForTimeout(6000);
+  assert.equal(fb.db.rev?.stamp, fb.db.state.meta.updatedAt, 'sürüm kaydı son yazımı göstermeli');
+  assert.match(await historyText(b, 'Ziynet Alış'), /ZA-\d{4}-0+1/, 'B cihazı A cihazının işlemini almalı');
+  // Akış artık tüm veriyi değil, yalnız sürüm kaydını dinler
+  const streamed = fb.log.filter((x) => x.method === 'GET' && x.path === '/kuyumcuProV5/state.json');
+  assert.ok(fb.log.some((x) => x.path === '/kuyumcuProV5/rev.json'), 'sürüm kaydı dinlenmeli');
+  assert.ok(streamed.length < 20, 'tam veri sürekli indirilmemeli: ' + streamed.length);
+  assert.deepEqual([...a.errors, ...b.errors], []);
+  await a.context().close(); await b.context().close();
+});

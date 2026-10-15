@@ -1075,8 +1075,12 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   // Asil Kuyumcu fiyat ekranında çalışan mevcut canlı fiyat altyapısı.
   const LIVE_PRICE_WORKER_URL = 'https://altin-proxy.ufuk87900.workers.dev';
   const ASIL_PRICE_SETTINGS_URL = 'https://asil-kuyumculuk-2feb6-default-rtdb.firebaseio.com/ayarlar.json';
-  const CLOUD_STATE_URL = 'https://asil-kuyumculuk-2feb6-default-rtdb.firebaseio.com/kuyumcuProV5/state.json';
-  const CLOUD_BACKUP_BASE = 'https://asil-kuyumculuk-2feb6-default-rtdb.firebaseio.com/kuyumcuProV5/backups';
+  // Programın kendi Firebase projesi (fiyat ekranı ayrı projede kalır; kotalar birbirini etkilemez).
+  const CLOUD_DB_BASE = 'https://kuyumpro-f33c2-default-rtdb.europe-west1.firebasedatabase.app';
+  const CLOUD_STATE_URL = CLOUD_DB_BASE+'/kuyumcuProV5/state.json';
+  const CLOUD_REV_URL = CLOUD_DB_BASE+'/kuyumcuProV5/rev.json';
+  const CLOUD_BACKUP_BASE = CLOUD_DB_BASE+'/kuyumcuProV5/backups';
+  window.ASIL_CLOUD_DB_HOST = new URL(CLOUD_DB_BASE).host; // bulut girişi kimliği yalnız bu veritabanına eklenir
   const CLOUD_KEY_STORAGE = 'asil_kuyumcu_cloud_key_v1';
   const CLOUD_DEVICE_STORAGE = 'asil_kuyumcu_cloud_device_v1';
   const SESSION_ACTIVITY_KEY = 'asil_kuyumcu_session_activity_v1';
@@ -1332,8 +1336,8 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     if(!remote||typeof remote!=='object'||!Array.isArray(remote.stocks))return false;
     try{
       const key=new Date().toISOString().replace(/[.:]/g,'-')+'-PRE';
-      const body={format:'ASIL_BACKUP_CLOUD_V3',label,date:now(),encrypted:false,state:remote};
-      const r=await fetch(`${CLOUD_BACKUP_BASE}/${key}.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const body={format:'ASIL_BACKUP_CLOUD_V3',label,date:now(),encrypted:false,stats:stateStatsV682(remote),state:await cloudPackV7(remote)};
+      const r=await fetch(`${CLOUD_BACKUP_BASE}/${key}.json?print=silent`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       return r.ok;
     }catch(_){return false;}
   }
@@ -4896,6 +4900,9 @@ function stockSummaryView(){
   }
   async function cloudBackupStatV680(key){
     const base=`${CLOUD_BACKUP_BASE}/${encodeURIComponent(key)}`;
+    // Yeni yedekler küçük bir sayım özeti taşır; içerik indirilmez.
+    const quick=await cloudJsonV680(base+'/stats.json').catch(()=>null);
+    if(quick&&typeof quick==='object'){const [label,date]=await Promise.all([cloudJsonV680(base+'/label.json').catch(()=>''),cloudJsonV680(base+'/date.json').catch(()=>'')]);return {key,label:String(label||'YEDEK'),date:String(date||''),updated:String(date||''),stocks:Number(quick.stocks||0),cards:Number(quick.cards||0),open:Number(quick.open||0),scrap:0,sales:Number(quick.sales||0),cari:Number(quick.cari||0)};}
     const [label,date,updated,stocks,cards,open,scrap,sales,cari]=await Promise.all([
       cloudJsonV680(base+'/label.json').catch(()=>''),cloudJsonV680(base+'/date.json').catch(()=>''),
       cloudJsonV680(base+'/state/meta/updatedAt.json').catch(()=>''),
@@ -4934,7 +4941,7 @@ function stockSummaryView(){
     try{
       await cloudBackupV5('GERİ YÜKLEME ÖNCESİ GÜVENLİK').catch(()=>false);
       const raw=await cloudJsonV680(`${CLOUD_BACKUP_BASE}/${encodeURIComponent(key)}.json?v=${Date.now()}`);
-      const data=raw?.state||raw;
+      const data=await cloudUnpackV7(raw?.state||raw);
       if(!data||typeof data!=='object'||!Array.isArray(data.stocks)||!Array.isArray(data.stockCardsMaster))throw new Error('Yedek yapısı doğrulanamadı');
       cloudApplyingV5=true;
       state=data;
@@ -7576,6 +7583,19 @@ function stockSummaryView(){
     if(remote?.format==='ASIL_BACKUP_CLOUD_V3'&&remote?.state)remote=remote.state;
     return remote&&typeof remote==='object'&&Array.isArray(remote.stocks)?remote:null;
   }
+  /* Buluta giden veri gzip ile sıkıştırılır (genelde 5-10 kat küçük); eski düz biçim de okunur. */
+  function cloudB64V7(u8){let s='';for(let i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s);}
+  function cloudUnb64V7(b){const s=atob(b),u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u;}
+  async function cloudPackV7(obj){
+    if(!obj||typeof CompressionStream!=='function')return obj;
+    const buf=await new Response(new Blob([JSON.stringify(obj)]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer();
+    return {format:'ASIL_GZ_V1',gz:cloudB64V7(new Uint8Array(buf)),updatedAt:String(obj?.meta?.updatedAt||''),stats:stateStatsV682(obj)};
+  }
+  async function cloudUnpackV7(raw){
+    if(raw?.format!=='ASIL_GZ_V1'||typeof raw.gz!=='string')return raw;
+    if(typeof DecompressionStream!=='function')throw new Error('Bu tarayıcı sıkıştırılmış bulut verisini açamıyor; tarayıcıyı güncelleyin');
+    return JSON.parse(await new Response(new Blob([cloudUnb64V7(raw.gz)]).stream().pipeThrough(new DecompressionStream('gzip'))).text());
+  }
   const cloudNormV7=v=>window.AsilCloudMerge?AsilCloudMerge.firebaseNormalize(v)??null:JSON.parse(JSON.stringify(v));
   // Cihaz verisi de bulutun saklayacağı biçime (boş liste/null'sız) çevrilir; yoksa değişmemiş
   // kayıtlar "değişmiş" görünür ve başka cihazda silinen kayıtlar geri gelir.
@@ -7657,8 +7677,8 @@ function stockSummaryView(){
       try{
         const g=await cloudGetWithEtagV7(),rr=g.r;etag=g.etag;
         if(rr.status===401||rr.status===403)throw new Error('CLOUD_AUTH');
-        if(rr.ok)remote=await rr.json();
-        if(remote?.format==='ASIL_BACKUP_CLOUD_V3'&&remote?.state)remote=remote.state;
+        if(rr.ok)remote=await cloudUnpackV7(await rr.json());
+        if(remote?.format==='ASIL_BACKUP_CLOUD_V3'&&remote?.state)remote=await cloudUnpackV7(remote.state);
         if(remote?.encrypted&&remote?.format==='ASIL_CLOUD_AESGCM_V1')remote=await cloudDecryptPayloadV664(remote);
       }catch(e){if(String(e?.message)==='CLOUD_AUTH')throw new Error('Bulut erişimi reddedildi (401/403). Yedek · Bulut sayfasından Bulut Girişi yapın.');}
       // Yeni cihaz (başlangıç verisi) bulutta veri varsa onu ezmez, alır.
@@ -7696,7 +7716,7 @@ function stockSummaryView(){
       // Ana bulut kaydı ezilmeden önce önceki sağlam durumu ayrı kurtarma kopyasına al.
       if(remote&&Array.isArray(remote.stocks)){
         const last=new Date(state.meta?.lastPreCloudSnapshotV682||0).getTime();
-        if(forceDangerous||!last||Date.now()-last>300000){
+        if(forceDangerous||!last||Date.now()-last>6*3600000){
           const ok=await backupRemoteCloudV682(remote,forceDangerous?'ZORUNLU YAZMA ÖNCESİ BULUT':'ÖNCEKİ BULUT OTOMATİK');
           if(ok){state.meta=state.meta||{};state.meta.lastPreCloudSnapshotV682=now();}
         }
@@ -7704,7 +7724,8 @@ function stockSummaryView(){
       state.cloudSync.lastStatus='Gönderiliyor';state.meta.updatedAt=now();if(state.meta)delete state.meta.freshSeedV7;
       const payload=cloudSafeStateV5();
       const headers={'Content-Type':'application/json'};if(etag&&!forceDangerous)headers['if-match']=etag;
-      const r=await fetch(CLOUD_STATE_URL,{method:'PUT',headers,body:JSON.stringify(payload)});
+      // Sıkıştırılmış yazılır; print=silent: Firebase yazılanı geri göndermez (indirme kotası harcanmaz).
+      const r=await fetch(CLOUD_STATE_URL+'?print=silent',{method:'PUT',headers,body:JSON.stringify(await cloudPackV7(payload))});
       // 412: Okuma ile yazma arasında başka cihaz yazdı; yeniden oku, birleştir, tekrar dene.
       if(r.status===412&&attempt<3)return await cloudPushCoreV7(manual,forceDangerous,attempt+1);
       if(r.status===401||r.status===403)throw new Error('Bulut erişimi reddedildi. Yedek · Bulut sayfasından Bulut Girişi yapın.');
@@ -7715,6 +7736,8 @@ function stockSummaryView(){
         if(Object.keys(ls).some(k=>Number(ws[k])!==Number(ls[k])))throw new Error('Bulut yazma doğrulaması eşleşmedi');
       }
       await cloudBaseSaveV7(payload);
+      // Diğer cihazlar yalnız bu küçük sürüm kaydını dinler; tüm veriyi ancak değişince indirirler.
+      fetch(CLOUD_REV_URL+'?print=silent',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({stamp:String(payload?.meta?.updatedAt||now()),at:now()})}).catch(()=>{});
       state.cloudSync.lastStatus='Bağlı';state.cloudSync.encrypted=false;state.cloudSync.encryptionMigrationPending=false;state.cloudSync.lastPush=now();state.cloudSync.lastVerified=now();state.cloudSync.lastVerifiedStats=stateStatsV682(state);
       state.meta=state.meta||{};state.meta.productionGuardV682={date:now(),blocked:false,stats:stateStatsV682(state)};
       persistStateBackgroundV681(state);
@@ -7733,14 +7756,14 @@ function stockSummaryView(){
       const r=await fetch(CLOUD_STATE_URL+'?v='+Date.now(),{cache:'no-store'});
       if(r.status===401||r.status===403)throw new Error('Bulut erişimi reddedildi. Yedek · Bulut sayfasından Bulut Girişi yapın.');
       if(!r.ok)throw new Error(`HTTP ${r.status}`);
-      const raw=await r.json();
+      const raw=await cloudUnpackV7(await r.json());
       if(!raw){state.cloudSync.lastStatus='İlk Kurulum';if(manual)await cloudPushV5(true);return false;}
       let remote=raw;
       // Sadece eski şifreli bulut kaydı varsa geriye dönük uyumluluk için bir kez çözmeyi dene.
       if(raw?.encrypted&&raw?.format==='ASIL_CLOUD_AESGCM_V1'){
         remote=await cloudDecryptPayloadV664(raw);
       }else if(raw?.format==='ASIL_BACKUP_CLOUD_V3'&&raw?.state){
-        remote=raw.state;
+        remote=await cloudUnpackV7(raw.state);
       }
       if(!remote||typeof remote!=='object'||!Array.isArray(remote.stocks)){state.cloudSync.lastStatus='Geçersiz Bulut Verisi';return false;}
       if(state.meta?.freshSeedV7){await cloudLockV7(()=>cloudAdoptRemoteV7(cloudNormV7(remote)));if(manual)toast('Bulut verisi alındı');cloudRenderV7();return true;}
@@ -7772,6 +7795,7 @@ function stockSummaryView(){
         await persistStateCriticalV681(state);cloudApplyingV5=false;await cloudBaseSaveV7(remote);
         if(manual){toast('Bulut verisi güvenlik kontrolünden geçerek alındı');render();}
         else if(autoRecovered){toast('VERİ GÜVENLİĞİ: Cihaz verisi sağlam bulut kaydından otomatik kurtarıldı','ok');render();}
+        else cloudRenderV7();
         return true;
       }
       state.cloudSync.encrypted=false;state.cloudSync.encryptionMigrationPending=false;state.cloudSync.lastStatus='Bağlı';
@@ -7785,21 +7809,26 @@ function stockSummaryView(){
   async function cloudBackupV5(label='AUTO'){
     try{
       const key=new Date().toISOString().replace(/[.:]/g,'-');
-      const body={format:'ASIL_BACKUP_CLOUD_V3',label,date:now(),encrypted:false,state:cloudSafeStateV5()};
-      const r=await fetch(`${CLOUD_BACKUP_BASE}/${key}.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const st=cloudSafeStateV5(),body={format:'ASIL_BACKUP_CLOUD_V3',label,date:now(),encrypted:false,stats:stateStatsV682(st),state:await cloudPackV7(st)};
+      const r=await fetch(`${CLOUD_BACKUP_BASE}/${key}.json?print=silent`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       return r.ok;
     }catch(e){state.cloudSync.lastError=String(e?.message||e);return false;}
   }
+  /* Eski bulut yedeklerini siler. Yedeklerin içeriği indirilmez: anahtarlar (tarih) sığ okunur, yalnız
+     süresi geçmiş olanların küçük etiket alanı okunur. Otomatik/açılış yedekleri 3 gün, diğerleri 30 gün,
+     haftalık 90, aylık 365 gün tutulur. */
   async function cleanupCloudBackupsV6(){
     try{
-      const r=await fetch(`${CLOUD_BACKUP_BASE}.json?v=${Date.now()}`,{cache:'no-store'});if(!r.ok)return;
-      const data=await r.json();if(!data||typeof data!=='object')return;
-      const nowMs=Date.now(),old=Object.entries(data).filter(([,v])=>{
-        const age=nowMs-new Date(v?.date||0).getTime(),label=String(v?.label||'').toUpperCase();
-        const keep=label.includes('AYLIK')?365:label.includes('HAFTALIK')?90:30;
-        return age>keep*86400000;
-      }).map(([k])=>k);
-      for(const k of old.slice(0,100))await fetch(`${CLOUD_BACKUP_BASE}/${encodeURIComponent(k)}.json`,{method:'DELETE'});
+      const r=await fetch(`${CLOUD_BACKUP_BASE}.json?shallow=true&v=${Date.now()}`,{cache:'no-store'});if(!r.ok)return;
+      const keys=Object.keys(await r.json()||{}),nowMs=Date.now(),day=86400000;
+      const keyTime=k=>{const m=/^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})/.exec(k);return m?Date.parse(`${m[1]}T${m[2]}:${m[3]}:${m[4]}Z`):NaN;};
+      let deleted=0;
+      for(const k of keys.sort()){
+        const t=keyTime(k);if(!Number.isFinite(t)||nowMs-t<3*day)continue;
+        const lr=await fetch(`${CLOUD_BACKUP_BASE}/${encodeURIComponent(k)}/label.json`,{cache:'no-store'});const label=String(lr.ok?await lr.json()||'':'').toUpperCase();
+        const keep=label.includes('AYLIK')?365:label.includes('HAFTALIK')?90:/OTOMATİK|AÇILIŞ|ÖNCESİ|PRE/.test(label)?3:30;
+        if(nowMs-t>keep*day){await fetch(`${CLOUD_BACKUP_BASE}/${encodeURIComponent(k)}.json`,{method:'DELETE'});if(++deleted>=100)break;}
+      }
     }catch(_){}
   }
   function isoWeekKeyV664(d=new Date()){
@@ -7927,45 +7956,36 @@ function stockSummaryView(){
   }
 
   /* Canlı akış: giriş anahtarı süresi dolunca veya bağlantı kesilince yeniden bağlanır. */
+  /* Canlı senkron: cihazlar tüm veriyi değil, yalnız küçük sürüm kaydını (rev) dinler. Başka bir cihaz
+     yazınca sürüm değişir ve veri bir kez indirilip birleştirilir; cihaz kendi yazdığını tekrar indirmez. */
   async function openCloudStreamV7(){
     try{cloudStreamV5?.close?.();}catch(_){}
-    const url=window.AsilCloudAuth?await AsilCloudAuth.authUrl(CLOUD_STATE_URL).catch(()=>CLOUD_STATE_URL):CLOUD_STATE_URL;
+    const url=window.AsilCloudAuth?await AsilCloudAuth.authUrl(CLOUD_REV_URL).catch(()=>CLOUD_REV_URL):CLOUD_REV_URL;
     cloudStreamV5=new EventSource(url);
     const reopen=()=>{try{cloudStreamV5?.close?.();}catch(_){}clearTimeout(openCloudStreamV7.timer);openCloudStreamV7.timer=setTimeout(openCloudStreamV7,5000);};
     cloudStreamV5.addEventListener('auth_revoked',reopen);
     cloudStreamV5.addEventListener('cancel',reopen);
     // Kimlik anahtarı 1 saat geçerli; süresi dolmadan akışı yenile.
     clearTimeout(openCloudStreamV7.refresh);if(window.AsilCloudAuth?.isConfigured())openCloudStreamV7.refresh=setTimeout(openCloudStreamV7,50*60*1000);
-    cloudStreamV5.addEventListener('put',async ev=>{
+    const onRev=async ev=>{
       try{
-        const p=JSON.parse(ev.data||'{}');if(p.path!=='/'||!p.data)return;
-        let remote=p.data;
-        if(remote?.encrypted&&remote?.format==='ASIL_CLOUD_AESGCM_V1'){
-          try{remote=await cloudDecryptPayloadV664(remote);}catch(_){return;}
-        }
-        remote=cloudUnwrapRemoteV7(remote);if(!remote)return;
-        if(state.meta?.freshSeedV7){await cloudLockV7(()=>cloudAdoptRemoteV7(cloudNormV7(remote)));cloudRenderV7();return;}
-        const stamp=remote?.meta?.updatedAt;
-        if(stamp&&stamp!==cloudBaseV7?.meta?.updatedAt&&cloudSeenStampsV7.includes(stamp))return; // daha önce görülmüş eski sürüm
-        const inbound=productionDropIssuesV682(remote,cloudBaseV7||state);
-        if(inbound.issues.length){
-          state.cloudSync.lastStatus='UZAK VERİ REDDEDİLDİ';state.cloudSync.lastError=inbound.issues.join(' · ');
-          state.meta=state.meta||{};state.meta.productionGuardV682={date:now(),blocked:true,direction:'stream-to-device',issues:inbound.issues,candidate:inbound.candidate,remote:inbound.remote};
-          persistStateBackgroundV681(state);toast('VERİ GÜVENLİĞİ: Başka cihazdan gelen şüpheli küçülmüş veri reddedildi','err');return;
-        }
-        const res=await cloudIntegrateRemoteV7(remote);
-        if(res==='merged'){cloudRenderV7();return;}
-        if(res==='same')return;
-        const rt=new Date(remote?.meta?.updatedAt||0).getTime(),lt=new Date(state?.meta?.updatedAt||0).getTime();
-        if(rt>lt+1200){cloudApplyStateV7(remote);state.cloudSync.encrypted=false;state.cloudSync.lastPull=now();state.cloudSync.lastStatus='Bağlı';state.meta.productionGuardV682={date:now(),blocked:false,stats:stateStatsV682(state)};await persistStateCriticalV681(state);await cloudBaseSaveV7(remote);render();}
+        const p=JSON.parse(ev.data||'{}'),d=p.path==='/'?p.data:(p.path==='/stamp'?{stamp:p.data}:null);
+        const stamp=String(d?.stamp||'');if(!stamp)return;
+        // Bu cihazın yazdığı ya da zaten birleştirilmiş sürüm: indirme yok.
+        if(stamp===String(cloudBaseV7?.meta?.updatedAt||'')||cloudSeenStampsV7.includes(stamp))return;
+        await cloudPullV5(false);
       }catch(_){}
-    });
+    };
+    cloudStreamV5.addEventListener('put',onRev);
+    cloudStreamV5.addEventListener('patch',onRev);
   }
   async function initCloudSyncV5(){
     ensureV5State();
     await cloudBaseLoadV7();
-    if(state.cloudSync?.enabled && state.settings?.backupEnabled!==false){
-      await cloudBackupV5('AÇILIŞ ÖNCESİ GÜVENLİK').catch(()=>false);
+    // Açılış güvenlik yedeği günde bir kez (her açılışta tam yedek, bulut kotasını hızla doldurur).
+    const openDay=new Date().toISOString().slice(0,10);
+    if(state.cloudSync?.enabled && state.settings?.backupEnabled!==false && state.meta?.lastOpenBackupDayV7!==openDay){
+      if(await cloudBackupV5('AÇILIŞ ÖNCESİ GÜVENLİK').catch(()=>false)){state.meta=state.meta||{};state.meta.lastOpenBackupDayV7=openDay;}
     }
     await cloudPullV5(false);
     const wrongCariRollbackV676=rollbackWrongCariOffsetsV676();
