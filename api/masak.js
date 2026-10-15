@@ -110,7 +110,7 @@ async function getText(url){
   const r=await fetch(url,{
     redirect:'follow',
     headers:{
-      'User-Agent':'Mozilla/5.0 (compatible; AsilKuyumcuPro/1.0; +https://kuyumcuproo.vercel.app)',
+      'User-Agent':'Mozilla/5.0 (compatible; AsilKuyumcuPro/1.0; +https://kuyumcupro.vercel.app)',
       'Accept':'text/html,text/csv,text/plain,application/octet-stream,*/*'
     },
     cache:'no-store'
