@@ -9,8 +9,9 @@ başlıklarından otomatik tanır; tanıyamadığı sütunu ekranda elle seçebi
 ## Sıra
 1. **Stok özeti** (barkodsuz altın/ziynet + hurda + kasa) — önce bu: içindeki barkodlu
    toplamı (adet / gram), barkodlu listenin eksiksiz olup olmadığını kontrol etmek için kullanılır.
-2. **Barkodlu ürün listesi**
-3. **Cari bakiye listesi**
+2. **Barkodlu ürün listesi** (altın)
+3. **Özel ürün listesi** (gümüş, saat, pırlanta, tesbih, bijuteri, çelik)
+4. **Cari bakiye listesi**
 
 Her aktarımdan önce cihazda ve bulutta otomatik yedek alınır.
 
@@ -33,6 +34,9 @@ Bulunması gereken sütunlar:
 - Aktarım, aktif dönemdeki **tüm barkodlu stokları siler** ve Excel'dekileri yükler.
   Satılmış ürün kayıtları satış geçmişi için korunur.
 - Has boşsa `gram × milyem` ile, Maliyet/Satış HAS boşsa `has + işçilik` ile hesaplanır.
+- Pusula'nın ISCILIK sütunu ürüne göre gram başı ya da adet başıdır; gerçek işçilik `maliyet − has`
+  olarak alınır (Pusula'nın toplamlarındaki gibi), girilen değer ayrıca saklanır.
+- Dosyanın sonundaki genel toplam ("1693 Adet") okunan ürün sayısıyla karşılaştırılır.
 
 ## 2. Stok özeti (barkodsuz stok + hurda + kasa)
 Pusula'nın stok özeti raporu (sütunlar: TANIM, AYAR, MIKTAR, HAS, ISCILIK, BIRIM, …, ORTALAMA, Adet, TIP)
@@ -54,7 +58,16 @@ Başka biçimde bir açık stok listesi de verilebilir:
 
 - Aktif dönemdeki **tüm barkodsuz stoklar silinir**, Excel'dekiler yüklenir.
 
-## 3. Cari bakiyeleri
+## 3. Özel ürünler
+Pusula'nın özel ürün listesi (barkodlu ürünle aynı sütunlar; BIRIM = TL. / USD / HAS) aktarılır.
+- Maliyet ve satış fiyatı kendi biriminde saklanır; satış ekranında o günün kuruyla TL'ye çevrilir.
+- Excel'de satış birimi sütunu yoktur; satış birimi BİRİM'den farklı olan ürünler, grup ara
+  toplamlarındaki ("KOLYE 380 Adet … TL / USD") birim dağılımından bulunur. Birden fazla eşleşme
+  olası gruplar ve çözülemeyen gruplar ekranda listelenir.
+- Altın barkodlu aktarım özel ürünlere, özel ürün aktarımı altın barkodlulara dokunmaz.
+- Barkoddaki küçük "ı" büyük "I" yapılır (BıJ0000048 → BIJ0000048).
+
+## 4. Cari bakiyeleri
 Pusula'da cari bakiye listesini (tüm cariler, birim bazında bakiye) Excel'e aktarın.
 
 | Gerekli | Olursa iyi olur |

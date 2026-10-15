@@ -81,6 +81,7 @@ test('toplam tutarlar elle girilebilir ve virgüllü fiyat kabul edilir', async 
     await p.fill('#saleProductSearch', '22'); await p.waitForTimeout(300); await p.press('#saleProductSearch', 'Enter');
     if (await p.waitForSelector('#saleEntryPrice:not([disabled])', { timeout: 5000 }).catch(() => null)) break;
   }
+  await p.waitForTimeout(300); // program seçimden sonra imleci Miktar alanına taşır; o bitmeden yazma
   await p.fill('#saleEntryPrice', '2500,50');
   assert.equal(await val(p, 'saleEntryPayable'), '2500.50');
   await p.fill('#saleEntryPayable', '7.000,00');
@@ -390,6 +391,46 @@ test('ALTIN STOKLARI penceresi F9 ile açılır; açık stok, barkodlu toplam ve
   await p.click('#modalCancel');
   await p.click('[data-gold-stocks]');
   await p.waitForSelector('table.gold-stock-v7');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
+test('özel ürün aktarımı altın stoklarına dokunmaz; USD fiyatlı ürün satışta güncel kurla TL olur', async () => {
+  const XLSX = require('xlsx');
+  const os = require('node:os'); const path = require('node:path'); const fs = require('node:fs');
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'pusula-ozel-')), 'ozel.xlsx');
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ['URUN KODU ', 'AYAR ', 'MIKTAR ', 'HAS ', 'ISCILIK ', 'BIRIM ', 'MALIYET ', 'SAT.FİYATI ', 'MODEL ', 'Grup ', 'Kod '],
+    ['SAA0000701 ', ' ', 1, ' ', ' ', 'USD ', 20, 100, ' ', 'SAA ', 701],
+    ['GUM0000702 ', ' ', 3, ' ', ' ', 'TL. ', 40, 750, ' ', 'GUM ', 702],
+  ]), 'Sayfa1');
+  XLSX.writeFile(wb, file);
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  p.removeAllListeners('dialog'); p.on('dialog', (d) => d.accept());
+  await p.click('[data-go="backup"]');
+  await p.click('#pusulaImportBackupV7');
+  await p.selectOption('#piMode', 'special');
+  await p.setInputFiles('#piFile', file);
+  await p.waitForFunction(() => /Yüklenecek:<\/b> 2 özel ürün/.test(document.getElementById('piResult').innerHTML), null, { timeout: 10000 });
+  await p.click('#modalConfirm');
+  await p.waitForFunction(() => !document.getElementById('modalRoot'), null, { timeout: 15000 });
+  await p.waitForTimeout(5000);
+  const st = fb.db.state.stocks.filter((x) => x.period === 2026);
+  assert.equal(st.filter((x) => x.specialV7).length, 2);
+  assert.ok(st.filter((x) => !x.specialV7).length >= 1691, 'altın barkodlu stoklar silinmemeli');
+  await p.evaluate(() => document.querySelector('[data-route="sales"]')?.click());
+  await p.waitForSelector('#saleProductSearch');
+  await p.fill('#saleProductSearch', 'SAA0000701'); await p.press('#saleProductSearch', 'Enter');
+  await p.waitForSelector('#saleEntryPrice:not([disabled])', { timeout: 10000 });
+  const price = Number(await p.inputValue('#saleEntryPrice'));
+  const usd = await p.evaluate(() => parseFloat(String(document.getElementById('tickerUsd')?.textContent || '0').replace(',', '.')) || 0);
+  assert.ok(price > 1000, '100 USD satış fiyatı TL olarak gelmeli: ' + price);
+  if (usd) assert.ok(Math.abs(price - 100 * usd) < 100 * usd * 0.05);
+  await p.keyboard.press('F9');
+  await p.waitForSelector('table.gold-stock-v7');
+  assert.match(await p.innerText('table.gold-stock-v7'), /ÖZEL ÜRÜN \(BARKODLU\)/);
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });

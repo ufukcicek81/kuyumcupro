@@ -214,9 +214,11 @@
       var karat=text(cell(row,mapping,'karat')),purity=purityOf(karat,cell(row,mapping,'milyem'));
       var gram=round(num(cell(row,mapping,'gram')),3);
       var has=num(cell(row,mapping,'has'));if(!has&&gram&&purity)has=gram*purity/1000;has=round(has,4);
-      var work=num(cell(row,mapping,'work')),saleWork=num(cell(row,mapping,'saleWork'));
+      var workEntry=num(cell(row,mapping,'work')),work=workEntry,saleWork=num(cell(row,mapping,'saleWork'));
       var costHas=num(cell(row,mapping,'costHas')),saleHas=num(cell(row,mapping,'saleHas'));
-      if(!work&&costHas&&has)work=costHas-has;
+      // Pusula ISCILIK sütunu ürüne göre gram başı ya da adet başı girilmiş olabilir; gerçek işçilik = maliyet − has.
+      if(costHas&&has)work=costHas-has;
+      var workMode=gram&&workEntry&&Math.abs(workEntry*gram-work)<Math.abs(workEntry-work)?'Gram İşçilik':'Birim İşçilik';
       if(!costHas)costHas=has+work;
       if(!saleWork&&saleHas&&has)saleWork=saleHas-has;
       if(!saleHas)saleHas=has+saleWork;
@@ -227,7 +229,7 @@
         id:'PB-'+barcode,period:period,source:'Pusula Barkodlu Stok Excel',stockMode:'Barkodlu',
         barcode:barcode,code:barcode,pusulaCode:String(code||''),group:group,category:name,name:name,type:name,
         karat:purity?String(purity):karat,purity:purity,amount:gram,qty:gram,count:Math.max(1,Math.round(num(cell(row,mapping,'count'))||1)),
-        hasWeight:has,materialHas:has,workmanshipEntryValue:round(work,4),workmanshipTotalHas:round(work,4),
+        hasWeight:has,materialHas:has,workmanshipEntryValue:round(workEntry,4),workmanshipMode:workMode,workmanshipTotalHas:round(work,4),
         saleWorkmanshipTotalHas:round(saleWork,4),workmanshipUnit:text(cell(row,mapping,'unit')).toLocaleUpperCase('tr-TR')||'HAS',costHas:round(costHas,4),saleHas:round(saleHas,4),
         model:text(cell(row,mapping,'model')),banko:text(cell(row,mapping,'banko')),stone:text(cell(row,mapping,'stone')),
         origin:text(cell(row,mapping,'origin')),size:num(cell(row,mapping,'size')),resultGram:num(cell(row,mapping,'resultGram')),
@@ -313,19 +315,99 @@
         var cur=text(row[cAyar]).replace(/\./g,'').toLocaleUpperCase('tr-TR');if(!cur)continue;
         var debt=num(row[cQty]),credit=num(row[cHas]);
         out.cash.push({currency:cur==='TL'?'TL':cur,amount:round(debt-credit,4),line:line});
-      }else out.skipped.push({line:line,name:name,qty:qtyV,unit:text(row[5])});
+      }else out.skipped.push({line:line,name:name,qty:qtyV,unit:text(row[5]),cost:work,avg:cAvg>=0?num(row[cAvg]):0,currency:currencyOf(row[5])});
     }
     out.barcodeSummary.gram=round(out.barcodeSummary.gram,3);out.barcodeSummary.has=round(out.barcodeSummary.has,4);
     return out;
   }
-  /* Excel'den alınan liste yarıda kesilmiş mi? (son satırın sütunları eksik) */
+  var ITEM_CODE_RE=/^[A-Za-zÇĞİÖŞÜçğıöşü]+\d+$/;
+  function isItemRow(r){return r&&ITEM_CODE_RE.test(text(r[0]))}
+  /* Pusula listelerinin sonundaki genel toplam satırı: "1693 Adet" (+ gram, has). */
+  function fileGrandTotal(rows,mapping){
+    for(var r=rows.length-1;r>=0;r--){var m=/^(\d+)\s*adet$/i.exec(text(rows[r]&&rows[r][0]));if(m)return {count:Number(m[1]),gram:num(mapping&&mapping.gram!==undefined?rows[r][mapping.gram]:rows[r][2]),line:r+1}}
+    return null;
+  }
+  /* Excel'den alınan liste yarıda kesilmiş mi? (son ürün satırının sütunları eksik) */
   function looksTruncated(rows,headerIndex){
-    var data=rows.slice(headerIndex+1).filter(function(r){return !isEmptyRow(r)});
+    var data=rows.slice(headerIndex+1).filter(isItemRow);
     if(data.length<5)return false;
     var filled=function(r){return r.filter(function(v){return text(v)!==''}).length};
     var last=data[data.length-1],typical=filled(data[Math.floor(data.length/2)]);
     return filled(last)<typical-2;
   }
 
-  return {cariTypeOf:cariTypeOf,parseStockSummary:parseStockSummary,isStockSummary:isStockSummary,looksTruncated:looksTruncated,GROUP_NAMES:GROUP_NAMES,norm:norm,num:num,purityOf:purityOf,detect:detect,buildBarcodeStocks:buildBarcodeStocks,buildOpenStocks:buildOpenStocks,buildCariBalances:buildCariBalances,detectBalances:detectBalances,balanceSpecOf:balanceSpecOf,BALANCE_UNITS:BALANCE_UNITS,MODES:MODES};
+  /* Özel ürünler (gümüş, saat, pırlanta, tesbih…): fiyatlar TL/USD/HAS cinsinden. */
+  var SPECIAL_GROUP_NAMES={BIJ:'BİJUTERİ',CLK:'ÇELİK',GUM:'GÜMÜŞ',PIR:'PIRLANTA',SAA:'SAAT',TSB:'TESBİH'};
+  function currencyOf(v){var t=text(v).replace(/\./g,'').toLocaleUpperCase('tr-TR');return t==='TL'||!t?'TL':t}
+  function buildSpecialStocks(rows,headerIndex,mapping,opts){
+    opts=opts||{};
+    var period=opts.period||new Date().getFullYear(),out=[],errors=[],warnings=[],seen={},totals={cost:{},sale:{},count:0,gram:0},fileTotals={cost:{},sale:{}};
+    for(var r=headerIndex+1;r<rows.length;r++){
+      var row=rows[r]||[];if(isEmptyRow(row))continue;
+      var first=text(row[0]);
+      // Pusula dosya toplamları: "TOPLAM MLYT" (maliyet) ve "TOPLAM SATIŞ" satırları.
+      var nf=norm(first);
+      if(/^toplammlyt|^toplammaliyet/.test(nf)){var cu=currencyOf(cell(row,mapping,'unit'));fileTotals.cost[cu]=(fileTotals.cost[cu]||0)+num(cell(row,mapping,'costHas'));continue}
+      if(/^toplamsatis|^toplam\d+adet/.test(nf)){var cs=currencyOf(cell(row,mapping,'unit'));fileTotals.sale[cs]=(fileTotals.sale[cs]||0)+num(cell(row,mapping,'saleHas'));continue}
+      if(!ITEM_CODE_RE.test(first))continue; // grup ara toplamları
+      var barcode=first.toLocaleUpperCase('tr-TR');
+      if(seen[barcode]){errors.push({line:r+1,message:'Aynı barkod ikinci kez: '+barcode});continue}seen[barcode]=1;
+      var parts=splitBarcode(barcode),group=text(cell(row,mapping,'group')).toLocaleUpperCase('tr-TR')||(parts&&parts.group)||'';
+      var cur=currencyOf(cell(row,mapping,'unit')),cost=num(cell(row,mapping,'costHas')),sale=num(cell(row,mapping,'saleHas'));
+      var gram=round(num(cell(row,mapping,'gram')),3),purity=purityOf(cell(row,mapping,'karat'),'');
+      var name=(opts.groupNames&&opts.groupNames[group])||SPECIAL_GROUP_NAMES[group]||group||'ÖZEL ÜRÜN';
+      totals.cost[cur]=(totals.cost[cur]||0)+cost;totals.sale[cur]=(totals.sale[cur]||0)+sale;totals.count++;totals.gram+=gram;
+      if(!sale)warnings.push({line:r+1,message:barcode+': satış fiyatı yok'});
+      out.push({
+        id:'PS-'+barcode,period:period,source:'Özel Ürün',specialV7:true,stockMode:'Barkodlu',barcode:barcode,code:barcode,
+        pusulaBarcode:first,pusulaCode:text(cell(row,mapping,'code'))||(parts?parts.num:''),group:group,category:name,name:name,type:name,productType:name,
+        karat:purity?String(purity):'',purity:purity,amount:gram,qty:gram,count:1,hasWeight:round(num(cell(row,mapping,'has')),4),materialHas:round(num(cell(row,mapping,'has')),4),
+        priceCurrency:cur,saleCurrency:cur,costNative:round(cost,4),saleNative:round(sale,4),line:r+1,workmanshipTotalHas:0,saleWorkmanshipTotalHas:0,
+        model:text(cell(row,mapping,'model')),stone:text(cell(row,mapping,'stone')),size:num(cell(row,mapping,'size')),
+        status:'Stokta',location:'Mağaza',importedAt:opts.importedAt||new Date().toISOString()
+      });
+    }
+    var resolved=resolveSaleCurrencies(rows,headerIndex,mapping,out);
+    totals.sale={};out.forEach(function(x){totals.sale[x.saleCurrency]=(totals.sale[x.saleCurrency]||0)+x.saleNative});
+    ['cost','sale'].forEach(function(k){Object.keys(totals[k]).forEach(function(c){totals[k][c]=round(totals[k][c],2)});Object.keys(fileTotals[k]).forEach(function(c){fileTotals[k][c]=round(fileTotals[k][c],2)})});
+    totals.gram=round(totals.gram,3);
+    out.forEach(function(x){delete x.line});
+    return {stocks:out,errors:errors,warnings:warnings,totals:totals,fileTotals:fileTotals,currencyFixes:resolved.fixes,currencyUnresolved:resolved.unresolved};
+  }
+  /* Pusula özel ürün listesinde satış birimi sütunu yok; her grubun ara toplamında satışlar birime göre ayrı verilir.
+     Ara toplam ile BİRİM'e göre toplam tutmuyorsa, tutarı tutan ürün alt kümesi (alt küme toplamı) bulunup
+     o ürünlerin satış birimi düzeltilir. Birden fazla çözüm varsa "belirsiz" olarak raporlanır. */
+  function subsetSum(values,target){
+    var T=Math.round(target),parent=new Int32Array(T+1).fill(-1),cnt=new Uint8Array(T+1);cnt[0]=1;parent[0]=-2;
+    for(var i=0;i<values.length;i++){var v=values[i];if(v<=0||v>T)continue;for(var t=T;t>=v;t--){if(cnt[t-v]){if(parent[t]===-1)parent[t]=i;cnt[t]=Math.min(2,cnt[t]+cnt[t-v]);}}}
+    if(!cnt[T])return null;
+    var pick=[],t2=T;while(t2>0){var k=parent[t2];if(k<0)return null;pick.push(k);t2-=values[k];}
+    return {pick:pick,unique:cnt[T]===1};
+  }
+  function resolveSaleCurrencies(rows,headerIndex,mapping,stocks){
+    var byLine={};stocks.forEach(function(x){byLine[x.line]=x});
+    var fixes=[],unresolved=[],block=[],cUnit=mapping.unit,cCost=mapping.costHas,cSale=mapping.saleHas,cSaleCur=cSale!==undefined?cSale+1:undefined;
+    for(var r=headerIndex+1;r<rows.length;r++){
+      var row=rows[r]||[],first=text(row[0]);
+      if(ITEM_CODE_RE.test(first)){if(byLine[r+1])block.push(byLine[r+1]);continue}
+      if(!/adet$/i.test(first)||/^toplam/i.test(norm(first))){continue}
+      var saleBy={},j=r;
+      do{var rr=rows[j]||[];var sc=cSaleCur!==undefined?text(rr[cSaleCur]):'';if(sc){var c=currencyOf(sc);saleBy[c]=(saleBy[c]||0)+num(rr[cSale]);}j++;}while(j<rows.length&&!text((rows[j]||[])[0])&&!isEmptyRow(rows[j]));
+      var ours={};block.forEach(function(x){ours[x.saleCurrency]=(ours[x.saleCurrency]||0)+x.saleNative});
+      var cur=Object.keys(Object.assign({},ours,saleBy)),diff={};cur.forEach(function(c){diff[c]=Math.round(((saleBy[c]||0)-(ours[c]||0))*100)});
+      var from=cur.filter(function(c){return diff[c]<0}),to=cur.filter(function(c){return diff[c]>0});
+      if(Object.keys(saleBy).length&&(from.length||to.length)){
+        if(from.length===1&&to.length===1&&diff[from[0]]===-diff[to[0]]){
+          var cand=block.filter(function(x){return x.saleCurrency===from[0]}),vals=cand.map(function(x){return Math.round(x.saleNative*100)});
+          var sol=subsetSum(vals,-diff[from[0]]);
+          if(sol){sol.pick.forEach(function(k){cand[k].saleCurrency=to[0]});fixes.push({group:first,from:from[0],to:to[0],amount:-diff[from[0]]/100,items:sol.pick.length,unique:sol.unique,barcodes:sol.pick.map(function(k){return cand[k].barcode})});}
+          else unresolved.push({group:first,saleBy:saleBy,ours:ours});
+        }else unresolved.push({group:first,saleBy:saleBy,ours:ours});
+      }
+      block=[];r=j-1;
+    }
+    return {fixes:fixes,unresolved:unresolved};
+  }
+
+  return {buildSpecialStocks:buildSpecialStocks,fileGrandTotal:fileGrandTotal,SPECIAL_GROUP_NAMES:SPECIAL_GROUP_NAMES,cariTypeOf:cariTypeOf,parseStockSummary:parseStockSummary,isStockSummary:isStockSummary,looksTruncated:looksTruncated,GROUP_NAMES:GROUP_NAMES,norm:norm,num:num,purityOf:purityOf,detect:detect,buildBarcodeStocks:buildBarcodeStocks,buildOpenStocks:buildOpenStocks,buildCariBalances:buildCariBalances,detectBalances:detectBalances,balanceSpecOf:balanceSpecOf,BALANCE_UNITS:BALANCE_UNITS,MODES:MODES};
 });
