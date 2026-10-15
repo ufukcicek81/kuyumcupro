@@ -63,7 +63,7 @@ export default async function handler(req,res){
   cors(res);
   if(req.method==='OPTIONS') return res.status(204).end();
   if(req.method==='GET'){
-    return res.status(200).json({ok:true,service:'Asil NFC Bridge',version:'1.0',provider:'Vercel'});
+    return res.status(200).json({ok:true,service:'Asil NFC Bridge',version:'2.0',provider:'Vercel',firebase:'kuyumpro-f33c2'});
   }
   if(req.method!=='POST') return res.status(405).json({ok:false,message:'Desteklenmeyen istek.'});
 
