@@ -4359,24 +4359,58 @@ function stockSummaryView(){
     document.getElementById('bgSearch')?.addEventListener('input',e=>{const q=e.target.value.trim().toLocaleLowerCase('tr-TR');document.querySelectorAll('[data-bg-row]').forEach(r=>{r.style.display=!q||r.dataset.bgSearch.includes(q)?'':'none';});});
   }
   /* Pusula'dan alınan bilanço Excel'i ile bu programın bilançosunu satır satır karşılaştırır. */
-  function balanceCompareHtmlV7(p,d){
+  function balanceCompareDataV7(p,d){
     const P=AsilPusulaImport,key=x=>P.balanceKey(x.group,x.unit),ours=new Map(),theirs=new Map(),order=[];
     const put=(m,x)=>{const k=key(x),o=m.get(k)||{group:x.group,unit:x.unit,debt:0,recv:0,debtHas:0,recvHas:0};o.debt+=Number(x.debt||0);o.recv+=Number(x.recv||0);o.debtHas+=Number(x.debtHas||0);o.recvHas+=Number(x.recvHas||0);m.set(k,o);if(!order.includes(k))order.push(k);};
     p.rows.forEach(x=>put(theirs,x));d.rows.forEach(x=>put(ours,x));
-    const z={debt:0,recv:0,debtHas:0,recvHas:0},diffRows=[];let same=0;
+    const z={debt:0,recv:0,debtHas:0,recvHas:0},rows=[];let same=0;
     order.forEach(k=>{const a=theirs.get(k)||{...z},b=ours.get(k)||{...z},src=theirs.get(k)||ours.get(k);
       const dn=(b.recv-b.debt)-(a.recv-a.debt),dh=(b.recvHas-b.debtHas)-(a.recvHas-a.debtHas),stockRow=src.unit==='GR'||src.unit==='ADET';
       // Yuvarlama payı: Pusula 2 basamak gösterir.
       if(Math.abs(b.debt-a.debt)<.015&&Math.abs(b.recv-a.recv)<.015&&(stockRow?Math.abs(dh)<.015:true)){same++;return;}
-      diffRows.push(`<tr><td><b>${esc(src.group)}</b></td><td>${esc(src.unit==='TL'?'TL.':src.unit)}</td><td class="num">${theirs.has(k)?qty(a.debt)+' / '+qty(a.recv):'<span class="muted">yok</span>'}</td><td class="num">${ours.has(k)?qty(b.debt)+' / '+qty(b.recv):'<span class="muted">yok</span>'}</td><td class="num ${dn>=0?'positive':'negative'}">${qty(dn)}</td><td class="num ${dh>=0?'positive':'negative'}">${qty(dh)}</td></tr>`);});
-    const line=(t,a,b)=>a===undefined?'':`<tr><td>${t}</td><td class="num">${qty(a)}</td><td class="num">${qty(b)}</td><td class="num ${Math.abs(b-a)<.015?'':(b-a>=0?'positive':'negative')}">${Math.abs(b-a)<.015?'✓':qty(b-a)}</td></tr>`;
-    return `<div class="card" style="margin-top:12px"><div class="section-head"><h3>Pusula Bilançosu ile Karşılaştırma</h3><span>${same} satır aynı · ${diffRows.length} satır farklı</span></div>
+      rows.push({group:src.group,unit:src.unit,inPusula:theirs.has(k),inOurs:ours.has(k),a,b,dn,dh});});
+    const summary=[];const add=(t,a,b)=>{if(a!==undefined)summary.push({label:t,pusula:a,ours:b,diff:b-a});};
+    if(p.totals){add('Toplam HAS Borcumuz',p.totals.debtHas,d.totalDebtHas);add('Toplam HAS Alacağımız',p.totals.recvHas,d.totalRecvHas);}
+    add('Kur Farkı',p.kur.total,d.kurFarki);add('Satış Kârı (TOPLAM)',p.total.salesProfit,d.total.salesProfit);add('Gider (TOPLAM)',p.total.expense,d.total.expense);add('Gelir (TOPLAM)',p.total.income,d.total.income);add('Net Kâr / Zarar',p.total.net,d.total.net);add('Sermaye',p.capital.capital,d.capital);add('Kalan Sermaye',p.capital.remaining,d.remaining);
+    return {rows,same,summary};
+  }
+  function balanceCompareHtmlV7(p,d){
+    const c=balanceCompareDataV7(p,d),u=x=>x==='TL'?'TL.':x;
+    const diffRows=c.rows.map(r=>`<tr><td><b>${esc(r.group)}</b></td><td>${esc(u(r.unit))}</td><td class="num">${r.inPusula?qty(r.a.debt)+' / '+qty(r.a.recv):'<span class="muted">yok</span>'}</td><td class="num">${r.inOurs?qty(r.b.debt)+' / '+qty(r.b.recv):'<span class="muted">yok</span>'}</td><td class="num ${r.dn>=0?'positive':'negative'}">${qty(r.dn)}</td><td class="num ${r.dh>=0?'positive':'negative'}">${qty(r.dh)}</td></tr>`);
+    const line=s=>`<tr><td>${s.label}</td><td class="num">${qty(s.pusula)}</td><td class="num">${qty(s.ours)}</td><td class="num ${Math.abs(s.diff)<.015?'':(s.diff>=0?'positive':'negative')}">${Math.abs(s.diff)<.015?'✓':qty(s.diff)}</td></tr>`;
+    return `<div class="card" style="margin-top:12px"><div class="section-head"><h3>Pusula Bilançosu ile Karşılaştırma</h3><span>${c.same} satır aynı · ${diffRows.length} satır farklı</span></div>
       ${diffRows.length?`<div class="table-wrap" style="max-height:46vh"><table class="table" style="min-width:820px"><thead><tr><th>Hesap</th><th>Cins</th><th class="num">Pusula borç / alacak</th><th class="num">Bizde borç / alacak</th><th class="num">Fark (net)</th><th class="num">HAS fark</th></tr></thead><tbody>${diffRows.join('')}</tbody></table></div>`:'<div class="notice">Tüm hesap satırları Pusula ile aynı.</div>'}
       <div class="muted" style="font-size:11px;margin:6px 0">Fark = bizdeki net (alacak − borç) − Pusula'daki net. HAS farkı kurlar farklıysa tutarlar aynı olsa da çıkabilir.</div>
-      <table class="table" style="margin-top:8px"><thead><tr><th></th><th class="num">Pusula</th><th class="num">Bizde</th><th class="num">Fark</th></tr></thead><tbody>
-      ${p.totals?line('Toplam HAS Borcumuz',p.totals.debtHas,d.totalDebtHas)+line('Toplam HAS Alacağımız',p.totals.recvHas,d.totalRecvHas):''}
-      ${line('Kur Farkı',p.kur.total,d.kurFarki)}${line('Satış Kârı (TOPLAM)',p.total.salesProfit,d.total.salesProfit)}${line('Gider (TOPLAM)',p.total.expense,d.total.expense)}${line('Gelir (TOPLAM)',p.total.income,d.total.income)}${line('Net Kâr / Zarar',p.total.net,d.total.net)}${line('Sermaye',p.capital.capital,d.capital)}${line('Kalan Sermaye',p.capital.remaining,d.remaining)}
-      </tbody></table></div>`;
+      <table class="table" style="margin-top:8px"><thead><tr><th></th><th class="num">Pusula</th><th class="num">Bizde</th><th class="num">Fark</th></tr></thead><tbody>${c.summary.map(line).join('')}</tbody></table></div>`;
+  }
+  /* Bilanço Excel'i: 1) Pusula'nın bilanço düzeninde (aynı sütunlar; bu programa geri yüklenip karşılaştırılabilir),
+     2) cari bazında detay (hangi cari hangi grupta), 3) Pusula karşılaştırması yüklüyse fark listesi. */
+  async function exportBalanceExcelV7(from,to){
+    const d=balancePusulaDataV656(from,to),r2=v=>Math.round(Number(v||0)*100)/100,u=x=>x==='TL'?'TL.':x,fmtD=s=>String(s||'').slice(8,10)+'.'+String(s||'').slice(5,7);
+    const aoa=[['Hesap Tanimi','Cins','Borcumuz','Alacağımız','','Borcumuz','Alacağımız']];let prev='',prevKind='';
+    d.rows.forEach(x=>{if((x.kind==='cari'&&prev&&x.group!==prev)||(prevKind&&x.kind!==prevKind))aoa.push([]);prev=x.group;prevKind=x.kind;
+      aoa.push([x.group,u(x.unit)+(x.note&&/^\d+$/.test(x.note)?'  '+x.note:''),x.kind==='stock'?'':r2(x.debt),r2(x.recv),'',x.kind==='stock'?'':r2(x.debtHas),r2(x.recvHas)]);});
+    aoa.push(['TOPLAM','','','','',r2(d.totalDebtHas),r2(d.totalRecvHas)]);
+    aoa.push(['','','','Kur Farkı','','',r2(d.kurFarki)],['','','','Eski Kur Farkı','','',r2(d.oldKur)],['','','','Gunluk Kur Farkı','','',r2(d.dailyKur)],[]);
+    aoa.push(['','','','','',`${fmtD(from)} - ${fmtD(to)}`,'TOPLAM']);
+    [['Satış Karı','salesProfit',1],['Iskonto','discount',-1],['Gider','expense',1],['Gelir','income',1],['Kur Farki','fx',1],['Net Kar/Zarar','net',1]].forEach(([t,k,s])=>aoa.push(['','','',t,'',r2(s*d.period[k]),r2(s*d.total[k])]));
+    aoa.push([],['','','','','','Sermaye',r2(d.capital)],['','','','','','Demirbaş',0],['','','','','','Net Kar/Zarar',r2(d.total.net)],['','','','','','Kalan Sermaye',r2(d.remaining)]);
+    const iso=`${to}T23:59:59`,detail=[['Bilanço Grubu','Kod','Cari','Tür','Birim','Bakiye','HAS Karşılığı','Not']];
+    (state.customers||[]).filter(c=>c.id!=='CASH').map(c=>({c,g:balanceGroupOfV7(c)})).sort((a,b)=>balanceGroupRankV7(a.g)-balanceGroupRankV7(b.g)||a.g.localeCompare(b.g,'tr')||String(a.c.name).localeCompare(String(b.c.name),'tr')).forEach(({c,g})=>{
+      const linked=g==='KASA'||linkedBankForCari(c)||linkedPosForCari(c)||(c.type==='Kasa'&&(state.cashAccounts||[]).some(a=>a.id===c.financeAccountId||a.customerId===c.id));
+      Object.entries(cariBalancesOfV7(c)).forEach(([un,v])=>detail.push([g,String(c.code||''),c.name,c.type||'',u(un),r2(v),Math.round(reportToHasV656(un,v,iso)*1000)/1000,linked?'Bilançoda kasa/banka hesabından okunur':(c.balanceGroupV7?'Grup elle seçildi':'')]));
+    });
+    try{
+      const X=await loadXlsxV7(),wb=X.utils.book_new();
+      X.utils.book_append_sheet(wb,X.utils.aoa_to_sheet(aoa),'Bilanço');
+      X.utils.book_append_sheet(wb,X.utils.aoa_to_sheet(detail),'Cari Detay');
+      if(balanceViewV7.pusula){const c=balanceCompareDataV7(balanceViewV7.pusula,d),cmp=[['Hesap','Cins','Pusula Borç','Pusula Alacak','Bizde Borç','Bizde Alacak','Fark (net)','HAS Fark']];
+        c.rows.forEach(r=>cmp.push([r.group,u(r.unit),r.inPusula?r2(r.a.debt):'yok',r.inPusula?r2(r.a.recv):'',r.inOurs?r2(r.b.debt):'yok',r.inOurs?r2(r.b.recv):'',r2(r.dn),r2(r.dh)]));
+        cmp.push([],['','Pusula','Bizde','Fark']);c.summary.forEach(s=>cmp.push([s.label,r2(s.pusula),r2(s.ours),r2(s.diff)]));
+        X.utils.book_append_sheet(wb,X.utils.aoa_to_sheet(cmp),'Karşılaştırma');}
+      X.writeFile(wb,`BILANCO_${to}.xlsx`);
+      audit(`Bilanço Excel'e aktarıldı (${from} → ${to})`,'Rapor');
+    }catch(e){toast('Excel oluşturulamadı: '+(e?.message||e),'err');}
   }
 
   function patronProfitReport(fromDate,toDate){
@@ -4465,12 +4499,13 @@ function stockSummaryView(){
     const today=new Date().toISOString().slice(0,10),d=new Date(),first=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
     const from0=balanceViewV7.from||first,to0=balanceViewV7.to||today;
     modal('Bilanço — Pusula Düzeni',`<div class="form-grid"><div class="labelled"><label>Başlangıç Tarihi</label><input id="balFrom" class="input" type="date" value="${from0}"></div><div class="labelled"><label>Bitiş Tarihi</label><input id="balTo" class="input" type="date" value="${to0}"></div><div class="labelled"><label>&nbsp;</label><button class="btn btn-primary" id="balCalc">GÖSTER</button></div></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-outline" id="balGroupsV7" type="button">Hesap Grupları</button><label class="btn btn-outline" style="cursor:pointer">📥 Pusula bilançosu ile karşılaştır<input id="balPusulaFileV7" type="file" accept=".xlsx,.xls" style="display:none"></label>${balanceViewV7.pusula?`<span class="badge gold" style="align-self:center">${esc(balanceViewV7.pusulaFile)}</span><button class="btn btn-outline" id="balPusulaClearV7" type="button">Karşılaştırmayı kaldır</button>`:''}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-outline" id="balGroupsV7" type="button">Hesap Grupları</button><button class="btn btn-outline" id="balExcelV7" type="button">📤 Excel'e Aktar</button><label class="btn btn-outline" style="cursor:pointer">📥 Pusula bilançosu ile karşılaştır<input id="balPusulaFileV7" type="file" accept=".xlsx,.xls" style="display:none"></label>${balanceViewV7.pusula?`<span class="badge gold" style="align-self:center">${esc(balanceViewV7.pusulaFile)}</span><button class="btn btn-outline" id="balPusulaClearV7" type="button">Karşılaştırmayı kaldır</button>`:''}</div>
       <div id="balResult" style="margin-top:14px"></div>`,null);
     const modalEl=document.querySelector('#modalRoot .modal');if(modalEl)modalEl.style.width='min(1260px,97vw)';
     const calc=()=>{const from=document.getElementById('balFrom')?.value,to=document.getElementById('balTo')?.value;if(!from||!to)return toast('Başlangıç ve bitiş tarihi seçin','err');if(from>to)return toast('Başlangıç tarihi bitiş tarihinden büyük olamaz','err');balanceViewV7.from=from;balanceViewV7.to=to;
       const d=balancePusulaDataV656(from,to),box=document.getElementById('balResult');if(box)box.innerHTML=(balanceViewV7.pusula?balanceCompareHtmlV7(balanceViewV7.pusula,d):'')+balancePusulaTableV656(d,from,to);};
     document.getElementById('balCalc')?.addEventListener('click',calc);
+    document.getElementById('balExcelV7')?.addEventListener('click',()=>{const from=document.getElementById('balFrom')?.value,to=document.getElementById('balTo')?.value;if(!from||!to||from>to)return toast('Geçerli bir tarih aralığı seçin','err');exportBalanceExcelV7(from,to);});
     document.getElementById('balGroupsV7')?.addEventListener('click',()=>{if(!v5Guard('canManageDefinitions','Hesap grubu değiştirmek için tanımlama yetkisi gerekir'))return;openBalanceGroupsV7(openBalanceSheet);});
     document.getElementById('balPusulaClearV7')?.addEventListener('click',()=>{balanceViewV7.pusula=null;openBalanceSheet();});
     document.getElementById('balPusulaFileV7')?.addEventListener('change',async e=>{const f=e.target.files?.[0];if(!f)return;
