@@ -8450,7 +8450,7 @@ function stockSummaryView(){
         if(tries<90)setTimeout(poll,2000);
       };
       setTimeout(poll,1200);
-    }catch(e){toast('NFC eşleştirme başlatılamadı: '+String(e?.message||e),'err');}
+    }catch(e){let host='';try{host=new URL(url).host}catch{}toast('NFC eşleştirme başlatılamadı: '+String(e?.message||e)+(host?' · köprü: '+host:''),'err');}
   }
 
   async function resumePendingNfcReturnV635(){
