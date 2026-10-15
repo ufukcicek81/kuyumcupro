@@ -31,7 +31,7 @@ function startStaticServer() {
 function createFakeFirebase({ requireAuth = false } = {}) {
   const zlib = require('node:zlib');
   const db = { raw: null, rev: null, backups: {} };
-  const unpack = (v) => (v && v.format === 'ASIL_GZ_V1' && typeof v.gz === 'string') ? JSON.parse(zlib.gunzipSync(Buffer.from(v.gz, 'base64')).toString('utf8')) : v;
+  const unpack = (v) => { const gz = v && v.format === 'ASIL_GZ_V1' ? (typeof v.gz === 'string' ? v.gz : Array.isArray(v.gzParts) ? v.gzParts.join('') : null) : null; return gz == null ? v : JSON.parse(zlib.gunzipSync(Buffer.from(gz, 'base64')).toString('utf8')); };
   Object.defineProperty(db, 'state', { get: () => unpack(db.raw), set: (v) => { db.raw = v; } });
   const log = [];
   const etagOf = (v) => crypto.createHash('md5').update(JSON.stringify(v ?? null)).digest('hex');
@@ -52,6 +52,7 @@ function createFakeFirebase({ requireAuth = false } = {}) {
       if (req.method() === 'GET') return json(db.raw, { ETag: etagOf(db.raw) });
       if (req.method() === 'PUT') {
         const ifMatch = req.headers()['if-match'];
+        if (ifMatch && silent) return route.fulfill({ status: 400, headers: cors, body: '{"error":"print=silent not supported with if-match"}' });
         if (ifMatch && ifMatch !== etagOf(db.raw)) return route.fulfill({ status: 412, headers: cors, body: '{"error":"ETag mismatch"}' });
         db.raw = firebaseNormalize(JSON.parse(req.postData())) ?? null; // Firebase boş dizi/nesne ve null saklamaz
         return written(db.raw, { ETag: etagOf(db.raw) });
