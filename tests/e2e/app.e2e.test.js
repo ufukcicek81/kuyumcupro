@@ -625,3 +625,24 @@ test('Pusula öncesi deneme kayıtları silinir; bakiyeler değişmez, cari deft
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('cari kartları: tür filtresi arama alanını gizlemez; tür, bakiye ve arama birlikte çalışır', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  await p.evaluate(() => (document.querySelector('[data-route="customers"]') || document.querySelector('[data-go="customers"]')).click());
+  await p.waitForSelector('#cariCardSearch');
+  const visibleTypes = () => p.$$eval('[data-cari-card]', (cs) => [...new Set(cs.filter((c) => c.style.display !== 'none').map((c) => c.dataset.cariType + '/' + c.dataset.cariBalance))]);
+  await p.click('[data-cari-type-filter="Toptancı"]');
+  await p.waitForTimeout(300);
+  assert.ok(await p.isVisible('#cariCardSearch'), 'arama alanı görünür kalmalı');
+  assert.ok(await p.isVisible('#cariBalanceFilter'), 'bakiye filtresi görünür kalmalı');
+  assert.ok((await visibleTypes()).every((t) => t.startsWith('Toptancı/')));
+  await p.selectOption('#cariBalanceFilter', 'credit');
+  await p.waitForTimeout(200);
+  const types = await visibleTypes();
+  assert.ok(types.length && types.every((t) => t === 'Toptancı/credit'), 'tür + bakiye filtresi: ' + types);
+  await p.click('#cariCardClear');
+  assert.ok((await visibleTypes()).some((t) => t.startsWith('Müşteri/')), 'temizle tüm carileri göstermeli');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
