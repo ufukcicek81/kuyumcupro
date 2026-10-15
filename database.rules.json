@@ -13,6 +13,13 @@
     "kuyumcuProV5": {
       ".read": "auth != null && root.child('yetkiliKullanicilar').child(auth.uid).val() === true",
       ".write": "auth != null && root.child('yetkiliKullanicilar').child(auth.uid).val() === true"
+    },
+    "nfcSessions": {
+      "$code": {
+        ".read": "auth != null && root.child('yetkiliKullanicilar').child(auth.uid).val() === true",
+        ".write": "(auth != null && root.child('yetkiliKullanicilar').child(auth.uid).val() === true) || (data.exists() && data.child('status').val() === 'WAITING' && data.child('expiresAt').val() > now && newData.child('status').val() === 'READY')",
+        ".validate": "$code.matches(/^[0-9]{8}$/)"
+      }
     }
   }
 }
