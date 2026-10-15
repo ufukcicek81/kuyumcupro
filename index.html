@@ -3426,7 +3426,7 @@ function stockSummaryView(){
     });
     return {created,updated,zeroed,moves};
   }
-  /* Pusula stok özeti: açık stoklar (mevcut kartın birim gramı, ayarı ve maliyet esası korunur), hurda, kasa. */
+  /* Pusula stok özeti: açık stoklar (mevcut kartın birim gramı ve ayarı korunur, maliyet Pusula'dan), hurda, kasa. */
   function applyStockSummaryV7(sum,period,{scrap,cash},fileName){
     const existing=(state.openStocks||[]).filter(x=>x.period===period),byCode=new Map(existing.map(x=>[String(x.pusulaCode||x.productCode||''),x]));
     const open=sum.open.map(x=>{
@@ -3435,7 +3435,8 @@ function stockSummaryView(){
         n.id=ex.id;n.stockCardId=ex.stockCardId||n.stockCardId;
         if(Number(ex.zGram||0)>0&&n.unit==='ADET')n.zGram=Number(ex.zGram);
         if(ex.unit)n.unit=ex.unit;if(Number(ex.purity||0)>0)n.purity=Number(ex.purity);
-        const c=Number(ex.inventoryUnitCostHas??ex.openingUnitCostHas);if(Number.isFinite(c)&&c>0)n.inventoryUnitCostHas=c;
+        // Maliyet Pusula'nın ORTALAMA (has + işçilik) değerinden gelir; dosyada yoksa mevcut kartınki kalır.
+        const c=Number(ex.inventoryUnitCostHas??ex.openingUnitCostHas);if(!(Number(n.inventoryUnitCostHas)>0)&&Number.isFinite(c)&&c>0)n.inventoryUnitCostHas=c;
         if(n.unit==='ADET')n.count=Math.round(n.amount);
       }
       n.openingUnitCostHas=n.inventoryUnitCostHas;n.openingCostHas=Number(n.inventoryUnitCostHas||0)*Number(n.amount||0);
@@ -4190,7 +4191,13 @@ function stockSummaryView(){
     if(u==='TL')return 1;
     if(u==='HAS')return Number(snap?.hasBuy||state.prices.has?.buy||1);
     const key={USD:'usdBuy',EUR:'eurBuy',GBP:'gbpBuy',CHF:'chfBuy',SAR:'sarBuy',CAD:'cadBuy'}[u];
-    return Number(key?snap?.[key]:0)||Number(state.prices[u.toLowerCase()]?.buy||1);
+    const direct=Number(key?snap?.[key]:0)||Number(state.prices[u.toLowerCase()]?.buy||0);if(direct)return direct;
+    const hasTl=Number(snap?.hasBuy||state.prices.has?.buy||0),item=code=>(state.prices.items||[]).find(x=>String(x.code).toUpperCase()===code);
+    // Cari birimleri: çeyrek (adet), gram altın, gümüş; kuru girilmemiş Suudi riyali dolara sabit kurdan.
+    if(u==='CEY'){const c=item('CEYREK');return Number(c?.buy||0)||(Number(c?.buyMilyem||1605)/1000)*hasTl;}
+    if(u==='GRM'){const c=item('24G1');return Number(c?.buy||0)||.995*hasTl;}
+    if(u==='SAR'){const usd=Number(snap?.usdBuy||state.prices.usd?.buy||0);if(usd)return usd/3.75;}
+    return 1;
   }
   function reportToHasV656(unit,amount,iso){
     const u=String(unit||'TL').toUpperCase(),n=Number(amount||0),hasRate=Number(nearestPriceSnapshot(iso||now())?.hasBuy||state.prices.has?.buy||1);
@@ -4250,27 +4257,126 @@ function stockSummaryView(){
     const section=(title,rows)=>rows.length?`<tr><td colspan="6" style="font-weight:900;background:rgba(214,177,95,.12)">${esc(title)}</td></tr>${rows.map(x=>`<tr><td><strong>${esc(x.name)}</strong><small style="display:block;color:var(--muted)">${esc(x.unit)}</small></td><td class="num">${qty(x.devir)}</td><td class="num">${qty(x.incoming)}</td><td class="num">${qty(x.outgoing)}</td><td class="num"><strong>${qty(x.current)}</strong></td><td class="num">${x.cost?qty(x.cost)+' HAS':'—'}</td></tr>`).join('')}`:'';
     return `<div class="notice"><strong>Pusula Patron Raporu düzeni:</strong> Devir + Giren − Çıkan = Kalan. Maliyet sütunu altın/hurda için HAS maliyetidir; kasa ve banka satırlarında para birimi korunur.</div><div class="table-wrap" style="margin-top:12px"><table class="table" style="min-width:850px"><thead><tr><th>TÜR</th><th class="num">DEVİR</th><th class="num">GİREN</th><th class="num">ÇIKAN</th><th class="num">KALAN</th><th class="num">MALİYET</th></tr></thead><tbody>${section('ALTIN STOĞU',d.stocks.gold)}${section('ÖZEL ÜRÜN',d.stocks.special)}${section('ZİYNET STOĞU',d.stocks.ziynet)}${section('HURDA STOĞU',d.scrap)}${section('KASA',d.cash)}${section('BANKA',d.banks)}</tbody></table></div><div class="card" style="margin-top:12px"><div class="table-wrap"><table class="table" style="min-width:620px"><thead><tr><th></th><th class="num">İSKONTO</th><th class="num">GELİR</th><th class="num">GİDER</th><th class="num">KÂR/ZARAR</th><th class="num">NET</th></tr></thead><tbody><tr><td><strong>${esc(d.r.fromDate)} → ${esc(d.r.toDate)}</strong></td><td class="num">${qty(d.discountHas)} HAS</td><td class="num">${qty(d.gelirHas)} HAS</td><td class="num">${qty(d.giderHas)} HAS</td><td class="num">${qty(d.salesProfitHas+d.kurHas)} HAS</td><td class="num"><strong class="${d.netHas>=0?'positive':'negative'}">${qty(d.netHas)} HAS</strong></td></tr></tbody></table></div></div>`;
   }
+  /* Pusula bilanço grubu (hesap tipi). Pusula'nın cari listesinde tip sütunu olmadığı için iç hesaplar
+     addan, diğerleri cari türünden bulunur; Bilanço → Hesap Grupları ekranından değiştirilebilir. */
+  const BAL_GROUP_ORDER_V7=['MUSTERI','OZEL','TOPTANCI','GIDER','KASA','ISKONTO','KAR / ZARAR','SERMAYE','POS','BANKA','PERSONEL','KREDILER'];
+  const BAL_UNIT_ORDER_V7=['22','HAS','TL','USD','EUR','CHF','GBP','SAR','ILS','CEY','GRM','GMS','CAD','AUD'];
+  function balanceGroupAutoV7(c){
+    const n=window.AsilPusulaImport?AsilPusulaImport.norm(c?.name):String(c?.name||'').toLowerCase();
+    if(/^donemk|^sermaye/.test(n))return 'SERMAYE';
+    if(/^(genelgider|kkartikomisyon|kredikartikomisyon|stokduzeltme|hurdakarzarar)/.test(n)||['gider','komisyon','hurda'].includes(c?.sysKeyV7))return 'GIDER';
+    if(/^karhesabi|^karzarar/.test(n)||c?.sysKeyV7==='kar')return 'KAR / ZARAR';
+    if(/^iskonto/.test(n)||c?.sysKeyV7==='iskonto')return 'ISKONTO';
+    if(n==='kasa')return 'KASA';
+    return {'Toptancı':'TOPTANCI','Personel':'PERSONEL','Krediler':'KREDILER','Gider':'GIDER','Gelir':'GIDER','İskonto':'ISKONTO','Kâr / Zarar':'KAR / ZARAR','Kasa':'KASA','Banka':'BANKA','POS':'POS','Özel':'OZEL'}[c?.type]||'MUSTERI';
+  }
+  function balanceGroupOfV7(c){return String(c?.balanceGroupV7||'').trim().toLocaleUpperCase('tr-TR')||balanceGroupAutoV7(c);}
+  function balanceGroupRankV7(g){const i=BAL_GROUP_ORDER_V7.indexOf(g);return i<0?BAL_GROUP_ORDER_V7.length:i;}
+  function balanceUnitRankV7(u){const i=BAL_UNIT_ORDER_V7.indexOf(u);return i<0?BAL_UNIT_ORDER_V7.length:i;}
+  /* Satırlar: cari grupları (birim bazında borç/alacak), kasa/banka/POS hesapları ve stoklar.
+     Kasa grubundaki cari ile banka/POS hesabına bağlı cariler hesap bakiyesinden okunur (çift sayılmaz). */
   function balanceRowsV656(toDate){
-    const rows=[],push=(group,unit,debt,recv)=>{debt=Number(debt||0);recv=Number(recv||0);if(Math.abs(debt)+Math.abs(recv)<.000001)return;rows.push({group,unit,debt,recv,debtHas:reportToHasV656(unit,debt,`${toDate}T23:59:59`),recvHas:reportToHasV656(unit,recv,`${toDate}T23:59:59`)});};
-    const groups=new Map();
-    (state.customers||[]).filter(c=>c.id!=='CASH'&&!['Kasa','Banka','POS'].includes(c.type)).forEach(c=>{
-      const g=String(c.type||'Müşteri').toLocaleUpperCase('tr-TR'),vals=[['TL',Number(c.tlBalance||0)],['HAS',Number(c.hasBalance||0)],...Object.entries(c.otherBalances||{}).map(([u,v])=>[String(u).toUpperCase(),Number(v||0)])];
-      vals.forEach(([u,v])=>{const k=`${g}|${u}`,x=groups.get(k)||{group:g,unit:u,debt:0,recv:0};if(v>=0)x.recv+=v;else x.debt+=Math.abs(v);groups.set(k,x);});
+    const iso=`${toDate}T23:59:59`,acc=new Map(),n=v=>Number(v||0);
+    const add=(group,unit,v)=>{v=n(v);if(Math.abs(v)<1e-9)return;const k=group+'|'+unit,x=acc.get(k)||{group,unit,debt:0,recv:0};if(v>=0)x.recv+=v;else x.debt+=-v;acc.set(k,x);};
+    const cashLinked=c=>c.type==='Kasa'&&(state.cashAccounts||[]).some(a=>a.id===c.financeAccountId||a.customerId===c.id);
+    (state.customers||[]).forEach(c=>{
+      if(c.id==='CASH')return;const g=balanceGroupOfV7(c);
+      if(g==='KASA'||cashLinked(c)||linkedBankForCari(c)||linkedPosForCari(c))return;
+      Object.entries(cariBalancesOfV7(c)).forEach(([u,v])=>add(g,u,v));
     });
-    groups.forEach(x=>push(x.group,x.unit,x.debt,x.recv));
-    const accGroups=(list,g)=>{const m=new Map();list.forEach(a=>{const u=String(a.currency||'TL').toUpperCase(),v=Number(a.balance||0),x=m.get(u)||{debt:0,recv:0};if(v>=0)x.recv+=v;else x.debt+=Math.abs(v);m.set(u,x);});m.forEach((x,u)=>push(g,u,x.debt,x.recv));};
-    accGroups(state.cashAccounts||[],'KASA');accGroups(state.bankAccounts||[],'BANKA / POS');
-    const sv=stockValuationReport();push('BARKODLU ALTIN STOKU','HAS',0,sv.barcodeCost);
-    (state.openStocks||[]).filter(o=>o.period===state.activePeriod&&Math.abs(Number(o.amount||0))>.000001).forEach(o=>rows.push({group:`ALTIN STOĞU  ${o.name}`,unit:String(o.unit||'GR').toUpperCase(),debt:0,recv:Number(o.amount||0),debtHas:0,recvHas:openInventoryCostHas(o)}));
-    (state.scrapStocks||[]).filter(s=>s.period===state.activePeriod&&Math.abs(Number(s.amount||0))>.000001).forEach(s=>rows.push({group:String(s.name||'HURDA'),unit:'GR',debt:0,recv:Number(s.amount||0),debtHas:0,recvHas:Number(s.amount||0)*Number(s.unitCostHas||Number(s.milyem||0)/1000||0)}));
+    const ownerGroup=(a,def)=>{const c=(state.customers||[]).find(x=>x.id===a.customerId||(a.id&&x.financeAccountId===a.id));const g=c?balanceGroupOfV7(c):def;return g==='KASA'?def:g;};
+    (state.cashAccounts||[]).forEach(a=>add('KASA',String(a.currency||'TL').toUpperCase(),a.balance));
+    (state.bankAccounts||[]).forEach(a=>add(ownerGroup(a,'BANKA'),String(a.currency||'TL').toUpperCase(),a.balance));
+    (state.posAccounts||[]).forEach(a=>add(ownerGroup(a,'POS'),String(a.currency||'TL').toUpperCase(),a.balance));
+    const rows=[...acc.values()].sort((a,b)=>balanceGroupRankV7(a.group)-balanceGroupRankV7(b.group)||a.group.localeCompare(b.group,'tr')||balanceUnitRankV7(a.unit)-balanceUnitRankV7(b.unit)||a.unit.localeCompare(b.unit))
+      .map(x=>({...x,kind:'cari',debtHas:reportToHasV656(x.unit,x.debt,iso),recvHas:reportToHasV656(x.unit,x.recv,iso)}));
+    // Stoklar (Pusula düzeni): barkodlu altın maliyet HAS, özel ürünler kendi para biriminde,
+    // barkodsuz altın saf HAS, işçilik ayrı satırda.
+    const stock=(group,unit,amount,has,note='',fx=false)=>rows.push({group,unit,note,debt:0,recv:n(amount),debtHas:0,recvHas:n(has),kind:'stock',fx});
+    const bar=activeStock(),gold=bar.filter(x=>!isSpecialStockV7(x)),sp=bar.filter(isSpecialStockV7);
+    if(gold.length)stock('BARKODLU ALTIN STOKU','HAS',gold.reduce((a,x)=>a+n(x.costHas),0),gold.reduce((a,x)=>a+n(x.costHas),0),String(gold.length));
+    const spBy={};sp.forEach(x=>{const c=String(x.priceCurrency||'TL').toUpperCase();spBy[c]=(spBy[c]||0)+n(x.costNative??x.costTl??0);});
+    ['USD','HAS','TL',...Object.keys(spBy).filter(c=>!['USD','HAS','TL'].includes(c))].forEach(c=>{if(spBy[c])stock('BARKODLU ÖZEL ÜRÜNLER',c,spBy[c],reportToHasV656(c,spBy[c],iso),'',c!=='HAS');});
+    let work=0;
+    (state.openStocks||[]).filter(o=>o.period===state.activePeriod&&Math.abs(n(o.amount))>1e-6).slice().sort((a,b)=>(Number(a.pusulaCode)||1e9)-(Number(b.pusulaCode)||1e9)||String(a.name).localeCompare(String(b.name),'tr')).forEach(o=>{
+      const q=n(o.amount),cost=openInventoryCostHas(o),ayar=n(o.displayAyar);
+      const has=ayar>0?q*ayar/1000:(n(o.hasWeight)||cost);
+      work+=cost-has;stock(`ALTIN STOĞU  ${o.name}`,String(o.unit||'GR').toUpperCase(),q,has);
+    });
+    (state.scrapStocks||[]).filter(s=>s.period===state.activePeriod&&Math.abs(n(s.amount))>1e-6).forEach(s=>{const m=n(s.milyem);stock(m?`${s.name} ${m}`:String(s.name||'HURDA'),'GR',s.amount,m?n(s.amount)*m/1000:n(s.amount)*n(s.unitCostHas));});
+    const lot=state.meta?.pusulaSpecialLotV7;
+    if(lot&&n(lot.cost)){const c=String(lot.currency||'USD').toUpperCase();stock('Ö.ÜRÜN STOĞU  ÖZEL ÜRÜN KARTI',c,lot.cost,reportToHasV656(c,lot.cost,iso),lot.qty?`${qty(lot.qty)} adet`:'',c!=='HAS');}
+    if(Math.abs(work)>.005)stock('ISCILIK STOĞU','HAS',work,work);
     return rows;
   }
   function balancePusulaDataV656(fromDate,toDate){
-    const rows=balanceRowsV656(toDate),totalDebtHas=rows.reduce((a,x)=>a+Number(x.debtHas||0),0),totalRecvHas=rows.reduce((a,x)=>a+Number(x.recvHas||0),0),kurFarki=totalRecvHas-totalDebtHas,r=patronProfitReport(fromDate,toDate),discountHas=r.sales.reduce((a,s)=>a+Number(s.discount||0)/Math.max(.000001,Number(s.hasSellRateAtSale||historicalHasRate(s.date,'sell')||1)),0),salesProfit=r.grossHas+discountHas,gider=r.expHas+r.feeHas,gelir=r.tradeProfitHas,net=salesProfit-discountHas-gider+gelir+r.realizedFxPlHas,b=balanceSheetSnapshot(),equityHas=b.equity/Math.max(.000001,b.hasRate),capitalHas=equityHas-net;
-    return {rows,totalDebtHas,totalRecvHas,kurFarki,r,discountHas,salesProfit,gider,gelir,net,equityHas,capitalHas};
+    const rows=balanceRowsV656(toDate),fromIso=`${fromDate}T00:00:00`,n=v=>Number(v||0);
+    const totalDebtHas=rows.reduce((a,x)=>a+n(x.debtHas),0),totalRecvHas=rows.reduce((a,x)=>a+n(x.recvHas),0),kurFarki=totalRecvHas-totalDebtHas;
+    // Dönem kur farkı: bugünkü bakiyelerin dönem başı kuruyla değeri ile bugünkü kurla değeri arasındaki fark.
+    const fx=x=>x.kind==='cari'||x.fx;
+    const oldKur=rows.reduce((a,x)=>a+(fx(x)?reportToHasV656(x.unit,x.recv,fromIso)-reportToHasV656(x.unit,x.debt,fromIso):x.recvHas-x.debtHas),0);
+    const net=g=>rows.filter(x=>x.kind==='cari'&&x.group===g).reduce((a,x)=>a+x.recvHas-x.debtHas,0);
+    const total={salesProfit:-net('KAR / ZARAR'),discount:net('ISKONTO'),expense:rows.filter(x=>x.kind==='cari'&&x.group==='GIDER').reduce((a,x)=>a+x.recvHas,0),income:rows.filter(x=>x.kind==='cari'&&x.group==='GIDER').reduce((a,x)=>a+x.debtHas,0),fx:kurFarki};
+    total.net=total.salesProfit-total.discount-total.expense+total.income+total.fx;
+    const r=patronProfitReport(fromDate,toDate),discountHas=r.sales.reduce((a,s)=>a+n(s.discount)/Math.max(.000001,n(s.hasSellRateAtSale||historicalHasRate(s.date,'sell')||1)),0);
+    const period={salesProfit:r.grossHas+discountHas,discount:discountHas,expense:r.expHas+r.feeHas,income:r.tradeProfitHas,fx:(kurFarki-oldKur)+r.realizedFxPlHas};
+    period.net=period.salesProfit-period.discount-period.expense+period.income+period.fx;
+    const capital=-net('SERMAYE');
+    return {rows,totalDebtHas,totalRecvHas,kurFarki,oldKur,dailyKur:kurFarki-oldKur,r,total,period,capital,remaining:capital+total.net,systemCari:!!state.meta?.systemCariV7?.since};
   }
   function balancePusulaTableV656(d,fromDate,toDate){
-    return `<div class="notice"><strong>Pusula bilanço mantığı:</strong> Pozitif cari/hesap bakiyesi <b>Alacağımız</b>, negatif bakiye <b>Borcumuz</b> tarafında gösterilir. Sağdaki iki sütun her satırın HAS karşılığıdır; böylece eksi değer yerine borç/alacak yönü açıkça görünür.</div><div class="table-wrap" style="margin-top:12px;max-height:58vh"><table class="table" style="min-width:900px"><thead><tr><th>Hesap Tanımı</th><th>Cins</th><th class="num">Borcumuz</th><th class="num">Alacağımız</th><th class="num">HAS Borcumuz</th><th class="num">HAS Alacağımız</th></tr></thead><tbody>${d.rows.map(x=>`<tr><td><strong>${esc(x.group)}</strong></td><td>${esc(x.unit)}</td><td class="num">${Math.abs(x.debt)>.000001?qty(x.debt):'—'}</td><td class="num">${Math.abs(x.recv)>.000001?qty(x.recv):'—'}</td><td class="num">${Math.abs(x.debtHas)>.000001?qty(x.debtHas):'—'}</td><td class="num">${Math.abs(x.recvHas)>.000001?qty(x.recvHas):'—'}</td></tr>`).join('')}<tr style="font-weight:900;background:rgba(214,177,95,.12)"><td>TOPLAM</td><td></td><td></td><td></td><td class="num">${qty(d.totalDebtHas)} HAS</td><td class="num">${qty(d.totalRecvHas)} HAS</td></tr></tbody></table></div><div class="grid grid-2" style="margin-top:12px"><div class="card"><div class="section-head"><h3>Kur / Pozisyon Farkı</h3><span>${esc(toDate)}</span></div><div class="summary-row total"><span>Alacak HAS − Borç HAS</span><strong class="${d.kurFarki>=0?'positive':'negative'}">${qty(d.kurFarki)} HAS</strong></div><div class="muted" style="font-size:11px">Bu değer toplam borç/alacak HAS farkıdır; tek başına dönem kârı değildir.</div></div><div class="card"><div class="section-head"><h3>${esc(fromDate)} → ${esc(toDate)}</h3><span>Dönem Kâr/Zarar</span></div><div class="summary-row"><span>Satış Kârı</span><strong>${qty(d.salesProfit)} HAS</strong></div><div class="summary-row"><span>İskonto</span><strong class="negative">-${qty(d.discountHas)} HAS</strong></div><div class="summary-row"><span>Gider</span><strong class="negative">-${qty(d.gider)} HAS</strong></div><div class="summary-row"><span>Gelir</span><strong class="positive">+${qty(d.gelir)} HAS</strong></div><div class="summary-row"><span>Döviz Kur Farkı</span><strong class="${d.r.realizedFxPlHas>=0?'positive':'negative'}">${qty(d.r.realizedFxPlHas)} HAS</strong></div><div class="summary-row total"><span>Net Kâr / Zarar</span><strong class="${d.net>=0?'positive':'negative'}">${qty(d.net)} HAS</strong></div></div></div><div class="card" style="margin-top:12px"><div class="summary-row"><span>Hesaplanan Dönem Başı Sermaye</span><strong>${qty(d.capitalHas)} HAS</strong></div><div class="summary-row"><span>Net Kâr / Zarar</span><strong class="${d.net>=0?'positive':'negative'}">${qty(d.net)} HAS</strong></div><div class="summary-row total"><span>Kalan / Net Öz Kaynak</span><strong class="${d.equityHas>=0?'positive':'negative'}">${qty(d.equityHas)} HAS</strong></div></div>`;
+    const cell=v=>Math.abs(v)>.000001?qty(v):'',sign=v=>v>=0?'positive':'negative',fmtD=s=>String(s||'').slice(8,10)+'.'+String(s||'').slice(5,7);
+    let prevGroup='',prevKind='';
+    const body=d.rows.map(x=>{const gap=(x.kind==='cari'&&prevGroup&&x.group!==prevGroup)||(x.kind!==prevKind&&prevKind)?`<tr class="bal-gap-v7"><td colspan="6"></td></tr>`:'';prevGroup=x.group;prevKind=x.kind;
+      return `${gap}<tr><td><strong>${esc(x.group)}</strong></td><td>${esc(x.unit==='TL'?'TL.':x.unit)}${x.note?` <small class="muted">${esc(x.note)}</small>`:''}</td><td class="num">${x.kind==='stock'?'':cell(x.debt)}</td><td class="num">${cell(x.recv)}</td><td class="num">${x.kind==='stock'?'':cell(x.debtHas)}</td><td class="num">${cell(x.recvHas)}</td></tr>`;}).join('');
+    const pl=[['Satış Kârı','salesProfit',1],['İskonto','discount',-1],['Gider','expense',1],['Gelir','income',1],['Kur Farkı','fx',1],['Net Kâr / Zarar','net',1]];
+    return `<div class="notice"><strong>Pusula bilanço düzeni:</strong> artı bakiye <b>Alacağımız</b>, eksi bakiye <b>Borcumuz</b> sütununda; sağdaki iki sütun HAS karşılığıdır. Kasa grubu ve banka/POS'a bağlı cariler hesap bakiyesinden okunur. Grup değiştirmek için <b>Hesap Grupları</b>.</div>
+      ${d.systemCari?'':`<div class="notice" style="margin-top:8px;border-color:var(--warn,#c90)"><strong>Sistem hesapları otomatik kaydı kapalı:</strong> yeni satış kârı, gider ve iskontolar KAR HESABI / GENEL GIDERLER carilerine yazılmıyor; TOPLAM kâr/zarar yalnızca aktarılan bakiyeleri gösterir, yeni işlemler kur farkında görünür. Cari → Sistem Hesapları → <b>Otomatik kaydı aç</b>.</div>`}
+      <div class="table-wrap" style="margin-top:12px;max-height:58vh"><table class="table bal-table-v7" style="min-width:900px"><thead><tr><th>Hesap Tanımı</th><th>Cins</th><th class="num">Borcumuz</th><th class="num">Alacağımız</th><th class="num">HAS Borcumuz</th><th class="num">HAS Alacağımız</th></tr></thead><tbody>${body}
+      <tr style="font-weight:900;background:rgba(214,177,95,.12)"><td>TOPLAM</td><td></td><td></td><td></td><td class="num">${qty(d.totalDebtHas)}</td><td class="num">${qty(d.totalRecvHas)}</td></tr></tbody></table></div>
+      <div class="grid grid-2" style="margin-top:12px">
+        <div class="card"><div class="summary-row total"><span>Kur Farkı</span><strong class="${sign(d.kurFarki)}">${qty(d.kurFarki)} HAS</strong></div><div class="summary-row"><span>Eski Kur Farkı <small class="muted">(${esc(fmtD(fromDate))} kuruyla)</small></span><strong>${qty(d.oldKur)} HAS</strong></div><div class="summary-row"><span>Dönem Kur Farkı</span><strong>${qty(d.dailyKur)} HAS</strong></div>
+          <div class="summary-row" style="margin-top:10px"><span>Sermaye</span><strong>${qty(d.capital)} HAS</strong></div><div class="summary-row"><span>Net Kâr / Zarar</span><strong class="${sign(d.total.net)}">${qty(d.total.net)} HAS</strong></div><div class="summary-row total"><span>Kalan Sermaye</span><strong class="${sign(d.remaining)}">${qty(d.remaining)} HAS</strong></div></div>
+        <div class="card"><table class="table"><thead><tr><th></th><th class="num">${esc(fmtD(fromDate))} - ${esc(fmtD(toDate))}</th><th class="num">TOPLAM</th></tr></thead><tbody>${pl.map(([t,k,s])=>`<tr${k==='net'?' style="font-weight:900"':''}><td>${t}</td><td class="num">${qty(s*d.period[k])}</td><td class="num ${k==='net'?sign(d.total.net):''}">${qty(s*d.total[k])}</td></tr>`).join('')}</tbody></table>
+          <div class="muted" style="font-size:11px;margin-top:6px">TOPLAM sütunu Pusula'daki gibi hesap bakiyelerinden: Satış Kârı = KAR / ZARAR, Gider = GIDER grubunun alacak HAS'ı, Gelir = borç HAS'ı. Dönem sütunu bu programdaki işlemlerden hesaplanır.</div></div>
+      </div>`;
+  }
+  /* Hesap grupları: Pusula'daki hesap tipine göre carilerin bilanço grubu. */
+  function openBalanceGroupsV7(back){
+    const list=(state.customers||[]).filter(c=>c.id!=='CASH').map(c=>({c,b:cariBalancesOfV7(c)})).filter(x=>Object.keys(x.b).length||x.c.balanceGroupV7)
+      .sort((a,b)=>balanceGroupRankV7(balanceGroupOfV7(a.c))-balanceGroupRankV7(balanceGroupOfV7(b.c))||String(a.c.name).localeCompare(String(b.c.name),'tr'));
+    const groups=[...new Set([...BAL_GROUP_ORDER_V7,'TAMİRCİ',...(state.customers||[]).map(c=>String(c.balanceGroupV7||'').toLocaleUpperCase('tr-TR')).filter(Boolean)])];
+    modal('Bilanço Hesap Grupları',`<div class="notice">Pusula'daki <b>hesap tipi</b> ile aynı grubu seçin (MUSTERI, PERSONEL, KREDILER, POS…). Listede olmayan bir grup adı da yazabilirsiniz. Boş bırakılırsa cari türüne göre otomatik grup kullanılır.</div>
+      <input id="bgSearch" class="input" style="margin-top:10px" placeholder="Cari ara">
+      <datalist id="bgList">${groups.map(g=>`<option value="${esc(g)}">`).join('')}</datalist>
+      <div class="table-wrap" style="margin-top:10px;max-height:56vh"><table class="table"><thead><tr><th>Kod</th><th>Cari</th><th>Tür</th><th>Bakiye</th><th>Bilanço Grubu</th></tr></thead><tbody>${list.map(({c,b})=>`<tr data-bg-row="${esc(c.id)}" data-bg-search="${esc((String(c.code||'')+' '+c.name).toLocaleLowerCase('tr-TR'))}"><td>${esc(String(c.code||''))}</td><td><b>${esc(c.name)}</b></td><td>${esc(c.type||'')}</td><td style="font-size:12px">${Object.entries(b).map(([u,v])=>`${qty(v)} ${esc(u)}`).join(' · ')}</td><td><input class="input" list="bgList" data-bg="${esc(c.id)}" value="${esc(c.balanceGroupV7||'')}" placeholder="${esc(balanceGroupAutoV7(c))}" style="min-width:150px"></td></tr>`).join('')}</tbody></table></div>`,()=>{
+      let changed=0;
+      document.querySelectorAll('[data-bg]').forEach(inp=>{const c=state.customers.find(x=>x.id===inp.dataset.bg);if(!c)return;let v=inp.value.trim().toLocaleUpperCase('tr-TR');if(v===balanceGroupAutoV7(c))v='';if(v===String(c.balanceGroupV7||''))return;if(v)c.balanceGroupV7=v;else delete c.balanceGroupV7;changed++;});
+      if(changed){audit(`Bilanço hesap grubu değiştirildi: ${changed} cari`,'Cari');save();}
+      closeModal();toast(changed?`${changed} carinin bilanço grubu güncellendi`:'Değişiklik yok');if(back)back();
+    },'KAYDET');
+    const modalEl=document.querySelector('#modalRoot .modal');if(modalEl)modalEl.style.width='min(1100px,97vw)';
+    document.getElementById('bgSearch')?.addEventListener('input',e=>{const q=e.target.value.trim().toLocaleLowerCase('tr-TR');document.querySelectorAll('[data-bg-row]').forEach(r=>{r.style.display=!q||r.dataset.bgSearch.includes(q)?'':'none';});});
+  }
+  /* Pusula'dan alınan bilanço Excel'i ile bu programın bilançosunu satır satır karşılaştırır. */
+  function balanceCompareHtmlV7(p,d){
+    const P=AsilPusulaImport,key=x=>P.balanceKey(x.group,x.unit),ours=new Map(),theirs=new Map(),order=[];
+    const put=(m,x)=>{const k=key(x),o=m.get(k)||{group:x.group,unit:x.unit,debt:0,recv:0,debtHas:0,recvHas:0};o.debt+=Number(x.debt||0);o.recv+=Number(x.recv||0);o.debtHas+=Number(x.debtHas||0);o.recvHas+=Number(x.recvHas||0);m.set(k,o);if(!order.includes(k))order.push(k);};
+    p.rows.forEach(x=>put(theirs,x));d.rows.forEach(x=>put(ours,x));
+    const z={debt:0,recv:0,debtHas:0,recvHas:0},diffRows=[];let same=0;
+    order.forEach(k=>{const a=theirs.get(k)||{...z},b=ours.get(k)||{...z},src=theirs.get(k)||ours.get(k);
+      const dn=(b.recv-b.debt)-(a.recv-a.debt),dh=(b.recvHas-b.debtHas)-(a.recvHas-a.debtHas),stockRow=src.unit==='GR'||src.unit==='ADET';
+      // Yuvarlama payı: Pusula 2 basamak gösterir.
+      if(Math.abs(b.debt-a.debt)<.015&&Math.abs(b.recv-a.recv)<.015&&(stockRow?Math.abs(dh)<.015:true)){same++;return;}
+      diffRows.push(`<tr><td><b>${esc(src.group)}</b></td><td>${esc(src.unit==='TL'?'TL.':src.unit)}</td><td class="num">${theirs.has(k)?qty(a.debt)+' / '+qty(a.recv):'<span class="muted">yok</span>'}</td><td class="num">${ours.has(k)?qty(b.debt)+' / '+qty(b.recv):'<span class="muted">yok</span>'}</td><td class="num ${dn>=0?'positive':'negative'}">${qty(dn)}</td><td class="num ${dh>=0?'positive':'negative'}">${qty(dh)}</td></tr>`);});
+    const line=(t,a,b)=>a===undefined?'':`<tr><td>${t}</td><td class="num">${qty(a)}</td><td class="num">${qty(b)}</td><td class="num ${Math.abs(b-a)<.015?'':(b-a>=0?'positive':'negative')}">${Math.abs(b-a)<.015?'✓':qty(b-a)}</td></tr>`;
+    return `<div class="card" style="margin-top:12px"><div class="section-head"><h3>Pusula Bilançosu ile Karşılaştırma</h3><span>${same} satır aynı · ${diffRows.length} satır farklı</span></div>
+      ${diffRows.length?`<div class="table-wrap" style="max-height:46vh"><table class="table" style="min-width:820px"><thead><tr><th>Hesap</th><th>Cins</th><th class="num">Pusula borç / alacak</th><th class="num">Bizde borç / alacak</th><th class="num">Fark (net)</th><th class="num">HAS fark</th></tr></thead><tbody>${diffRows.join('')}</tbody></table></div>`:'<div class="notice">Tüm hesap satırları Pusula ile aynı.</div>'}
+      <div class="muted" style="font-size:11px;margin:6px 0">Fark = bizdeki net (alacak − borç) − Pusula'daki net. HAS farkı kurlar farklıysa tutarlar aynı olsa da çıkabilir.</div>
+      <table class="table" style="margin-top:8px"><thead><tr><th></th><th class="num">Pusula</th><th class="num">Bizde</th><th class="num">Fark</th></tr></thead><tbody>
+      ${p.totals?line('Toplam HAS Borcumuz',p.totals.debtHas,d.totalDebtHas)+line('Toplam HAS Alacağımız',p.totals.recvHas,d.totalRecvHas):''}
+      ${line('Kur Farkı',p.kur.total,d.kurFarki)}${line('Satış Kârı (TOPLAM)',p.total.salesProfit,d.total.salesProfit)}${line('Gider (TOPLAM)',p.total.expense,d.total.expense)}${line('Gelir (TOPLAM)',p.total.income,d.total.income)}${line('Net Kâr / Zarar',p.total.net,d.total.net)}${line('Sermaye',p.capital.capital,d.capital)}${line('Kalan Sermaye',p.capital.remaining,d.remaining)}
+      </tbody></table></div>`;
   }
 
   function patronProfitReport(fromDate,toDate){
@@ -4354,12 +4460,25 @@ function stockSummaryView(){
     const stockTl=sv.totalCost*hasRate,totalAssets=stockTl+liquidAssetsTl+receivablesTl,totalLiabilities=accountDebtTl+payablesTl,equity=totalAssets-totalLiabilities;
     return {date:now(),hasRate,sv,stockTl,liquidAssetsTl,receivablesTl,accountDebtTl,payablesTl,totalAssets,totalLiabilities,equity,receivables,payables,accountDetails};
   }
+  let balanceViewV7={from:'',to:'',pusula:null,pusulaFile:''};
   function openBalanceSheet(){
     const today=new Date().toISOString().slice(0,10),d=new Date(),first=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
-    modal('Bilanço — Pusula Düzeni',`<div class="form-grid"><div class="labelled"><label>Başlangıç Tarihi</label><input id="balFrom" class="input" type="date" value="${first}"></div><div class="labelled"><label>Bitiş Tarihi</label><input id="balTo" class="input" type="date" value="${today}"></div><div class="labelled"><label>&nbsp;</label><button class="btn btn-primary" id="balCalc">GÖSTER</button></div></div><div id="balResult" style="margin-top:14px"></div>`,null);
+    const from0=balanceViewV7.from||first,to0=balanceViewV7.to||today;
+    modal('Bilanço — Pusula Düzeni',`<div class="form-grid"><div class="labelled"><label>Başlangıç Tarihi</label><input id="balFrom" class="input" type="date" value="${from0}"></div><div class="labelled"><label>Bitiş Tarihi</label><input id="balTo" class="input" type="date" value="${to0}"></div><div class="labelled"><label>&nbsp;</label><button class="btn btn-primary" id="balCalc">GÖSTER</button></div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-outline" id="balGroupsV7" type="button">Hesap Grupları</button><label class="btn btn-outline" style="cursor:pointer">📥 Pusula bilançosu ile karşılaştır<input id="balPusulaFileV7" type="file" accept=".xlsx,.xls" style="display:none"></label>${balanceViewV7.pusula?`<span class="badge gold" style="align-self:center">${esc(balanceViewV7.pusulaFile)}</span><button class="btn btn-outline" id="balPusulaClearV7" type="button">Karşılaştırmayı kaldır</button>`:''}</div>
+      <div id="balResult" style="margin-top:14px"></div>`,null);
     const modalEl=document.querySelector('#modalRoot .modal');if(modalEl)modalEl.style.width='min(1260px,97vw)';
-    const calc=()=>{const from=document.getElementById('balFrom')?.value,to=document.getElementById('balTo')?.value;if(!from||!to)return toast('Başlangıç ve bitiş tarihi seçin','err');if(from>to)return toast('Başlangıç tarihi bitiş tarihinden büyük olamaz','err');const d=balancePusulaDataV656(from,to),b=balanceSheetSnapshot(),toHas=tl=>Number(tl||0)/Math.max(1,b.hasRate),box=document.getElementById('balResult');if(box)box.innerHTML=balancePusulaTableV656(d,from,to)+`<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:800">Yönetim bilançosu özeti</summary><div class="grid grid-2" style="margin-top:12px"><div class="card"><div class="section-head"><h3>VARLIKLAR</h3><span>${trDate(b.date)}</span></div><div class="summary-row"><span>Altın / Ziynet / Hurda Stok Maliyeti</span><strong>${money(b.stockTl)}<br><small>${qty(b.sv.totalCost)} HAS</small></strong></div><div class="summary-row"><span>Kasa + Banka</span><strong>${money(b.liquidAssetsTl)}<br><small>${qty(toHas(b.liquidAssetsTl))} HAS</small></strong></div><div class="summary-row"><span>Cari Alacaklar</span><strong>${money(b.receivablesTl)}<br><small>${qty(toHas(b.receivablesTl))} HAS</small></strong></div><div class="summary-row total"><span>TOPLAM VARLIK</span><strong>${money(b.totalAssets)}<br><small>${qty(toHas(b.totalAssets))} HAS</small></strong></div></div><div class="card"><div class="section-head"><h3>BORÇLAR + ÖZ KAYNAK</h3><span>Denge</span></div><div class="summary-row"><span>Banka/Kasa Eksi Bakiyeler</span><strong>${money(b.accountDebtTl)}</strong></div><div class="summary-row"><span>Cari / Toptancı Borçları</span><strong>${money(b.payablesTl)}</strong></div><div class="summary-row"><span>Toplam Borç</span><strong>${money(b.totalLiabilities)}<br><small>${qty(toHas(b.totalLiabilities))} HAS</small></strong></div><div class="summary-row total"><span>NET ÖZ KAYNAK</span><strong class="${b.equity>=0?'positive':'negative'}">${money(b.equity)}<br><small>${qty(toHas(b.equity))} HAS</small></strong></div></div></div></details>`;};
-    document.getElementById('balCalc')?.addEventListener('click',calc);calc();
+    const calc=()=>{const from=document.getElementById('balFrom')?.value,to=document.getElementById('balTo')?.value;if(!from||!to)return toast('Başlangıç ve bitiş tarihi seçin','err');if(from>to)return toast('Başlangıç tarihi bitiş tarihinden büyük olamaz','err');balanceViewV7.from=from;balanceViewV7.to=to;
+      const d=balancePusulaDataV656(from,to),box=document.getElementById('balResult');if(box)box.innerHTML=(balanceViewV7.pusula?balanceCompareHtmlV7(balanceViewV7.pusula,d):'')+balancePusulaTableV656(d,from,to);};
+    document.getElementById('balCalc')?.addEventListener('click',calc);
+    document.getElementById('balGroupsV7')?.addEventListener('click',()=>{if(!v5Guard('canManageDefinitions','Hesap grubu değiştirmek için tanımlama yetkisi gerekir'))return;openBalanceGroupsV7(openBalanceSheet);});
+    document.getElementById('balPusulaClearV7')?.addEventListener('click',()=>{balanceViewV7.pusula=null;openBalanceSheet();});
+    document.getElementById('balPusulaFileV7')?.addEventListener('change',async e=>{const f=e.target.files?.[0];if(!f)return;
+      try{const X=await loadXlsxV7(),wb=X.read(await f.arrayBuffer(),{type:'array'}),rows=X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:'',raw:true});
+        if(!AsilPusulaImport.isBalanceSheet(rows))throw new Error('Bu dosya Pusula bilanço raporuna benzemiyor (Hesap Tanimi / Cins başlığı yok)');
+        balanceViewV7.pusula=AsilPusulaImport.parseBalanceSheet(rows);balanceViewV7.pusulaFile=f.name;openBalanceSheet();
+      }catch(err){toast(err.message||String(err),'err');}});
+    calc();
   }
 
 
@@ -4672,15 +4791,22 @@ function stockSummaryView(){
   }
   async function saveEncryptedBackupV7(){
     if(!window.AsilBackupCrypto)return toast('Şifreleme modülü yüklenemedi','err');
+    const file=backupFileNameV664().replace('.json','_SIFRELI.json');
+    // Kaydetme penceresi parola ve şifrelemeden ÖNCE açılır: tarayıcı pencereyi yalnız tıklamadan hemen sonra izin verir.
+    let handle=null;
+    if(typeof window.showSaveFilePicker==='function'){
+      try{handle=await window.showSaveFilePicker({suggestedName:file,types:[{description:'Asil Kuyumcu Şifreli Yedek',accept:{'application/json':['.json']}}]});}
+      catch(err){if(err?.name==='AbortError')return;handle=null;}
+    }
     const pw=prompt('Yedek parolası (en az 8 karakter). Bu parolayı unutursanız yedek açılamaz:');if(!pw)return;
     if(pw.length<8)return toast('Parola en az 8 karakter olmalı','err');
     if(prompt('Parolayı tekrar girin:')!==pw)return toast('Parolalar eşleşmedi','err');
     try{
       const inner=await localBackupEnvelopeV664();
       const env=await AsilBackupCrypto.encrypt(inner,pw,{createdAt:inner.createdAt,appVersion:APP_VERSION,business:inner.business});
-      const file=backupFileNameV664().replace('.json','_SIFRELI.json');
-      const saved=await saveTextAsV672(JSON.stringify(env),file,'application/json');
-      if(!saved.ok)return;
+      const text=JSON.stringify(env);let saved;
+      if(handle){const w=await handle.createWritable();await w.write(new Blob([text],{type:'application/json'}));await w.close();saved={ok:true,name:handle.name||file};}
+      else{downloadText(text,file,'application/json');saved={ok:true,name:file};}
       state.meta=state.meta||{};state.meta.lastEncryptedBackup=now();save(false);
       audit(`Şifreli harici yedek kaydedildi · ${saved.name}`,'Yedek');toast('Şifreli yedek kaydedildi');
     }catch(e){toast('Şifreli yedek oluşturulamadı: '+(e?.message||e),'err');}
@@ -7362,7 +7488,9 @@ function stockSummaryView(){
       }
       if(!remote||typeof remote!=='object'||!Array.isArray(remote.stocks)){state.cloudSync.lastStatus='Geçersiz Bulut Verisi';return false;}
       if(state.meta?.freshSeedV7){await cloudLockV7(()=>cloudAdoptRemoteV7(cloudNormV7(remote)));if(manual)toast('Bulut verisi alındı');cloudRenderV7();return true;}
-      const incomingGuard=productionDropIssuesV682(remote,state);
+      // Bulut verisi, bulutun bu cihazın bildiği son hâli ile karşılaştırılır; cihazda henüz gönderilmemiş
+      // yeni kayıtlar (ör. büyük bir aktarım) buluttaki veriyi "küçülmüş" göstermesin.
+      const incomingGuard=productionDropIssuesV682(remote,cloudBaseV7||state);
       if(incomingGuard.issues.length&&!force){
         state.cloudSync.lastStatus='UZAK VERİ GÜVENLİK KİLİDİ';
         state.cloudSync.lastError='Buluttan gelen veri anormal küçülmüş: '+incomingGuard.issues.join(' · ');
@@ -7561,7 +7689,9 @@ function stockSummaryView(){
         }
         remote=cloudUnwrapRemoteV7(remote);if(!remote)return;
         if(state.meta?.freshSeedV7){await cloudLockV7(()=>cloudAdoptRemoteV7(cloudNormV7(remote)));cloudRenderV7();return;}
-        const inbound=productionDropIssuesV682(remote,state);
+        const stamp=remote?.meta?.updatedAt;
+        if(stamp&&stamp!==cloudBaseV7?.meta?.updatedAt&&cloudSeenStampsV7.includes(stamp))return; // daha önce görülmüş eski sürüm
+        const inbound=productionDropIssuesV682(remote,cloudBaseV7||state);
         if(inbound.issues.length){
           state.cloudSync.lastStatus='UZAK VERİ REDDEDİLDİ';state.cloudSync.lastError=inbound.issues.join(' · ');
           state.meta=state.meta||{};state.meta.productionGuardV682={date:now(),blocked:true,direction:'stream-to-device',issues:inbound.issues,candidate:inbound.candidate,remote:inbound.remote};
@@ -7657,7 +7787,8 @@ function stockSummaryView(){
         return {ok:true,name:handle.name||name,method:'picker'};
       }catch(err){
         if(err?.name==='AbortError')return {ok:false,cancelled:true};
-        throw err;
+        // Tıklamanın üzerinden zaman geçtiyse tarayıcı pencereyi açmaz; dosya indirme klasörüne kaydedilir.
+        if(err?.name!=='SecurityError'&&err?.name!=='NotAllowedError')throw err;
       }
     }
     // Tarayıcı klasör seçme API'sini desteklemiyorsa klasik indirme kullanılır.

@@ -434,3 +434,71 @@ test('özel ürün aktarımı altın stoklarına dokunmaz; USD fiyatlı ürün s
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('bilanço Pusula düzeninde: kasa bir kez sayılır, hesap grubu değiştirilir, Pusula bilançosu ile karşılaştırılır', async () => {
+  const XLSX = require('xlsx');
+  const os = require('node:os'); const path = require('node:path'); const fs = require('node:fs');
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'pusula-bilanco-')), 'bilanco.xlsx');
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ['Hesap Tanimi ', 'Cins ', 'Borcumuz ', 'Alacağımız ', ' ', 'Borcumuz ', 'Alacağımız '],
+    ['MUSTERI ', 'TL. ', 100, 50, ' ', 0.02, 0.01],
+    ['KASA ', 'TL. ', 0, 123, ' ', 0, 0.02],
+    ['TOPLAM ', ' ', ' ', ' ', ' ', 0.02, 0.03],
+  ]), 'Sayfa1');
+  XLSX.writeFile(wb, file);
+
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  // Pusula'daki gibi bir "KASA" carisi: kasa hesabının aynası, bilançoda ikinci kez sayılmamalı.
+  const cariFile = path.join(path.dirname(file), 'cari.xlsx');
+  const wb2 = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb2, XLSX.utils.aoa_to_sheet([['FIRMA UNVANI ', 'KOD ', 'TL. '], ['KASA ', 1, 999999], ['TEST MÜŞTERİ ', 5000, 1500]]), 'Cari');
+  XLSX.writeFile(wb2, cariFile);
+  await p.click('[data-go="backup"]');
+  await p.click('#pusulaImportBackupV7');
+  await p.selectOption('#piMode', 'cari');
+  await p.setInputFiles('#piFile', cariFile);
+  await p.waitForFunction(() => /Excel'de:<\/b> 2 cari/.test(document.getElementById('piResult').innerHTML), null, { timeout: 10000 });
+  p.removeAllListeners('dialog'); p.on('dialog', (d) => d.accept());
+  await p.click('#modalConfirm');
+  await p.waitForFunction(() => !document.getElementById('modalRoot'), null, { timeout: 15000 });
+  await p.waitForTimeout(1500);
+  assert.equal(await p.locator('.critical-alert').count(), 0, 'aktarım sonrası yanlış veri güvenliği uyarısı çıkmamalı');
+  const openBal = async () => {
+    await p.evaluate(() => (document.querySelector('[data-route="reports"]') || document.querySelector('[data-go="reports"]')).click());
+    await p.click('[data-pusula-report="balance_sheet"]');
+    await p.waitForSelector('#balResult table');
+  };
+  await openBal();
+  const rows = await p.$$eval('#balResult .bal-table-v7 tbody tr', (trs) => trs.map((tr) => [...tr.children].map((td) => td.innerText.trim())));
+  const kasaTl = rows.filter((r) => r[0] === 'KASA' && r[1] === 'TL.');
+  assert.equal(kasaTl.length, 1, 'KASA TL tek satır olmalı');
+  const st = fb.db.state;
+  const cashTl = st.cashAccounts.filter((a) => a.currency === 'TL').reduce((n, a) => n + Number(a.balance || 0), 0);
+  const shown = Number(kasaTl[0][3].replace(/\./g, '').replace(',', '.'));
+  assert.equal(Math.round(shown * 100), Math.round(cashTl * 100), 'KASA satırı kasa hesaplarının toplamı olmalı');
+  assert.ok(rows.some((r) => r[0] === 'TOPLAM'));
+
+  // Hesap grubu: bakiyeli bir cariyi PERSONEL grubuna al.
+  await p.click('#balGroupsV7');
+  const cariId = await p.$$eval('[data-bg-row]', (trs) => trs.find((tr) => tr.children[2].innerText.trim() === 'Müşteri')?.dataset.bgRow);
+  assert.ok(cariId, 'listede bakiyeli müşteri olmalı');
+  const cari = { id: cariId };
+  await p.fill(`[data-bg="${cari.id}"]`, 'personel');
+  await p.click('#modalConfirm');
+  await p.waitForSelector('#balResult table');
+  const groups = await p.$$eval('#balResult .bal-table-v7 tbody tr td:first-child', (tds) => tds.map((td) => td.innerText.trim()));
+  assert.ok(groups.includes('PERSONEL'), 'PERSONEL grubu bilançoda görünmeli: ' + [...new Set(groups)]);
+  await p.waitForTimeout(3000);
+  assert.equal(fb.db.state.customers.find((c) => c.id === cari.id).balanceGroupV7, 'PERSONEL');
+
+  // Pusula bilanço Excel'i ile karşılaştırma
+  await p.setInputFiles('#balPusulaFileV7', file);
+  await p.waitForSelector('text=Pusula Bilançosu ile Karşılaştırma');
+  const cmp = await p.innerText('#balResult');
+  assert.match(cmp, /satır farklı/);
+  assert.match(cmp, /Toplam HAS Alacağımız/);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});

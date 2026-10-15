@@ -191,3 +191,49 @@ test('Pusula barkodlu: gerçek işçilik maliyet − has; gram başı işçilik 
   assert.deepEqual(P.fileGrandTotal(rows, d.mapping), { count: 2, gram: 9.3, line: 4 });
   assert.equal(P.looksTruncated(rows, d.headerIndex), false);
 });
+
+test('Pusula bilanço raporu okunur (grup satırları, toplam, kur farkı, kâr/zarar, sermaye)', () => {
+  const s = ' ';
+  const rows = [
+    ['Hesap Tanimi ', 'Cins ', 'Borcumuz ', 'Alacağımız ', s, 'Borcumuz ', 'Alacağımız ', 'Hestip ', s, 'Borc ', 'Alacak '],
+    ['MUSTERI ', 22, 10, 1, s, 9.37, 0.94, s, s, s, s],
+    ['MUSTERI ', 'TL. ', 6600, 0, s, 1, 0, s, s, s, s],
+    [s, s, s, s, s, s, s, s, s, s, s],
+    ['KAR / ZARAR ', 'HAS ', 5, 0, s, 5, 0, s, s, s, s],
+    ['SERMAYE ', 'HAS ', 20, 2, s, 20, 2, s, s, s, s],
+    ['BARKODLU ALTIN STOKU ', 'HAS  12 ', s, 30, s, s, 30, s, s, s, s],
+    ['ALTIN STOĞU  CEYREK ', 'GR ', s, 4, s, s, 6.42, s, s, 7, 5],
+    ['TOPLAM ', s, s, s, s, 35.37, 39.36, '* ', s, s, s],
+    [s, s, s, 'Kur Farkı ', s, s, 3.99, s, s, s, s],
+    [s, s, s, 'Eski Kur Farkı ', s, s, 3, s, s, s, s],
+    [s, s, s, 'Gunluk Kur Farkı ', s, s, 0.99, s, s, s, s],
+    [s, s, s, s, s, '30.09 - 15.10 ', 'TOPLAM ', s, s, s, s],
+    [s, s, s, 'Satış Karı ', s, 1, 5, s, s, s, s],
+    [s, s, s, 'Iskonto ', s, 0, -0.5, s, s, s, s],
+    [s, s, s, 'Kur Farki ', s, 0.99, 3.99, s, s, s, s],
+    [s, s, s, 'Net Kar/Zarar ', s, 1.99, 8.49, s, s, s, s],
+    [s, s, s, s, s, 'Sermaye ', 18, s, s, s, s],
+    [s, s, s, s, s, 'Kalan Sermaye ', 26.49, s, s, s, s],
+  ];
+  assert.equal(P.isBalanceSheet(rows), true);
+  const b = P.parseBalanceSheet(rows);
+  assert.equal(b.rows.length, 6);
+  assert.deepEqual(b.rows[1], { group: 'MUSTERI', rawGroup: 'MUSTERI', unit: 'TL', note: '', debt: 6600, recv: 0, debtHas: 1, recvHas: 0, line: 3 });
+  assert.equal(b.rows[4].unit, 'HAS');
+  assert.equal(b.rows[4].note, '12');
+  assert.equal(b.rows[5].group, 'ALTIN STOĞU CEYREK');
+  assert.deepEqual(b.totals, { debtHas: 35.37, recvHas: 39.36 });
+  assert.deepEqual(b.kur, { total: 3.99, old: 3, daily: 0.99 });
+  assert.equal(b.periodLabel, '30.09 - 15.10');
+  assert.equal(b.total.salesProfit, 5);
+  assert.equal(b.total.discount, -0.5);
+  assert.equal(b.period.fx, 0.99);
+  assert.equal(b.total.net, 8.49);
+  assert.equal(b.capital.capital, 18);
+  assert.equal(b.capital.remaining, 26.49);
+  // Stok satırlarında GR / ADET farkı karşılaştırmayı bozmaz; para birimi satırlarında birim anahtarın parçasıdır.
+  assert.equal(P.balanceKey('ALTIN STOĞU  CEYREK', 'GR'), P.balanceKey('ALTIN STOĞU CEYREK', 'ADET'));
+  assert.notEqual(P.balanceKey('BARKODLU ÖZEL ÜRÜNLER', 'USD'), P.balanceKey('BARKODLU ÖZEL ÜRÜNLER', 'TL.'));
+  assert.equal(P.balanceKey('MUSTERI', 'TL.'), P.balanceKey('MUSTERI ', 'TL'));
+  assert.equal(P.isBalanceSheet([['FIRMA UNVANI', 'KOD', 'HAS']]), false);
+});
