@@ -35,10 +35,12 @@ Firebase Console → **Project settings** → **General** → **Web API Key** de
 Programda **Yedek · Bulut → Bulut Girişi / Ayarları** (veya giriş ekranındaki **☁ Bulut Girişi**)
 → Web API anahtarı, e-posta, şifre → **GİRİŞ YAP**. Bunu mağazadaki her PC/tablette bir kez yapın.
 
-## 6. NFC köprüsü için sunucu anahtarı
-Firebase Console → Project settings → **Service accounts** → **Database secrets** → anahtarı kopyalayın.
-Vercel → Proje → Settings → **Environment Variables** → `FIREBASE_DB_SECRET` = anahtar → yeniden deploy.
-(Bu anahtar yalnızca sunucuda durur; tarayıcıya gönderilmez.)
+## 6. NFC köprüsü
+NFC köprüsü (`/api/nfc`) eşleştirme kodlarını bu projenin `nfcSessions` düğümünde tutar. Sunucu
+anahtarı gerekmez: PC/tablet oturumu açar ve sonucu kendi **bulut girişi** anahtarıyla okur;
+telefondaki NFC yardımcısı anahtarsız yazar ve kural buna yalnız bekleyen, süresi dolmamış bir
+kod için izin verir. Kimlik verisini giriş yapmamış kimse okuyamaz. NFC başlatılan cihazda bulut
+girişi yapılmış olmalıdır. (İsteğe bağlı: Vercel'de `FIREBASE_DB_SECRET` tanımlanırsa sunucu onu kullanır.)
 
 ## 7. Kuralları yayınlayın
 Realtime Database → **Rules** → bu repodaki `database.rules.json` içeriğini yapıştırın → **Publish**.
