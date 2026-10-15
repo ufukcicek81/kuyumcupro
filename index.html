@@ -7609,7 +7609,9 @@ function stockSummaryView(){
   /* İki cihaz aynı anda işlem yaparsa aynı belge numarası oluşabilir; numara değiştirilmez, kullanıcı uyarılır. */
   function cloudDuplicateDocsV7(){
     const dup=[];
-    ['sales','tradeMoves','purchases','expenses'].forEach(k=>{const seen=new Set();(state[k]||[]).forEach(x=>{const d=x?.docNo;if(!d)return;if(seen.has(d))dup.push(d);seen.add(d);});});
+    // Bir belge birden çok satır olabilir (ör. altın alışta her kalem ayrı satır, aynı belge no ve
+    // aynı zaman). Çakışma, aynı numaranın farklı zamanda/kullanıcıda ikinci bir belgeye verilmesidir.
+    ['sales','tradeMoves','purchases','expenses'].forEach(k=>{const first=new Map();(state[k]||[]).forEach(x=>{const d=x?.docNo;if(!d)return;const sig=String(x.date||x.createdAt||'')+'|'+String(x.user||'');if(!first.has(d))first.set(d,sig);else if(first.get(d)!==sig)dup.push(d);});});
     return dup;
   }
   /* Bulut boş liste/nesneleri saklamaz; birleştirilen veride eksik kalan boş alanları cihazdaki
