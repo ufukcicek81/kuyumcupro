@@ -3523,7 +3523,7 @@ function stockSummaryView(){
     });
     document.getElementById('goldPrintV7')?.addEventListener('click',()=>{
       const w=window.open('','_blank','width=900,height=800');if(!w)return toast('Tarayıcı açılır pencereyi engelledi','err');
-      w.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Altın Stokları</title><style>body{font-family:Arial,sans-serif;margin:12mm}h2{margin:0 0 6px}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border:1px solid #999;padding:3px 6px}th{background:#ddd;text-align:left}.num{text-align:right}tr.total td,tr.kasa td{background:#f5d9b5;font-weight:700}tr.gap td{border:0}</style></head><body><h2>${esc(state.settings?.companyName||'ASİL KUYUMCULUK')} — ALTIN STOKLARI</h2><div>Dönem ${state.activePeriod} · ${new Date().toLocaleString('tr-TR')}</div><br>${goldStockTableHtmlV7(rows)}<script>window.onload=()=>setTimeout(()=>window.print(),200)<\/script></body></html>`);
+      w.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Altın Stokları</title><style>*{color:#000!important;background:#fff!important}body{font-family:Arial,sans-serif;margin:8mm;font-weight:700}h2{margin:0 0 6px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #000;padding:3px 6px}th{text-align:left;border-bottom:2px solid #000}.num{text-align:right}tr.total td,tr.kasa td{font-weight:900;border-top:2px solid #000;border-bottom:2px solid #000}tr.gap td{border:0}</style></head><body><h2>${esc(state.settings?.companyName||'ASİL KUYUMCULUK')} — ALTIN STOKLARI</h2><div>Dönem ${state.activePeriod} · ${new Date().toLocaleString('tr-TR')}</div><br>${goldStockTableHtmlV7(rows)}<script>window.onload=()=>setTimeout(()=>window.print(),200)<\/script></body></html>`);
       w.document.close();
     });
     const wrap=document.querySelector('#modalRoot .gold-wrap-v7');
@@ -8961,13 +8961,17 @@ function stockSummaryView(){
     if(!name)throw new Error('Fiş yazıcısı bulunamadı');
     p.printerName=name;save();return name;
   }
+  /* Fiş yazıcısı (termal) gri ve ince yazıyı noktalı/soluk basar: tüm fişlerde yazı tam siyah,
+     kalın ve okunur boyutta; çizgiler siyah. Ölçüden önce eklenir ki fiş boyu doğru çıksın. */
+  var RECEIPT_MONO_CSS_V7='<style id="receiptMonoV7">*{color:#000!important;opacity:1!important;text-shadow:none!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}html,body,.receipt{background:#fff!important}body,.receipt,.receipt *{font-weight:700!important}.receipt{font-size:12px!important}.receipt .rp span:first-child,.receipt .items th,.receipt .items td,.receipt .branch{font-size:11px!important}.receipt .note,.receipt .sign div{font-size:10px!important}.receipt .items th,.receipt .items td{border-bottom:1px dashed #000!important}.receipt .dash{border-top:1px dashed #000!important}img{filter:grayscale(1) contrast(1.6)}</style>';
+  function receiptMonoV7(html){html=String(html||'');if(html.indexOf('receiptMonoV7')>=0)return html;return html.indexOf('</head>')>=0?html.replace('</head>',RECEIPT_MONO_CSS_V7+'</head>'):RECEIPT_MONO_CSS_V7+html;}
   async function printReceiptHtmlV644(html,label){
     var p=receiptPrinterV644(),copies=Math.max(1,Number(p.copies||1));
-    var sized=await sizeReceiptV647(html);html=sized.html;
+    var sized=await sizeReceiptV647(receiptMonoV7(html));html=sized.html;
     if(p.mode==='qz'){
       try{
         var q=await qzConnect(),name=await findReceiptPrinterV644(q);
-        var cfg=q.configs.create(name,{units:'mm',size:{width:sized.width,height:sized.height},orientation:'portrait',margins:{top:0,right:0,bottom:0,left:0},copies:1,colorType:'grayscale',scaleContent:false});
+        var cfg=q.configs.create(name,{units:'mm',size:{width:sized.width,height:sized.height},orientation:'portrait',margins:{top:0,right:0,bottom:0,left:0},copies:1,colorType:'blackwhite',scaleContent:false});
         var jobs=[{type:'pixel',format:'html',flavor:'plain',data:html}];
         for(var i=0;i<copies;i++)await q.print(cfg,jobs);
         audit((label||'Fiş')+' yazdırıldı · '+name,'Fiş');
