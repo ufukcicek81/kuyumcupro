@@ -993,3 +993,21 @@ test('bulut verisi sıkıştırılmış yazılır; diğer cihaz yalnız sürüm 
   assert.deepEqual([...a.errors, ...b.errors], []);
   await a.context().close(); await b.context().close();
 });
+
+test('telefon düzeni: logo görünür, ekranlar yana taşmaz, satış kartları üst üste binmez', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  await p.setViewportSize({ width: 390, height: 800 });
+  assert.equal(await p.evaluate(() => document.querySelector('.sidebar-brand img.logo')?.naturalWidth > 0), true, 'logo yüklenmeli');
+  const overflow = () => p.evaluate(() => [...document.querySelectorAll('body *')].filter((e) => e.getBoundingClientRect().right > innerWidth + 2 && !e.parentElement.closest('.table-wrap')).map((e) => e.tagName + '.' + e.className).slice(0, 3));
+  for (const r of ['dashboard', 'sales', 'customers', 'stocks', 'purchases', 'finance', 'reports']) {
+    await p.evaluate((r) => document.querySelector(`[data-go="${r}"],[data-route="${r}"]`).click(), r);
+    await p.waitForTimeout(400);
+    assert.deepEqual(await overflow(), [], `${r} ekranı yana taşmamalı`);
+  }
+  await p.evaluate(() => document.querySelector('[data-route="sales"]').click());
+  await p.waitForSelector('#saleAddUnified');
+  const gap = await p.evaluate(() => document.querySelector('.sale-payment-card').getBoundingClientRect().top - document.querySelector('#saleAddUnified').getBoundingClientRect().bottom);
+  assert.ok(gap > 0, `Ekle düğmesi ödeme kartının üstüne binmemeli (${gap})`);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
