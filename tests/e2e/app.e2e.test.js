@@ -395,6 +395,65 @@ test('ALTIN STOKLARI penceresi F9 ile açılır; açık stok, barkodlu toplam ve
   await p.context().close();
 });
 
+test('ALTIN STOKLARI: satıra çift tıklayınca hareketleri açılır; sıralama değiştirilir ve korunur', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  // Bir ziynet satışı yap: ilgili açık stoğun hareketlerinde çıkan olarak görünmeli.
+  await p.waitForSelector('[data-home-trade="Ziynet Satış"]');
+  await p.click('[data-home-trade="Ziynet Satış"]');
+  const soldName = (await p.$eval('#stItem', (s) => s.options[s.selectedIndex].text)).split('·')[0].trim();
+  await p.fill('#stQty', '1'); await p.fill('#stPrice', '20000');
+  await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  if (await p.$('#modalRoot #modalConfirm')) { await p.click('#modalConfirm').catch(() => {}); }
+  await p.waitForTimeout(300);
+  await p.keyboard.press('F9');
+  await p.waitForSelector('table.gold-stock-v7');
+  const rowsCount = await p.locator('table.gold-stock-v7 tr.open').count();
+  let found = false;
+  for (let i = 0; i < rowsCount && !found; i++) {
+    await p.locator('table.gold-stock-v7 tr.open').nth(i).dblclick();
+    await p.waitForSelector('.gold-mv-v7');
+    const txt = await p.innerText('.gold-mv-v7');
+    if (/Ziynet Satış/.test(txt)) { found = true; assert.match(txt, /Ziynet Satış[^\n]*\t1\t/, 'çıkan 1 adet görünmeli'); }
+    await p.click('#modalCancel');
+    await p.waitForSelector('table.gold-stock-v7');
+  }
+  assert.ok(found, `ziynet satışı (${soldName}) bir açık stok satırının hareketlerinde görünmeli`);
+  await p.waitForSelector('table.gold-stock-v7');
+  const openNames = async () => p.$$eval('table.gold-stock-v7 tr.open td:first-child', (tds) => tds.map((td) => td.innerText.replace(/[▲▼]/g, '').trim()));
+  const before = await openNames();
+  assert.ok(before.length >= 2, 'en az iki açık stok satırı olmalı');
+  // Çift tık: hareket penceresi, devir satırı ve son kalan stoktaki miktara eşit.
+  const firstRow = p.locator('table.gold-stock-v7 tr.open').first();
+  const qtyText = (await firstRow.locator('td').nth(2).innerText()).trim();
+  await firstRow.dblclick();
+  await p.waitForSelector('.gold-mv-v7');
+  const mv = await p.innerText('.gold-mv-v7');
+  assert.ok(mv.includes('DEVİR / AÇILIŞ') && mv.includes('TOPLAM'), 'devir ve toplam satırı olmalı');
+  const lastBal = (await p.locator('.gold-mv-v7 tr.sum td').last().innerText()).trim();
+  assert.equal(Number(lastBal.replace(/\./g, '').replace(',', '.')), Number(qtyText.replace(/\./g, '').replace(',', '.')), 'kalan, stok miktarına eşit olmalı');
+  await p.click('#modalCancel');
+  await p.waitForSelector('table.gold-stock-v7');
+  // Tek tık + Hareketler düğmesi (dokunmatik ekran için).
+  await p.locator('table.gold-stock-v7 tr.cash').first().click();
+  await p.click('#goldMovesV7');
+  await p.waitForSelector('.gold-mv-v7');
+  await p.click('#modalCancel');
+  // Sıralama: ilk açık stoğu bir aşağı al.
+  await p.click('#goldOrderV7');
+  await p.locator('table.gold-stock-v7 tr.open [data-gold-down]').first().click();
+  await p.click('#goldOrderDoneV7');
+  const after = await openNames();
+  assert.equal(after[0], before[1]);
+  assert.equal(after[1], before[0]);
+  // Pencere kapanıp yeniden açılınca sıra korunur.
+  await p.click('#modalCancel');
+  await p.keyboard.press('F9');
+  await p.waitForSelector('table.gold-stock-v7');
+  assert.deepEqual(await openNames(), after);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
 test('özel ürün aktarımı altın stoklarına dokunmaz; USD fiyatlı ürün satışta güncel kurla TL olur', async () => {
   const XLSX = require('xlsx');
   const os = require('node:os'); const path = require('node:path'); const fs = require('node:fs');
