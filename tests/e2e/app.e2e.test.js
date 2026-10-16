@@ -167,6 +167,10 @@ test('çoklu döviz işleminde tüm satırlar tek fişte basılır', async () =>
   assert.match(text, /DÖVİZ İŞLEM FİŞİ/);
   assert.match(text, /USD/); assert.match(text, /EUR/);
   assert.match(text, /6\.500,00/, 'toplam iki satırın toplamı olmalı');
+  // Fiş yazıcısında okunur: tüm yazılar tam siyah ve kalın.
+  const ink = await popups[0].$$eval('.receipt *', (els) => els.filter((e) => e.textContent.trim()).map((e) => [getComputedStyle(e).color, Number(getComputedStyle(e).fontWeight)]));
+  assert.ok(ink.length > 5);
+  assert.ok(ink.every(([c, w]) => c === 'rgb(0, 0, 0)' && w >= 700), 'fiş yazıları siyah ve kalın olmalı');
   await p.context().close();
 });
 
