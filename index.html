@@ -8,8 +8,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
-  <link rel="icon" href="./icon.svg" type="image/svg+xml" />
-  <link rel="apple-touch-icon" href="./icon.svg" />
+  <link rel="icon" href="./logo-192.png" type="image/png" />
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
   <title>Asil Kuyumcu Pro V6.96</title>
   <style>
 :root {
@@ -1038,6 +1038,91 @@ body[data-screen="sales"] #finalizeSale{min-height:40px;font-size:17px;margin-to
 @media(max-width:1200px){.home-tiles{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.home-tile{min-height:90px}.home-menu{gap:18px;grid-template-columns:210px 1fr}}
 @media(max-width:1099px){body[data-screen="sales"] .compact-sale-workspace{grid-template-columns:1fr!important}.compact-sale-side{display:grid;grid-template-columns:1fr 1fr;overflow:visible}.compact-sale-side .sale-summary{grid-column:2;grid-row:1/4}.compact-sale-lines{max-height:300px;min-height:160px}body[data-screen="sales"] .sale-unified-editor{grid-template-columns:repeat(4,minmax(0,1fr))!important}body[data-screen="sales"] .sale-payment-card{min-height:190px}}
 @media(max-width:700px){.home-menu{grid-template-columns:1fr}.home-categories{display:grid;grid-template-columns:1fr 1fr;gap:6px}.home-categories h2,.home-search{grid-column:1/-1}.home-tiles{grid-template-columns:repeat(3,minmax(0,1fr))}.home-heading{margin-top:12px}.home-footer span{display:none}body[data-screen="sales"] .sale-head-grid{grid-template-columns:1fr 90px!important}body[data-screen="sales"] .sale-head-grid>.labelled:last-child{grid-column:1/-1!important}.compact-sale-side{display:flex}body[data-screen="sales"] .sale-unified-editor{grid-template-columns:repeat(2,minmax(0,1fr))!important}body[data-screen="sales"] .pusula-sales-tabs{grid-template-columns:repeat(3,minmax(0,1fr))!important}body[data-screen="sales"] .sale-payment-card{flex-basis:240px}.home-tile strong{font-size:13px}.home-tile{min-height:90px}.home-heading p{font-size:13px}}
+}
+
+/* Logo görseli (AK yazısı yerine) */
+img.brand-logo{object-fit:contain;padding:0!important;border:0!important;background:transparent!important;border-radius:50%!important}
+img.brand-mark.brand-logo{width:96px;height:96px}
+/* ===== TELEFON (≤700px): PC/Tablet modundan bağımsız sade düzen ===== */
+@media(max-width:700px){
+  html,body{overflow-x:hidden}
+  body[data-ui-mode] .sidebar{padding:calc(6px + env(safe-area-inset-top)) 10px 0!important}
+  .simple-brand-row{flex-wrap:nowrap!important;gap:8px!important;align-items:center}
+  body[data-ui-mode] .simple-brand-row .sidebar-brand{padding:0 0 6px!important;gap:8px!important;min-width:0;flex:1}
+  body[data-ui-mode] .sidebar-brand .logo{width:40px!important;height:40px!important;flex:0 0 40px}
+  body[data-ui-mode] .sidebar-brand strong{font-size:16px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  body[data-ui-mode] .sidebar-brand small{display:none!important}
+  .simple-account{display:flex;gap:6px;flex:0 0 auto}
+  .simple-account .btn{min-height:38px!important;min-width:40px;padding:4px 10px!important;font-size:16px!important;white-space:nowrap}
+  .simple-account .btn-txt{font-size:13px}
+  #logoutBtn .btn-txt{display:none}
+  body[data-ui-mode] .topbar{display:grid!important;grid-template-columns:minmax(0,1fr) auto;gap:6px 8px!important;padding:6px 10px!important;min-height:0}
+  body[data-ui-mode] .topbar-left{grid-column:1;grid-row:1;min-width:0}
+  body[data-ui-mode] .topbar-right{grid-column:2;grid-row:1;gap:6px}
+  .topbar-right .user-label,.topbar-right .badge,.topbar-right .mode-switch{display:none!important}
+  .period-select{height:36px!important;min-height:36px!important;font-size:14px!important;max-width:100%;width:100%}
+  .theme-switch{padding:2px!important}.theme-btn{min-height:30px!important;padding:2px 8px!important;font-size:0!important}
+  .theme-btn::first-letter{font-size:16px}
+  body[data-ui-mode] .market-ticker{grid-column:1/-1;grid-row:2;display:grid!important;grid-template-columns:1fr 1fr;gap:4px 10px!important;font-size:13px!important;width:100%}
+  .market-ticker>span{display:flex;justify-content:space-between;gap:6px;white-space:nowrap}
+  .market-ticker .market-sync{display:none!important}
+  .market-ticker>.btn{width:100%;min-height:36px!important;font-size:13px!important}
+  .market-ticker .fkey,.home-tile small{display:none}
+  body[data-ui-mode] .content{padding:10px!important}
+  /* Ana menü: önce işlem kutuları, kategoriler altta */
+  .home-menu{display:flex!important;flex-direction:column;gap:14px!important;margin-top:0!important}
+  .home-shortcuts{order:1}.home-categories{order:2}
+  .home-heading{margin:0 0 8px!important}.home-heading h1{font-size:19px!important}.home-heading p,.home-heading>span,.home-footer{display:none!important}
+  .home-tiles{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important}
+  .home-tile{min-height:78px!important;padding:8px 4px!important;gap:6px!important}
+  .home-tile-icon{font-size:20px!important}.home-tile strong{font-size:12.5px!important;line-height:1.2;text-align:center}
+  .home-categories{display:grid!important;grid-template-columns:1fr 1fr;gap:6px!important}
+  .home-categories h2{font-size:15px!important;margin:4px 0!important}
+  .home-categories .btn{min-height:40px!important;font-size:13px!important;padding:6px 10px!important}
+  /* Satış: tek sayfa (PC) yükseklik kısıtları kaldırılır, kartlar alt alta akar */
+  body[data-screen="sales"] .app-shell,body[data-screen="sales"] .main,body[data-screen="sales"] .content,body[data-screen="sales"] .sales-shell{height:auto!important;min-height:0!important;display:block!important}
+  body[data-screen="sales"] .compact-sale-workspace,body[data-screen="sales"] .sale-layout{display:flex!important;flex-direction:column;gap:10px!important}
+  body[data-screen="sales"] .compact-sale-main,body[data-screen="sales"] .compact-sale-side{display:flex!important;flex-direction:column;overflow:visible!important;gap:10px}
+  body[data-screen="sales"] .sale-product-card,body[data-screen="sales"] .sale-payment-card,body[data-screen="sales"] .sale-summary,body[data-screen="sales"] .compact-sale-lines,body[data-screen="sales"] .compact-payment-records{flex:none!important;height:auto!important;max-height:none!important;min-height:0!important;overflow:visible!important}
+  body[data-screen="sales"] .sale-unified-editor{grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:8px!important}
+  body[data-screen="sales"] .sale-unified-editor>*{grid-column:span 2!important}
+  body[data-screen="sales"] .sale-unified-editor>:nth-child(5),body[data-screen="sales"] .sale-unified-editor>:nth-child(6){grid-column:span 3!important}
+  body[data-screen="sales"] .sale-unified-editor>.wide,body[data-screen="sales"] .sale-unified-editor>#saleAddUnified{grid-column:1/-1!important}
+  body[data-screen="sales"] #saleAddUnified{min-height:44px}
+  body[data-screen="sales"] .sale-unified-editor label{font-size:12px!important}
+  body[data-screen="sales"] .pusula-sales-tabs{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  body[data-screen="sales"] .pusula-sales-tabs .btn{min-height:40px!important}
+  body[data-screen="sales"] .sale-payment-card .section-head{flex-wrap:wrap}
+  body[data-screen="sales"] .sales-extra-note,body[data-screen="sales"] .sale-inline-help{display:none}
+  body[data-screen="sales"] .table-wrap{overflow-x:auto!important;-webkit-overflow-scrolling:touch}
+  body[data-screen="sales"] .sale-head-actions .btn{min-height:40px}
+  body[data-screen="sales"] .sale-compact-actions .btn{min-height:38px!important}
+  body[data-screen="sales"] #finalizeSale{min-height:50px}
+  /* Üst menü: 4 sütunlu kompakt düğmeler */
+  body[data-ui-mode] .nav{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px!important;padding:4px 0 6px!important;border:0!important;background:transparent!important}
+  body[data-ui-mode] .nav>button,body[data-ui-mode] .more-nav>summary{min-height:36px!important;padding:4px 2px!important;font-size:12px!important;justify-content:center;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px solid var(--line)!important;border-radius:8px!important;display:flex;align-items:center;gap:3px}
+  body[data-ui-mode] .nav>button .ico{display:none}
+  body[data-ui-mode] .more-nav{flex:none!important;position:static}
+  .more-nav-panel{max-height:60vh;overflow:auto}
+  /* Genel ızgaralar telefonda daralır */
+  .grid-2,.grid-3,.purchase-layout{grid-template-columns:minmax(0,1fr)!important}
+  .grid-4,.grid-6{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .form-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .form-grid>.span-2,.form-grid>.span-3,.form-grid>.span-4{grid-column:1/-1!important}
+  .form-grid>*,.filter-panel>*{min-width:0!important}
+  .filter-panel{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .filter-panel>:first-child{grid-column:1/-1}
+  .stock-tabs{flex-wrap:wrap}
+  /* Cari kartları kompakt */
+  #cariCardGrid{grid-template-columns:minmax(0,1fr)!important;gap:8px!important}
+  #cariCardGrid>.card{padding:10px 12px!important}
+  #cariCardGrid .section-head{margin-bottom:4px!important}#cariCardGrid h3{font-size:16px!important}
+  #cariCardGrid .summary-row{padding:3px 0!important;font-size:13px!important}
+  #cariCardGrid .metric{padding:6px 8px!important;min-height:0!important}
+  /* Genel: dokunmaya uygun alanlar, iOS zoom'u engelleyen 16px yazı */
+  .input,.select,.textarea{font-size:16px!important}
+  .modal{max-height:calc(100dvh - 16px)!important}
+  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 }
 </style>
 </head>
@@ -2097,7 +2182,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       <div class="login-shell">
         <div class="login-card">
           <div class="login-hero">
-            <div class="brand-mark">AK</div>
+            <img class="brand-mark brand-logo" src="./logo.png" alt="Asil Kuyumculuk">
             <h1>ASİL<br><span class="gold">KUYUMCU PRO</span></h1>
             <p>Pusula iş akışını koruyan; alıştan barkoda, satıştan tahsilata ve stok/cariye kadar birbirine bağlı kuyumcu yönetim prototipi.</p>
             <div class="feature-pills"><span>Alış → Stok → Satış</span><span>2012–2026 dönem</span><span>Barkod / RFID</span><span>HAS + TL + Döviz</span></div>
@@ -2145,7 +2230,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   function shell(body){
     return `<div class="app-shell">
       <aside class="sidebar ${mobileOpen?'open':''}" id="sidebar">
-        <div class="simple-brand-row"><div class="sidebar-brand"><div class="logo">AK</div><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v${APP_VERSION}</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂ Ana Menü</button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">Çıkış</button></div></div>
+        <div class="simple-brand-row"><div class="sidebar-brand"><img class="logo brand-logo" src="./logo-192.png" alt="Asil Kuyumculuk"><div><strong>ASİL KUYUMCU <em>PRO</em></strong><small>Satış · Stok · Cari · Tamir <span class="ui-version">v${APP_VERSION}</span></small></div></div><div class="simple-account"><button class="btn btn-outline" data-route="dashboard" data-nav-text="ana menü">⌂<span class="btn-txt"> Ana Menü</span></button><span>${esc(session.name)}</span><button class="btn btn-outline" id="logoutBtn">⏻<span class="btn-txt"> Çıkış</span></button></div></div>
         <nav class="nav" aria-label="Ana menü">${['dashboard','sales','customers','stocks','finance','repairs','reports'].map(r=>{const item=navItems.find(x=>x[0]===r);if(!item)return '';const [key,i,t]=item;const label={dashboard:'Ana Menü',sales:'Satış',stocks:'Stok',finance:'Kasa / Banka',repairs:'Tamir'}[r]||t;return `<button data-route="${key}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${label}</button>`;}).join('')}
         <details class="more-nav"><summary>Diğer İşlemler ▾</summary><div class="more-nav-panel"><div class="nav-search"><input id="menuSearch" placeholder="Menü ara..." autocomplete="off" aria-label="Menü ara"></div>${navItems.filter(x=>!['dashboard','sales','customers','stocks','finance','repairs','reports'].includes(x[0])).map(([r,i,t])=>`<button data-route="${r}" data-nav-text="${esc(t.toLowerCase())}" class="${route===r?'active':''}"><span class="ico">${i}</span>${t}</button>`).join('')}</div></details></nav>
       </aside>
@@ -2155,7 +2240,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
           <div class="topbar-left"><button class="btn btn-outline mobile-menu" id="menuBtn">☰</button>
             <select id="periodSelect" class="period-select">${YEARS.map(y=>`<option value="${y}" ${state.activePeriod===y?'selected':''}>${periodLabel(y)} / ${y}</option>`).join('')}</select>
           </div>
-          <div class="market-ticker"><span>HAS ALIŞ <strong class="negative" id="tickerHasBuy">${money(state.prices.has.buy,'')}</strong></span><span>HAS SATIŞ <strong class="positive" id="tickerHasSell">${money(state.prices.has.sell,'')}</strong></span><span>USD <strong id="tickerUsd">${state.prices.usd.sell.toFixed(4)}</strong></span><span>EUR <strong id="tickerEur">${state.prices.eur.sell.toFixed(4)}</strong></span><span class="market-sync ${state.market?.status==='live'?'live':state.market?.status==='offline'?'offline':''}" id="marketSyncBadge"><i class="dot"></i><b id="marketSyncText">${state.market?.status==='live'?'CANLI':state.market?.status==='offline'?'SON KAYIT':'BAĞLANIYOR'}</b></span><button class="btn btn-outline" type="button" data-gold-stocks title="Altın stokları ve kasa (F9)" style="min-height:30px;padding:4px 10px;font-weight:800">ALTIN STOKLARI · F9</button><button class="btn btn-outline" type="button" data-recent-receipts title="Son işlemlerin fişleri (F10)" style="min-height:30px;padding:4px 10px;font-weight:800">FİŞLER · F10</button></div>
+          <div class="market-ticker"><span>HAS ALIŞ <strong class="negative" id="tickerHasBuy">${money(state.prices.has.buy,'')}</strong></span><span>HAS SATIŞ <strong class="positive" id="tickerHasSell">${money(state.prices.has.sell,'')}</strong></span><span>USD <strong id="tickerUsd">${state.prices.usd.sell.toFixed(4)}</strong></span><span>EUR <strong id="tickerEur">${state.prices.eur.sell.toFixed(4)}</strong></span><span class="market-sync ${state.market?.status==='live'?'live':state.market?.status==='offline'?'offline':''}" id="marketSyncBadge"><i class="dot"></i><b id="marketSyncText">${state.market?.status==='live'?'CANLI':state.market?.status==='offline'?'SON KAYIT':'BAĞLANIYOR'}</b></span><button class="btn btn-outline" type="button" data-gold-stocks title="Altın stokları ve kasa (F9)" style="min-height:30px;padding:4px 10px;font-weight:800">ALTIN STOKLARI<span class="fkey"> · F9</span></button><button class="btn btn-outline" type="button" data-recent-receipts title="Son işlemlerin fişleri (F10)" style="min-height:30px;padding:4px 10px;font-weight:800">FİŞLER<span class="fkey"> · F10</span></button></div>
           <div class="topbar-right"><div class="mode-switch" title="Ekran modu"><button class="mode-btn ${uiMode==='pc'?'active':''}" id="pcModeBtn">🖥 PC</button><button class="mode-btn ${uiMode==='tablet'?'active':''}" id="tabletModeBtn">▣ Tablet</button></div><div class="theme-switch" title="Tema"><button class="theme-btn ${theme==='dark'?'active':''}" id="darkThemeBtn">🌙 Karanlık</button><button class="theme-btn ${theme==='light'?'active':''}" id="lightThemeBtn">☀ Aydınlık</button></div><span class="user-label">${esc(session.name)}</span><span class="badge gold">${esc(session.role)}</span></div>
         </header>
         <section class="content">${body}</section>
