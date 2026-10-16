@@ -565,6 +565,49 @@ test('KAMERA İLE KİMLİK OKU: MRZ metni ayrıştırılır, alanlar doldurulur 
   await p.context().close();
 });
 
+test('PC\'de başlatılan kimlik okuması telefonda QR ile açılan sayfadan fotoğrafla gelir', async () => {
+  const auth = { apiKey: 'K', email: 'magaza@test.com', uid: 'UID1', refreshToken: 'R', idToken: 'TEST_ID_TOKEN', exp: Date.now() + 3600e3 };
+  const pc = await newDevice(browser, appUrl, createFakeFirebase(), { authConfig: auth });
+  // Sahte NFC köprüsü (api/nfc): oturum aç / gönder / sorgula.
+  const sessions = {};
+  const bridge = async (route) => {
+    const req = route.request();
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' } });
+    const b = JSON.parse(req.postData() || '{}'); let out = { ok: false };
+    if (b.action === 'createNfcSession') { const code = '12345678'; sessions[code] = { status: 'WAITING' }; out = { ok: true, code }; }
+    if (b.action === 'submitNfcIdentity') { sessions[b.code] = { status: 'READY', payload: b.payload }; out = { ok: true, status: 'READY' }; }
+    if (b.action === 'pollNfcSession') { const s = sessions[b.code]; out = s && s.status === 'READY' ? { ok: true, status: 'READY', payload: s.payload } : { ok: true, status: 'WAITING' }; if (s && s.status === 'READY') delete sessions[b.code]; }
+    return route.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*' }, contentType: 'application/json', body: JSON.stringify(out) });
+  };
+  await pc.context().route(/\/api\/nfc/, bridge);
+  await pc.evaluate(() => document.querySelector('[data-go="compliance"]')?.click());
+  await pc.click('#startNfcNew');
+  await pc.waitForSelector('#nfcCamLink[href*="kimlik.html"]');
+  const link = await pc.getAttribute('#nfcCamLink', 'href');
+  assert.match(link, /c=12345678/);
+  // Telefon: ayrı cihaz, giriş yok; sahte OCR.
+  const phoneCtx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await phoneCtx.route(/\/api\/nfc/, bridge);
+  const ocr = ['I<TURA12B34567510000000146<<<<', '9001158M3105205TUR<<<<<<<<<<<0', 'YILMAZ<<AHMET<CAN<<<<<<<<<<<<<'].join('\n');
+  await phoneCtx.route(/tesseract\.min\.js/, (r) => r.fulfill({ status: 200, contentType: 'text/javascript', body: `window.Tesseract={createWorker:async()=>({setParameters:async()=>{},recognize:async()=>({data:{text:${JSON.stringify(ocr)}}}),terminate:async()=>{}})};` }));
+  const phone = await phoneCtx.newPage();
+  const phoneErrors = []; phone.on('pageerror', (e) => phoneErrors.push(e.message));
+  await phone.goto(link);
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  await phone.setInputFiles('#file', { name: 'kimlik.png', mimeType: 'image/png', buffer: png });
+  await phone.waitForSelector('#result:not([hidden])');
+  assert.equal(await phone.inputValue('#tckn'), '10000000146');
+  await phone.click('#send');
+  await phone.waitForSelector('#status.ok');
+  // PC: sorgulama veriyi alır, kayıt açılır.
+  await pc.waitForFunction(() => (JSON.parse(localStorage.getItem('asil_kuyumcu_pro_kyc_v2') || '[]')[0] || {}).tckn === '10000000146', null, { timeout: 15000 });
+  const rec = await pc.evaluate(() => JSON.parse(localStorage.getItem('asil_kuyumcu_pro_kyc_v2'))[0]);
+  assert.equal(rec.fullName, 'AHMET CAN YILMAZ'); assert.equal(rec.documentNo, 'A12B34567'); assert.equal(rec.birthDate, '1990-01-15');
+  assert.equal(rec.mrzCameraRead, true); assert.notEqual(rec.nfcRead, true, 'kamera okuması NFC sayılmaz');
+  assert.deepEqual([...pc.errors, ...phoneErrors], []);
+  await phoneCtx.close(); await pc.context().close();
+});
+
 test('özel ürün aktarımı altın stoklarına dokunmaz; USD fiyatlı ürün satışta güncel kurla TL olur', async () => {
   const XLSX = require('xlsx');
   const os = require('node:os'); const path = require('node:path'); const fs = require('node:fs');
