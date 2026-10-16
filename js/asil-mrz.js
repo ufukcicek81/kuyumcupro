@@ -90,7 +90,7 @@
     for(var i=lines.length-1;i>=0;i--){var l=lines[i];
       if(l.indexOf('<<')<0||l.replace(/[A-Z<]/g,'').length>1)continue;
       // Dolgu işaretleri (<) OCR'da sıkça K/L okunur: yalnız K/L'den oluşan parçalar isim değildir.
-      var clean=function(t){return t.replace(/</g,' ').split(/\s+/).filter(function(w){return w&&!/^[KL]{3,}$/.test(w)}).join(' ')};
+      var clean=function(t){return t.replace(/</g,' ').split(/\s+/).filter(function(w){return w&&!/^[KL]+$/.test(w)}).join(' ')};
       var parts=l.split('<<'),surname=clean(parts[0]),given=clean(parts.slice(1).join(' '));
       var full=(given+' '+surname).trim();
       if(full.length>=3)return {fullName:full,givenNames:given,surname:surname};

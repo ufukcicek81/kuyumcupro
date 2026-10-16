@@ -8680,17 +8680,25 @@ function stockSummaryView(){
   }
   function loadImageFileV7(file){return new Promise((resolve,reject)=>{const u=URL.createObjectURL(file),img=new Image();img.onload=()=>{URL.revokeObjectURL(u);resolve(img);};img.onerror=()=>{URL.revokeObjectURL(u);reject(new Error('Fotoğraf açılamadı'));};img.src=u;});}
   /* Görüntünün alt kısmını (MRZ bölgesi) büyütüp gri tona ve siyah-beyaza çevirir. */
-  function mrzCanvasV7(img,fromRatio){
-    const W=img.naturalWidth||img.width,H=img.naturalHeight||img.height,sy=Math.floor(H*fromRatio),sh=H-sy;
+  function mrzCanvasV7(img,fromRatio,{threshold=true,rotate=false}={}){
+    const W=img.naturalWidth||img.width,H=img.naturalHeight||img.height;
+    // Ters tutulmuş kartta MRZ üstte kalır: görüntü 180° çevrilip aynı alt bölge okunur.
+    let src=img;if(rotate){const r=document.createElement('canvas');r.width=W;r.height=H;const rg=r.getContext('2d');rg.translate(W,H);rg.rotate(Math.PI);rg.drawImage(img,0,0);src=r;}
+    const sy=Math.floor(H*fromRatio),sh=H-sy;
     const scale=Math.min(3,Math.max(1,1800/W)),c=document.createElement('canvas');c.width=Math.round(W*scale);c.height=Math.round(sh*scale);
-    const g=c.getContext('2d',{willReadFrequently:true});g.drawImage(img,0,sy,W,sh,0,0,c.width,c.height);
+    const g=c.getContext('2d',{willReadFrequently:true});g.drawImage(src,0,sy,W,sh,0,0,c.width,c.height);
     const im=g.getImageData(0,0,c.width,c.height),px=im.data,hist=new Array(256).fill(0);
     for(let i=0;i<px.length;i+=4){const y=Math.round(px[i]*.299+px[i+1]*.587+px[i+2]*.114);px[i]=y;hist[y]++;}
     // Otsu eşiği
     let total=px.length/4,sum=0;for(let t=0;t<256;t++)sum+=t*hist[t];let sumB=0,wB=0,best=0,th=128;
     for(let t=0;t<256;t++){wB+=hist[t];if(!wB)continue;const wF=total-wB;if(!wF)break;sumB+=t*hist[t];const mB=sumB/wB,mF=(sum-sumB)/wF,v=wB*wF*(mB-mF)*(mB-mF);if(v>best){best=v;th=t;}}
-    for(let i=0;i<px.length;i+=4){const v=px[i]>th?255:0;px[i]=px[i+1]=px[i+2]=v;px[i+3]=255;}
+    for(let i=0;i<px.length;i+=4){const v=threshold?(px[i]>th?255:0):px[i];px[i]=px[i+1]=px[i+2]=v;px[i+3]=255;}
     g.putImageData(im,0,0);return c;
+  }
+  function mergeMrzV7(a,b){
+    if(!a)return {...b};
+    const out={...a};['documentNumber','birthYYMMDD','expiryYYMMDD','tckn','fullName','givenNames','surname','sex','nationality'].forEach(k=>{if(!out[k]&&b[k])out[k]=b[k];});
+    out.complete=!!(out.documentNumber&&out.birthYYMMDD&&out.expiryYYMMDD);return out;
   }
   async function readMrzFromPhotoV7(file,onStatus){
     onStatus('Yazı tanıma hazırlanıyor… (ilk seferde biraz sürer)');
@@ -8698,15 +8706,17 @@ function stockSummaryView(){
     const worker=await T.createWorker('eng',1,{logger:m=>{if(m.status==='recognizing text')onStatus('Okunuyor… %'+Math.round((m.progress||0)*100));}});
     try{
       await worker.setParameters({tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<',tessedit_pageseg_mode:'6'});
-      let best=null;
-      for(const from of [0.55,0.4,0]){
-        const {data}=await worker.recognize(mrzCanvasV7(img,from));
-        const d=AsilMrz.parse(data.text||'');d.ocrText=data.text||'';
-        const score=(d.documentNumber?1:0)+(d.birthYYMMDD?1:0)+(d.expiryYYMMDD?1:0)+(d.fullName?0.5:0)+(d.tckn?0.5:0);
-        if(!best||score>best.score)best={...d,score};
-        if(d.complete&&d.fullName)break;
+      // Farklı kırpma / eşikleme / döndürme denemeleri; her alan kontrol haneleriyle doğrulandığı için
+      // denemelerden gelen alanlar birleştirilir (biri seri noyu, diğeri tarihleri okuyabilir).
+      const tries=[[0.55,{}],[0.4,{}],[0.55,{threshold:false}],[0,{}],[0.55,{rotate:true}],[0.4,{threshold:false,rotate:true}]];
+      let acc=null,texts=[];
+      for(const [from,opt] of tries){
+        const {data}=await worker.recognize(mrzCanvasV7(img,from,opt));
+        texts.push(data.text||'');acc=mergeMrzV7(acc,AsilMrz.parse(data.text||''));
+        if(acc.complete&&acc.fullName&&acc.tckn)break;
       }
-      return best;
+      acc.ocrText=texts.join('\n---\n');
+      return acc;
     }finally{try{await worker.terminate();}catch{}}
   }
   function openCameraKycV7(recordId=''){
@@ -8715,11 +8725,17 @@ function stockSummaryView(){
       <div class="muted" id="camKycStatus">Fotoğraf bekleniyor.</div>
       <div id="camKycResult" style="margin-top:10px"></div>`,null);
     const status=t=>{const el=document.getElementById('camKycStatus');if(el)el.textContent=t;};
+    let accRead=null;
     document.getElementById('camKycFile')?.addEventListener('change',async e=>{
       const file=e.target.files&&e.target.files[0];if(!file)return;
       try{
-        const d=await readMrzFromPhotoV7(file,status);
-        status(d.complete?'Okundu. Bilgileri kontrol edip KAYDET\'e basın.':'Bazı alanlar okunamadı. Tekrar çekin ya da eksikleri kartın ön yüzünden yazın.');
+        const fresh=await readMrzFromPhotoV7(file,status),ocrText=fresh.ocrText;
+        // Ekranda elle düzeltilen değerler korunur; yeni fotoğraf yalnız boş alanları doldurur.
+        const typed=id=>document.getElementById(id)?.value.trim()||'';
+        if(accRead){const m={...accRead,fullName:typed('ckName')||accRead.fullName,tckn:typed('ckTckn')||accRead.tckn,documentNumber:typed('ckDoc')||accRead.documentNumber};accRead=mergeMrzV7(m,fresh);}else accRead=fresh;
+        const d={...accRead,ocrText};
+        const missing=[!d.fullName&&'ad soyad',!d.tckn&&'T.C. kimlik no',!d.documentNumber&&'seri no',!d.birthYYMMDD&&'doğum tarihi',!d.expiryYYMMDD&&'son geçerlilik'].filter(Boolean);
+        status(missing.length?`Okunamayan: ${missing.join(', ')}. Tekrar FOTOĞRAF ÇEK'e basın (okunanlar korunur) ya da kartın ön yüzünden elle yazın.`:'Tüm alanlar okundu. Kontrol edip KAYDET\'e basın.');
         const v={name:d.fullName,tckn:d.tckn,doc:d.documentNumber,birth:AsilMrz.toIsoDate(d.birthYYMMDD,'birth'),expiry:AsilMrz.toIsoDate(d.expiryYYMMDD,'expiry'),sex:d.sex==='M'?'Erkek':d.sex==='F'?'Kadın':'',nat:d.nationality==='TUR'?'T.C.':(d.nationality||'')};
         const f=(id,label,val,type='text',wide=false)=>`<div class="labelled${wide?' span-2':''}"><label>${label}${val?' ✓':''}</label><input class="input" id="${id}" type="${type}" value="${esc(val||'')}"></div>`;
         document.getElementById('camKycResult').innerHTML=`<div class="form-grid">${f('ckName','Ad Soyad',v.name,'text',true)}${f('ckTckn','T.C. Kimlik No',v.tckn)}${f('ckDoc','Seri No',v.doc)}${f('ckBirth','Doğum Tarihi',v.birth,'date')}${f('ckExpiry','Son Geçerlilik',v.expiry,'date')}${f('ckSex','Cinsiyet',v.sex)}${f('ckNat','Uyruk',v.nat)}</div>

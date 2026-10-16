@@ -34,3 +34,7 @@ test('isimdeki dolgu işaretleri (K/L okunmuş) temizlenir',()=>{
   const d=M.parse([l1,l2,'YILMAZ<<AHMET<CAN<KLKLLLLLL<<<<<'].join('\n'));
   assert.equal(d.fullName,'AHMET CAN YILMAZ');
 });
+test('isimdeki tek harflik K/L dolgu gürültüsü de temizlenir',()=>{
+  const d=M.parse([l1,l2,'YILMAZ<<AHMET<CAN<L<<<<<<<<<<<<'].join('\n'));
+  assert.equal(d.fullName,'AHMET CAN YILMAZ');
+});
