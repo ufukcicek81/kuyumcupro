@@ -541,6 +541,30 @@ test('Son Fiş: satış ekranındaki ziynet alışı dahil son işlemin fişi ba
   await p.context().close();
 });
 
+test('KAMERA İLE KİMLİK OKU: MRZ metni ayrıştırılır, alanlar doldurulur ve MASAK müşterisi oluşturulur', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  // Testte gerçek OCR yok: Tesseract yerine bilinen MRZ metnini döndüren sahte kütüphane.
+  const ocr = ['T.C. KIMLIK KARTI', 'I<TURA12B34567510000000146<<<<', '9001158M3105205TUR<<<<<<<<<<<0', 'YILMAZ<<AHMET<CAN<KLKLLL<<<<<<'].join('\n');
+  await p.context().route(/tesseract\.min\.js/, (r) => r.fulfill({ status: 200, contentType: 'text/javascript', body: `window.Tesseract={createWorker:async()=>({setParameters:async()=>{},recognize:async()=>({data:{text:${JSON.stringify(ocr)}}}),terminate:async()=>{}})};` }));
+  await p.evaluate(() => document.querySelector('[data-go="compliance"]')?.click());
+  await p.click('#startCameraKyc');
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  await p.setInputFiles('#camKycFile', { name: 'kimlik.png', mimeType: 'image/png', buffer: png });
+  await p.waitForSelector('#camKycSave');
+  assert.equal(await p.inputValue('#ckName'), 'AHMET CAN YILMAZ');
+  assert.equal(await p.inputValue('#ckTckn'), '10000000146');
+  assert.equal(await p.inputValue('#ckDoc'), 'A12B34567');
+  assert.equal(await p.inputValue('#ckBirth'), '1990-01-15');
+  assert.equal(await p.inputValue('#ckExpiry'), '2031-05-20');
+  await p.click('#camKycSave');
+  await p.waitForSelector('#kycName');
+  assert.equal(await p.inputValue('#kycName'), 'AHMET CAN YILMAZ');
+  const rec = await p.evaluate(() => JSON.parse(localStorage.getItem('asil_kuyumcu_pro_kyc_v2') || '[]')[0]);
+  assert.equal(rec.tckn, '10000000146'); assert.equal(rec.mrzCameraRead, true); assert.notEqual(rec.verified, true);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
 test('özel ürün aktarımı altın stoklarına dokunmaz; USD fiyatlı ürün satışta güncel kurla TL olur', async () => {
   const XLSX = require('xlsx');
   const os = require('node:os'); const path = require('node:path'); const fs = require('node:fs');

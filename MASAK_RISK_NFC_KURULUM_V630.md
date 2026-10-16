@@ -56,6 +56,14 @@ Worker değişkenleri:
 
 Özel entegratörün gerçek JSON alanları farklıysa `forwardInvoice()` içinde sağlayıcıya özel dönüştürücü eklenmelidir. API adı/şeması bilinmeden bunu güvenli şekilde otomatik tahmin etmeyin.
 
+## 2b) Kamera ile kimlik okuma (iPhone Safari dahil)
+
+`Kimlik / MASAK > KAMERA İLE KİMLİK OKU`: kimliğin arka yüzündeki MRZ satırları telefon
+kamerasıyla çekilir, tarayıcıda Tesseract OCR (jsDelivr, ilk kullanımda indirilir) ile okunur ve
+ICAO kontrol haneleriyle doğrulanır (`js/asil-mrz.js`). Ad soyad, T.C. kimlik no, seri no, doğum,
+son geçerlilik, cinsiyet ve uyruk doldurulur; adres/telefon elle tamamlanır. Ek uygulama
+gerekmez. Çip okuması değildir; kayıt `mrzCameraRead` olarak işaretlenir, doğrulandı yapılmaz.
+
 ## 3) Android NFC Helper
 
 Kaynak proje bu repoda değildir; ayrı Android projesi olarak tutulur.
