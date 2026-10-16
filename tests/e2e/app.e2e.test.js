@@ -454,6 +454,50 @@ test('ALTIN STOKLARI: satıra çift tıklayınca hareketleri açılır; sıralam
   await p.context().close();
 });
 
+test('KASA SAYIMI: sayılan miktar sistemle karşılaştırılır; fazla AL, eksik SAT olarak raporlanır ve kaydedilir', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  await p.keyboard.press('F9');
+  await p.click('#goldCountV7');
+  await p.waitForSelector('.kc-wrap');
+  const num = (t) => Number(String(t).replace(/\./g, '').replace(',', '.'));
+  const rowSys = async (sel) => num(await p.locator(sel).locator('td').nth(2).innerText());
+  const openRow = p.locator('tr[data-kc-row^="o:"]').first();
+  const openName = (await openRow.locator('td').first().innerText()).trim();
+  const openSys = await rowSys('tr[data-kc-row^="o:"] >> nth=0');
+  const cashSys = await rowSys('tr[data-kc-row="c:TL"]');
+  await openRow.locator('input').fill(String(openSys + 2));
+  await openRow.locator('input').press('Enter'); // sonraki satıra geçer, rapor açılmaz
+  assert.ok(await p.$('.kc-wrap'), 'Enter sayım ekranında kalmalı');
+  assert.match(await openRow.locator('.kc-diff').innerText(), /^\+2/);
+  await p.fill('tr[data-kc-row="c:TL"] input', String(cashSys - 100).replace('.', ','));
+  assert.match(await p.innerText('#kcInfo'), /^2\//);
+  await p.click('#modalConfirm');
+  await p.waitForSelector('table.kc-rep');
+  const rep = await p.innerText('#modalRoot .modal-body');
+  assert.match(rep, /AL — sisteme GİRİŞ/);
+  assert.match(rep, /SAT — sisteme ÇIKIŞ/);
+  const alPart = rep.split('SAT —')[0], satPart = rep.split('SAT —')[1];
+  assert.ok(alPart.includes(openName), 'fazla sayılan açık stok AL bölümünde olmalı');
+  assert.ok(satPart.includes('Kasa TL'), 'eksik kasa SAT bölümünde olmalı');
+  await p.click('#modalConfirm'); // SAYIMI KAYDET
+  await p.waitForSelector('table.gold-stock-v7');
+  await p.waitForTimeout(6000);
+  const saved = fb.db.state.kasaCountsV7;
+  assert.ok(Array.isArray(saved) && saved.length === 1, 'sayım buluta kaydedilmeli');
+  assert.equal(saved[0].rows.filter((r) => r.off).length, 2);
+  // Stok değişmez.
+  await p.click('#goldCountV7');
+  await p.waitForSelector('.kc-wrap');
+  assert.equal(await rowSys('tr[data-kc-row^="o:"] >> nth=0'), openSys);
+  assert.equal(await p.inputValue('tr[data-kc-row^="o:"] >> nth=0 >> input'), '', 'kaydedilen sayımdan sonra taslak temizlenir');
+  await p.click('#kcHistoryV7');
+  await p.click('[data-kc-open]');
+  await p.waitForSelector('table.kc-rep');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
 test('özel ürün aktarımı altın stoklarına dokunmaz; USD fiyatlı ürün satışta güncel kurla TL olur', async () => {
   const XLSX = require('xlsx');
   const os = require('node:os'); const path = require('node:path'); const fs = require('node:fs');

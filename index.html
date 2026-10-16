@@ -3350,6 +3350,120 @@ function stockSummaryView(){
       catch(e){toast('Excel oluşturulamadı: '+(e?.message||e),'err');}
     });
   }
+  /* === V7 GÜNLÜK KASA SAYIMI (F9) ===
+     Sayılan miktarlar sistemdeki altın stoğu ve kasa bakiyeleriyle karşılaştırılır. Stok değiştirilmez;
+     fark raporu AL (sisteme giriş eksik) / SAT (sisteme çıkış eksik) olarak verilir ve sayım kaydedilir. */
+  const KASA_COUNT_DRAFT_V7='asil_kasa_count_draft_v7';
+  function kasaCountItemsV7(){
+    const period=state.activePeriod,n=v=>Number(v||0),items=[];
+    goldStockOrderV7('open',(state.openStocks||[]).filter(x=>x.period===period).slice().sort((a,b)=>(Number(a.pusulaCode)||1e9)-(Number(b.pusulaCode)||1e9)||String(a.name).localeCompare(String(b.name),'tr')),x=>x.id)
+      .forEach(o=>{const q=n(o.amount);items.push({key:'o:'+o.id,group:'AÇIK STOK',name:o.name,unit:String(o.unit||'GR').toUpperCase(),sys:q,hasPer:q?n(o.hasWeight)/q:n(o.purity)/1000});});
+    const by={};activeStock().filter(x=>!isSpecialStockV7(x)).forEach(x=>{const p=Math.round(n(x.purity));if(!by[p])by[p]={p,c:0,g:0,h:0};by[p].c++;by[p].g+=stockAmount(x);by[p].h+=stockHas(x);});
+    goldStockOrderV7('barcode',Object.values(by).sort((a,b)=>String(PURITY_LABEL_V7[a.p]||a.p).localeCompare(String(PURITY_LABEL_V7[b.p]||b.p),'tr',{numeric:true})),x=>String(x.p))
+      .forEach(x=>items.push({key:'b:'+x.p,group:'BARKODLU',name:(PURITY_LABEL_V7[x.p]||x.p+' MİLYEM')+' barkodlu ürün',unit:'ADET',sys:x.c,hasPer:x.c?x.h/x.c:0,note:qty(x.g)+' GR'}));
+    const sp=activeStock().filter(isSpecialStockV7).length;if(sp)items.push({key:'sp',group:'ÖZEL ÜRÜN',name:'Özel ürün (barkodlu)',unit:'ADET',sys:sp,hasPer:0});
+    goldStockOrderV7('scrap',(state.scrapStocks||[]).filter(x=>x.period===period),x=>x.id)
+      .forEach(h=>{const q=n(h.amount);items.push({key:'s:'+h.id,group:'HURDA',name:h.name,unit:'GR',sys:q,hasPer:q?n(h.hasWeight)/q:n(h.milyem)/1000});});
+    const cur={};(state.cashAccounts||[]).forEach(a=>{const c=String(a.currency||'TL').toUpperCase();cur[c]=(cur[c]||0)+n(a.balance);});
+    Object.keys(cur).sort((a,b)=>(a==='TL'?-1:b==='TL'?1:a.localeCompare(b))).forEach(c=>{if(c==='HAS'&&!cur[c])return;items.push({key:'c:'+c,group:'KASA',name:'Kasa '+c,unit:c,sys:cur[c],hasPer:0,cash:true});});
+    return items;
+  }
+  function kasaCountTolV7(it){return it.unit==='ADET'?0.5:0.005;}
+  // Adette nokta binlik ayraçtır (1.652 = 1652); diğer birimlerde Türkçe ondalık okunur.
+  function kasaCountParseV7(raw,unit){return unit==='ADET'?Number(String(raw).replace(/[.\s]/g,'').replace(',','.'))||0:parseTrNumber(raw);}
+  function kasaCountInputV7(v,unit){return Number(v||0).toLocaleString('tr-TR',{useGrouping:false,minimumFractionDigits:0,maximumFractionDigits:unit==='ADET'?0:3});}
+  function kasaCountDraftV7(){try{const d=JSON.parse(localStorage.getItem(KASA_COUNT_DRAFT_V7)||'null');return d&&d.period===state.activePeriod?d:null;}catch{return null;}}
+  function kasaCountSaveDraftV7(values){try{localStorage.setItem(KASA_COUNT_DRAFT_V7,JSON.stringify({period:state.activePeriod,at:now(),values}));}catch{}}
+  function kasaCountResultV7(items,values){
+    const rows=items.map(it=>{const raw=values[it.key];const counted=raw===undefined||raw===''?null:kasaCountParseV7(raw,it.unit);const diff=counted===null?null:counted-it.sys;
+      const off=diff!==null&&Math.abs(diff)>kasaCountTolV7(it);return {...it,counted,diff,off,diffHas:off&&!it.cash?diff*it.hasPer:0};});
+    return {rows,counted:rows.filter(r=>r.counted!==null),missing:rows.filter(r=>r.counted===null),al:rows.filter(r=>r.off&&r.diff>0),sat:rows.filter(r=>r.off&&r.diff<0)};
+  }
+  function kasaCountFmtV7(v,unit){if(v===null||v===undefined)return '';return Number(v).toLocaleString('tr-TR',{minimumFractionDigits:unit==='ADET'?0:2,maximumFractionDigits:unit==='ADET'?0:3});}
+  function openKasaCountV7(){
+    const items=kasaCountItemsV7(),draft=kasaCountDraftV7(),values={...(draft?.values||{})};
+    let group='';
+    const body=items.map(it=>{const head=it.group!==group?`<tr class="kc-group"><td colspan="5">${esc(it.group)}</td></tr>`:'';group=it.group;
+      return `${head}<tr data-kc-row="${esc(it.key)}"><td>${esc(it.name)}${it.note?`<small> · ${esc(it.note)}</small>`:''}</td><td>${esc(it.unit)}</td><td class="num">${kasaCountFmtV7(it.sys,it.unit)}</td><td class="num"><input class="input kc-in" data-kc="${esc(it.key)}" inputmode="decimal" autocomplete="off" placeholder="sayılan" value="${esc(values[it.key]??'')}"></td><td class="num kc-diff" data-kc-diff="${esc(it.key)}"></td></tr>`;}).join('');
+    modal('KASA SAYIMI',`<style>
+      #modalRoot .modal.gold-wide{max-width:900px;width:96vw}
+      .kc-wrap{max-height:60vh;overflow:auto;border:1px solid #9aa3b5}
+      .kc-wrap table{width:100%;border-collapse:collapse;font:600 14px/1.25 Arial,Helvetica,sans-serif}
+      .kc-wrap th{position:sticky;top:0;z-index:1;background:#6b7180;color:#fff;text-align:left;padding:5px 8px}
+      .kc-wrap td{padding:3px 8px;border:1px solid #c9cfdb;vertical-align:middle}
+      .kc-wrap .num{text-align:right}.kc-wrap small{color:var(--muted);font-weight:500}
+      .kc-wrap tr.kc-group td{background:#fbd09b;color:#1a3fd1;font-weight:800}
+      .kc-wrap .kc-in{width:120px;text-align:right;min-height:32px;padding:4px 8px}
+      .kc-wrap .kc-diff.plus{color:#0a7a2f;font-weight:800}.kc-wrap .kc-diff.minus{color:#c0262d;font-weight:800}.kc-wrap .kc-diff.ok{color:#0a7a2f}
+    </style>
+    <div class="notice" style="margin-bottom:8px">Kasada saydığınız miktarı <b>SAYILAN</b> sütununa yazın (Enter ile sonraki satır). Boş bıraktığınız satır sayılmamış kabul edilir. Stoklar değiştirilmez; fark raporu verilir. Yazdıklarınız bu cihazda saklanır, yarıda bırakabilirsiniz.</div>
+    <div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap"><div class="muted" id="kcInfo"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" type="button" id="kcFillV7" title="Boş satırlara sistem miktarını yaz">Boşları sistemle doldur</button><button class="btn btn-outline" type="button" id="kcClearV7">Temizle</button><button class="btn btn-outline" type="button" id="kcHistoryV7">Geçmiş sayımlar</button></div></div>
+    <div class="kc-wrap"><table><thead><tr><th>TANIM</th><th>BİRİM</th><th class="num">SİSTEM</th><th class="num">SAYILAN</th><th class="num">FARK</th></tr></thead><tbody>${body}</tbody></table></div>`,()=>{
+      const res=kasaCountResultV7(items,values);if(!res.counted.length)return toast('En az bir satır sayın','err');
+      openKasaCountReportV7(items,values);
+    },'RAPOR');
+    const m=document.querySelector('#modalRoot .modal');if(m)m.classList.add('gold-wide');
+    const cancel=document.getElementById('modalCancel');if(cancel){cancel.textContent='← ALTIN STOKLARI';cancel.onclick=()=>openGoldStocksV7();}
+    const byKey=new Map(items.map(it=>[it.key,it]));
+    const paint=key=>{const it=byKey.get(key),cell=document.querySelector(`#modalRoot [data-kc-diff="${CSS.escape(key)}"]`);if(!it||!cell)return;const raw=values[key];
+      if(raw===undefined||raw===''){cell.textContent='';cell.className='num kc-diff';return;}
+      const d=kasaCountParseV7(raw,it.unit)-it.sys,off=Math.abs(d)>kasaCountTolV7(it);cell.textContent=off?(d>0?'+':'')+kasaCountFmtV7(d,it.unit):'✓';cell.className='num kc-diff '+(off?(d>0?'plus':'minus'):'ok');};
+    const info=()=>{const r=kasaCountResultV7(items,values),el=document.getElementById('kcInfo');if(el)el.textContent=`${r.counted.length}/${items.length} satır sayıldı · ${r.al.length+r.sat.length} farklı`;};
+    items.forEach(it=>paint(it.key));info();
+    const inputs=[...document.querySelectorAll('#modalRoot .kc-in')];
+    inputs.forEach((inp,i)=>{
+      inp.addEventListener('input',()=>{values[inp.dataset.kc]=inp.value.trim();kasaCountSaveDraftV7(values);paint(inp.dataset.kc);info();});
+      inp.addEventListener('keydown',e=>{if(e.key!=='Enter')return;e.preventDefault();e.stopPropagation();const nx=inputs[i+1];if(nx){nx.focus();nx.select();}else document.getElementById('modalConfirm')?.focus();});
+    });
+    document.getElementById('kcFillV7')?.addEventListener('click',()=>{inputs.forEach(inp=>{if(!inp.value.trim()){const it=byKey.get(inp.dataset.kc);inp.value=kasaCountInputV7(it.sys,it.unit);values[it.key]=inp.value;paint(it.key);}});kasaCountSaveDraftV7(values);info();});
+    document.getElementById('kcClearV7')?.addEventListener('click',()=>{if(!confirm('Yazılan sayım değerleri silinsin mi?'))return;try{localStorage.removeItem(KASA_COUNT_DRAFT_V7);}catch{}openKasaCountV7();});
+    document.getElementById('kcHistoryV7')?.addEventListener('click',openKasaCountHistoryV7);
+    setTimeout(()=>{const first=inputs.find(x=>!x.value)||inputs[0];first?.focus();},50);
+  }
+  function kasaCountReportHtmlV7(rec){
+    const line=r=>`<tr><td>${esc(r.name)}</td><td>${esc(r.unit)}</td><td class="num">${kasaCountFmtV7(r.sys,r.unit)}</td><td class="num">${kasaCountFmtV7(r.counted,r.unit)}</td><td class="num"><b>${r.diff>0?'+':''}${kasaCountFmtV7(r.diff,r.unit)}</b></td><td class="num">${r.diffHas?qty(r.diffHas)+' HAS':''}</td></tr>`;
+    const hint=(r,al)=>r.cash?(al?'Kasada fazla para: tahsilat / satış girilmemiş olabilir':'Kasada eksik para: ödeme / gider girilmemiş olabilir'):(al?'Fazla sayıldı: alış / stok girişi yapılmamış olabilir':'Eksik sayıldı: satış / çıkış yapılmamış olabilir');
+    const section=(title,list,al,color)=>list.length?`<h4 style="margin:12px 0 6px;color:${color}">${title} (${list.length})</h4><table class="kc-rep"><thead><tr><th>TANIM</th><th>BİRİM</th><th class="num">SİSTEM</th><th class="num">SAYILAN</th><th class="num">FARK</th><th class="num">HAS KARŞILIĞI</th></tr></thead><tbody>${list.map(line).join('')}</tbody></table><div class="muted" style="font-size:12px;margin-top:4px">${[...new Set(list.map(r=>hint(r,al)))].map(esc).join(' · ')}</div>`:'';
+    const hasNet=[...rec.al,...rec.sat].reduce((a,r)=>a+r.diffHas,0);
+    return `<style>table.kc-rep{width:100%;border-collapse:collapse;font:600 13px/1.25 Arial,Helvetica,sans-serif}table.kc-rep th{background:#6b7180;color:#fff;text-align:left;padding:4px 8px}table.kc-rep td{padding:3px 8px;border:1px solid #c9cfdb}table.kc-rep .num{text-align:right}</style>
+      <div class="summary-row"><span>Sayım</span><strong>${esc(trDate(rec.date))} · ${esc(rec.user||'')}</strong></div>
+      <div class="summary-row"><span>Sayılan satır</span><strong>${rec.counted.length} / ${rec.rows.length}</strong></div>
+      <div class="summary-row"><span>Tutan</span><strong class="positive">${rec.counted.length-rec.al.length-rec.sat.length}</strong></div>
+      <div class="summary-row"><span>Farklı</span><strong class="${rec.al.length+rec.sat.length?'negative':'positive'}">${rec.al.length+rec.sat.length}</strong></div>
+      ${hasNet?`<div class="summary-row"><span>Altın farkı (net)</span><strong class="${hasNet<0?'negative':'positive'}">${hasNet>0?'+':''}${qty(hasNet)} HAS</strong></div>`:''}
+      ${!rec.al.length&&!rec.sat.length?'<div class="notice" style="margin-top:10px"><b>Kasa tutuyor.</b> Sayılan tüm kalemler sistemle aynı.</div>':''}
+      ${section('AL — sisteme GİRİŞ yapılmalı (kasada fazla)',rec.al,true,'#0a7a2f')}
+      ${section('SAT — sisteme ÇIKIŞ yapılmalı (kasada eksik)',rec.sat,false,'#c0262d')}
+      ${rec.missing.length?`<div class="muted" style="margin-top:10px;font-size:12px">Sayılmayan: ${rec.missing.map(r=>esc(r.name)).join(', ')}</div>`:''}`;
+  }
+  function openKasaCountReportV7(items,values,saved){
+    const res=saved||{...kasaCountResultV7(items,values),date:now(),user:session?.name||''};
+    modal('KASA SAYIM RAPORU',`${kasaCountReportHtmlV7(res)}<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn btn-outline" type="button" id="kcPrintV7">Yazdır</button><button class="btn btn-outline" type="button" id="kcExcelV7">Excel</button></div>`,saved?null:()=>{
+      state.kasaCountsV7=Array.isArray(state.kasaCountsV7)?state.kasaCountsV7:[];
+      const slim=r=>({key:r.key,group:r.group,name:r.name,unit:r.unit,sys:r.sys,counted:r.counted,diff:r.diff,off:r.off,diffHas:r.diffHas,cash:!!r.cash});
+      state.kasaCountsV7.unshift({id:uid('KSY'),period:state.activePeriod,date:res.date,user:res.user,rows:res.rows.map(slim)});
+      state.kasaCountsV7=state.kasaCountsV7.slice(0,120);
+      audit(`Kasa sayımı: ${res.counted.length} satır sayıldı, ${res.al.length} fazla, ${res.sat.length} eksik`,'Stok');
+      try{localStorage.removeItem(KASA_COUNT_DRAFT_V7);}catch{}
+      save();toast('Kasa sayımı kaydedildi');openGoldStocksV7();
+    },'SAYIMI KAYDET');
+    const cancel=document.getElementById('modalCancel');if(cancel){cancel.textContent=saved?'← GEÇMİŞ':'← SAYIMA DÖN';cancel.onclick=()=>saved?openKasaCountHistoryV7():openKasaCountV7();}
+    document.getElementById('kcPrintV7')?.addEventListener('click',()=>{
+      const w=window.open('','_blank','width=900,height=800');if(!w)return toast('Tarayıcı açılır pencereyi engelledi','err');
+      w.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Kasa Sayım Raporu</title><style>body{font-family:Arial,sans-serif;margin:12mm;font-size:12px}.summary-row{display:flex;justify-content:space-between;border-bottom:1px solid #ddd;padding:3px 0}.notice{border:1px solid #9c9;padding:6px}.muted{color:#555}</style></head><body><h2>${esc(state.settings?.companyName||'ASİL KUYUMCULUK')} — KASA SAYIM RAPORU</h2>${kasaCountReportHtmlV7(res)}<script>window.onload=()=>setTimeout(()=>window.print(),200)<\/script></body></html>`);w.document.close();
+    });
+    document.getElementById('kcExcelV7')?.addEventListener('click',async()=>{
+      try{const X=await loadXlsxV7();const aoa=[['GRUP','TANIM','BİRİM','SİSTEM','SAYILAN','FARK','HAS KARŞILIĞI','DURUM'],...res.rows.map(r=>[r.group,r.name,r.unit,r.sys,r.counted??'',r.diff??'',r.diffHas||'',r.counted===null?'SAYILMADI':!r.off?'TUTUYOR':r.diff>0?'AL (FAZLA)':'SAT (EKSİK)'])];const wb=X.utils.book_new();X.utils.book_append_sheet(wb,X.utils.aoa_to_sheet(aoa),'Kasa Sayımı');X.writeFile(wb,`KASA_SAYIMI_${String(res.date).slice(0,10)}.xlsx`);}
+      catch(e){toast('Excel oluşturulamadı: '+(e?.message||e),'err');}
+    });
+  }
+  function openKasaCountHistoryV7(){
+    const list=(state.kasaCountsV7||[]).filter(x=>x.period===state.activePeriod);
+    const view=rec=>{const rows=rec.rows||[];return {...rec,rows,counted:rows.filter(r=>r.counted!==null&&r.counted!==undefined),missing:rows.filter(r=>r.counted===null||r.counted===undefined),al:rows.filter(r=>r.off&&r.diff>0),sat:rows.filter(r=>r.off&&r.diff<0)};};
+    modal('GEÇMİŞ KASA SAYIMLARI',list.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Tarih</th><th>Sayan</th><th class="num">Sayılan</th><th class="num">Fazla (AL)</th><th class="num">Eksik (SAT)</th><th></th></tr></thead><tbody>${list.map(r=>{const v=view(r);return `<tr><td>${esc(trDate(r.date))}</td><td>${esc(r.user||'')}</td><td class="num">${v.counted.length}</td><td class="num">${v.al.length}</td><td class="num">${v.sat.length}</td><td><button class="btn btn-outline" type="button" data-kc-open="${esc(r.id)}">Rapor</button></td></tr>`;}).join('')}</tbody></table></div>`:'<div class="empty-state">Bu dönemde kaydedilmiş kasa sayımı yok.</div>',null);
+    const cancel=document.getElementById('modalCancel');if(cancel){cancel.textContent='← SAYIM';cancel.onclick=()=>openKasaCountV7();}
+    document.querySelectorAll('#modalRoot [data-kc-open]').forEach(b=>b.addEventListener('click',()=>{const r=list.find(x=>x.id===b.dataset.kcOpen);if(r)openKasaCountReportV7(null,null,view(r));}));
+  }
   function openGoldStocksV7(sorting=false){
     const rows=goldStockRowsV7();
     modal('ALTIN STOKLARI',`<style>
@@ -3370,7 +3484,7 @@ function stockSummaryView(){
       table.gold-stock-v7 .gold-ord-v7 button{border:1px solid #fff;background:#4b5160;color:#fff;border-radius:4px;padding:0 6px;font-size:11px;line-height:18px;cursor:pointer}
       table.gold-stock-v7 tr.cash td:first-child{background:#6b7180}
     </style>
-    <div class="gold-bar-v7"><div class="muted">Dönem ${state.activePeriod} · ${new Date().toLocaleString('tr-TR')} · ${sorting?'▲▼ ile açık stok, barkodlu ve hurda satırlarının sırasını değiştirin':'Satıra çift tıklayınca hareketleri açılır'}</div><div style="display:flex;gap:8px;flex-wrap:wrap">${sorting?'<button class="btn btn-outline" id="goldOrderResetV7" type="button">Varsayılan sıra</button><button class="btn btn-primary" id="goldOrderDoneV7" type="button">SIRALAMA BİTTİ</button>':'<button class="btn btn-outline" id="goldMovesV7" type="button" disabled>Hareketler</button><button class="btn btn-outline" id="goldOrderV7" type="button">Sırala</button><button class="btn btn-outline" id="goldExcelV7" type="button">Excel</button><button class="btn btn-outline" id="goldPrintV7" type="button">Yazdır</button>'}</div></div>
+    <div class="gold-bar-v7"><div class="muted">Dönem ${state.activePeriod} · ${new Date().toLocaleString('tr-TR')} · ${sorting?'▲▼ ile açık stok, barkodlu ve hurda satırlarının sırasını değiştirin':'Satıra çift tıklayınca hareketleri açılır'}</div><div style="display:flex;gap:8px;flex-wrap:wrap">${sorting?'<button class="btn btn-outline" id="goldOrderResetV7" type="button">Varsayılan sıra</button><button class="btn btn-primary" id="goldOrderDoneV7" type="button">SIRALAMA BİTTİ</button>':'<button class="btn btn-primary" id="goldCountV7" type="button">KASA SAYIMI</button><button class="btn btn-outline" id="goldMovesV7" type="button" disabled>Hareketler</button><button class="btn btn-outline" id="goldOrderV7" type="button">Sırala</button><button class="btn btn-outline" id="goldExcelV7" type="button">Excel</button><button class="btn btn-outline" id="goldPrintV7" type="button">Yazdır</button>'}</div></div>
     <div class="gold-wrap-v7">${goldStockTableHtmlV7(rows,sorting)}</div>`,null);
     const m=document.querySelector('#modalRoot .modal');if(m)m.classList.add('gold-wide');
     const cancel=document.getElementById('modalCancel');if(cancel){cancel.textContent='MENÜ';}
@@ -3395,6 +3509,7 @@ function stockSummaryView(){
     wrap?.addEventListener('dblclick',e=>{const tr=e.target.closest('tr[data-gold-key]');if(tr)openGoldStockMovesV7(tr.dataset.goldKey);});
     document.getElementById('goldMovesV7')?.addEventListener('click',()=>{if(selected)openGoldStockMovesV7(selected);});
     document.getElementById('goldOrderV7')?.addEventListener('click',()=>openGoldStocksV7(true));
+    document.getElementById('goldCountV7')?.addEventListener('click',openKasaCountV7);
   }
   // Her ekrandan erişim: F9, üst çubuktaki düğme, ana menü kutucuğu.
   document.addEventListener('keydown',e=>{if(e.key==='F9'&&session&&!e.altKey&&!e.ctrlKey&&!e.metaKey){e.preventDefault();openGoldStocksV7();}});
