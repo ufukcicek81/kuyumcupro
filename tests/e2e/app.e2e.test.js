@@ -502,6 +502,43 @@ test('KASA SAYIMI: sayılan miktar sistemle karşılaştırılır; fazla AL, eks
   await p.context().close();
 });
 
+test('Son Fiş: satış ekranındaki ziynet alışı dahil son işlemin fişi basılır; F10 fiş listesi', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  const popups = [];
+  p.context().on('page', (pg) => popups.push(pg));
+  await p.click('[data-go="sales"]');
+  await p.waitForSelector('[data-special-trade="Ziynet Alış"]');
+  await p.click('[data-special-trade="Ziynet Alış"]');
+  await p.fill('#stQty', '2'); await p.fill('#stPrice', '15000');
+  await p.click('#modalConfirm'); await p.waitForTimeout(400);
+  if (await p.$('#modalRoot #modalConfirm')) { await p.click('#modalConfirm').catch(() => {}); }
+  await p.waitForTimeout(400);
+  await p.click('[data-receipt-kind="last"]');
+  for (let i = 0; i < 40 && popups.length < 1; i++) await p.waitForTimeout(250);
+  assert.equal(popups.length, 1, 'fiş penceresi açılmalı');
+  const text = await popups[0].innerText('body');
+  assert.match(text, /ALTIN \/ ZİYNET|Ziynet Alış/i, 'son fiş ziynet alışı olmalı');
+  assert.doesNotMatch(text, /SATIŞ FİŞİ/);
+  // Testte QZ yok: "doğrudan baskı olmadı" uyarısı kapatılır.
+  const closeAlert = async () => { const b = await p.$('.critical-alert button'); if (b) await b.click(); };
+  await closeAlert();
+  // F10: son işlemler listesi, en üstte ziynet alışı.
+  await p.keyboard.press('F10');
+  await p.waitForSelector('[data-recent-receipt="0"]');
+  const first = await p.locator('#modalRoot tbody tr').first().innerText();
+  assert.match(first, /Ziynet Alış/);
+  await p.locator('#modalRoot tbody tr').first().locator('[data-recent-receipt]').click();
+  for (let i = 0; i < 40 && popups.length < 2; i++) await p.waitForTimeout(250);
+  assert.equal(popups.length, 2, 'listeden de fiş basılmalı');
+  // Diğer çıktılar (kimlik formu, raporlar…): gri yazı da siyah ve kalın basılır.
+  await p.evaluate(() => { const w = window.open('', '_blank'); w.document.write('<!doctype html><html><head><style>.l{color:#888;font-weight:400}</style></head><body><span class="l">Ad Soyad</span></body></html>'); w.document.close(); });
+  for (let i = 0; i < 20 && popups.length < 3; i++) await p.waitForTimeout(100);
+  const [c, fw] = await popups[2].$eval('.l', (e) => [getComputedStyle(e).color, Number(getComputedStyle(e).fontWeight)]);
+  assert.equal(c, 'rgb(0, 0, 0)'); assert.ok(fw >= 700);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
 test('özel ürün aktarımı altın stoklarına dokunmaz; USD fiyatlı ürün satışta güncel kurla TL olur', async () => {
   const XLSX = require('xlsx');
   const os = require('node:os'); const path = require('node:path'); const fs = require('node:fs');
