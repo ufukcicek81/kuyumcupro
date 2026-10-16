@@ -5328,7 +5328,7 @@ function stockSummaryView(){
   function keepFieldAboveKeyboard(el, smooth=true){
     if(!el || !isMobileViewport())return;
     const run=()=>{
-      if(!document.body.contains(el))return;
+      if(!document.body.contains(el)||document.activeElement!==el||Date.now()<(window.__asilTouchUntilV7||0))return;
       const vv=window.visualViewport;
       const rect=el.getBoundingClientRect();
       const viewTop=(vv?.offsetTop||0)+72;
@@ -5365,18 +5365,24 @@ function stockSummaryView(){
       setTimeout(()=>keepFieldAboveKeyboard(el,true),80);
       setTimeout(()=>keepFieldAboveKeyboard(el,true),320);
     },true);
+    // Kullanıcı parmağıyla kaydırırken alan geri çekilmez (kaydırma ile kavga edip sayfayı titretiyordu).
+    const markTouch=()=>{window.__asilTouchUntilV7=Date.now()+700;};
+    window.addEventListener('touchstart',markTouch,{passive:true});
+    window.addEventListener('touchmove',markTouch,{passive:true});
+    window.addEventListener('scroll',()=>{if(Date.now()<(window.__asilTouchUntilV7||0))markTouch();},{passive:true});
     if(window.visualViewport){
-      let timer;
+      let timer,lastHeight=window.visualViewport.height;
+      // Yalnız klavye açılınca (görünür alan belirgin küçülünce) odaktaki alan görünür yapılır.
+      // Adres çubuğunun gizlenip görünmesi (~60 px) ve kaydırma olayları yok sayılır.
       window.visualViewport.addEventListener('resize',()=>{
+        const h=window.visualViewport.height,shrunk=lastHeight-h;lastHeight=h;
+        if(shrunk<120)return;
         clearTimeout(timer);
         timer=setTimeout(()=>{
+          if(Date.now()<(window.__asilTouchUntilV7||0))return;
           const el=document.activeElement;
-          if(el instanceof HTMLElement && el.matches('input,select,textarea,button'))keepFieldAboveKeyboard(el,false);
-        },80);
-      });
-      window.visualViewport.addEventListener('scroll',()=>{
-        const el=document.activeElement;
-        if(el instanceof HTMLElement && el.matches('input,select,textarea,button'))setTimeout(()=>keepFieldAboveKeyboard(el,false),40);
+          if(el instanceof HTMLElement && el.matches('input,select,textarea'))keepFieldAboveKeyboard(el,false);
+        },120);
       });
     }
   }
@@ -5739,6 +5745,8 @@ function stockSummaryView(){
       let target=document.getElementById('saleProductSearch');
       if(saleDraft.entrySelection?.type==='open')target=document.getElementById('saleEntryAmount');
       if(saleDraft.entrySelection?.type==='barcode')target=document.getElementById('saleEntryPrice');
+      // Telefonda satış ekranı açılır açılmaz klavye açılmasın; yalnız ürün seçiliyken sonraki alana geçilir.
+      if(isMobileViewport()&&!saleDraft.entrySelection)return;
       if(target&&document.activeElement===document.body)focusAndSelect(target);
     },0);
     const customerSelectEl=document.getElementById('saleCustomerSelect');

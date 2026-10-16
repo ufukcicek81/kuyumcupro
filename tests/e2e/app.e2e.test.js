@@ -608,6 +608,25 @@ test('PC\'de başlatılan kimlik okuması telefonda QR ile açılan sayfadan fot
   await phoneCtx.close(); await pc.context().close();
 });
 
+test('telefonda satış ekranı: açılışta klavye açılmaz, kaydırma odaktaki alana geri çekilmez', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  await p.setViewportSize({ width: 390, height: 700 });
+  await p.evaluate(() => document.querySelector('[data-go="sales"]')?.click());
+  await p.waitForSelector('#saleProductSearch');
+  await p.waitForTimeout(300);
+  assert.notEqual(await p.evaluate(() => document.activeElement?.id), 'saleProductSearch', 'telefonda arama kutusu kendiliğinden odaklanmamalı');
+  // Kullanıcı arama kutusuna dokunur, sonra parmağıyla aşağı kaydırır.
+  await p.focus('#saleProductSearch');
+  await p.waitForTimeout(500);
+  await p.evaluate(() => { window.dispatchEvent(new Event('touchstart')); window.scrollTo(0, 900); window.dispatchEvent(new Event('touchmove')); });
+  const y0 = await p.evaluate(() => window.scrollY);
+  await p.waitForTimeout(700);
+  const y1 = await p.evaluate(() => window.scrollY);
+  assert.ok(y0 > 300 && Math.abs(y1 - y0) < 5, `kaydırma korunmalı (${y0} → ${y1})`);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
 test('özel ürün aktarımı altın stoklarına dokunmaz; USD fiyatlı ürün satışta güncel kurla TL olur', async () => {
   const XLSX = require('xlsx');
   const os = require('node:os'); const path = require('node:path'); const fs = require('node:fs');
