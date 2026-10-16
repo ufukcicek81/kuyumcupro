@@ -1011,3 +1011,48 @@ test('telefon düzeni: logo görünür, ekranlar yana taşmaz, satış kartları
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('fatura taslağı: altın bedeli, işçilik ve yalnız işçilikten KDV ayrılır; entegratöre ayrıntılı gider', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  let sent = null;
+  await p.context().route('https://fatura.test/api', async (r) => { sent = JSON.parse(r.request().postData()); await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, status: 'Gönderildi', invoiceNo: 'TST2026000000001' }) }); });
+  // Satış: 22 ayar 0,25 gram, 70.000 TL nakit
+  await p.click('[data-go="sales"]');
+  for (let i = 0; i < 3; i++) {
+    await p.fill('#saleProductSearch', '22'); await p.waitForTimeout(300); await p.press('#saleProductSearch', 'Enter');
+    if (await p.waitForSelector('#saleEntryPrice:not([disabled])', { timeout: 5000 }).catch(() => null)) break;
+  }
+  await p.waitForTimeout(300);
+  await p.fill('#saleEntryPayable', '70000'); await p.click('#saleAddUnified'); await p.waitForTimeout(400);
+  await p.click('[data-pay="Nakit"]'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.selectOption('#salePerson', { index: 1 });
+  await p.click('#finalizeSale'); await p.click('#modalConfirm'); await p.waitForTimeout(1500);
+  // e-Fatura: entegrasyon adresi, taslak
+  await p.evaluate(() => document.querySelector('[data-go="invoices"],[data-route="invoices"]').click());
+  await p.click('[data-invoice-view="settings"]');
+  await p.fill('#invProxy', 'https://fatura.test/api'); await p.click('#saveInvoiceSettings');
+  await p.click('[data-invoice-view="sales"]');
+  await p.click('[data-invoice-draft]');
+  await p.waitForSelector('[data-inv-gold="0"]');
+  const num = (s) => Number(String(s).replace(/[^\d,-]/g, '').replace(',', '.'));
+  const rowText = await p.innerText('.invoice-draft tbody tr');
+  const cells = rowText.split('\t');
+  const gold = Number(await p.inputValue('[data-inv-gold="0"]'));
+  const labour = num(cells[5]), vat = num(cells[6]);
+  assert.ok(gold > 0 && gold < 70000, 'altın bedeli hesaplanmalı: ' + gold);
+  assert.ok(Math.abs(gold + labour + vat - 70000) < 0.02, `altın + işçilik + KDV = satış (${gold} + ${labour} + ${vat})`);
+  assert.ok(Math.abs(vat - (70000 - gold) * 20 / 120) < 0.02, 'KDV yalnız işçilikten iç yüzdeyle ayrılmalı');
+  // Altın bedeli elle düzeltilir, kaydedilir; kayıtlar sekmesinde görünür
+  await p.fill('[data-inv-gold="0"]', '10000'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  assert.match(await p.innerText('.content'), /SAT-\d{4}-0+1/);
+  assert.match(await p.innerText('.content'), /50\.000,00/, 'işçilik (60.000 − KDV 10.000) listede görünmeli');
+  await p.click('[data-invoice-send]'); await p.waitForTimeout(800);
+  assert.ok(sent, 'entegratöre istek gitmeli');
+  assert.equal(sent.sale.lines[0].goldValue, 10000);
+  assert.equal(sent.sale.lines[0].labourAmount, 50000);
+  assert.equal(sent.sale.lines[0].vatAmount, 10000);
+  assert.deepEqual({ g: sent.totals.goldValue, l: sent.totals.labourAmount, v: sent.totals.vatAmount, t: sent.totals.total }, { g: 10000, l: 50000, v: 10000, t: 70000 });
+  assert.match(await p.innerText('.content'), /TST2026000000001/);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
