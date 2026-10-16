@@ -520,7 +520,8 @@ test('Son Fiş: satış ekranındaki ziynet alışı dahil son işlemin fişi ba
   assert.match(text, /ALTIN \/ ZİYNET|Ziynet Alış/i, 'son fiş ziynet alışı olmalı');
   assert.doesNotMatch(text, /SATIŞ FİŞİ/);
   // Testte QZ yok: "doğrudan baskı olmadı" uyarısı kapatılır.
-  const closeAlert = async (waitMs = 0) => { await p.waitForSelector('.critical-alert button', { timeout: waitMs }).catch(() => {}); const b = await p.$('.critical-alert button'); if (b) await b.click(); };
+  // Playwright'ta timeout:0 süresiz bekler; bekleme yalnız süre verilirse yapılır.
+  const closeAlert = async (waitMs = 0) => { if (waitMs) await p.waitForSelector('.critical-alert button', { timeout: waitMs }).catch(() => {}); const b = await p.$('.critical-alert button'); if (b) await b.click(); };
   await closeAlert(3000);
   // F10: son işlemler listesi, en üstte ziynet alışı.
   await p.keyboard.press('F10');
