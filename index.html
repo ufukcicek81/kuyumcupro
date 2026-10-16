@@ -3436,6 +3436,35 @@ function stockSummaryView(){
       ${section('SAT — sisteme ÇIKIŞ yapılmalı (kasada eksik)',rec.sat,false,'#c0262d')}
       ${rec.missing.length?`<div class="muted" style="margin-top:10px;font-size:12px">Sayılmayan: ${rec.missing.map(r=>esc(r.name)).join(', ')}</div>`:''}`;
   }
+  /* Fiş yazıcısı (termal) için yazdırma: renk ve gri zemin yok, tamamı siyah ve kalın; her kalem
+     dar kâğıda sığacak şekilde alt alta yazılır. A4 yazıcıda da okunur. */
+  function kasaCountPrintHtmlV7(rec){
+    const f=(v,u)=>kasaCountFmtV7(v,u),line=(k,v)=>`<tr><td>${esc(k)}</td><td class="r">${v}</td></tr>`;
+    const item=r=>`<div class="it"><div class="nm">${esc(r.name)} <span>(${esc(r.unit)})</span></div><table>${line('Sistem',f(r.sys,r.unit))}${line('Sayılan',f(r.counted,r.unit))}${line('FARK',`<b>${r.diff>0?'+':''}${f(r.diff,r.unit)}</b>`)}${r.diffHas?line('HAS',`${r.diffHas>0?'+':''}${qty(r.diffHas)}`):''}</table></div>`;
+    const sec=(title,hint,list)=>list.length?`<div class="sec">${title} (${list.length})</div><div class="hint">${hint}</div>${list.map(item).join('')}`:'';
+    const hasNet=[...rec.al,...rec.sat].reduce((a,r)=>a+r.diffHas,0),diff=rec.al.length+rec.sat.length;
+    return `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Kasa Sayım Raporu</title><style>
+      @page{margin:3mm}
+      *{color:#000!important;background:#fff!important;box-shadow:none!important}
+      body{font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:700;margin:0;padding:2mm;max-width:76mm}
+      h1{font-size:16px;margin:0 0 2px;text-align:center}h2{font-size:14px;margin:0 0 6px;text-align:center}
+      table{width:100%;border-collapse:collapse}td{padding:1px 0;vertical-align:top}td.r{text-align:right;white-space:nowrap}
+      .sum td{font-size:14px}.sep{border-top:2px dashed #000;margin:6px 0}
+      .sec{font-size:15px;margin:8px 0 2px;padding:3px 0;border-top:2px solid #000;border-bottom:2px solid #000;text-align:center}
+      .hint{font-size:12px;font-weight:700;margin-bottom:4px;text-align:center}
+      .it{border-bottom:1px dashed #000;padding:4px 0}.it .nm{font-size:15px}.it .nm span{font-weight:400;font-size:12px}
+      .ok{text-align:center;font-size:16px;margin:8px 0;padding:4px;border:2px solid #000}
+      .miss{font-size:12px;font-weight:700;margin-top:6px}
+    </style></head><body>
+      <h1>${esc(state.settings?.companyName||'ASİL KUYUMCULUK')}</h1><h2>KASA SAYIM RAPORU</h2>
+      <table class="sum">${line('Tarih',esc(trDate(rec.date)))}${line('Sayan',esc(rec.user||''))}${line('Sayılan satır',`${rec.counted.length} / ${rec.rows.length}`)}${line('Tutan',String(rec.counted.length-diff))}${line('Farklı',String(diff))}${hasNet?line('Altın farkı',`${hasNet>0?'+':''}${qty(hasNet)} HAS`):''}</table>
+      ${diff?'':'<div class="ok">KASA TUTUYOR</div>'}
+      ${sec('AL — SİSTEME GİRİŞ','Kasada fazla: alış / giriş / tahsilat girilmemiş olabilir',rec.al)}
+      ${sec('SAT — SİSTEMDEN ÇIKIŞ','Kasada eksik: satış / çıkış / ödeme girilmemiş olabilir',rec.sat)}
+      ${rec.missing.length?`<div class="sep"></div><div class="miss"><b>Sayılmayan (${rec.missing.length}):</b> ${rec.missing.map(r=>esc(r.name)).join(', ')}</div>`:''}
+      <div class="sep"></div><div class="miss">İmza: ______________________</div>
+      <script>window.onload=()=>setTimeout(()=>window.print(),200)<\/script></body></html>`;
+  }
   function openKasaCountReportV7(items,values,saved){
     const res=saved||{...kasaCountResultV7(items,values),date:now(),user:session?.name||''};
     modal('KASA SAYIM RAPORU',`${kasaCountReportHtmlV7(res)}<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn btn-outline" type="button" id="kcPrintV7">Yazdır</button><button class="btn btn-outline" type="button" id="kcExcelV7">Excel</button></div>`,saved?null:()=>{
@@ -3449,8 +3478,8 @@ function stockSummaryView(){
     },'SAYIMI KAYDET');
     const cancel=document.getElementById('modalCancel');if(cancel){cancel.textContent=saved?'← GEÇMİŞ':'← SAYIMA DÖN';cancel.onclick=()=>saved?openKasaCountHistoryV7():openKasaCountV7();}
     document.getElementById('kcPrintV7')?.addEventListener('click',()=>{
-      const w=window.open('','_blank','width=900,height=800');if(!w)return toast('Tarayıcı açılır pencereyi engelledi','err');
-      w.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Kasa Sayım Raporu</title><style>body{font-family:Arial,sans-serif;margin:12mm;font-size:12px}.summary-row{display:flex;justify-content:space-between;border-bottom:1px solid #ddd;padding:3px 0}.notice{border:1px solid #9c9;padding:6px}.muted{color:#555}</style></head><body><h2>${esc(state.settings?.companyName||'ASİL KUYUMCULUK')} — KASA SAYIM RAPORU</h2>${kasaCountReportHtmlV7(res)}<script>window.onload=()=>setTimeout(()=>window.print(),200)<\/script></body></html>`);w.document.close();
+      const w=window.open('','_blank','width=420,height=800');if(!w)return toast('Tarayıcı açılır pencereyi engelledi','err');
+      w.document.write(kasaCountPrintHtmlV7(res));w.document.close();
     });
     document.getElementById('kcExcelV7')?.addEventListener('click',async()=>{
       try{const X=await loadXlsxV7();const aoa=[['GRUP','TANIM','BİRİM','SİSTEM','SAYILAN','FARK','HAS KARŞILIĞI','DURUM'],...res.rows.map(r=>[r.group,r.name,r.unit,r.sys,r.counted??'',r.diff??'',r.diffHas||'',r.counted===null?'SAYILMADI':!r.off?'TUTUYOR':r.diff>0?'AL (FAZLA)':'SAT (EKSİK)'])];const wb=X.utils.book_new();X.utils.book_append_sheet(wb,X.utils.aoa_to_sheet(aoa),'Kasa Sayımı');X.writeFile(wb,`KASA_SAYIMI_${String(res.date).slice(0,10)}.xlsx`);}
