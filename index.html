@@ -2153,7 +2153,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
           <div class="topbar-left"><button class="btn btn-outline mobile-menu" id="menuBtn">☰</button>
             <select id="periodSelect" class="period-select">${YEARS.map(y=>`<option value="${y}" ${state.activePeriod===y?'selected':''}>${periodLabel(y)} / ${y}</option>`).join('')}</select>
           </div>
-          <div class="market-ticker"><span>HAS ALIŞ <strong class="negative" id="tickerHasBuy">${money(state.prices.has.buy,'')}</strong></span><span>HAS SATIŞ <strong class="positive" id="tickerHasSell">${money(state.prices.has.sell,'')}</strong></span><span>USD <strong id="tickerUsd">${state.prices.usd.sell.toFixed(4)}</strong></span><span>EUR <strong id="tickerEur">${state.prices.eur.sell.toFixed(4)}</strong></span><span class="market-sync ${state.market?.status==='live'?'live':state.market?.status==='offline'?'offline':''}" id="marketSyncBadge"><i class="dot"></i><b id="marketSyncText">${state.market?.status==='live'?'CANLI':state.market?.status==='offline'?'SON KAYIT':'BAĞLANIYOR'}</b></span><button class="btn btn-outline" type="button" data-gold-stocks title="Altın stokları ve kasa (F9)" style="min-height:30px;padding:4px 10px;font-weight:800">ALTIN STOKLARI · F9</button></div>
+          <div class="market-ticker"><span>HAS ALIŞ <strong class="negative" id="tickerHasBuy">${money(state.prices.has.buy,'')}</strong></span><span>HAS SATIŞ <strong class="positive" id="tickerHasSell">${money(state.prices.has.sell,'')}</strong></span><span>USD <strong id="tickerUsd">${state.prices.usd.sell.toFixed(4)}</strong></span><span>EUR <strong id="tickerEur">${state.prices.eur.sell.toFixed(4)}</strong></span><span class="market-sync ${state.market?.status==='live'?'live':state.market?.status==='offline'?'offline':''}" id="marketSyncBadge"><i class="dot"></i><b id="marketSyncText">${state.market?.status==='live'?'CANLI':state.market?.status==='offline'?'SON KAYIT':'BAĞLANIYOR'}</b></span><button class="btn btn-outline" type="button" data-gold-stocks title="Altın stokları ve kasa (F9)" style="min-height:30px;padding:4px 10px;font-weight:800">ALTIN STOKLARI · F9</button><button class="btn btn-outline" type="button" data-recent-receipts title="Son işlemlerin fişleri (F10)" style="min-height:30px;padding:4px 10px;font-weight:800">FİŞLER · F10</button></div>
           <div class="topbar-right"><div class="mode-switch" title="Ekran modu"><button class="mode-btn ${uiMode==='pc'?'active':''}" id="pcModeBtn">🖥 PC</button><button class="mode-btn ${uiMode==='tablet'?'active':''}" id="tabletModeBtn">▣ Tablet</button></div><div class="theme-switch" title="Tema"><button class="theme-btn ${theme==='dark'?'active':''}" id="darkThemeBtn">🌙 Karanlık</button><button class="theme-btn ${theme==='light'?'active':''}" id="lightThemeBtn">☀ Aydınlık</button></div><span class="user-label">${esc(session.name)}</span><span class="badge gold">${esc(session.role)}</span></div>
         </header>
         <section class="content">${body}</section>
@@ -3003,7 +3003,7 @@ function stockSummaryView(){
   function qzHasLocalSigningKey(){try{return /^-----BEGIN (?:RSA )?PRIVATE KEY-----/.test(String(localStorage.getItem(QZ_LOCAL_KEY_STORAGE)||'').trim());}catch(_e){return false;}}
   function qzLoad(){
     if(window.qz)return Promise.resolve(window.qz);
-    return new Promise((resolve,reject)=>{const old=document.getElementById('qzTrayScript');if(old){if(window.qz)return resolve(window.qz);old.addEventListener('load',()=>resolve(window.qz),{once:true});old.addEventListener('error',()=>reject(new Error('QZ Tray kütüphanesi yüklenemedi')),{once:true});return;}const sc=document.createElement('script');sc.id='qzTrayScript';sc.src=printerSettings().qzScriptUrl;sc.async=true;sc.onload=()=>window.qz?resolve(window.qz):reject(new Error('QZ Tray kütüphanesi bulunamadı'));sc.onerror=()=>reject(new Error('QZ Tray kütüphanesi indirilemedi'));document.head.appendChild(sc);});
+    return new Promise((resolve,reject)=>{const old=document.getElementById('qzTrayScript');if(old){if(window.qz)return resolve(window.qz);old.addEventListener('load',()=>resolve(window.qz),{once:true});old.addEventListener('error',()=>reject(new Error('QZ Tray kütüphanesi yüklenemedi')),{once:true});return;}const sc=document.createElement('script');sc.id='qzTrayScript';sc.src=printerSettings().qzScriptUrl;sc.async=true;sc.onload=()=>window.qz?resolve(window.qz):reject(new Error('QZ Tray kütüphanesi bulunamadı'));sc.onerror=()=>{sc.remove();reject(new Error('QZ Tray kütüphanesi indirilemedi'));};document.head.appendChild(sc);});
   }
   function qzLoadSigner(){
     if(window.KJUR&&window.KEYUTIL&&window.stob64&&window.hextorstr)return Promise.resolve(true);
@@ -3542,6 +3542,7 @@ function stockSummaryView(){
   }
   // Her ekrandan erişim: F9, üst çubuktaki düğme, ana menü kutucuğu.
   document.addEventListener('keydown',e=>{if(e.key==='F9'&&session&&!e.altKey&&!e.ctrlKey&&!e.metaKey){e.preventDefault();openGoldStocksV7();}});
+  document.addEventListener('keydown',e=>{if(e.key==='F10'&&session&&!e.altKey&&!e.ctrlKey&&!e.metaKey){e.preventDefault();openRecentReceiptsV7();}});
   document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-go="salesreport"]');if(!b)return;e.preventDefault();e.stopPropagation();openPusulaReportV660('sales_general');},true);
   document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-gold-stocks],[data-go="goldstocks"]');if(!b)return;e.preventDefault();e.stopPropagation();openGoldStocksV7();},true);
   /* === V7 SİSTEM CARİLERİ (Pusula muhasebe mantığı) ===
@@ -8961,6 +8962,17 @@ function stockSummaryView(){
     if(!name)throw new Error('Fiş yazıcısı bulunamadı');
     p.printerName=name;save();return name;
   }
+  /* Tüm yazdırma pencereleri (kimlik formu, raporlar, etiketler, F9, kasa sayımı…): yazılar tam siyah ve
+     kalın, gri zeminler beyaz, çizgiler siyah. Fiş yazıcısında gri yazı noktalı/okunmaz basılıyordu. */
+  var PRINT_INK_CSS_V7='<style id="printInkV7">*{color:#000!important;text-shadow:none!important;opacity:1!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}html,body,div,section,article,header,footer,table,thead,tbody,tr,th,td,p,span,small,b,strong,label,h1,h2,h3,h4{background-color:#fff!important}body,body *{font-weight:700!important}*{border-color:#000!important}img{filter:grayscale(1) contrast(1.4)}</style>';
+  function printInkV7(html){html=String(html==null?'':html);if(html.indexOf('printInkV7')>=0||html.indexOf('</head>')<0||/<title>[^<]*Etiket/i.test(html))return html;/* dar barkod etiketleri ölçüsü bozulmasın */return html.replace('</head>',PRINT_INK_CSS_V7+'</head>');}
+  (function(){
+    var nativeOpen=window.open;if(!nativeOpen||nativeOpen.__inkV7)return;
+    var wrapped=function(url){var w=nativeOpen.apply(window,arguments);
+      if(w&&(!url||url==='about:blank')){try{var d=w.document,ow=d.write.bind(d);d.write=function(){var a=[].slice.call(arguments).map(printInkV7);return ow.apply(null,a);};}catch(_e){}}
+      return w;};
+    wrapped.__inkV7=true;window.open=wrapped;
+  })();
   /* Fiş yazıcısı (termal) gri ve ince yazıyı noktalı/soluk basar: tüm fişlerde yazı tam siyah,
      kalın ve okunur boyutta; çizgiler siyah. Ölçüden önce eklenir ki fiş boyu doğru çıksın. */
   var RECEIPT_MONO_CSS_V7='<style id="receiptMonoV7">*{color:#000!important;opacity:1!important;text-shadow:none!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}html,body,.receipt{background:#fff!important}body,.receipt,.receipt *{font-weight:700!important}.receipt{font-size:12px!important}.receipt .rp span:first-child,.receipt .items th,.receipt .items td,.receipt .branch{font-size:11px!important}.receipt .note,.receipt .sign div{font-size:10px!important}.receipt .items th,.receipt .items td{border-bottom:1px dashed #000!important}.receipt .dash{border-top:1px dashed #000!important}img{filter:grayscale(1) contrast(1.6)}</style>';
@@ -9179,6 +9191,46 @@ function stockSummaryView(){
     document.getElementById('repairSearchClear')?.addEventListener('click',function(){var q=document.getElementById('repairSearch');if(q)q.value='';filter();});
   }
 
+  /* === V7 SON FİŞ (tüm işlemler) ===
+     Satış, ziynet/hurda/döviz alış-satış (satış ekranı alt menüsü dahil), altın girişi, cari işlemler,
+     tek başına kasa/banka hareketleri ve tamir kayıtları tarih sırasıyla tek listede. Aynı anda yapılan
+     çok satırlı işlem (aynı belge no veya aynı anda kaydedilen döviz satırları) tek fiş olarak basılır. */
+  var CARI_RECEIPT_SOURCES_V7={cariManual:1,cariGold:1,cariZiynet:1,cariScrap:1,cariReturnOut:1};
+  function recentReceiptDocsV7(limit){
+    var period=state.activePeriod,docs=[],inP=function(x){return x&&x.period===period;},cust=function(id){var c=(state.customers||[]).find(function(x){return x.id===id;});return c?c.name:'';};
+    (state.sales||[]).filter(function(s){return inP(s)&&s.status==='Tamamlandı';}).forEach(function(s){docs.push({kind:'sale',ids:[s.id],date:s.date,doc:s.docNo||s.id,title:s.transactionKind==='Cari Tahsilat'?'Cari Tahsilat':'Satış',party:cust(s.customerId)||'Peşin Müşteri'});});
+    var trades=(state.tradeMoves||[]).filter(function(t){return inP(t)&&!CARI_RECEIPT_SOURCES_V7[t.sourceType]&&t.tradeType!=='CI - ÇIKAN İADE';}).slice().sort(function(a,b){return String(a.date||'').localeCompare(String(b.date||''));}),grp=null;
+    trades.forEach(function(t){
+      var fx=String(t.tradeType||'').startsWith('Döviz'),ms=Date.parse(t.date||'')||0;
+      var same=grp&&((t.docNo&&t.docNo===grp.docNo)||(fx&&grp.fx&&t.user===grp.user&&Math.abs(ms-grp.ms)<3000));
+      if(same){grp.ids.push(t.id);grp.ms=ms;grp.types[t.tradeType]=1;return;}
+      grp={kind:'trade',ids:[t.id],date:t.date,doc:t.docNo||t.id,docNo:t.docNo,fx:fx,user:t.user,ms:ms,types:{},party:t.customer||''};grp.types[t.tradeType]=1;docs.push(grp);
+    });
+    docs.forEach(function(d){if(d.kind==='trade'){d.title=Object.keys(d.types).join(' / ');delete d.types;}});
+    (state.purchases||[]).filter(function(p){return inP(p)&&p.status!=='İptal'&&p.sourceType!=='cariGold';}).forEach(function(p){docs.push({kind:'purchase',ids:[p.id],date:p.date,doc:p.docNo||p.id,title:p.type||'Altın Girişi',party:cust(p.supplierId)});});
+    (state.customerMoves||[]).filter(function(m){return inP(m)&&CARI_RECEIPT_SOURCES_V7[m.sourceType];}).forEach(function(m){docs.push({kind:'cari',ids:[m.id],date:m.date,doc:m.sourceDocNo||m.code||'',title:m.type||'Cari İşlem',party:cust(m.customerId)});});
+    (state.financeMoves||[]).filter(function(f){return inP(f)&&!f.sourceDocNo&&!f.sourceId&&!f.sourceType;}).forEach(function(f){docs.push({kind:'finance',ids:[f.id],date:f.date,doc:'',title:f.type||'Kasa / Banka',party:f.customer||f.accountName||''});});
+    (state.repairs||[]).filter(function(r){return !r.period||r.period===period;}).forEach(function(r){docs.push({kind:'repair',ids:[r.id],date:r.date||r.createdAt||r.receivedAt,doc:r.docNo||'',title:'Tamir / Servis',party:r.customerName||r.customer||''});});
+    docs.sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));});
+    return limit?docs.slice(0,limit):docs;
+  }
+  function printReceiptDocV7(d){
+    if(!d)return toast('Basılacak fiş bulunamadı','err');
+    if(d.kind==='sale')return printSaleReceiptV644(d.ids[0]);
+    if(d.kind==='trade')return d.ids.length>1?printTradeReceiptsCombinedV7(d.ids,1):printTradeReceiptV644(d.ids[0]);
+    if(d.kind==='purchase')return printPurchaseReceiptV644(d.ids[0]);
+    if(d.kind==='cari')return printCariReceiptV644(d.ids[0]);
+    if(d.kind==='finance')return printFinanceReceiptV644(d.ids[0]);
+    if(d.kind==='repair')return printRepairReceiptV644(d.ids[0]);
+  }
+  function printLastReceiptV7(){return printReceiptDocV7(recentReceiptDocsV7(1)[0]);}
+  function openRecentReceiptsV7(){
+    var list=recentReceiptDocsV7(30);
+    modal('FİŞLER — SON İŞLEMLER',list.length?'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap"><div class="muted">En son işlem en üstte. Satış, ziynet / hurda / döviz, altın girişi, cari, kasa ve tamir işlemleri.</div><button class="btn btn-primary" type="button" data-recent-receipt="0">SON FİŞİ YAZDIR</button></div><div class="table-wrap"><table class="table"><thead><tr><th>Tarih</th><th>İşlem</th><th>Belge</th><th>Cari / Müşteri</th><th></th></tr></thead><tbody>'+list.map(function(d,i){return '<tr><td>'+esc(trDate(d.date))+'</td><td><b>'+esc(d.title)+'</b>'+(d.ids.length>1?' <small>('+d.ids.length+' satır)</small>':'')+'</td><td>'+esc(d.doc||'')+'</td><td>'+esc(d.party||'')+'</td><td><button class="btn btn-outline" type="button" data-recent-receipt="'+i+'">Fiş Yazdır</button></td></tr>';}).join('')+'</tbody></table></div>':'<div class="empty-state">Bu dönemde fişi basılacak işlem yok.</div>',null);
+    var m=document.querySelector('#modalRoot .modal');if(m)m.style.maxWidth='900px';
+    document.querySelectorAll('#modalRoot [data-recent-receipt]').forEach(function(b){b.addEventListener('click',function(){printReceiptDocV7(list[Number(b.dataset.recentReceipt)]);});});
+  }
+  document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-recent-receipts]');if(!b)return;e.preventDefault();e.stopPropagation();openRecentReceiptsV7();},true);
   function addReceiptCellV644(tr,id,kind){
     if(!tr||tr.querySelector('[data-receipt-kind="'+kind+'"]'))return;
     var td=document.createElement('td'),b=document.createElement('button');
@@ -9191,8 +9243,7 @@ function stockSummaryView(){
   function enhanceReceiptsV644(r){
     if(r==='sales'){
       var head=document.querySelector('.sale-head-actions');
-      var last=activeSales().filter(function(s){return s.status==='Tamamlandı';}).slice().sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));})[0];
-      if(head&&last&&!head.querySelector('[data-receipt-kind="sale"]')){var sb=document.createElement('button');sb.className='btn btn-outline';sb.textContent='Son Fişi Yazdır';sb.dataset.receiptKind='sale';sb.dataset.receiptId=last.id;head.insertBefore(sb,head.firstChild);}
+      if(head&&!head.querySelector('[data-receipt-kind="last"]')){var sb=document.createElement('button');sb.className='btn btn-outline';sb.textContent='Son Fişi Yazdır';sb.title='Son yapılan işlemin fişi (satış, ziynet / hurda / döviz, cari, kasa…)';sb.dataset.receiptKind='last';sb.dataset.receiptId='last';head.insertBefore(sb,head.firstChild);}
     }
     if(r==='purchases'){
       var pcard=[].slice.call(document.querySelectorAll('.content .card')).find(function(x){return x.querySelector('.section-head h3')&&x.querySelector('.section-head h3').textContent.indexOf('Son Altın Girişleri')>=0;});
@@ -9226,6 +9277,7 @@ function stockSummaryView(){
     var b=e.target.closest&&e.target.closest('[data-receipt-kind][data-receipt-id]');if(!b)return;
     e.preventDefault();e.stopPropagation();
     var kind=b.dataset.receiptKind,id=b.dataset.receiptId;
+    if(kind==='last')return printLastReceiptV7();
     if(kind==='sale')return printSaleReceiptV644(id);
     if(kind==='purchase')return printPurchaseReceiptV644(id);
     if(kind==='cari')return printCariReceiptV644(id);
