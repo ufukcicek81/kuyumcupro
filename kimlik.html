@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Kimlik Fotoğrafı — Asil Kuyumcu Pro</title>
+<style>
+  :root{--bg:#f6f4ef;--card:#fff;--ink:#1d1d1f;--muted:#6b6b70;--gold:#b08a2e;--ok:#0a7a2f;--err:#c0262d;--line:#ddd6c8}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;padding:16px}
+  main{max-width:520px;margin:0 auto}
+  h1{font-size:20px;margin:4px 0 2px}
+  .muted{color:var(--muted);font-size:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:12px}
+  .code{font:700 26px/1 ui-monospace,Menlo,monospace;letter-spacing:3px;text-align:center;padding:8px;background:#faf7ef;border-radius:10px}
+  .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:54px;border:0;border-radius:12px;font-size:18px;font-weight:700;cursor:pointer;margin-top:12px}
+  .primary{background:var(--gold);color:#fff}
+  .outline{background:#fff;color:var(--ink);border:1px solid var(--line)}
+  .btn[disabled]{opacity:.5}
+  label.f{display:block;font-size:13px;font-weight:700;margin-top:10px}
+  input.i{width:100%;font-size:17px;padding:10px;border:1px solid var(--line);border-radius:10px;margin-top:4px;background:#fff;color:var(--ink)}
+  #status{margin-top:12px;font-weight:600}
+  .ok{color:var(--ok)} .err{color:var(--err)}
+  pre{white-space:pre-wrap;font-size:11px;color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Kimlik Fotoğrafı</h1>
+  <div class="muted">Bilgiler mağazadaki bilgisayara gönderilir. Bu sayfa giriş istemez; yalnız bilgisayarda açılan eşleştirme koduna veri gönderebilir.</div>
+
+  <div class="card">
+    <div class="muted" style="text-align:center">Eşleştirme kodu</div>
+    <div class="code" id="code">—</div>
+  </div>
+
+  <div class="card">
+    <div class="muted">Kimliğin <b>ARKA yüzünü</b> düz bir zemine koyun. Alttaki <b>&lt;&lt;&lt;</b> işaretli 3 satır net, parlamasız ve ekranı enine dolduracak şekilde çekin.</div>
+    <label class="btn primary" id="shotLabel">📷 FOTOĞRAF ÇEK<input id="file" type="file" accept="image/*" capture="environment" style="display:none"></label>
+    <div id="status" class="muted">Fotoğraf bekleniyor.</div>
+  </div>
+
+  <div class="card" id="result" hidden>
+    <label class="f">Ad Soyad<input class="i" id="fullName" autocomplete="off"></label>
+    <label class="f">T.C. Kimlik No<input class="i" id="tckn" inputmode="numeric" autocomplete="off"></label>
+    <label class="f">Seri No<input class="i" id="documentNumber" autocomplete="off"></label>
+    <label class="f">Doğum Tarihi<input class="i" id="birthDate" type="date"></label>
+    <label class="f">Son Geçerlilik<input class="i" id="expiryDate" type="date"></label>
+    <label class="f">Cinsiyet<input class="i" id="sex" autocomplete="off"></label>
+    <label class="f">Uyruk<input class="i" id="nationality" autocomplete="off"></label>
+    <button class="btn primary" id="send" type="button">BİLGİSAYARA GÖNDER</button>
+    <details style="margin-top:10px"><summary class="muted">Okunan metin</summary><pre id="raw"></pre></details>
+  </div>
+</main>
+<script src="./js/asil-mrz.js"></script>
+<script src="./js/asil-mrz-camera.js"></script>
+<script>
+(function(){
+  'use strict';
+  var q=new URLSearchParams(location.search),code=String(q.get('c')||'').replace(/\D/g,''),bridge=String(q.get('u')||'');
+  var $=function(id){return document.getElementById(id)},status=function(t,cls){var el=$('status');el.textContent=t;el.className=cls||'muted'};
+  var valid=code.length===8&&/^https:\/\//i.test(bridge);
+  $('code').textContent=code.length===8?code.replace(/(\d{4})(\d{4})/,'$1 $2'):'—';
+  if(!valid){status('Bağlantı geçersiz. Bilgisayarda NFC / kimlik işlemini yeniden başlatıp QR kodu tekrar okutun.','err');$('shotLabel').style.display='none';return;}
+  var acc=null;
+  $('file').addEventListener('change',function(e){
+    var file=e.target.files&&e.target.files[0];if(!file)return;
+    AsilMrzCamera.read(file,function(t){status(t)}).then(function(fresh){
+      // Önceden okunanlar ve elle düzeltilenler korunur; yeni fotoğraf yalnız boş alanları doldurur.
+      if(acc){acc.fullName=$('fullName').value.trim()||acc.fullName;acc.tckn=$('tckn').value.trim()||acc.tckn;acc.documentNumber=$('documentNumber').value.trim()||acc.documentNumber;acc=AsilMrzCamera.merge(acc,fresh);}
+      else acc=fresh;
+      $('fullName').value=acc.fullName||'';$('tckn').value=acc.tckn||'';$('documentNumber').value=acc.documentNumber||'';
+      $('birthDate').value=AsilMrz.toIsoDate(acc.birthYYMMDD,'birth')||$('birthDate').value;
+      $('expiryDate').value=AsilMrz.toIsoDate(acc.expiryYYMMDD,'expiry')||$('expiryDate').value;
+      $('sex').value=acc.sex==='M'?'Erkek':acc.sex==='F'?'Kadın':$('sex').value;
+      $('nationality').value=acc.nationality==='TUR'?'T.C.':(acc.nationality||$('nationality').value||'T.C.');
+      $('raw').textContent=fresh.ocrText||'';$('result').hidden=false;
+      var missing=[!acc.fullName&&'ad soyad',!acc.tckn&&'T.C. kimlik no',!acc.documentNumber&&'seri no',!acc.birthYYMMDD&&'doğum tarihi',!acc.expiryYYMMDD&&'son geçerlilik'].filter(Boolean);
+      status(missing.length?'Okunamayan: '+missing.join(', ')+'. Tekrar fotoğraf çekin (okunanlar korunur) ya da elle yazın.':'Tüm alanlar okundu. Kontrol edip GÖNDER\'e basın.',missing.length?'muted':'ok');
+    }).catch(function(err){status('Okunamadı: '+(err&&err.message||err),'err')});
+    e.target.value='';
+  });
+  $('send').addEventListener('click',function(){
+    var v=function(id){return $(id).value.trim()};
+    var tc=v('tckn').replace(/\D/g,'');
+    if(!v('fullName')&&!v('documentNumber'))return status('Ad soyad veya seri no gerekli.','err');
+    if(tc&&!AsilMrz.isValidTckn(tc)&&!confirm('T.C. kimlik numarası doğrulanamadı. Yine de gönderilsin mi?'))return;
+    var btn=$('send');btn.disabled=true;status('Gönderiliyor…');
+    fetch(bridge,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'submitNfcIdentity',code:code,payload:{
+      fullName:v('fullName'),tckn:tc,documentNumber:v('documentNumber'),birthDate:v('birthDate'),expiryDate:v('expiryDate'),
+      sex:v('sex'),nationality:v('nationality'),mrzCameraRead:true,reader:'Telefon Kamerası',protocol:'MRZ-KAMERA'}})})
+      .then(function(r){return r.json().catch(function(){return {}}).then(function(d){if(!r.ok||!d.ok)throw new Error(d.message||('HTTP '+r.status));})})
+      .then(function(){status('✓ Gönderildi. Bilgiler bilgisayardaki ekrana geldi; bu sayfayı kapatabilirsiniz.','ok');})
+      .catch(function(err){btn.disabled=false;status('Gönderilemedi: '+(err&&err.message||err),'err')});
+  });
+})();
+</script>
+</body>
+</html>
