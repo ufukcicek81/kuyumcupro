@@ -3209,31 +3209,31 @@ function stockSummaryView(){
   function goldStockRowsV7(){
     const period=state.activePeriod,rows=[],n=v=>Number(v||0);
     // Pusula sırası: ürün koduna göre (8 K, 14 K, 22 K, ÇEYREK, YARIM…).
-    const open=(state.openStocks||[]).filter(x=>x.period===period).slice().sort((a,b)=>(Number(a.pusulaCode)||1e9)-(Number(b.pusulaCode)||1e9)||String(a.name).localeCompare(String(b.name),'tr'));
+    const open=goldStockOrderV7('open',(state.openStocks||[]).filter(x=>x.period===period).slice().sort((a,b)=>(Number(a.pusulaCode)||1e9)-(Number(b.pusulaCode)||1e9)||String(a.name).localeCompare(String(b.name),'tr')),x=>x.id);
     rows.push({kind:'head',cells:['TANIM','AYAR','MİKTAR','HAS','İŞÇİLİK','BİRİM','ORTALAMA','Adet','TİP']});
     let tq=0,th=0,tw=0;
     open.forEach(x=>{const q=n(x.amount),h=n(x.hasWeight),w=n(x.workmanshipTotalHas);tq+=q;th+=h;tw+=w;
-      rows.push({kind:'open',cells:[x.name,n(x.displayAyar||x.purity),q,h,w,'HAS',q?w/q:0,0,q?(h+w)/q*1000:'']});});
+      rows.push({kind:'open',key:'o:'+x.id,cells:[x.name,n(x.displayAyar||x.purity),q,h,w,'HAS',q?w/q:0,0,q?(h+w)/q*1000:'']});});
     rows.push({kind:'total',cells:['TOPLAM ALTIN','',tq,th,tw,'','','','']});
     const by={};activeStock().filter(x=>!isSpecialStockV7(x)).forEach(x=>{const p=Math.round(n(x.purity));const k=String(p);if(!by[k])by[k]={p,q:0,h:0,w:0,c:0};by[k].q+=stockAmount(x);by[k].h+=stockHas(x);by[k].w+=stockWorkmanshipHas(x);by[k].c++;});
     let bq=0,bh=0,bw=0,bc=0;
-    Object.values(by).sort((a,b)=>String(PURITY_LABEL_V7[a.p]||a.p).localeCompare(String(PURITY_LABEL_V7[b.p]||b.p),'tr',{numeric:true})).forEach(x=>{bq+=x.q;bh+=x.h;bw+=x.w;bc+=x.c;rows.push({kind:'barcode',purity:x.p,cells:[PURITY_LABEL_V7[x.p]||(x.p+' MİLYEM'),x.p,x.q,x.h,x.w,'HAS',`${x.c} ADET`,'','']});});
+    goldStockOrderV7('barcode',Object.values(by).sort((a,b)=>String(PURITY_LABEL_V7[a.p]||a.p).localeCompare(String(PURITY_LABEL_V7[b.p]||b.p),'tr',{numeric:true})),x=>String(x.p)).forEach(x=>{bq+=x.q;bh+=x.h;bw+=x.w;bc+=x.c;rows.push({kind:'barcode',key:'b:'+x.p,purity:x.p,cells:[PURITY_LABEL_V7[x.p]||(x.p+' MİLYEM'),x.p,x.q,x.h,x.w,'HAS',`${x.c} ADET`,'','']});});
     rows.push({kind:'total',cells:['TOPLAM BARKOD','',bq,bh,bw,'',`${bc} ADET`,'','']});
     rows.push({kind:'gap'});
-    let sq=0,sh=0;(state.scrapStocks||[]).filter(x=>x.period===period).forEach(x=>{sq+=n(x.amount);sh+=n(x.hasWeight);rows.push({kind:'scrap',cells:[x.name,n(x.milyem),n(x.amount),n(x.hasWeight),'','','','','']});});
+    let sq=0,sh=0;goldStockOrderV7('scrap',(state.scrapStocks||[]).filter(x=>x.period===period),x=>x.id).forEach(x=>{sq+=n(x.amount);sh+=n(x.hasWeight);rows.push({kind:'scrap',key:'s:'+x.id,cells:[x.name,n(x.milyem),n(x.amount),n(x.hasWeight),'','','','','']});});
     rows.push({kind:'total',cells:['TOPLAM HURDA','',sq,sh,'','','','','']});
     // Özel ürünler (barkodlu, TL/USD/HAS fiyatlı) ve Pusula stok özetindeki barkodsuz özel ürün kalemi.
     const sp=activeStock().filter(isSpecialStockV7),spBy={};sp.forEach(x=>{const c=String(x.priceCurrency||'TL').toUpperCase();if(!spBy[c])spBy[c]={n:0,cost:0};spBy[c].n++;spBy[c].cost+=n(x.costNative??x.costTl??0);});
     const lot=state.meta?.pusulaSpecialLotV7;
     if(sp.length||lot){rows.push({kind:'gap'});
-      if(lot)rows.push({kind:'special',cells:['ÖZEL ÜRÜN','',n(lot.qty),'',n(lot.cost),lot.currency||'USD',n(lot.avg),'','']});
-      Object.keys(spBy).sort().forEach(c=>rows.push({kind:'special',cells:['ÖZEL ÜRÜN (BARKODLU)','',spBy[c].n,'',spBy[c].cost,c==='TL'?'TL.':c,spBy[c].n?spBy[c].cost/spBy[c].n:0,'','']}));}
+      if(lot)rows.push({kind:'special',key:'sp:LOT',cells:['ÖZEL ÜRÜN','',n(lot.qty),'',n(lot.cost),lot.currency||'USD',n(lot.avg),'','']});
+      Object.keys(spBy).sort().forEach(c=>rows.push({kind:'special',key:'sp:'+c,cells:['ÖZEL ÜRÜN (BARKODLU)','',spBy[c].n,'',spBy[c].cost,c==='TL'?'TL.':c,spBy[c].n?spBy[c].cost/spBy[c].n:0,'','']}));}
     rows.push({kind:'gap'});
     rows.push({kind:'kasa',cells:['KASA','','BORÇ','ALACAK','','','','','']});
     const cur={};(state.cashAccounts||[]).forEach(a=>{const c=String(a.currency||'TL').toUpperCase();cur[c]=(cur[c]||0)+n(a.balance);});
-    Object.keys(cur).sort().forEach(c=>{const v=cur[c];if(c==='HAS'&&!v)return;rows.push({kind:'cash',cells:['',c==='TL'?'TL.':c,v>=0?v:'',v<0?-v:'','','','','','']});});
+    Object.keys(cur).sort().forEach(c=>{const v=cur[c];if(c==='HAS'&&!v)return;rows.push({kind:'cash',key:'c:'+c,cells:['',c==='TL'?'TL.':c,v>=0?v:'',v<0?-v:'','','','','','']});});
     const banks=(state.bankAccounts||[]).filter(b=>n(b.balance)),pos=(state.posAccounts||[]).filter(b=>n(b.balance));
-    if(banks.length||pos.length){rows.push({kind:'kasa',cells:['BANKA / POS','','BORÇ','ALACAK','','','','','']});banks.concat(pos).forEach(b=>{const v=n(b.balance);rows.push({kind:'cash',cells:[b.bank||b.name,String(b.currency||'TL').toUpperCase(),v>=0?v:'',v<0?-v:'','','','','','']});});}
+    if(banks.length||pos.length){rows.push({kind:'kasa',cells:['BANKA / POS','','BORÇ','ALACAK','','','','','']});banks.concat(pos).forEach(b=>{const v=n(b.balance);rows.push({kind:'cash',key:(banks.includes(b)?'k:':'p:')+b.id,cells:[b.bank||b.name,String(b.currency||'TL').toUpperCase(),v>=0?v:'',v<0?-v:'','','','','','']});});}
     return rows;
   }
   function goldStockFmtV7(v,i){
@@ -3243,13 +3243,114 @@ function stockSummaryView(){
     if(i===1||i===7)return Number.isInteger(v)?String(v):v.toLocaleString('tr-TR',{maximumFractionDigits:1});
     return v.toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
   }
-  function goldStockTableHtmlV7(rows){
+  function goldStockTableHtmlV7(rows,sorting=false){
     return `<table class="gold-stock-v7"><tbody>${rows.map(r=>{
       if(r.kind==='gap')return '<tr class="gap"><td colspan="9">&nbsp;</td></tr>';
       const tag=r.kind==='head'?'th':'td';
-      return `<tr class="${r.kind}"${r.purity?` data-gold-purity="${r.purity}" title="Barkodlu ürün listesi"`:''}>${r.cells.map((c,i)=>`<${tag} class="${i>0&&i!==5?'num':''}">${r.kind==='special'&&i===6&&typeof c==='number'?c.toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}):goldStockFmtV7(c,i)}</${tag}>`).join('')}</tr>`;}).join('')}</tbody></table>`;
+      const sortable=sorting&&GOLD_ORDER_KINDS_V7[r.kind];
+      return `<tr class="${r.kind}"${r.key?` data-gold-key="${esc(r.key)}" title="Hareketler için çift tıklayın"`:''}>${r.cells.map((c,i)=>`<${tag} class="${i>0&&i!==5?'num':''}">${i===0&&sortable?`<span class="gold-ord-v7"><button type="button" data-gold-up="${esc(r.key)}" title="Yukarı">▲</button><button type="button" data-gold-down="${esc(r.key)}" title="Aşağı">▼</button></span>`:''}${r.kind==='special'&&i===6&&typeof c==='number'?c.toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}):goldStockFmtV7(c,i)}</${tag}>`).join('')}</tr>`;}).join('')}</tbody></table>`;
   }
-  function openGoldStocksV7(){
+  /* Altın stokları penceresi: kullanıcı sırası ve satır hareketleri (çift tık). */
+  const GOLD_ORDER_KINDS_V7={open:'open',barcode:'barcode',scrap:'scrap'};
+  function goldStockOrderV7(kind,list,keyOf){
+    const ord=state.settings?.goldStockOrderV7?.[kind];if(!Array.isArray(ord)||!ord.length)return list;
+    const at=new Map(ord.map((k,i)=>[String(k),i]));
+    return list.map((x,i)=>({x,i,o:at.has(String(keyOf(x)))?at.get(String(keyOf(x))):1e9+i})).sort((a,b)=>a.o-b.o||a.i-b.i).map(r=>r.x);
+  }
+  function goldStockMoveOrderV7(key,dir){
+    const kind={o:'open',b:'barcode',s:'scrap'}[String(key).split(':')[0]];if(!kind)return false;
+    const keys=goldStockRowsV7().filter(r=>r.kind===kind&&r.key).map(r=>r.key),i=keys.indexOf(key),j=i+dir;
+    if(i<0||j<0||j>=keys.length)return false;
+    [keys[i],keys[j]]=[keys[j],keys[i]];
+    state.settings=state.settings||{};state.settings.goldStockOrderV7={...(state.settings.goldStockOrderV7||{}),[kind]:keys.map(k=>k.slice(2))};
+    save();return true;
+  }
+  function goldNumTrV7(s){return Number(String(s||'').replace(/\./g,'').replace(',','.'))||0;}
+  function goldTradeInOpenV7(name){const n=String(name||'').toUpperCase().replace(' / TAM','');return (state.openStocks||[]).find(x=>String(x.name).toUpperCase().includes(n)&&x.unit==='ADET'&&x.period===state.activePeriod);}
+  function goldTradeInScrapV7(name){return (state.scrapStocks||[]).find(x=>String(x.name).toUpperCase()===String(name||'').toUpperCase()&&x.period===state.activePeriod);}
+  function goldTradeScrapV7(name){const n=normalizeInventoryName(name).replace('HURDASI','HURDA');return (state.scrapStocks||[]).find(x=>normalizeInventoryName(x.name).includes(n));}
+  /* Bir satırın hareketleri: {title,unit,current,rows:[{date,doc,type,who,desc,inQ,outQ}]} */
+  function goldStockMovesV7(key){
+    const [t,...rest]=String(key).split(':'),id=rest.join(':'),period=state.activePeriod,n=v=>Number(v||0);
+    const inP=x=>x&&x.period===period,cust=cid=>(state.customers||[]).find(c=>c.id===cid)?.name||'';
+    const sales=(state.sales||[]).filter(s=>inP(s)&&s.status==='Tamamlandı'),purchases=(state.purchases||[]).filter(p=>inP(p)&&p.status!=='İptal'),trades=(state.tradeMoves||[]).filter(inP),smoves=(state.stockMoves||[]).filter(inP);
+    const rows=[],add=(date,doc,type,who,desc,inQ,outQ)=>rows.push({date:date||'',doc:doc||'',type:type||'',who:who||'',desc:desc||'',inQ:n(inQ),outQ:n(outQ)});
+    let title='',unit='',current=0;
+    if(t==='o'){
+      const o=(state.openStocks||[]).find(x=>x.id===id);if(!o)return null;
+      title=o.name;unit=String(o.unit||'GR').toUpperCase();current=n(o.amount);
+      sales.forEach(s=>{
+        (s.lines||[]).filter(l=>l.openStockId===o.id).forEach(l=>add(s.date,s.docNo,'SATIŞ',cust(s.customerId),l.note,0,l.displayAmount??l.qty));
+        (s.returnItems||[]).filter(r=>r.kind==='open'&&r.openStockId===o.id).forEach(r=>add(s.date,s.docNo,'SATIŞ İADESİ',cust(s.customerId),r.note,r.quantity,0));
+        (s.payments||[]).filter(p=>p.type==='Altın / Ziynet'&&p.itemKind!=='Hurda'&&goldTradeInOpenV7(p.itemName)===o).forEach(p=>add(s.date,s.docNo,'TAKAS GİRİŞ',cust(s.customerId),p.detail,p.nativeAmount,0));
+      });
+      purchases.forEach(p=>(p.openStockChanges||[]).filter(c=>c.openStockId===o.id).forEach(c=>add(p.date,p.docNo,p.type||'ALTIN GİRİŞ',cust(p.supplierId),p.note,c.amount,0)));
+      trades.forEach(x=>{
+        if(x.sourceType==='cariZiynet'&&x.itemCode===o.id)add(x.date,x.docNo,x.tradeType,x.customer,x.userDescription,x.side==='Giriş'?x.quantity:0,x.side==='Çıkış'?x.quantity:0);
+        else if(x.tradeType==='CI - ÇIKAN İADE'&&x.itemCode===o.id)add(x.date,x.docNo,x.tradeType,x.customer,x.userDescription,0,x.quantity);
+        else if(x.sourceType==='saleScreenPurchase'&&x.tradeType!=='Hurda Alış'&&goldTradeInOpenV7(x.item)===o)add(x.date,x.docNo,x.tradeType,x.customer,x.description,x.quantity,0);
+        else if(!x.sourceType&&(x.tradeType==='Ziynet Alış'||x.tradeType==='Ziynet Satış')&&findOpenTradeStock({name:x.item,code:x.itemCode})===o)add(x.date,x.docNo,x.tradeType,x.customer,x.description,x.side==='Alış'?x.quantity:0,x.side==='Satış'?x.quantity:0);
+      });
+      smoves.filter(m=>m.stockId===o.id&&m.type==='HURDA → AÇIK STOK').forEach(m=>add(m.date,m.sourceDocNo,m.type,m.from,m.description,goldNumTrV7((/Çıktı ([\d.,]+)/.exec(m.description||'')||[])[1]),0));
+    }else if(t==='s'){
+      const h=(state.scrapStocks||[]).find(x=>x.id===id);if(!h)return null;
+      title=h.name;unit='GR';current=n(h.amount);
+      sales.forEach(s=>(s.payments||[]).filter(p=>p.type==='Altın / Ziynet'&&p.itemKind==='Hurda'&&goldTradeInScrapV7(p.itemName)===h).forEach(p=>add(s.date,s.docNo,'TAKAS GİRİŞ',cust(s.customerId),p.detail,p.nativeAmount,0)));
+      trades.forEach(x=>{
+        if(x.sourceType==='cariScrap'&&x.itemCode===h.id)add(x.date,x.docNo,x.tradeType,x.customer,x.userDescription,x.side==='Giriş'?x.quantity:0,x.side==='Çıkış'?x.quantity:0);
+        else if(x.sourceType==='saleScreenPurchase'&&x.tradeType==='Hurda Alış'&&goldTradeInScrapV7(x.item)===h)add(x.date,x.docNo,x.tradeType,x.customer,x.description,x.quantity,0);
+        else if(!x.sourceType&&(x.tradeType==='Hurda Alış'||x.tradeType==='Hurda Satış')&&goldTradeScrapV7(x.item)===h)add(x.date,x.docNo,x.tradeType,x.customer,x.description,x.side==='Alış'?x.quantity:0,x.side==='Satış'?x.quantity:0);
+      });
+      smoves.forEach(m=>{
+        if(m.type==='HURDA → AÇIK STOK'&&m.from===h.name)add(m.date,m.sourceDocNo,m.type,m.to,m.description,0,goldNumTrV7((/Girdi ([\d.,]+)/.exec(m.description||'')||[])[1]));
+        else if(m.type==='BARKOD → HURDA'&&m.to===h.name)add(m.date,m.sourceDocNo,m.type,m.code,m.description,goldNumTrV7((/· ([\d.,]+) GR/.exec(m.description||'')||[])[1]),0);
+      });
+    }else if(t==='b'){
+      const p=Number(id),of=x=>Math.round(n(x.purity))===p&&!isSpecialStockV7(x);
+      title=(PURITY_LABEL_V7[p]||p+' MİLYEM')+' · BARKODLU';unit='GR';current=activeStock().filter(of).reduce((a,x)=>a+stockAmount(x),0);
+      const byId=new Map((state.stocks||[]).filter(x=>of(x)).map(x=>[x.id,x]));
+      (state.stocks||[]).filter(x=>of(x)&&x.period===period).forEach(x=>add(x.entryDate,x.barcode||x.code,'STOK GİRİŞİ',x.supplier||x.producer||'',x.name,stockAmount(x),0));
+      sales.forEach(s=>{
+        (s.lines||[]).filter(l=>l.sourceType==='barcode'&&byId.has(l.stockId)).forEach(l=>add(s.date,s.docNo,'SATIŞ',cust(s.customerId),(byId.get(l.stockId).barcode||'')+' '+(l.name||''),0,stockAmount(byId.get(l.stockId))));
+        (s.returnItems||[]).filter(r=>r.kind==='barcode'&&byId.has(r.stockId)).forEach(r=>add(s.date,s.docNo,'SATIŞ İADESİ',cust(s.customerId),r.itemName,stockAmount(byId.get(r.stockId)),0));
+      });
+      smoves.filter(m=>byId.has(m.stockId)&&(m.type==='BARKOD → HURDA'||m.type==='TOPTANCI İADE')).forEach(m=>add(m.date,m.sourceDocNo,m.type,m.to,m.description,0,stockAmount(byId.get(m.stockId))));
+    }else if(t==='sp'){
+      title='ÖZEL ÜRÜN';unit='ADET';const sp=(state.stocks||[]).filter(x=>isSpecialStockV7(x)&&x.period===period),ids=new Set(sp.map(x=>x.id));current=activeStock().filter(isSpecialStockV7).length;
+      sp.forEach(x=>add(x.entryDate,x.barcode||x.code,'STOK GİRİŞİ',x.supplier||'',x.name,1,0));
+      sales.forEach(s=>(s.lines||[]).filter(l=>ids.has(l.stockId)).forEach(l=>add(s.date,s.docNo,'SATIŞ',cust(s.customerId),l.name,0,1)));
+    }else if(t==='c'||t==='k'||t==='p'){
+      const fm=(state.financeMoves||[]).filter(inP);let accs=[];
+      if(t==='c'){accs=(state.cashAccounts||[]).filter(a=>String(a.currency||'TL').toUpperCase()===id);title='KASA · '+id;unit=id;}
+      else{const a=(t==='k'?state.bankAccounts:state.posAccounts||[]).find(x=>x.id===id);if(a)accs=[a];title=(a?.bank||a?.name||'BANKA')+(t==='p'?' · POS':'');unit=String(a?.currency||'TL').toUpperCase();}
+      const ids=new Set(accs.map(a=>a.id));current=accs.reduce((x,a)=>x+n(a.balance),0);
+      fm.filter(m=>ids.has(m.accountId)||ids.has(String(m.accountKey||'').split(':')[1])).forEach(m=>{const v=Math.abs(n(m.accountAmount??m.amount));add(m.date,m.sourceDocNo,m.type,m.customer,m.description,m.direction==='Giriş'?v:0,m.direction==='Çıkış'?v:0);});
+    }else return null;
+    rows.sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    const net=rows.reduce((a,r)=>a+r.inQ-r.outQ,0),opening=current-net;
+    let bal=opening;rows.forEach(r=>{bal+=r.inQ-r.outQ;r.bal=bal;});
+    return {title,unit,current,opening,rows};
+  }
+  function openGoldStockMovesV7(key){
+    const d=goldStockMovesV7(key);if(!d)return toast('Bu satır için hareket bulunamadı','err');
+    const f=v=>v?v.toLocaleString('tr-TR',{minimumFractionDigits:d.unit==='ADET'?0:2,maximumFractionDigits:3}):'';
+    const tin=d.rows.reduce((a,r)=>a+r.inQ,0),tout=d.rows.reduce((a,r)=>a+r.outQ,0);
+    modal('HAREKETLER — '+esc(d.title),`<style>#modalRoot .modal.gold-wide{max-width:1100px;width:96vw}.gold-mv-v7{max-height:62vh;overflow:auto;border:1px solid #9aa3b5}.gold-mv-v7 table{width:100%;border-collapse:collapse;font:600 13px/1.25 Arial,Helvetica,sans-serif}.gold-mv-v7 th{position:sticky;top:0;background:#6b7180;color:#fff;text-align:left;padding:4px 8px}.gold-mv-v7 td{padding:3px 8px;border:1px solid #c9cfdb;white-space:nowrap}.gold-mv-v7 .num{text-align:right}.gold-mv-v7 tr.devir td,.gold-mv-v7 tr.sum td{background:#fbd09b;color:#1a3fd1;font-weight:800}</style>
+      <div class="gold-bar-v7" style="display:flex;justify-content:space-between;gap:8px;margin-bottom:10px"><div class="muted">Dönem ${state.activePeriod} · Birim ${esc(d.unit)} · ${d.rows.length} hareket</div><div style="display:flex;gap:8px">${key.startsWith('b:')?'<button class="btn btn-outline" id="goldMvListV7" type="button">Ürün listesi</button>':''}<button class="btn btn-outline" id="goldMvExcelV7" type="button">Excel</button></div></div>
+      <div class="gold-mv-v7"><table><thead><tr><th>TARİH</th><th>BELGE</th><th>İŞLEM</th><th>CARİ / KARŞI</th><th>AÇIKLAMA</th><th class="num">GİREN</th><th class="num">ÇIKAN</th><th class="num">KALAN</th></tr></thead><tbody>
+      <tr class="devir"><td></td><td></td><td>DEVİR / AÇILIŞ</td><td></td><td>Dönem başı / Pusula aktarımı</td><td></td><td></td><td class="num">${f(d.opening)||'0'}</td></tr>
+      ${d.rows.map(r=>`<tr><td>${r.date?esc(trDate(r.date)):''}</td><td>${esc(r.doc)}</td><td>${esc(r.type)}</td><td>${esc(r.who)}</td><td style="white-space:normal;max-width:320px">${esc(r.desc)}</td><td class="num">${f(r.inQ)}</td><td class="num">${f(r.outQ)}</td><td class="num">${f(r.bal)||'0'}</td></tr>`).join('')||'<tr><td colspan="8" class="muted">Bu dönemde hareket yok</td></tr>'}
+      <tr class="sum"><td></td><td></td><td>TOPLAM</td><td></td><td></td><td class="num">${f(tin)}</td><td class="num">${f(tout)}</td><td class="num">${f(d.current)||'0'}</td></tr>
+      </tbody></table></div>`,null);
+    const m=document.querySelector('#modalRoot .modal');if(m)m.classList.add('gold-wide');
+    const cancel=document.getElementById('modalCancel');if(cancel){cancel.textContent='← ALTIN STOKLARI';cancel.onclick=()=>openGoldStocksV7();}
+    document.getElementById('goldMvListV7')?.addEventListener('click',()=>{closeModal();route='stocks';stockView='list';render();});
+    document.getElementById('goldMvExcelV7')?.addEventListener('click',async()=>{
+      try{const X=await loadXlsxV7();const aoa=[['TARİH','BELGE','İŞLEM','CARİ / KARŞI','AÇIKLAMA','GİREN','ÇIKAN','KALAN'],['','','DEVİR / AÇILIŞ','','','','',d.opening],...d.rows.map(r=>[r.date?trDate(r.date):'',r.doc,r.type,r.who,r.desc,r.inQ||'',r.outQ||'',r.bal])];const wb=X.utils.book_new();X.utils.book_append_sheet(wb,X.utils.aoa_to_sheet(aoa),'Hareketler');X.writeFile(wb,`HAREKET_${String(d.title).replace(/[^\wÇĞİÖŞÜçğıöşü]+/g,'_')}_${new Date().toISOString().slice(0,10)}.xlsx`);}
+      catch(e){toast('Excel oluşturulamadı: '+(e?.message||e),'err');}
+    });
+  }
+  function openGoldStocksV7(sorting=false){
     const rows=goldStockRowsV7();
     modal('ALTIN STOKLARI',`<style>
       #modalRoot .modal.gold-wide{max-width:1100px;width:96vw}
@@ -3262,12 +3363,15 @@ function stockSummaryView(){
       table.gold-stock-v7 .num{text-align:right}
       table.gold-stock-v7 tr.total td,table.gold-stock-v7 tr.kasa td{background:#fbd09b;color:#1a3fd1;font-weight:800}
       table.gold-stock-v7 tr.gap td{background:#fff;border-left:0;border-right:0}
-      table.gold-stock-v7 tr.barcode{cursor:pointer}
-      table.gold-stock-v7 tr.barcode:hover td:not(:first-child){background:#eef3ff}
+      table.gold-stock-v7 tr[data-gold-key]{cursor:pointer;user-select:none}
+      table.gold-stock-v7 tr[data-gold-key]:hover td:not(:first-child){background:#eef3ff}
+      table.gold-stock-v7 tr.sel td{background:#cfe0ff!important;color:#111!important}
+      table.gold-stock-v7 .gold-ord-v7{display:inline-flex;gap:2px;margin-right:6px}
+      table.gold-stock-v7 .gold-ord-v7 button{border:1px solid #fff;background:#4b5160;color:#fff;border-radius:4px;padding:0 6px;font-size:11px;line-height:18px;cursor:pointer}
       table.gold-stock-v7 tr.cash td:first-child{background:#6b7180}
     </style>
-    <div class="gold-bar-v7"><div class="muted">Dönem ${state.activePeriod} · ${new Date().toLocaleString('tr-TR')} · Barkodlu satıra tıklayınca ürün listesi açılır</div><div style="display:flex;gap:8px"><button class="btn btn-outline" id="goldExcelV7" type="button">Excel</button><button class="btn btn-outline" id="goldPrintV7" type="button">Yazdır</button></div></div>
-    <div class="gold-wrap-v7">${goldStockTableHtmlV7(rows)}</div>`,null);
+    <div class="gold-bar-v7"><div class="muted">Dönem ${state.activePeriod} · ${new Date().toLocaleString('tr-TR')} · ${sorting?'▲▼ ile açık stok, barkodlu ve hurda satırlarının sırasını değiştirin':'Satıra çift tıklayınca hareketleri açılır'}</div><div style="display:flex;gap:8px;flex-wrap:wrap">${sorting?'<button class="btn btn-outline" id="goldOrderResetV7" type="button">Varsayılan sıra</button><button class="btn btn-primary" id="goldOrderDoneV7" type="button">SIRALAMA BİTTİ</button>':'<button class="btn btn-outline" id="goldMovesV7" type="button" disabled>Hareketler</button><button class="btn btn-outline" id="goldOrderV7" type="button">Sırala</button><button class="btn btn-outline" id="goldExcelV7" type="button">Excel</button><button class="btn btn-outline" id="goldPrintV7" type="button">Yazdır</button>'}</div></div>
+    <div class="gold-wrap-v7">${goldStockTableHtmlV7(rows,sorting)}</div>`,null);
     const m=document.querySelector('#modalRoot .modal');if(m)m.classList.add('gold-wide');
     const cancel=document.getElementById('modalCancel');if(cancel){cancel.textContent='MENÜ';}
     document.getElementById('goldExcelV7')?.addEventListener('click',async()=>{
@@ -3279,7 +3383,18 @@ function stockSummaryView(){
       w.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Altın Stokları</title><style>body{font-family:Arial,sans-serif;margin:12mm}h2{margin:0 0 6px}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border:1px solid #999;padding:3px 6px}th{background:#ddd;text-align:left}.num{text-align:right}tr.total td,tr.kasa td{background:#f5d9b5;font-weight:700}tr.gap td{border:0}</style></head><body><h2>${esc(state.settings?.companyName||'ASİL KUYUMCULUK')} — ALTIN STOKLARI</h2><div>Dönem ${state.activePeriod} · ${new Date().toLocaleString('tr-TR')}</div><br>${goldStockTableHtmlV7(rows)}<script>window.onload=()=>setTimeout(()=>window.print(),200)<\/script></body></html>`);
       w.document.close();
     });
-    document.querySelectorAll('#modalRoot [data-gold-purity]').forEach(tr=>tr.addEventListener('click',()=>{closeModal();route='stocks';stockView='list';render();toast(`${PURITY_LABEL_V7[tr.dataset.goldPurity]||tr.dataset.goldPurity} barkodlu ürünler listeleniyor`);}));
+    const wrap=document.querySelector('#modalRoot .gold-wrap-v7');
+    if(sorting){
+      wrap?.addEventListener('click',e=>{const up=e.target.closest('[data-gold-up]'),dn=e.target.closest('[data-gold-down]');if(!up&&!dn)return;const top=wrap.scrollTop;if(goldStockMoveOrderV7((up||dn).dataset[up?'goldUp':'goldDown'],up?-1:1)){openGoldStocksV7(true);const w=document.querySelector('#modalRoot .gold-wrap-v7');if(w)w.scrollTop=top;}});
+      document.getElementById('goldOrderDoneV7')?.addEventListener('click',()=>openGoldStocksV7(false));
+      document.getElementById('goldOrderResetV7')?.addEventListener('click',()=>{if(!confirm('Altın stokları sırası varsayılana dönsün mü?'))return;if(state.settings)delete state.settings.goldStockOrderV7;save();openGoldStocksV7(true);});
+      return;
+    }
+    let selected='';
+    wrap?.addEventListener('click',e=>{const tr=e.target.closest('tr[data-gold-key]');if(!tr)return;wrap.querySelectorAll('tr.sel').forEach(x=>x.classList.remove('sel'));tr.classList.add('sel');selected=tr.dataset.goldKey;const b=document.getElementById('goldMovesV7');if(b)b.disabled=false;});
+    wrap?.addEventListener('dblclick',e=>{const tr=e.target.closest('tr[data-gold-key]');if(tr)openGoldStockMovesV7(tr.dataset.goldKey);});
+    document.getElementById('goldMovesV7')?.addEventListener('click',()=>{if(selected)openGoldStockMovesV7(selected);});
+    document.getElementById('goldOrderV7')?.addEventListener('click',()=>openGoldStocksV7(true));
   }
   // Her ekrandan erişim: F9, üst çubuktaki düğme, ana menü kutucuğu.
   document.addEventListener('keydown',e=>{if(e.key==='F9'&&session&&!e.altKey&&!e.ctrlKey&&!e.metaKey){e.preventDefault();openGoldStocksV7();}});
