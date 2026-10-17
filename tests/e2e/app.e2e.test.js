@@ -1162,3 +1162,33 @@ test('satış geçmişi: tam pencere, tarih ve ödeme/banka filtresi, ödeme şe
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('satış fişi: takasta alınan ziynet kalem kalem, müşteriye ödenen hesabıyla yazılır', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  const popups = [];
+  p.context().on('page', (pg) => popups.push(pg));
+  await p.click('[data-go="sales"]');
+  for (let i = 0; i < 3; i++) {
+    await p.fill('#saleProductSearch', '22'); await p.waitForTimeout(300); await p.press('#saleProductSearch', 'Enter');
+    if (await p.waitForSelector('#saleEntryPrice:not([disabled])', { timeout: 5000 }).catch(() => null)) break;
+  }
+  await p.waitForTimeout(300);
+  await p.fill('#saleEntryPayable', '6700'); await p.click('#saleAddUnified'); await p.waitForTimeout(400);
+  await p.click('[data-pay="Altın / Ziynet"]');
+  await p.selectOption('#tiItem', { label: 'CEYREK' }); await p.fill('#tiQty', '1'); await p.fill('#tiPrice', '10400'); await p.waitForTimeout(200);
+  await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.click('[data-pay="Ödeme"]'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.selectOption('#salePerson', { index: 1 });
+  await p.click('#finalizeSale'); await p.click('#modalConfirm'); await p.waitForTimeout(1500);
+  if (!popups.length) await p.click('text=Son Fişi Yazdır');
+  for (let i = 0; i < 40 && !popups.length; i++) await p.waitForTimeout(250);
+  assert.ok(popups.length, 'satış fişi basılmalı');
+  const text = await popups[0].innerText('body');
+  assert.match(text, /ALINAN: CEYREK/);
+  assert.match(text, /1 ADET × 10\.400,00/);
+  assert.match(text, /MÜŞTERİYE ÖDENEN · Nakit/);
+  assert.match(text, /TL Kasa/);
+  assert.match(text, /Müşteriye Ödenen\s+3\.700,00/);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
