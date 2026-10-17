@@ -1098,3 +1098,38 @@ test('banka ekstresi: banka hareketleri görünür, düzeltilir ve silinir; baki
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('cari geçmişi: peşin kapanan satış müşterinin ekstresinde görünür, bakiyeyi değiştirmez', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  await p.click('[data-go="sales"]');
+  const cust = await p.$$eval('#saleCustomerSelect option', (os) => os.map((o) => ({ v: o.value, t: o.textContent })).find((o) => o.v && o.v !== 'CASH' && !/PEŞİN/i.test(o.t)));
+  await p.selectOption('#saleCustomerSelect', cust.v); await p.waitForTimeout(400);
+  for (let i = 0; i < 3; i++) {
+    await p.fill('#saleProductSearch', '22'); await p.waitForTimeout(300); await p.press('#saleProductSearch', 'Enter');
+    if (await p.waitForSelector('#saleEntryPrice:not([disabled])', { timeout: 5000 }).catch(() => null)) break;
+  }
+  await p.waitForTimeout(300);
+  await p.fill('#saleEntryPayable', '4321'); await p.click('#saleAddUnified'); await p.waitForTimeout(400);
+  await p.click('[data-pay="Nakit"]'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.selectOption('#salePerson', { index: 1 });
+  await p.click('#finalizeSale'); await p.click('#modalConfirm'); await p.waitForTimeout(1500);
+  const closeAlert = async () => { const b = await p.$('.critical-alert button'); if (b) await b.click(); };
+  await closeAlert();
+  await p.evaluate(() => document.querySelector('[data-route="customers"],[data-go="customers"]').click());
+  await p.waitForTimeout(500);
+  const before = await p.evaluate((id) => document.querySelector(`[data-cari-card="${id}"]`).innerText, cust.v);
+  await p.evaluate((id) => document.querySelector(`[data-cari-card="${id}"] [data-cari-detail]`).click(), cust.v);
+  await p.waitForSelector('#cariEkstreTable');
+  const table = await p.innerText('#cariEkstreTable');
+  assert.match(table, /SATIŞ/, 'peşin satış cari geçmişinde görünmeli');
+  assert.match(table, /4\.321,00/);
+  assert.match(table, /Peşin \/ kapalı/);
+  await p.click('.cari-ekstre-row:has-text("4.321,00")');
+  assert.ok(await p.$('#selectedInfoPrint'), 'fiş düğmesi olmalı');
+  await p.uncheck('#cariShowInfo'); await p.waitForTimeout(300);
+  assert.doesNotMatch(await p.innerText('#modalRoot'), /4\.321,00/, 'kutucuk kapatılınca peşin işlemler gizlenmeli');
+  await p.click('#modalX');
+  assert.equal(await p.evaluate((id) => document.querySelector(`[data-cari-card="${id}"]`).innerText, cust.v), before, 'cari bakiyesi değişmemeli');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});

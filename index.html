@@ -7526,9 +7526,23 @@ function stockSummaryView(){
       closeModal();toast('Banka hareketi düzeltildi');afterBankFinanceChangeV7(fm,cariId);
     },'Kaydet');
   }
+
+  /* Cari geçmişi: bakiyeyi etkilemeyen (peşin kapanmış) satış, alış, alım-satım ve kasa/banka işlemleri de ekstrede görünür. */
+  let cariShowInfoV7=true;
+  function cariHistoryRowsV7(c){
+    const docs=new Set(state.customerMoves.filter(m=>m.customerId===c.id&&m.sourceDocNo).map(m=>m.sourceDocNo)),free=d=>!d||!docs.has(d),out=[];
+    const lineText=ls=>(ls||[]).slice(0,3).map(l=>`${l.name||l.code||''}${l.displayAmount||l.qty?` ${qty(l.displayAmount??l.qty)} ${l.unit||''}`:''}`).join(', ')+((ls||[]).length>3?` +${ls.length-3}`:'');
+    (state.sales||[]).filter(s=>s.customerId===c.id&&s.status!=='İptal'&&free(s.docNo)).forEach(s=>out.push({id:'SALE:'+s.id,_info:'sale',_ref:s.id,date:s.date,type:s.transactionKind==='Cari Tahsilat'?'TAHSİLAT':'SATIŞ',unit:'TL',debit:0,credit:0,_amount:money(s.total),description:lineText(s.lines),sourceDocNo:s.docNo||''}));
+    (state.purchases||[]).filter(x=>x.supplierId===c.id&&x.status!=='İptal'&&free(x.docNo)).forEach(x=>out.push({id:'PUR:'+x.id,_info:'purchase',_ref:x.id,date:x.date,type:x.type||'ALIŞ',unit:'HAS',debit:0,credit:0,_amount:`${qty(x.totalHas||0)} HAS${x.tlEquivalent?' · '+money(x.tlEquivalent):''}`,description:[x.paymentType,x.note].filter(Boolean).join(' · '),sourceDocNo:x.docNo||''}));
+    (state.tradeMoves||[]).filter(x=>x.customerId===c.id&&x.status!=='İptal'&&free(x.docNo)).forEach(x=>out.push({id:'TRD:'+x.id,_info:'trade',_ref:x.id,date:x.date,type:x.tradeType||x.side||'ALIM-SATIM',unit:String(x.unit||'TL'),debit:0,credit:0,_amount:`${qty(x.quantity||0)} ${esc(x.unit||'')} · ${money(x.totalTL||0)}`,description:[x.settlementLabel,x.accountName].filter(Boolean).join(' · '),sourceDocNo:x.docNo||''}));
+    (state.financeMoves||[]).filter(f=>f.customerId===c.id&&f.sourceType!=='cariManual'&&free(f.sourceDocNo)&&!(state.sales||[]).some(s=>s.docNo&&s.docNo===f.sourceDocNo)&&!(state.tradeMoves||[]).some(x=>x.docNo&&x.docNo===f.sourceDocNo)&&!(state.purchases||[]).some(x=>x.docNo&&x.docNo===f.sourceDocNo)).forEach(f=>out.push({id:'FINI:'+f.id,_info:'finance',_ref:f.id,date:f.date,type:f.type||f.direction,unit:String(f.accountCurrency||'TL'),debit:0,credit:0,_amount:`${f.direction} · ${qty(f.accountAmount??f.amount)} ${esc(f.accountCurrency||'TL')} · ${esc(f.accountName||f.accountKind||'')}`,description:f.description||'',sourceDocNo:f.sourceDocNo||''}));
+    return out;
+  }
+  function printCariHistoryDocV7(x){if(x._info==='sale')return printSaleReceiptV644(x._ref);if(x._info==='purchase')return printPurchaseReceiptV644(x._ref);if(x._info==='trade')return printTradeReceiptV644(x._ref);if(x._info==='finance')return printFinanceReceiptV644(x._ref);}
   function openCariDetail(id){
     const c=state.customers.find(x=>x.id===id); if(!c)return;
-    const raw=[...state.customerMoves.filter(x=>x.customerId===id),...bankCariFinanceRowsV7(c)];
+    const infoRows=cariHistoryRowsV7(c);
+    const raw=[...state.customerMoves.filter(x=>x.customerId===id),...bankCariFinanceRowsV7(c),...(cariShowInfoV7?infoRows:[])];
     const isOpening=x=>String(x.code||'').toUpperCase()==='DV'||String(x.type||'').toLocaleUpperCase('tr-TR').includes('DEVİR')||String(x.sourceType||'').startsWith('opening');
     const asc=[...raw].sort((a,b)=>{
       const ao=isOpening(a)?0:1, bo=isOpening(b)?0:1;
@@ -7539,7 +7553,7 @@ function stockSummaryView(){
     const enriched=asc.map(x=>{
       const u=String(x.unit||'HAS').toUpperCase();
       // Banka/POS carisinde bakiye banka hesabının kendi hareketlerinden yürür; cari satırları bilgi amaçlı gösterilir.
-      if(bankAcc&&!x._fin)return {...x,_cariOnly:true,_balance:Number(running[u]||0),_balances:{...running}};
+      if(x._info||(bankAcc&&!x._fin))return {...x,_cariOnly:!x._info,_balance:Number(running[u]||0),_balances:{...running}};
       running[u]=Number(running[u]||0)+Number(x.debit||0)-Number(x.credit||0);
       return {...x,_balance:Number(running[u]||0),_balances:{...running}};
     });
@@ -7555,7 +7569,7 @@ function stockSummaryView(){
     const bankUnit=bankAcc?String(bankAcc.acc.currency||'TL').toUpperCase():'',bankBal=bankAcc?Number(bankAcc.acc.balance||0):0,bankGap=bankAcc?bankBal-Number(running[bankUnit]||0):0;
     const gapNote=bankAcc?`<div class="notice" style="margin:8px 0">${Math.abs(bankGap)>=0.01?`<strong>Fark var:</strong> Banka hareketlerinin toplamı ${qty(Number(running[bankUnit]||0))} ${esc(bankUnit)}, banka hesabının bakiyesi ${qty(bankBal)} ${esc(bankUnit)}. Aradaki <b>${qty(bankGap)} ${esc(bankUnit)}</b> hareketi olmayan eski bakiyedir (ör. Pusula'dan bakiye olarak gelen). <button class="btn btn-outline" type="button" id="bankGapAsOpening" style="margin-left:6px">Farkı açılış hareketi yap</button> — bakiye değişmez, fark listede görünür ve düzeltilebilir olur.`:'Banka bakiyesi, listedeki banka hareketlerinin toplamıyla tutuyor.'} <span class="muted">“Cari kaydı” satırları bilgi içindir, banka bakiyesine eklenmez.</span></div>`:'';
     const body=rows.length?`
-      <div class="cari-ekstre-summary">${summary}</div>${gapNote}
+      <div class="cari-ekstre-summary">${summary}</div>${gapNote}${infoRows.length?`<label style="display:flex;gap:6px;align-items:center;margin:8px 0;font-size:14px"><input type="checkbox" id="cariShowInfo" ${cariShowInfoV7?'checked':''}> Bakiyeyi etkilemeyen peşin işlemleri de göster (${infoRows.length} işlem: satış, alış, alım-satım, kasa/banka)</label>`:''}
       <div class="cari-ekstre-wrap">
         <table class="cari-ekstre-table" id="cariEkstreTable" tabindex="0">
           <thead><tr><th>Tarih</th><th>İşlem</th><th>Cins / Karşılık</th><th class="num">Borç</th><th class="num">Alacak</th><th class="num">Bakiye</th></tr></thead>
@@ -7567,10 +7581,10 @@ function stockSummaryView(){
             return `<tr class="cari-ekstre-row ${i===0?'selected':''}" data-ekstre-index="${i}">
               <td>${trDate(x.date)}</td>
               <td><strong>${esc(x.type)}</strong></td>
-              <td>${combo}</td>
+              <td>${x._info?x._amount:combo}</td>
               <td class="num">${Number(x.debit||0)?qty(x.debit):'—'}</td>
               <td class="num">${Number(x.credit||0)?qty(x.credit):'—'}</td>
-              <td class="num">${x._cariOnly?'<small class="muted">Cari kaydı</small>':`<strong class="${bal>0?'negative':bal<0?'positive':''}">${bal>0?'+':bal<0?'-':''}${qty(Math.abs(bal))} ${esc(x.unit)}</strong>`}</td>
+              <td class="num">${x._info?'<small class="muted">Peşin / kapalı</small>':x._cariOnly?'<small class="muted">Cari kaydı</small>':`<strong class="${bal>0?'negative':bal<0?'positive':''}">${bal>0?'+':bal<0?'-':''}${qty(Math.abs(bal))} ${esc(x.unit)}</strong>`}</td>
             </tr>`;
           }).join('')}</tbody>
         </table>
@@ -7580,6 +7594,7 @@ function stockSummaryView(){
     `:'<div class="empty-state"><strong>Hareket yok</strong></div>';
     modal(`Ekstre — ${c.name}`,body,null,'Kapat');
     const modalEl=document.querySelector('#modalRoot .modal'); if(modalEl)modalEl.style.width='min(1080px,96vw)';
+    document.getElementById('cariShowInfo')?.addEventListener('change',e=>{cariShowInfoV7=e.target.checked;openCariDetail(c.id);});
     document.getElementById('bankGapAsOpening')?.addEventListener('click',()=>{
       const first=(state.financeMoves||[]).filter(f=>f.accountKind===bankAcc.kind&&f.accountId===bankAcc.acc.id).map(f=>String(f.date||'')).sort()[0];
       const date=first?first.slice(0,10)+'T00:00:00':now();
@@ -7605,8 +7620,9 @@ function stockSummaryView(){
           <div><small>Açıklama</small><strong>${esc(x.description||'-')}</strong></div>
         </div>
         <div class="cari-ekstre-selected-balances">${(bs.length?bs:[['HAS',0]]).map(([u,v])=>`<span class="badge ${Number(v)>0?'red':Number(v)<0?'green':'blue'}">${fmtSigned(v,u)}</span>`).join('')}</div>
-        ${x._fin?`<div class="notice" style="margin-top:8px">Banka hesabı hareketi${x._link?` · <b>Bağlı belge:</b> ${esc(x._link)}`:''}</div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px"><button class="btn btn-outline" id="selectedFinDelete">Hareketi Sil</button><button class="btn btn-primary" id="selectedFinEdit">Hareketi Düzelt</button></div>`:`<div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-primary" id="selectedCariEdit">İşlemi Düzelt</button></div>`}`;
+        ${x._info?`<div class="notice" style="margin-top:8px">${esc(x._amount)} · Peşin / kapalı işlem: cari bakiyesini etkilemez. Düzeltme ve iptal belgenin kendi ekranından yapılır.</div><div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-primary" id="selectedInfoPrint">Fişi Göster / Yazdır</button></div>`:x._fin?`<div class="notice" style="margin-top:8px">Banka hesabı hareketi${x._link?` · <b>Bağlı belge:</b> ${esc(x._link)}`:''}</div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px"><button class="btn btn-outline" id="selectedFinDelete">Hareketi Sil</button><button class="btn btn-primary" id="selectedFinEdit">Hareketi Düzelt</button></div>`:`<div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-primary" id="selectedCariEdit">İşlemi Düzelt</button></div>`}`;
       document.getElementById('selectedCariEdit')?.addEventListener('click',()=>editCariMoveFromStatement(x.id));
+      document.getElementById('selectedInfoPrint')?.addEventListener('click',()=>printCariHistoryDocV7(x));
       document.getElementById('selectedFinEdit')?.addEventListener('click',()=>editBankFinanceMoveV7(x._fin,c.id));
       document.getElementById('selectedFinDelete')?.addEventListener('click',()=>deleteBankFinanceMoveV7(x._fin,c.id));
       document.querySelector(`.cari-ekstre-row[data-ekstre-index="${selected}"]`)?.scrollIntoView({block:'nearest'});
