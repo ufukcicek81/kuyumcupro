@@ -5815,6 +5815,13 @@ function stockSummaryView(){
       const idx=fields.reduce((best,f)=>f.startsWith(q)?Math.min(best,0):f.includes(q)?Math.min(best,1):best,99);
       if(idx<99)rows.push({type:'open',id:o.id,rank:idx,label:o.name,code:o.pusulaCode||o.productCode||'',meta:`${qty(o.amount)} ${o.unit||''} stok`,stock:Number(o.amount||0)});
     });
+    // Stoğu olmayan (yeni açılmış) stok kartları da listelenir; seçilince açık stok kaydı oluşturulur.
+    const listedCards=new Set(rows.map(r=>{const o=(state.openStocks||[]).find(x=>x.id===r.id);return o?.stockCardId||'';}).filter(Boolean)),listedCodes=new Set(rows.map(r=>String(r.code)));
+    (state.stockCardsMaster||[]).filter(c=>!c.hideFromSale&&!listedCards.has(c.id)&&!listedCodes.has(String(c.pusulaCode||c.productCode||c.code||''))).forEach(c=>{
+      const fields=[c.productDefinition||c.name,c.productCode,c.pusulaCode,c.code].map(foldSaleSearchKey);
+      const idx=fields.reduce((best,f)=>f===q?Math.min(best,0):f.startsWith(q)?Math.min(best,1):f.includes(q)?Math.min(best,3):best,99);
+      if(idx<99)rows.push({type:'card',id:c.id,rank:idx+1,label:c.productDefinition||c.name||'',code:c.pusulaCode||c.productCode||c.code||'',meta:'STOK YOK — satılırsa stok eksiye düşer',stock:0});
+    });
     activeStock().forEach(x=>{
       const fields=[x.barcode,x.code,x.pusulaCode,x.name,x.type,x.category,x.group,`${x.group||''}${x.pusulaCode||''}`].map(foldSaleSearchKey);
       let idx=fields.reduce((best,f)=>f===q?Math.min(best,-1):f.startsWith(q)?Math.min(best,0):f.includes(q)?Math.min(best,2):best,99);
@@ -5847,15 +5854,28 @@ function stockSummaryView(){
     };
     return rows.slice().sort((a,b)=>score(a)-score(b)||String(a.label).localeCompare(String(b.label),'tr'))[0]||null;
   }
+  /* Stoğu olmayan kart seçildiğinde açık stok kaydı (0) oluşturur ve onu seçer. */
+  function resolveSaleSuggestionV7(type,id){
+    if(type!=='card')return {type,id};
+    const card=(state.stockCardsMaster||[]).find(c=>c.id===id);if(!card)return {type:'open',id:''};
+    let o=(state.openStocks||[]).find(x=>x.period===state.activePeriod&&x.stockCardId===card.id);
+    if(!o){
+      const isZiynet=!!(card.ziynet||card.countedTracking),milyem=Number(card.fixedMilyem||card.purity||0);
+      o={id:uid('OPEN'),period:state.activePeriod,source:'Stok Kartı',stockMode:'Açık',stockCardId:card.id,name:card.productDefinition||card.name,productCode:card.productCode||card.code,pusulaCode:card.pusulaCode||card.productCode,displayAyar:milyem,purity:Number(card.purity||card.karat||milyem||0),amount:0,unit:isZiynet?'ADET':'GR',hasWeight:0,workmanshipTotalHas:0,averageWorkmanship:0,count:0,zGram:isZiynet?Number(card.zGram||0):0,location:'Açık Stok',inventoryUnitCostHas:0};
+      state.openStocks.push(o);save();
+    }
+    toast(`${o.name}: stokta yok. Satış stoğu eksiye düşürür; önce Altın Giriş / Alış yapmanız önerilir.`,'err');
+    return {type:'open',id:o.id};
+  }
   function renderSaleSearchDropdown(input){
     const box=document.getElementById('saleSearchResults');if(!box||!input)return [];
     const q=String(input.value||'').trim();
     if(!q){box.classList.remove('show');box.innerHTML='';input.dataset.lookupIndex='0';return [];}
     const rows=saleLookupSuggestions(q,30);
     let idx=Number(input.dataset.lookupIndex||0);if(idx<0)idx=0;if(idx>=rows.length)idx=Math.max(0,rows.length-1);input.dataset.lookupIndex=String(idx);
-    box.innerHTML=rows.length?rows.map((r,i)=>`<div class="sale-search-item ${i===idx?'active':''}" data-sale-suggestion-type="${r.type}" data-sale-suggestion-id="${r.id}"><span class="badge ${r.type==='barcode'?'blue':'gold'}">${r.type==='barcode'?'BARKOD':'AÇIK'}</span><div class="sale-search-main"><strong>${esc(r.code?String(r.code)+' · ':'')}${esc(r.label||'')}</strong><small>${esc(r.meta||'')}</small></div><span class="sale-search-stock">${r.type==='barcode'?'1 adet':qty(Number(r.stock||0))}</span></div>`).join(''):`<div class="sale-search-item"><div class="sale-search-main"><strong>Eşleşen stok yok</strong><small>Başka kod veya ürün adı deneyin.</small></div></div>`;
+    box.innerHTML=rows.length?rows.map((r,i)=>`<div class="sale-search-item ${i===idx?'active':''}" data-sale-suggestion-type="${r.type}" data-sale-suggestion-id="${r.id}"><span class="badge ${r.type==='barcode'?'blue':r.type==='card'?'red':'gold'}">${r.type==='barcode'?'BARKOD':r.type==='card'?'STOK YOK':'AÇIK'}</span><div class="sale-search-main"><strong>${esc(r.code?String(r.code)+' · ':'')}${esc(r.label||'')}</strong><small>${esc(r.meta||'')}</small></div><span class="sale-search-stock">${r.type==='barcode'?'1 adet':qty(Number(r.stock||0))}</span></div>`).join(''):`<div class="sale-search-item"><div class="sale-search-main"><strong>Eşleşen stok yok</strong><small>Başka kod veya ürün adı deneyin.</small></div></div>`;
     box.classList.add('show');
-    box.querySelectorAll('[data-sale-suggestion-id]').forEach(el=>el.addEventListener('pointerdown',ev=>{ev.preventDefault();saleDraft.entrySelection={type:el.dataset.saleSuggestionType,id:el.dataset.saleSuggestionId};saleDraft.entryQuery=input.value.trim();render();setTimeout(()=>{const target=document.getElementById(el.dataset.saleSuggestionType==='open'?'saleEntryAmount':'saleEntryPrice');focusAndSelect(target);keepFieldAboveKeyboard(target,true);},70);}));
+    box.querySelectorAll('[data-sale-suggestion-id]').forEach(el=>el.addEventListener('pointerdown',ev=>{ev.preventDefault();saleDraft.entrySelection=resolveSaleSuggestionV7(el.dataset.saleSuggestionType,el.dataset.saleSuggestionId);saleDraft.entryQuery=input.value.trim();render();setTimeout(()=>{const target=document.getElementById(el.dataset.saleSuggestionType!=='barcode'?'saleEntryAmount':'saleEntryPrice');focusAndSelect(target);keepFieldAboveKeyboard(target,true);},70);}));
     return rows;
   }
   function moveSaleSearchSelection(input,delta){
@@ -5873,10 +5893,10 @@ function stockSummaryView(){
       else item=bestInlineSaleSuggestion(input.value.trim());
     }
     if(!item)return false;
-    saleDraft.entrySelection={type:item.type,id:item.id};
+    saleDraft.entrySelection=resolveSaleSuggestionV7(item.type,item.id);
     saleDraft.entryQuery=input.value.trim();
     render();
-    setTimeout(()=>{const target=document.getElementById(item.type==='open'?'saleEntryAmount':'saleEntryPrice');focusAndSelect(target);if(target?.id==='saleEntryPrice'){try{target.setSelectionRange(0,String(target.value||'').length);}catch(_){try{target.select();}catch(__){}}}keepFieldAboveKeyboard(target,true);},80);
+    setTimeout(()=>{const target=document.getElementById(item.type!=='barcode'?'saleEntryAmount':'saleEntryPrice');focusAndSelect(target);if(target?.id==='saleEntryPrice'){try{target.setSelectionRange(0,String(target.value||'').length);}catch(_){try{target.select();}catch(__){}}}keepFieldAboveKeyboard(target,true);},80);
     return true;
   }
 
@@ -5922,7 +5942,7 @@ function stockSummaryView(){
       if(!v&&(saleDraft.lines.length||(saleDraft.returnItems||[]).length)){const t=saleTotals();const target=Math.abs(t.remain)<=0.01?document.getElementById('finalizeSale'):document.querySelector('[data-pay]');if(target){focusAndSelect(target);return;}}
       if(!v)return;
       const rows=saleLookupSuggestions(v,30),idx=Math.min(Number(e.target.dataset.lookupIndex||0),Math.max(0,rows.length-1)),item=rows[idx];
-      if(item){saleDraft.entrySelection={type:item.type,id:item.id};saleDraft.entryQuery=v;render();setTimeout(()=>{const target=document.getElementById(item.type==='open'?'saleEntryAmount':'saleEntryPrice');focusAndSelect(target);keepFieldAboveKeyboard(target,true);},70);return;}
+      if(item){saleDraft.entrySelection=resolveSaleSuggestionV7(item.type,item.id);saleDraft.entryQuery=v;render();setTimeout(()=>{const target=document.getElementById(item.type!=='barcode'?'saleEntryAmount':'saleEntryPrice');focusAndSelect(target);keepFieldAboveKeyboard(target,true);},70);return;}
       const found=findUnifiedSaleEntry(v);if(found){saleDraft.entrySelection=found;saleDraft.entryQuery=v;render();return;}
       toast('Ürün bulunamadı. Örn. 22 yazınca ilgili stoklar listelenir.','err');
     });
@@ -6479,6 +6499,11 @@ function stockSummaryView(){
   function openBulkStockModal(){
     modal('Toplu Ürün Girişi',`<div class="form-grid"><div class="labelled span-2"><label>Stok Kartı</label><select id="bsCard" class="select">${state.stockCardsMaster.map(c=>`<option value="${c.id}">${esc(c.pusulaCode)} · ${esc(c.name)}</option>`).join('')}</select></div><div class="labelled"><label>Tedarikçi</label><select id="bsSupplier" class="select">${state.definitions.suppliers.map(x=>`<option>${esc(x)}</option>`).join('')}</select></div><div class="labelled"><label>Parti No</label><input id="bsParty" class="input" value="PARTI-${state.activePeriod}-${String(Date.now()).slice(-6)}"></div><div class="labelled"><label>Ürün Adedi</label><input id="bsCount" type="number" min="1" max="250" class="input" value="5"></div><div class="labelled"><label>Stok Kod Ön Eki</label><input id="bsPrefix" class="input" value="URUN"></div><div class="labelled span-2"><label>Gramlar (virgülle veya satır satır)</label><textarea id="bsWeights" class="textarea" rows="5" placeholder="5.33, 4.82, 6.10"></textarea></div><div class="labelled"><label>Varsayılan Gram</label><input id="bsDefaultWeight" type="number" step="0.001" class="input" value="0"></div><div class="labelled"><label>Alış HAS / Ürün</label><input id="bsPurchase" type="number" step="0.001" class="input" value="0"></div><div class="labelled"><label>Satış HAS / Ürün</label><input id="bsSale" type="number" step="0.001" class="input" value="0"></div><div class="labelled"><label>Vitrin / Banko</label><select id="bsShowcase" class="select"><option value=""></option>${state.definitions.showcases.map(x=>`<option>${esc(x)}</option>`).join('')}</select></div></div><div class="notice" style="margin-top:12px">Her fiziksel ürün için ayrı stok kodu ve EAN-13 barkod oluşturulur. Aynı parti numarasıyla birbirine bağlanır.</div>`,()=>{const card=getStockCard(document.getElementById('bsCard').value); const count=Math.max(1,Math.min(250,Number(document.getElementById('bsCount').value||1))); const weights=document.getElementById('bsWeights').value.split(/[\n,;]+/).map(x=>Number(x.trim().replace(',','.'))).filter(x=>Number.isFinite(x)&&x>=0); const def=Number(document.getElementById('bsDefaultWeight').value||0),prefix=(document.getElementById('bsPrefix').value.trim()||card.code||'URUN').toUpperCase(),party=document.getElementById('bsParty').value.trim(),supplier=document.getElementById('bsSupplier').value,showcase=document.getElementById('bsShowcase').value,purchase=Number(document.getElementById('bsPurchase').value||0),sale=Number(document.getElementById('bsSale').value||0); let made=0; for(let i=0;i<count;i++){let code=`${prefix}${String(Date.now()).slice(-5)}${String(i+1).padStart(3,'0')}`; while(state.stocks.some(x=>x.code===code))code+='X'; const gross=weights[i]??def; const rec={id:uid('S'),stockCardId:card.id,pusulaCode:card.pusulaCode,productType:card.productType,group:card.group,code,name:card.name,category:card.category,subCategory:card.subCategory,supplier,producer:supplier,brand:'',model:'',collection:'',color:'',karat:card.karat,purity:card.purity,grossWeight:gross,stoneWeight:0,netWeight:gross,hasWeight:calcHas(gross,card.purity),qty:gross,count:1,purchaseHas:purchase,costHas:purchase,saleHas:sale,workmanshipType:card.workmanshipType,workmanshipValue:0,showcase,banko:showcase,location:'Mağaza',rfid:'',barcode:generateBarcode(),status:'Stokta',notes:'Toplu giriş',entryDate:now(),entryYear:state.activePeriod,partyId:party,period:state.activePeriod,saleTo:'',saleDate:''}; state.stocks.push(rec);addStockMove(rec,'ALIŞ / TOPLU GİRİŞ','Tedarikçi','Mağaza',`${party} · ${supplier}`);made++;} audit(`${party}: ${made} ürün toplu eklendi`,'Stok');closeModal();save();stockView='list';render();},'Toplu Girişi Kaydet');
   }
+  /* Yeni stok kartına sıradaki kod: kayıtlı kartlar ve açık stoklardaki en büyük sayısal koddan bir sonrası. */
+  function nextStockCardCodeV7(){
+    const nums=[...(state.stockCardsMaster||[]).flatMap(c=>[c.productCode,c.pusulaCode,c.code]),...(state.openStocks||[]).flatMap(o=>[o.productCode,o.pusulaCode])].map(x=>String(x||'').trim()).filter(x=>/^\d+$/.test(x)).map(Number);
+    return String((nums.length?Math.max(...nums):0)+1);
+  }
   function openStockCardModal(editId=''){
     const existing=editId?getStockCard(editId):null;
     const v=(key,def='')=>existing?.[key] ?? def;
@@ -6486,7 +6511,7 @@ function stockSummaryView(){
     const groups=state.definitions.productMainGroups||['ALTIN','PIRLANTA','SAAT','GÜMÜŞ','ÇELİK','ZİYNET','TAŞ','DİĞER'];
     modal(existing?'Stok Kartı Tanımlama — Düzenle':'Stok Kartı Tanımlama',`<div class="form-grid">
       <div class="labelled span-2"><label>Ürün Grubu</label><select id="scProductGroup" class="select">${groups.map(x=>`<option ${x===v('productGroup','ALTIN')?'selected':''}>${esc(x)}</option>`).join('')}</select></div>
-      <div class="labelled"><label>Ürün Kodu *</label><input id="scProductCode" class="input" value="${esc(v('productCode',v('code','')))}"></div>
+      <div class="labelled"><label>Ürün Kodu *</label><input id="scProductCode" class="input" value="${esc(existing?v('productCode',v('code','')):nextStockCardCodeV7())}"></div>
       <div class="labelled span-4"><label>Ürün Tanımı *</label><input id="scProductDefinition" class="input" value="${esc(v('productDefinition',v('name','')))}" placeholder="Örn. 22 BİLEZİK"></div>
       <div class="labelled"><label>Stok Takip Birimi</label><select id="scStockUnit" class="select">${['HAS','TL','ADET','GR'].map(x=>`<option ${x===v('stockTrackingUnit','HAS')?'selected':''}>${x}</option>`).join('')}</select></div>
       <div class="labelled"><label>İşçilik Takip Birimi</label><select id="scWorkUnit" class="select">${['HAS','TL'].map(x=>`<option ${x===v('workmanshipTrackingUnit','HAS')?'selected':''}>${x}</option>`).join('')}</select></div>
@@ -6515,7 +6540,7 @@ function stockSummaryView(){
       <div class="labelled"><label>K. HAS İşç. Max</label><input id="scKHasMax" class="input" type="number" step="0.001" value="${v('kHasWorkMax',0)}"></div>
     </div>`,()=>{
       const g=id=>document.getElementById(id), num=id=>Number(g(id).value||0), bool=id=>g(id).checked;
-      const productCode=g('scProductCode').value.trim(), productDefinition=g('scProductDefinition').value.trim(); if(!productCode||!productDefinition)return toast('Ürün kodu ve ürün tanımı zorunlu','err');
+      const productCode=g('scProductCode').value.trim(), productDefinition=g('scProductDefinition').value.trim(); if(!productCode||!productDefinition)return toast('Ürün kodu ve ürün tanımı zorunlu','err'); const dupCard=(!existing||productCode!==String(existing.productCode||existing.code||'').trim())&&(state.stockCardsMaster||[]).find(x=>x.id!==existing?.id&&[x.productCode,x.pusulaCode,x.code].map(y=>String(y||'').trim()).includes(productCode)); if(dupCard)return toast(`${productCode} kodu zaten "${dupCard.productDefinition||dupCard.name}" kartında kullanılıyor. Önerilen kod: ${nextStockCardCodeV7()}`,'err');
       const productGroup=g('scProductGroup').value, fixedMilyem=num('scFixedMilyem'), purity=num('scPurity')||fixedMilyem;
       const c=existing||{id:uid('SC')}; Object.assign(c,{productGroup,productCode,productDefinition,stockTrackingUnit:g('scStockUnit').value,workmanshipTrackingUnit:g('scWorkUnit').value,unit12:g('scUnit12').value,fixedMilyem,fixedPrice:num('scFixedPrice'),canChangePurity:bool('scCanChange'),ziynet:bool('scZiynet'),workmanshipIncluded:bool('scWorkIncluded'),countedTracking:bool('scCounted'),hideFromSale:bool('scHideSale'),showGoldPrice:bool('scShowGold'),formula:g('scFormula').value,internetName:g('scInternetName').value,ftWorkmanshipMin:num('scFtMin'),ftWorkmanshipMax:num('scFtMax'),ftDescription:g('scFtDesc').value,zGram:num('scZGram'),minPrice:num('scMinPrice'),maxPrice:num('scMaxPrice'),kHasWorkMin:num('scKHasMin'),kHasWorkMax:num('scKHasMax')});
       c.pusulaCode=productCode; c.code=productCode; c.name=productDefinition; c.productType=productGroup==='ALTIN'?'Altın Mamul':(productGroup==='ZİYNET'?'Ziynet':productGroup.charAt(0)+productGroup.slice(1).toLowerCase()); c.group=productGroup; c.category=productDefinition; c.subCategory=''; c.karat=String(purity); c.purity=String(purity); c.unit=c.unit12==='GR'?'Gram':(c.unit12==='AD'?'Adet':c.unit12); c.workmanshipType=c.workmanshipTrackingUnit;
