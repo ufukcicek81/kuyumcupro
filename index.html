@@ -9313,6 +9313,32 @@ function stockSummaryView(){
     }
     return await browserPrintReceiptV644(html);
   }
+  /* Satış fişinde ödeme/takas ayrıntısı: alınan altın-ziynet kalem kalem, tahsilat ve müşteriye ödeme hesabıyla. */
+  function saleReceiptPaymentsV7(s){
+    var pays=s.payments||[];if(!pays.length)return '';
+    var acc=function(k){if(!k)return '';var a=accountByKey(k);return a&&a.name?a.name:'';};
+    var rows=pays.map(function(x){
+      var amt=Number(x.amount||0),type=String(x.type||'Ödeme'),cur=String(x.currency||'TL').toUpperCase(),n=Number(x.nativeAmount||0);
+      if(type==='Altın / Ziynet'){
+        var unitPrice=n?Math.abs(amt)/n:0,info=[x.purity?('Ayar '+x.purity):'',Number(x.zGram||0)?(qty(x.zGram)+' gr'):'',Number(x.hasAmount||0)?(qty(x.hasAmount)+' HAS'):''].filter(Boolean).join(' · ');
+        return '<tr><td><b>ALINAN: '+esc(x.itemName||x.itemCode||'Altın / Ziynet')+'</b><br>'+esc(qty(n))+' '+esc(x.unit||'')+(unitPrice?' × '+esc(money(unitPrice)):'')+(info?'<br>'+esc(info):'')+'</td><td class="num">'+esc(money(Math.abs(amt)))+'</td></tr>';
+      }
+      var name=acc(x.accountKey),label;
+      if(type==='Açık Hesap')label=amt<0?'Cari alacak mahsubu':'Açık hesap (cari borç)';
+      else if(amt<0)label='MÜŞTERİYE ÖDENEN · '+(type==='Ödeme'?'Nakit':type);
+      else label=type==='Kredi Kartı'?'KREDİ KARTI':type==='Havale / EFT'?'HAVALE / EFT':type.toLocaleUpperCase('tr-TR');
+      var sub=[name,cur!=='TL'&&n?(qty(n)+' '+cur):''].filter(Boolean).join(' · ');
+      return '<tr><td><b>'+esc(label)+'</b>'+(sub?'<br>'+esc(sub):'')+'</td><td class="num">'+(amt<0?'-':'')+esc(money(Math.abs(amt)))+'</td></tr>';
+    }).join('');
+    var gold=pays.filter(function(x){return x.type==='Altın / Ziynet';}).reduce(function(a,x){return a+Math.abs(Number(x.amount||0));},0);
+    var paidOut=pays.filter(function(x){return x.type!=='Altın / Ziynet'&&Number(x.amount||0)<0;}).reduce(function(a,x){return a+Math.abs(Number(x.amount||0));},0);
+    var taken=pays.filter(function(x){return x.type!=='Altın / Ziynet'&&x.type!=='Açık Hesap'&&Number(x.amount||0)>0;}).reduce(function(a,x){return a+Number(x.amount||0);},0);
+    var out='<div class="dash"></div><div class="title">ÖDEME / TAKAS</div><table class="items"><tbody>'+rows+'</tbody></table><div class="dash"></div>';
+    if(gold)out+=receiptPairV644('Alınan Altın/Ziynet',money(gold),false);
+    if(taken)out+=receiptPairV644('Tahsil Edilen',money(taken),false);
+    if(paidOut)out+=receiptPairV644('Müşteriye Ödenen',money(paidOut),true);
+    return out;
+  }
   function saleReceiptHtmlV644(s){
     var cust=state.customers.find(function(x){return x.id===s.customerId;}),cur=String(s.saleCurrency||'TL').toUpperCase(),body='';
     if((s.lines||[]).length){
@@ -9320,10 +9346,12 @@ function stockSummaryView(){
       body+=(s.lines||[]).map(function(l){return '<tr><td><b>'+esc(l.name||l.code||'Ürün')+'</b><br>'+esc(l.code||'')+'</td><td class="num">'+esc(qty(l.displayAmount!=null?l.displayAmount:(l.weight!=null?l.weight:(l.qty!=null?l.qty:1))))+' '+esc(l.unit||'')+'</td><td class="num">'+esc(money(l.total||0))+'</td></tr>';}).join('');
       body+='</tbody></table>';
     }
-    if((s.returnItems||[]).length)body+='<div class="dash"></div>'+receiptPairV644('İade / Takas',money((s.returnItems||[]).reduce(function(a,x){return a+Number(x.total||0);},0)),true);
-    body+='<div class="dash"></div>'+receiptPairV644('Toplam',money(s.total||0),true);
+    if((s.returnItems||[]).length){
+      body+='<div class="dash"></div><div class="title">İADE / TAKAS</div><table class="items"><tbody>'+(s.returnItems||[]).map(function(r){return '<tr><td><b>'+esc(r.itemName||r.itemCode||'İade')+'</b>'+(r.originalSaleDoc?'<br>'+esc(r.originalSaleDoc):'')+'</td><td class="num">'+esc(money(r.total||0))+'</td></tr>';}).join('')+'</tbody></table>';
+    }
+    body+='<div class="dash"></div>'+receiptPairV644('Satış Toplamı',money(s.total||0),true);
     if(cur!=='TL')body+=receiptPairV644('Satış Cinsi',cur,false);
-    (s.payments||[]).forEach(function(x){body+=receiptPairV644(x.type||'Ödeme',money(Math.abs(Number(x.amount||0))),false);});
+    body+=saleReceiptPaymentsV7(s);
     if(s.note)body+='<div class="dash"></div>'+receiptPairV644('Not',s.note,false);
     body+=receiptPairV644('Personel',s.salesperson||s.user||'',false);
     return receiptDocV644('SATIŞ FİŞİ',s.docNo||s.id,s.date,cust?cust.name:'Peşin Müşteri',body);
