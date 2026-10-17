@@ -1233,3 +1233,28 @@ test('fatura kodları: 24 ayar gram külçe 230 istisna (KDV yok), elle 805 seç
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('raporlar bugünün tarihiyle açılır; hızlı aralık düğmeleri tarihi değiştirir', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  const today = await p.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+  const monthStart = today.slice(0, 8) + '01';
+  await p.evaluate(() => document.querySelector('[data-route="reports"],[data-go="reports"]').click());
+  await p.click('[data-pusula-report="sales_general"]');
+  await p.waitForSelector('#prFrom');
+  assert.equal(await p.inputValue('#prFrom'), today, 'rapor bugünden başlamalı');
+  assert.equal(await p.inputValue('#prTo'), today);
+  await p.click('[data-range-pr="month"]');
+  assert.equal(await p.inputValue('#prFrom'), monthStart);
+  assert.match(await p.innerText('#prResult'), new RegExp(monthStart));
+  await p.click('#modalX');
+  await p.click('[data-pusula-report="patron"]');
+  await p.waitForSelector('#patronFrom');
+  assert.equal(await p.inputValue('#patronFrom'), today);
+  assert.ok((await p.innerText('#patronResult')).trim().length > 0, 'patron raporu açılışta hesaplanmalı');
+  await p.click('#modalX');
+  await p.click('[data-pusula-report="balance_sheet"]');
+  await p.waitForSelector('#balFrom');
+  assert.equal(await p.inputValue('#balFrom'), today);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});

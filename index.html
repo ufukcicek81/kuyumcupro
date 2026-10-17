@@ -5014,13 +5014,25 @@ function stockSummaryView(){
     downloadText(rows.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(';')).join('\n'),`patron_kar_zarar_${r.fromDate}_${r.toDate}.csv`,'text/csv;charset=utf-8');
     audit(`${r.fromDate}-${r.toDate} patron raporu dışa aktarıldı`,'Rapor');
   }
+  /* Raporlar: varsayılan tarih bugündür (yerel saat); hızlı aralık düğmeleri. */
+  function localDayV7(d){d=d||new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+  function reportRangeButtonsV7(key){return `<div class="report-range" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${[['today','Bugün'],['yesterday','Dün'],['week','Bu Hafta'],['month','Bu Ay'],['year','Bu Yıl']].map(([k,l])=>`<button class="btn btn-outline" type="button" data-range-${key}="${k}">${l}</button>`).join('')}</div>`;}
+  function bindReportRangeV7(key,fromId,toId,after){
+    document.querySelectorAll(`[data-range-${key}]`).forEach(b=>b.onclick=()=>{const n=new Date(),k=b.getAttribute(`data-range-${key}`);let f=localDayV7(n),to=f;
+      if(k==='yesterday'){const y=new Date(n);y.setDate(y.getDate()-1);f=to=localDayV7(y);}
+      else if(k==='week'){const w=new Date(n);w.setDate(w.getDate()-((w.getDay()+6)%7));f=localDayV7(w);}
+      else if(k==='month')f=localDayV7(new Date(n.getFullYear(),n.getMonth(),1));
+      else if(k==='year')f=localDayV7(new Date(n.getFullYear(),0,1));
+      const fe=document.getElementById(fromId),te=document.getElementById(toId);if(fe)fe.value=f;if(te)te.value=to;if(after)after();});
+  }
   function openPatronReport(){
-    const today=new Date().toISOString().slice(0,10),d=new Date(),first=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
-    modal('Patron Raporu — Pusula Düzeni',`<div class="form-grid"><div class="labelled"><label>Başlangıç Tarihi</label><input id="patronFrom" class="input" type="date" value="${first}"></div><div class="labelled"><label>Bitiş Tarihi</label><input id="patronTo" class="input" type="date" value="${today}"></div><div class="labelled"><label>&nbsp;</label><button class="btn btn-primary" id="patronCalc">GÖSTER</button></div><div class="labelled"><label>&nbsp;</label><button class="btn btn-outline" id="patronExport">CSV / Excel Aktar</button></div></div><div id="patronResult" style="margin-top:14px"></div>`,null);
+    const today=localDayV7();
+    modal('Patron Raporu — Pusula Düzeni',`<div class="form-grid"><div class="labelled"><label>Başlangıç Tarihi</label><input id="patronFrom" class="input" type="date" value="${today}"></div><div class="labelled"><label>Bitiş Tarihi</label><input id="patronTo" class="input" type="date" value="${today}"></div><div class="labelled"><label>&nbsp;</label><button class="btn btn-primary" id="patronCalc">GÖSTER</button></div><div class="labelled"><label>&nbsp;</label><button class="btn btn-outline" id="patronExport">CSV / Excel Aktar</button></div></div>${reportRangeButtonsV7('patron')}<div id="patronResult" style="margin-top:14px"></div>`,null);
     const modalEl=document.querySelector('#modalRoot .modal');if(modalEl)modalEl.style.width='min(1240px,97vw)';
     let last=null;
     const calc=()=>{const from=document.getElementById('patronFrom')?.value,to=document.getElementById('patronTo')?.value;if(!from||!to)return toast('Başlangıç ve bitiş tarihi seçin','err');if(from>to)return toast('Başlangıç tarihi bitiş tarihinden büyük olamaz','err');last=patronProfitReport(from,to);const p=patronPusulaDataV656(from,to),box=document.getElementById('patronResult');if(box)box.innerHTML=patronPusulaTableV656(p)+`<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:800">Detaylı kâr analizi</summary>${patronReportResultHtml(last)}</details>`;};
     document.getElementById('patronCalc')?.addEventListener('click',calc);
+    bindReportRangeV7('patron','patronFrom','patronTo',calc);['patronFrom','patronTo'].forEach(id=>document.getElementById(id)?.addEventListener('change',calc));calc();
     document.getElementById('patronExport')?.addEventListener('click',()=>{if(!last)calc();if(last)downloadPatronReportCsv(last);});
     calc();
   }
@@ -5043,15 +5055,16 @@ function stockSummaryView(){
   }
   let balanceViewV7={from:'',to:'',pusula:null,pusulaFile:''};
   function openBalanceSheet(){
-    const today=new Date().toISOString().slice(0,10),d=new Date(),first=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
-    const from0=balanceViewV7.from||first,to0=balanceViewV7.to||today;
-    modal('Bilanço — Pusula Düzeni',`<div class="form-grid"><div class="labelled"><label>Başlangıç Tarihi</label><input id="balFrom" class="input" type="date" value="${from0}"></div><div class="labelled"><label>Bitiş Tarihi</label><input id="balTo" class="input" type="date" value="${to0}"></div><div class="labelled"><label>&nbsp;</label><button class="btn btn-primary" id="balCalc">GÖSTER</button></div></div>
+    const today=localDayV7();
+    const from0=balanceViewV7.from||today,to0=balanceViewV7.to||today;
+    modal('Bilanço — Pusula Düzeni',`<div class="form-grid"><div class="labelled"><label>Başlangıç Tarihi</label><input id="balFrom" class="input" type="date" value="${from0}"></div><div class="labelled"><label>Bitiş Tarihi</label><input id="balTo" class="input" type="date" value="${to0}"></div><div class="labelled"><label>&nbsp;</label><button class="btn btn-primary" id="balCalc">GÖSTER</button></div></div>${reportRangeButtonsV7('bal')}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-outline" id="balGroupsV7" type="button">Hesap Grupları</button><button class="btn btn-outline" id="balExcelV7" type="button">📤 Excel'e Aktar</button><label class="btn btn-outline" style="cursor:pointer">📥 Pusula bilançosu ile karşılaştır<input id="balPusulaFileV7" type="file" accept=".xlsx,.xls" style="display:none"></label>${balanceViewV7.pusula?`<span class="badge gold" style="align-self:center">${esc(balanceViewV7.pusulaFile)}</span><button class="btn btn-outline" id="balPusulaClearV7" type="button">Karşılaştırmayı kaldır</button>`:''}</div>
       <div id="balResult" style="margin-top:14px"></div>`,null);
     const modalEl=document.querySelector('#modalRoot .modal');if(modalEl)modalEl.style.width='min(1260px,97vw)';
     const calc=()=>{const from=document.getElementById('balFrom')?.value,to=document.getElementById('balTo')?.value;if(!from||!to)return toast('Başlangıç ve bitiş tarihi seçin','err');if(from>to)return toast('Başlangıç tarihi bitiş tarihinden büyük olamaz','err');balanceViewV7.from=from;balanceViewV7.to=to;
       const d=balancePusulaDataV656(from,to),box=document.getElementById('balResult');if(box)box.innerHTML=(balanceViewV7.pusula?balanceCompareHtmlV7(balanceViewV7.pusula,d):'')+balancePusulaTableV656(d,from,to);};
     document.getElementById('balCalc')?.addEventListener('click',calc);
+    bindReportRangeV7('bal','balFrom','balTo',calc);
     document.getElementById('balExcelV7')?.addEventListener('click',()=>{const from=document.getElementById('balFrom')?.value,to=document.getElementById('balTo')?.value;if(!from||!to||from>to)return toast('Geçerli bir tarih aralığı seçin','err');exportBalanceExcelV7(from,to);});
     document.getElementById('balGroupsV7')?.addEventListener('click',()=>{if(!v5Guard('canManageDefinitions','Hesap grubu değiştirmek için tanımlama yetkisi gerekir'))return;openBalanceGroupsV7(openBalanceSheet);});
     document.getElementById('balPusulaClearV7')?.addEventListener('click',()=>{balanceViewV7.pusula=null;openBalanceSheet();});
@@ -5109,7 +5122,7 @@ function stockSummaryView(){
       <div class="card" style="padding:14px">
         <div class="form-grid">
           <div class="labelled"><label>Başlangıç</label><input id="dsrFrom" class="input" type="date" value="${today}"></div>
-          <div class="labelled"><label>Bitiş</label><input id="dsrTo" class="input" type="date" value="${today}"></div>
+          <div class="labelled"><label>Bitiş</label><input id="dsrTo" class="input" type="date" value="${today}"></div><div class="span-4">${reportRangeButtonsV7('dsr')}</div>
           <div class="labelled"><label>Gösterim</label><select id="dsrUnit" class="select"><option value="HAS">HAS</option><option value="TL">TL</option></select></div>
           <div class="labelled"><label>Kullanıcı / Personel</label><select id="dsrUser" class="select"><option value="">Tümü</option>${people.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select></div>
         </div>
@@ -5159,7 +5172,7 @@ function stockSummaryView(){
       btn.classList.remove('btn-outline');btn.classList.add('btn-primary');draw();
     }));
     document.getElementById('dsrShow')?.addEventListener('click',draw);
-    ['dsrFrom','dsrTo','dsrUnit','dsrUser'].forEach(id=>document.getElementById(id)?.addEventListener('change',draw));
+    ['dsrFrom','dsrTo','dsrUnit','dsrUser'].forEach(id=>document.getElementById(id)?.addEventListener('change',draw));bindReportRangeV7('dsr','dsrFrom','dsrTo',draw);
     document.getElementById('dsrCsv')?.addEventListener('click',()=>{
       draw();
       const from=document.getElementById('dsrFrom')?.value||today,to=document.getElementById('dsrTo')?.value||today;
@@ -5261,12 +5274,12 @@ function stockSummaryView(){
   function openPusulaReportV660(type){
     if(type==='balance_sheet')return openBalanceSheet();
     if(type==='patron')return openPatronReport();
-    const today=new Date().toISOString().slice(0,10),d=new Date(),first=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`,needs=type==='account_statement';
+    const today=localDayV7(),needs=type==='account_statement';
     const opts=(state.customers||[]).filter(c=>c.id!=='CASH').sort((a,b)=>String(a.name).localeCompare(String(b.name),'tr')).map(c=>`<option value="${esc(c.id)}">${esc(c.code||'')} · ${esc(c.name)}</option>`).join('');
-    modal('Rapor',`<div class="card"><div class="form-grid"><div class="labelled"><label>Başlangıç</label><input id="prFrom" class="input" type="date" value="${first}"></div><div class="labelled"><label>Bitiş</label><input id="prTo" class="input" type="date" value="${today}"></div>${needs?`<div class="labelled span-2"><label>Hesap / Cari</label><select id="prExtra" class="select">${opts}</select></div>`:''}${/^(sales|general_sales|gold_sales|product_analysis)/.test(type)?`<div class="labelled"><label>Gösterim</label><select id="prUnit" class="select"><option value="HAS" ${srvU()==='HAS'?'selected':''}>HAS</option><option value="TL" ${srvU()==='TL'?'selected':''}>TL</option></select></div>`:''}</div><div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-primary" id="prShow">Göster</button><button class="btn btn-outline" id="prCsv">CSV / Excel</button></div></div><div id="prResult" style="margin-top:14px"></div>`,null,'Kapat');
+    modal('Rapor',`<div class="card"><div class="form-grid"><div class="labelled"><label>Başlangıç</label><input id="prFrom" class="input" type="date" value="${today}"></div><div class="labelled"><label>Bitiş</label><input id="prTo" class="input" type="date" value="${today}"></div>${needs?`<div class="labelled span-2"><label>Hesap / Cari</label><select id="prExtra" class="select">${opts}</select></div>`:''}${/^(sales|general_sales|gold_sales|product_analysis)/.test(type)?`<div class="labelled"><label>Gösterim</label><select id="prUnit" class="select"><option value="HAS" ${srvU()==='HAS'?'selected':''}>HAS</option><option value="TL" ${srvU()==='TL'?'selected':''}>TL</option></select></div>`:''}</div><div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-primary" id="prShow">Göster</button><button class="btn btn-outline" id="prCsv">CSV / Excel</button></div>${reportRangeButtonsV7('pr')}</div><div id="prResult" style="margin-top:14px"></div>`,null,'Kapat');
     document.querySelector('#modalRoot .modal').style.width='min(1480px,98vw)';
     let last=null; const draw=()=>{const f=document.getElementById('prFrom').value,t=document.getElementById('prTo').value,e=document.getElementById('prExtra')?.value||'';last=v660Report(type,f,t,e);document.getElementById('prResult').innerHTML=`<div class="page-title"><div><h1 style="font-size:22px">${esc(last.title)}</h1><p>${esc(f)} → ${esc(t)}</p></div></div>${last.html}`;};
-    document.getElementById('prShow').onclick=draw;document.getElementById('prUnit')?.addEventListener('change',e=>{salesReportUnitV7=e.target.value==='TL'?'TL':'HAS';try{localStorage.setItem('asil_sales_report_unit_v7',salesReportUnitV7);}catch(_){}draw();});['prFrom','prTo','prExtra'].forEach(id=>{const el=document.getElementById(id);if(el)el.onchange=draw;});document.getElementById('prCsv').onclick=()=>{if(!last)draw();if(!last?.csv?.length)return;downloadText(last.csv.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(';')).join('\n'),`${last.title.replace(/\s+/g,'_')}.csv`,'text/csv;charset=utf-8');};draw();
+    document.getElementById('prShow').onclick=draw;bindReportRangeV7('pr','prFrom','prTo',draw);document.getElementById('prUnit')?.addEventListener('change',e=>{salesReportUnitV7=e.target.value==='TL'?'TL':'HAS';try{localStorage.setItem('asil_sales_report_unit_v7',salesReportUnitV7);}catch(_){}draw();});['prFrom','prTo','prExtra'].forEach(id=>{const el=document.getElementById(id);if(el)el.onchange=draw;});document.getElementById('prCsv').onclick=()=>{if(!last)draw();if(!last?.csv?.length)return;downloadText(last.csv.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(';')).join('\n'),`${last.title.replace(/\s+/g,'_')}.csv`,'text/csv;charset=utf-8');};draw();
   }
   function pageReports(){
     const items=[
