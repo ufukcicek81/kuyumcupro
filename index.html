@@ -5819,12 +5819,13 @@ function stockSummaryView(){
     const listedCards=new Set(rows.map(r=>{const o=(state.openStocks||[]).find(x=>x.id===r.id);return o?.stockCardId||'';}).filter(Boolean)),listedCodes=new Set(rows.map(r=>String(r.code)));
     (state.stockCardsMaster||[]).filter(c=>!c.hideFromSale&&!listedCards.has(c.id)&&!listedCodes.has(String(c.pusulaCode||c.productCode||c.code||''))).forEach(c=>{
       const fields=[c.productDefinition||c.name,c.productCode,c.pusulaCode,c.code].map(foldSaleSearchKey);
-      const idx=fields.reduce((best,f)=>f===q?Math.min(best,0):f.startsWith(q)?Math.min(best,1):f.includes(q)?Math.min(best,3):best,99);
-      if(idx<99)rows.push({type:'card',id:c.id,rank:idx+1,label:c.productDefinition||c.name||'',code:c.pusulaCode||c.productCode||c.code||'',meta:'STOK YOK — satılırsa stok eksiye düşer',stock:0});
+      const idx=fields.reduce((best,f)=>f===q?Math.min(best,-1):f.startsWith(q)?Math.min(best,0):f.includes(q)?Math.min(best,1):best,99);
+      if(idx<99)rows.push({type:'card',id:c.id,rank:idx,label:c.productDefinition||c.name||'',code:c.pusulaCode||c.productCode||c.code||'',meta:'STOK YOK — satılırsa stok eksiye düşer',stock:0});
     });
     activeStock().forEach(x=>{
       const fields=[x.barcode,x.code,x.pusulaCode,x.name,x.type,x.category,x.group,`${x.group||''}${x.pusulaCode||''}`].map(foldSaleSearchKey);
-      let idx=fields.reduce((best,f)=>f===q?Math.min(best,-1):f.startsWith(q)?Math.min(best,0):f.includes(q)?Math.min(best,2):best,99);
+      // Barkodlu ürünler: tam eşleşme en üstte; kısmi eşleşmeler açık stok ve stok kartlarından sonra gelir.
+      let idx=fields.reduce((best,f)=>f===q?Math.min(best,-1):f.startsWith(q)?Math.min(best,1):f.includes(q)?Math.min(best,2):best,99);
       if(stockMatchesBarcodeLookup(x,value))idx=Math.min(idx,-2);
       if(idx<99)rows.push({type:'barcode',id:x.id,rank:idx,label:x.name||x.type||x.category||'Barkodlu Ürün',code:x.barcode||x.code||'',meta:`${qty(stockAmount(x))} GR · ${x.purity||x.karat||''}`,stock:1});
     });
