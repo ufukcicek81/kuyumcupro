@@ -1133,3 +1133,32 @@ test('cari geçmişi: peşin kapanan satış müşterinin ekstresinde görünür
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('satış geçmişi: tam pencere, tarih ve ödeme/banka filtresi, ödeme şekli görünür', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  await p.click('[data-go="sales"]');
+  for (let i = 0; i < 3; i++) {
+    await p.fill('#saleProductSearch', '22'); await p.waitForTimeout(300); await p.press('#saleProductSearch', 'Enter');
+    if (await p.waitForSelector('#saleEntryPrice:not([disabled])', { timeout: 5000 }).catch(() => null)) break;
+  }
+  await p.waitForTimeout(300);
+  await p.fill('#saleEntryPayable', '5000'); await p.click('#saleAddUnified'); await p.waitForTimeout(400);
+  await p.click('[data-pay="Havale / EFT"]'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.selectOption('#salePerson', { index: 1 });
+  await p.click('#finalizeSale'); await p.click('#modalConfirm'); await p.waitForTimeout(1500);
+  await p.click('text=Satış Geçmişi');
+  await p.waitForSelector('#saleHistBody tr');
+  const [mw, vw] = await p.evaluate(() => [document.querySelector('#modalRoot .modal').getBoundingClientRect().width, innerWidth]);
+  assert.ok(mw > vw - 40, `pencere ekranı doldurmalı (${mw}/${vw})`);
+  assert.match(await p.innerText('#saleHistBody'), /Havale · İŞ BANKASI/, 'ödeme şekli ve banka görünmeli');
+  assert.match(await p.innerText('#saleHistSummary'), /1 satış · 5\.000,00/);
+  await p.selectOption('#saleHistPay', 'Nakit');
+  assert.match(await p.innerText('#saleHistBody'), /Satış bulunamadı/, 'nakit filtresinde havale satışı çıkmamalı');
+  await p.selectOption('#saleHistPay', '');
+  await p.click('[data-hist-range="today"]');
+  assert.match(await p.innerText('#saleHistBody'), /SAT-\d{4}-0+1/, 'bugün filtresinde görünmeli');
+  await p.fill('#saleHistFrom', '2099-01-01');
+  assert.match(await p.innerText('#saleHistBody'), /Satış bulunamadı/, 'ileri tarihte satış olmamalı');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
