@@ -65,3 +65,17 @@ Her satır bir vergi türü ve GİB kodu taşır (`taxType`, `exemptionCode`, `e
 - Kod listesi e-Fatura > Entegrasyon Ayarları > "KDV İstisna ve Özel Matrah Kodları" bölümünden düzenlenir; yeni kod eklenebilir.
 - GİB'de bir faturanın tek tipi olur. Satışta farklı türler varsa `invoiceType` = `KARMA` gelir; entegratör satışı ayrı faturalara bölmelidir.
 - Kod numaraları GİB UBL-TR Kod Listeleri kılavuzundan ve mali müşavirle teyit edilmelidir.
+
+## Fatura düzeni (layout)
+
+`layout: "SPLIT"` (varsayılan) — kuyumcunun portalda kestiği düzen:
+
+- Fatura tipi `ISTISNA`.
+- Her altın ürünü iki satıra ayrılır:
+  1. Altın satırı: miktar (gram/adet) × birim fiyat = altın bedeli, KDV %0, `exemptionCode` = altın satırı istisna kodu (varsayılan **230**).
+  2. `İŞÇİLİK` satırı: 1 adet, KDV hariç işçilik, KDV %20.
+- `sale.lines` faturaya yazılacak satırlardır (`kind`: gold / labour / normal / special); ürün bazındaki hesap `sale.products` içindedir.
+
+`layout: "OZELMATRAH"` — her ürün tek satır, özel matrah kodu (805 / 808), fatura tipi `OZELMATRAH`.
+
+Düzen ve altın satırı kodu e-Fatura > Entegrasyon Ayarları'ndan seçilir.

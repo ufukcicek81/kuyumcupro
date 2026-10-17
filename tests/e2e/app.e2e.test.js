@@ -1048,9 +1048,14 @@ test('fatura taslağı: altın bedeli, işçilik ve yalnız işçilikten KDV ayr
   assert.match(await p.innerText('.content'), /50\.000,00/, 'işçilik (60.000 − KDV 10.000) listede görünmeli');
   await p.click('[data-invoice-send]'); await p.waitForTimeout(800);
   assert.ok(sent, 'entegratöre istek gitmeli');
-  assert.equal(sent.sale.lines[0].goldValue, 10000);
-  assert.equal(sent.sale.lines[0].labourAmount, 50000);
-  assert.equal(sent.sale.lines[0].vatAmount, 10000);
+  assert.equal(sent.sale.products[0].goldValue, 10000);
+  assert.equal(sent.sale.products[0].labourAmount, 50000);
+  assert.equal(sent.sale.products[0].vatAmount, 10000);
+  // Varsayılan düzen: altın satırı (KDV %0, kod 230) + İŞÇİLİK satırı (KDV %20)
+  assert.equal(sent.invoiceType, 'ISTISNA');
+  assert.deepEqual([sent.sale.lines[0].total, sent.sale.lines[0].vatRate, sent.sale.lines[0].exemptionCode], [10000, 0, '230']);
+  assert.match(sent.sale.lines[1].name, /^İŞÇİLİK/);
+  assert.deepEqual([sent.sale.lines[1].total, sent.sale.lines[1].vatRate, sent.sale.lines[1].vatAmount], [50000, 20, 10000]);
   assert.deepEqual({ g: sent.totals.goldValue, l: sent.totals.labourAmount, v: sent.totals.vatAmount, t: sent.totals.total }, { g: 10000, l: 50000, v: 10000, t: 70000 });
   assert.match(await p.innerText('.content'), /TST2026000000001/);
   assert.deepEqual(p.errors, []);
@@ -1193,7 +1198,7 @@ test('satış fişi: takasta alınan ziynet kalem kalem, müşteriye ödenen hes
   await p.context().close();
 });
 
-test('fatura kodları: 24 ayar gram külçe 230 istisna (KDV yok), elle 805 seçilince özel matrah; neden faturaya yazılır', async () => {
+test('fatura: altın ve işçilik ayrı satır, altın kodu 230, fatura tipi İSTİSNA; özel matrah düzeni seçilebilir', async () => {
   const p = await newDevice(browser, appUrl, createFakeFirebase());
   let sent = null;
   await p.context().route('https://fatura.test/api', async (r) => { sent = JSON.parse(r.request().postData()); await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, status: 'Gönderildi', invoiceNo: 'TST2' }) }); });
@@ -1211,25 +1216,36 @@ test('fatura kodları: 24 ayar gram külçe 230 istisna (KDV yok), elle 805 seç
   await p.evaluate(() => document.querySelector('[data-go="invoices"],[data-route="invoices"]').click());
   await p.click('[data-invoice-view="settings"]');
   assert.match(await p.innerText('.content'), /KDV İstisna ve Özel Matrah Kodları/);
+  assert.equal(await p.inputValue('#invLayout'), 'SPLIT', 'varsayılan düzen altın + işçilik ayrı');
+  assert.equal(await p.inputValue('#invGoldCode'), '230');
   await p.fill('#invProxy', 'https://fatura.test/api'); await p.click('#saveInvoiceSettings');
   await p.click('[data-invoice-view="sales"]');
   await p.click('[data-invoice-draft]');
-  await p.waitForSelector('[data-inv-code="0"]');
-  assert.equal(await p.inputValue('[data-inv-code="0"]'), '230', '24 ayar gram külçe istisna koduyla gelmeli');
+  await p.waitForSelector('.invoice-lines');
   let draft = await p.innerText('.invoice-draft');
-  assert.match(draft, /İSTİSNA/);
-  assert.match(draft, /230 · İstisna\s+Külçe altın, külçe gümüş ve kıymetli taşların teslimi \(KDVK md\. 17\/4-g\)/);
-  // Elle 805 özel matrah seçilince KDV işçilikten hesaplanır
-  await p.selectOption('[data-inv-code="0"]', '805'); await p.waitForSelector('[data-inv-gold="0"]');
-  draft = await p.innerText('.invoice-draft');
-  assert.match(draft, /ÖZEL MATRAH/);
-  assert.match(draft, /805 · Özel Matrah/);
+  assert.match(draft, /Fatura Tipi\s+İSTİSNA/);
+  const lines = await p.innerText('.invoice-lines tbody');
+  assert.match(lines, /24 Ayar[^\n]*%0[^\n]*230/, 'altın satırı KDV %0 ve 230 koduyla');
+  assert.match(lines, /İŞÇİLİK[^\n]*%20/, 'işçilik ayrı satır, KDV %20');
+  assert.match(draft, /230 · İstisna\s+Külçe altın, külçe gümüş ve kıymetli taşların teslimi/);
   await p.click('#modalConfirm'); await p.waitForTimeout(300);
   await p.click('[data-invoice-send]'); await p.waitForTimeout(800);
-  assert.equal(sent.invoiceType, 'OZELMATRAH');
-  assert.equal(sent.sale.lines[0].exemptionCode, '805');
-  assert.match(sent.sale.lines[0].exemptionReason, /ziynet eşyaları ile sikke altınların teslimi/);
-  assert.ok(sent.sale.lines[0].vatAmount > 0);
+  assert.equal(sent.invoiceType, 'ISTISNA');
+  assert.equal(sent.layout, 'SPLIT');
+  assert.equal(sent.sale.lines[0].exemptionCode, '230');
+  assert.equal(sent.sale.lines[0].vatRate, 0);
+  assert.match(sent.sale.lines[1].name, /^İŞÇİLİK/);
+  assert.equal(sent.sale.lines[1].vatRate, 20);
+  const sum = sent.sale.lines.reduce((n, x) => n + x.total + x.vatAmount, 0);
+  assert.ok(Math.abs(sum - 7000) < 0.02, 'satırlar + KDV satış tutarına eşit olmalı: ' + sum);
+  // Özel matrah düzenine geçilince tek satır 805
+  await p.click('[data-invoice-view="settings"]');
+  await p.selectOption('#invLayout', 'OZELMATRAH'); await p.click('#invCodeSave'); await p.waitForTimeout(300);
+  await p.click('[data-invoice-view="records"]');
+  await p.click('[data-invoice-open]');
+  await p.waitForSelector('.invoice-lines');
+  draft = await p.innerText('.invoice-draft');
+  assert.doesNotMatch(await p.innerText('.invoice-lines tbody'), /İŞÇİLİK/);
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
