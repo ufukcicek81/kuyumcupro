@@ -1056,3 +1056,45 @@ test('fatura taslağı: altın bedeli, işçilik ve yalnız işçilikten KDV ayr
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('banka ekstresi: banka hareketleri görünür, düzeltilir ve silinir; bakiye güncellenir', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  const path = require('node:path');
+  // Bankaya ekstreden bir ödeme hareketi kaydet (2.500 TL çıkış)
+  await p.evaluate(() => document.querySelector('[data-go="banking"]').click());
+  const bankName = (await p.$eval('#bankFeedBank option:checked', (o) => o.textContent)).split(' · ')[0];
+  await p.setInputFiles('#bankCsvInput', path.join(__dirname, '..', '..', 'BANKA_CSV_ORNEK.csv'));
+  await p.waitForSelector('[data-bankfeed-post]');
+  await p.click('[data-bankfeed-post]'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  const openEkstre = async () => {
+    await p.evaluate(() => document.querySelector('[data-route="customers"],[data-go="customers"]').click());
+    await p.waitForTimeout(500);
+    await p.evaluate((n) => [...document.querySelectorAll('[data-cari-card][data-cari-type="Banka"]')].find((e) => e.querySelector('h3').innerText.trim() === n).querySelector('[data-cari-detail]').click(), bankName);
+    await p.waitForSelector('#cariEkstreTable');
+  };
+  const tlBalance = () => p.evaluate(() => [...document.querySelectorAll('.cari-ekstre-balance')].find((e) => /TL Son Bakiye/.test(e.innerText)).innerText);
+  await openEkstre();
+  const before = await tlBalance();
+  assert.match(await p.innerText('#cariEkstreTable'), /Havale \/ EFT Ödeme/, 'banka hareketi ekstrede görünmeli');
+  assert.match(await p.innerText('#modalRoot'), /tutuyor/, 'bakiye hareketlerle tutmalı');
+  const num = (s) => Number(String(s).replace(/[^\d,]/g, '').replace(',', '.'));
+  // Düzelt: 2.500 → 3.000
+  await p.click('.cari-ekstre-row:has-text("Havale / EFT Ödeme")');
+  await p.click('#selectedFinEdit');
+  await p.fill('#bfeAmt', '3000'); await p.click('#modalConfirm');
+  await p.waitForSelector('#cariEkstreTable');
+  assert.equal(num(await tlBalance()), num(before) - 500, 'bakiye 500 TL azalmalı');
+  assert.match(await p.innerText('#cariEkstreTable'), /3\.000/);
+  // Sil: bakiye 3.000 TL geri gelir, ekstre satırı tekrar "Bekliyor" olur
+  await p.click('.cari-ekstre-row:has-text("Havale / EFT Ödeme")');
+  await p.click('#selectedFinDelete'); await p.click('#modalConfirm');
+  await p.waitForSelector('#cariEkstreTable');
+  assert.equal(num(await tlBalance()), num(before) + 2500, 'silinince bakiye geri alınmalı');
+  assert.doesNotMatch(await p.innerText('#cariEkstreTable'), /Havale \/ EFT Ödeme/);
+  await p.click('#modalX');
+  await p.evaluate(() => document.querySelector('[data-go="banking"],[data-route="banking"]').click());
+  await p.waitForTimeout(400);
+  assert.equal(await p.locator('[data-bankfeed-post]').count(), 2, 'silinen hareketin ekstre satırı yeniden kaydedilebilmeli');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
