@@ -1274,3 +1274,33 @@ test('raporlar bugünün tarihiyle açılır; hızlı aralık düğmeleri tarihi
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('yeni stok kartı: kod otomatik sıradaki numara; stoksuz kart satış aramasında çıkar ve seçilebilir', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  await p.evaluate(() => document.querySelector('[data-route="stocks"],[data-go="stocks"]').click());
+  await p.waitForTimeout(400);
+  await p.evaluate(() => (document.getElementById('newStockCard') || document.querySelector('[data-new-stockcard]')).click());
+  await p.waitForSelector('#scProductCode');
+  const code = await p.inputValue('#scProductCode');
+  assert.match(code, /^\d+$/, 'kod otomatik dolmalı: ' + code);
+  assert.ok(Number(code) > 39, 'mevcut kodlardan büyük olmalı: ' + code);
+  await p.fill('#scProductDefinition', 'TEST KULCE 7 GRAM');
+  await p.fill('#scPurity', '995'); await p.fill('#scFixedMilyem', '995');
+  await p.click('#modalConfirm'); await p.waitForTimeout(400);
+  // Aynı kodla ikinci kart açılamaz
+  await p.evaluate(() => (document.getElementById('newStockCard') || document.querySelector('[data-new-stockcard]')).click());
+  await p.waitForSelector('#scProductCode');
+  assert.equal(await p.inputValue('#scProductCode'), String(Number(code) + 1), 'sonraki kart bir sonraki kodu almalı');
+  await p.click('#modalX');
+  // Satış: stoksuz kart listede STOK YOK olarak çıkar
+  await p.evaluate(() => document.querySelector('[data-route="sales"],[data-go="sales"]').click());
+  await p.waitForSelector('#saleProductSearch');
+  await p.fill('#saleProductSearch', 'TEST KULCE'); await p.waitForTimeout(400);
+  const list = await p.innerText('#saleSearchResults');
+  assert.match(list, /STOK YOK/); assert.match(list, /TEST KULCE 7 GRAM/);
+  await p.dispatchEvent('[data-sale-suggestion-type="card"]', 'pointerdown');
+  await p.waitForTimeout(500);
+  assert.equal(await p.inputValue('#saleEntryName'), 'TEST KULCE 7 GRAM', 'kart seçilebilmeli');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
