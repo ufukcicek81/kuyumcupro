@@ -1038,7 +1038,7 @@ test('fatura taslağı: altın bedeli, işçilik ve yalnız işçilikten KDV ayr
   const rowText = await p.innerText('.invoice-draft tbody tr');
   const cells = rowText.split('\t');
   const gold = Number(await p.inputValue('[data-inv-gold="0"]'));
-  const labour = num(cells[5]), vat = num(cells[6]);
+  const labour = num(cells[6]), vat = num(cells[7]);
   assert.ok(gold > 0 && gold < 70000, 'altın bedeli hesaplanmalı: ' + gold);
   assert.ok(Math.abs(gold + labour + vat - 70000) < 0.02, `altın + işçilik + KDV = satış (${gold} + ${labour} + ${vat})`);
   assert.ok(Math.abs(vat - (70000 - gold) * 20 / 120) < 0.02, 'KDV yalnız işçilikten iç yüzdeyle ayrılmalı');
@@ -1189,6 +1189,47 @@ test('satış fişi: takasta alınan ziynet kalem kalem, müşteriye ödenen hes
   assert.match(text, /MÜŞTERİYE ÖDENEN · Nakit/);
   assert.match(text, /TL Kasa/);
   assert.match(text, /Müşteriye Ödenen\s+3\.700,00/);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
+test('fatura kodları: 24 ayar gram külçe 230 istisna (KDV yok), elle 805 seçilince özel matrah; neden faturaya yazılır', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  let sent = null;
+  await p.context().route('https://fatura.test/api', async (r) => { sent = JSON.parse(r.request().postData()); await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, status: 'Gönderildi', invoiceNo: 'TST2' }) }); });
+  await p.click('[data-go="sales"]');
+  for (let i = 0; i < 3; i++) {
+    await p.fill('#saleProductSearch', '39'); await p.waitForTimeout(300); await p.press('#saleProductSearch', 'Enter');
+    if (await p.waitForSelector('#saleEntryPrice:not([disabled])', { timeout: 5000 }).catch(() => null)) break;
+  }
+  await p.waitForTimeout(300);
+  assert.match(await p.inputValue('#saleEntryName'), /24 Ayar/);
+  await p.fill('#saleEntryPayable', '7000'); await p.click('#saleAddUnified'); await p.waitForTimeout(400);
+  await p.click('[data-pay="Nakit"]'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.selectOption('#salePerson', { index: 1 });
+  await p.click('#finalizeSale'); await p.click('#modalConfirm'); await p.waitForTimeout(1500);
+  await p.evaluate(() => document.querySelector('[data-go="invoices"],[data-route="invoices"]').click());
+  await p.click('[data-invoice-view="settings"]');
+  assert.match(await p.innerText('.content'), /KDV İstisna ve Özel Matrah Kodları/);
+  await p.fill('#invProxy', 'https://fatura.test/api'); await p.click('#saveInvoiceSettings');
+  await p.click('[data-invoice-view="sales"]');
+  await p.click('[data-invoice-draft]');
+  await p.waitForSelector('[data-inv-code="0"]');
+  assert.equal(await p.inputValue('[data-inv-code="0"]'), '230', '24 ayar gram külçe istisna koduyla gelmeli');
+  let draft = await p.innerText('.invoice-draft');
+  assert.match(draft, /İSTİSNA/);
+  assert.match(draft, /230 · İstisna\s+Külçe altın, külçe gümüş ve kıymetli taşların teslimi \(KDVK md\. 17\/4-g\)/);
+  // Elle 805 özel matrah seçilince KDV işçilikten hesaplanır
+  await p.selectOption('[data-inv-code="0"]', '805'); await p.waitForSelector('[data-inv-gold="0"]');
+  draft = await p.innerText('.invoice-draft');
+  assert.match(draft, /ÖZEL MATRAH/);
+  assert.match(draft, /805 · Özel Matrah/);
+  await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.click('[data-invoice-send]'); await p.waitForTimeout(800);
+  assert.equal(sent.invoiceType, 'OZELMATRAH');
+  assert.equal(sent.sale.lines[0].exemptionCode, '805');
+  assert.match(sent.sale.lines[0].exemptionReason, /ziynet eşyaları ile sikke altınların teslimi/);
+  assert.ok(sent.sale.lines[0].vatAmount > 0);
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
