@@ -1304,3 +1304,40 @@ test('yeni stok kartı: kod otomatik sıradaki numara; stoksuz kart satış aram
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('yeni ziynet stok kartı Ziynet Alış ve takas listelerinde çıkar; alış kendi stoğuna işlenir', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  await p.evaluate(() => document.querySelector('[data-route="stocks"],[data-go="stocks"]').click());
+  await p.waitForTimeout(300);
+  await p.evaluate(() => (document.getElementById('newStockCard') || document.querySelector('[data-new-stockcard]')).click());
+  await p.waitForSelector('#scProductCode');
+  await p.fill('#scProductDefinition', 'TEST 24 AYAR 5 GRAM');
+  await p.fill('#scPurity', '4975'); await p.fill('#scFixedMilyem', '4975'); await p.fill('#scZGram', '5');
+  await p.selectOption('#scUnit12', 'AD'); await p.check('#scCounted'); await p.check('#scZiynet');
+  await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  // Ziynet Alış listesinde
+  await p.evaluate(() => document.querySelector('[data-route="dashboard"],[data-go="dashboard"]').click());
+  await p.click('[data-home-trade="Ziynet Alış"]');
+  await p.waitForSelector('#stItem');
+  const opts = await p.$$eval('#stItem option', (os) => os.map((o) => o.textContent));
+  assert.ok(opts.includes('TEST 24 AYAR 5 GRAM'), 'Ziynet Alış listesinde olmalı: ' + opts.join(', '));
+  await p.selectOption('#stItem', { label: 'TEST 24 AYAR 5 GRAM' });
+  await p.waitForTimeout(200);
+  assert.ok(Number(await p.inputValue('#stPrice')) > 0, 'HAS fiyatından alış fiyatı önerilmeli');
+  await p.fill('#stQty', '2'); await p.fill('#stPrice', '30000');
+  await p.click('#modalConfirm'); await p.waitForTimeout(1500);
+  const b = await p.$('.critical-alert button'); if (b) await b.click();
+  // Satışta kendi kartının stoğu olarak (2 ADET) görünür
+  await p.evaluate(() => document.querySelector('[data-route="sales"],[data-go="sales"]').click());
+  await p.waitForSelector('#saleProductSearch');
+  await p.fill('#saleProductSearch', 'TEST 24 AYAR'); await p.waitForTimeout(400);
+  const list = await p.innerText('#saleSearchResults');
+  assert.match(list, /TEST 24 AYAR 5 GRAM[\s\S]*2 ADET stok/, 'alış kartın kendi stoğuna işlenmeli: ' + list);
+  // Takas (müşteriden alınan) listesinde
+  await p.fill('#saleProductSearch', ''); await p.click('[data-pay="Altın / Ziynet"]');
+  await p.waitForSelector('#tiItem');
+  const ti = await p.$$eval('#tiItem option', (os) => os.map((o) => o.textContent));
+  assert.ok(ti.some((x) => x.includes('TEST 24 AYAR 5 GRAM')), 'takas listesinde olmalı');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
