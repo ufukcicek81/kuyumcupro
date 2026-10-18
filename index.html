@@ -2991,7 +2991,7 @@ function stockSummaryView(){
     <div class="table-wrap"><table class="table" id="stockTable" style="min-width:1320px"><thead><tr><th></th><th>Ürün Kodu</th><th>Mal Tanımı</th><th>Ürün Grubu</th><th>Toptancı</th><th class="num">Miktar</th><th class="num">Ayar</th><th class="num">Mal HAS</th><th class="num">İşçilik</th><th class="num">Karşı Hesap</th><th>Konum</th><th>Durum</th><th>Barkod</th><th>İşlem</th></tr></thead><tbody>${list.map(x=>`<tr data-search="${esc([x.pusulaCode,x.code,x.name,x.productType,x.group,`${x.group||''}${x.pusulaCode||''}`,x.category,x.supplier,x.barcode,x.rfid].join(' ').toLocaleLowerCase('tr-TR'))}" data-stock-code="${esc(x.code||'')}" data-barcode="${esc(x.barcode||'')}" data-pusula-code="${esc(x.pusulaCode||'')}" data-group="${esc(x.group)}" data-category="${esc(x.category)}" data-karat="${esc(x.purity||x.karat)}" data-supplier="${esc(x.supplier)}" data-status="${esc(x.status)}"><td><input type="checkbox" class="stock-check" value="${x.id}"></td><td><strong>${esc(x.code)}</strong></td><td><div class="product-name"><strong>${esc(x.name)}</strong><small>${esc(x.purchaseDocNo||x.partyId||'')}</small></div></td><td><span class="badge blue">${esc(x.group||x.productType)}</span></td><td>${esc(x.supplier)}</td><td class="num">${qty(stockAmount(x))} GR</td><td class="num"><span class="badge gold">${qty(Number(x.purity||0))}</span></td><td class="num">${qty(stockHas(x))} HAS</td><td class="num">${qty(stockWorkmanshipHas(x))} HAS</td><td class="num"><strong>${qty(stockCounterHas(x))} HAS</strong></td><td>${esc([x.showcase,x.location].filter(Boolean).join(' / '))}</td><td><span class="badge ${stockStatusClass(x.status)}">${esc(x.status)}</span></td><td>${esc(x.barcode)}</td><td><div class="row-actions"><button class="btn btn-outline" data-stock-detail="${x.id}">Detay</button><button class="btn" data-stock-status="${x.id}">Durum</button>${x.openSourceId&&x.status==='Stokta'?`<button class="btn btn-danger" data-return-open="${x.id}">Barkodu Geri Al</button>`:''}</div></td></tr>`).join('')}</tbody></table></div></div>`;
   }
   function stockCardsView(){
-    return `<div class="page-title" style="margin-top:4px"><div><h1 style="font-size:22px">Stok Kartı Tanımlama</h1><p>Pusula ekranındaki ürün grubu, ürün kodu, takip birimleri ve sabit milyem mantığı.</p></div><button class="btn btn-primary" data-new-stockcard="1">+ Yeni Stok Kartı</button></div><div class="notice">Altın kartında <strong>Milyem Sabiti</strong> tanımlanır. Altın girişinde mal seçildiğinde ayar otomatik gelir ve miktardan HAS hesaplanır.</div><div class="stock-card-order-hint">Kartları fareyle tutup sürükleyerek istediğin sıraya al. Sıralama kalıcı kaydedilir.</div><div class="master-card-grid" id="stockCardOrderGrid" style="margin-top:8px">${state.stockCardsMaster.map(c=>`<div class="stock-card-box" draggable="true" data-stockcard-order="${c.id}"><div class="section-head"><h4>${esc(c.productDefinition||c.name)}</h4><span class="badge gold">Kod ${esc(c.productCode||c.code)}</span></div><p>${esc(c.productGroup||c.productType)} · Stok: ${esc(c.stockTrackingUnit||'')} · İşçilik: ${esc(c.workmanshipTrackingUnit||'')}</p><div class="meta"><span class="badge">Sabit ${qty(c.fixedMilyem||c.purity)}</span>${c.ziynet?`<span class="badge">Saflık ${qty(c.purity||c.karat||0)}</span>`:'' }<span class="badge">${esc(c.unit12||'GR')}</span>${c.countedTracking?'<span class="badge blue">Adetli Takip</span>':''}${c.ziynet?'<span class="badge gold">Ziynet</span>':''}${c.ziynet&&Number(c.zGram||0)>0?`<span class="badge green">1 Adet = ${qty(c.zGram)} GR</span>`:''}</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px"><button class="btn btn-outline" data-edit-stockcard="${c.id}">Düzenle</button><button class="btn btn-danger" data-delete-stockcard="${c.id}">Sil</button></div></div>`).join('')}</div>`;
+    return `<div class="page-title" style="margin-top:4px"><div><h1 style="font-size:22px">Stok Kartı Tanımlama</h1><p>Pusula ekranındaki ürün grubu, ürün kodu, takip birimleri ve sabit milyem mantığı.</p></div><button class="btn btn-primary" data-new-stockcard="1">+ Yeni Stok Kartı</button></div><div class="notice">Altın kartında <strong>Milyem Sabiti</strong> tanımlanır. Altın girişinde mal seçildiğinde ayar otomatik gelir ve miktardan HAS hesaplanır.</div><div class="stock-card-order-hint">Kartları fareyle tutup sürükleyerek istediğin sıraya al. Sıralama kalıcı kaydedilir.</div><div class="master-card-grid" id="stockCardOrderGrid" style="margin-top:8px">${state.stockCardsMaster.map(c=>`<div class="stock-card-box" draggable="true" data-stockcard-order="${c.id}"><div class="section-head"><h4>${esc(c.productDefinition||c.name)}</h4><span class="badge gold">Kod ${esc(c.productCode||c.code)}</span></div><p>${esc(c.productGroup||c.productType)} · Stok: ${esc(c.stockTrackingUnit||'')} · İşçilik: ${esc(c.workmanshipTrackingUnit||'')}</p><div class="meta"><span class="badge">Sabit ${qty(c.fixedMilyem||c.purity)}</span>${c.ziynet?`<span class="badge">Saflık ${qty(c.purity||c.karat||0)}</span>`:'' }<span class="badge">${esc(c.unit12||'GR')}</span>${c.countedTracking?'<span class="badge blue">Adetli Takip</span>':''}${c.ziynet?'<span class="badge gold">Ziynet</span>':''}${c.ziynet&&Number(c.zGram||0)>0?`<span class="badge green">1 Adet = ${qty(c.zGram)} GR</span>`:''}</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px"><button class="btn btn-outline" data-edit-stockcard="${c.id}">Düzenle</button><button class="btn btn-outline" data-merge-stockcard="${c.id}" title="Bu kartın stoğunu ve geçmişini başka karta aktarıp bu kartı siler">Birleştir</button><button class="btn btn-danger" data-delete-stockcard="${c.id}">Sil</button></div></div>`).join('')}</div>`;
   }
 
   function labelFieldCatalogV665(){
@@ -6428,6 +6428,7 @@ function stockSummaryView(){
     document.querySelectorAll('[data-new-stockcard]').forEach(b=>b.addEventListener('click',()=>openStockCardModal()));
     document.querySelectorAll('[data-edit-stockcard]').forEach(b=>b.addEventListener('click',()=>openStockCardModal(b.dataset.editStockcard)));
     document.querySelectorAll('[data-delete-stockcard]').forEach(b=>b.addEventListener('click',()=>deleteStockCardDefinition(b.dataset.deleteStockcard)));
+    document.querySelectorAll('[data-merge-stockcard]').forEach(b=>b.addEventListener('click',()=>mergeStockCardV7(b.dataset.mergeStockcard)));
     const fields=['stockSearch','stockGroupFilter','stockCategoryFilter','stockKaratFilter','stockSupplierFilter','stockStatusFilter'];
     const apply=()=>document.querySelectorAll('#stockTable tbody tr').forEach(r=>{
       const raw=String(document.getElementById('stockSearch')?.value||'').trim(),q=raw.toLocaleLowerCase('tr-TR'),shortMatch=raw&&[r.dataset.barcode,r.dataset.stockCode,r.dataset.pusulaCode,`${r.dataset.group||''}${r.dataset.pusulaCode||''}`].some(v=>barcodeLookupMatches(v,raw));
@@ -6460,6 +6461,36 @@ function stockSummaryView(){
   function canDeleteDefinitions(){
     const u=state.currentUser||state.users.find(x=>x.id===session?.id)||state.users[0];
     return Boolean(u?.permissions?.canManageDefinitions!==false && (u?.permissions?.canDelete!==false || u?.role==='Yönetici'));
+  }
+  /* Kart birleştirme: kaynak kartın açık stokları, barkodlu ürünleri ve alış bağlantıları hedef karta aktarılır, kaynak kart silinir. */
+  function mergeStockCardV7(srcId){
+    const src=state.stockCardsMaster.find(x=>x.id===srcId);if(!src)return;
+    if(!canDeleteDefinitions())return toast('Bu kullanıcı tanımlama birleştiremez / silemez.','err');
+    const code=c=>String(c.pusulaCode||c.productCode||c.code||'').trim(),nm=c=>c.productDefinition||c.name||'';
+    const others=state.stockCardsMaster.filter(x=>x.id!==srcId).sort((a,b)=>nm(a).localeCompare(nm(b),'tr'));
+    const linked=o=>o.stockCardId===src.id||(!o.stockCardId&&code(src)&&String(o.pusulaCode||o.productCode||'').trim()===code(src));
+    const opens=(state.openStocks||[]).filter(linked),barcodes=(state.stocks||[]).filter(x=>x.stockCardId===src.id);
+    modal('Stok Kartı Birleştir',`<div class="notice"><b>${esc(code(src))} · ${esc(nm(src))}</b> kartının stoğu ve geçmişi seçtiğiniz karta aktarılır, sonra bu kart silinir.<br>Aktarılacak: ${opens.length} açık stok kaydı (${opens.map(o=>`${o.period}: ${qty(o.amount||0)} ${esc(o.unit||'')}`).join(', ')||'stok yok'}), ${barcodes.length} barkodlu ürün.</div>
+      <div class="labelled" style="margin-top:10px"><label>Kalacak (hedef) kart</label><select id="mergeTarget" class="select">${others.map(c=>`<option value="${c.id}">${esc(code(c))} · ${esc(nm(c))}</option>`).join('')}</select></div>`,()=>{
+      const tgt=state.stockCardsMaster.find(x=>x.id===document.getElementById('mergeTarget').value);if(!tgt)return;
+      if(!confirm(`${nm(src)} → ${nm(tgt)} birleştirilsin mi? Bu işlem geri alınamaz.`))return;
+      let moved=0;
+      opens.forEach(o=>{
+        const t2=(state.openStocks||[]).find(x=>x!==o&&x.period===o.period&&(x.stockCardId===tgt.id||(!x.stockCardId&&code(tgt)&&String(x.pusulaCode||x.productCode||'').trim()===code(tgt))));
+        if(t2&&String(t2.unit||'').toUpperCase()===String(o.unit||'').toUpperCase()){
+          const a1=Number(t2.amount||0),a2=Number(o.amount||0),c1=Number(t2.inventoryUnitCostHas||0),c2=Number(o.inventoryUnitCostHas||0);
+          t2.amount=a1+a2;t2.hasWeight=Number(t2.hasWeight||0)+Number(o.hasWeight||0);t2.workmanshipTotalHas=Number(t2.workmanshipTotalHas||0)+Number(o.workmanshipTotalHas||0);t2.count=Number(t2.count||0)+Number(o.count||0);
+          if(a1+a2>0)t2.inventoryUnitCostHas=(a1*c1+a2*c2)/(a1+a2);
+          t2.stockCardId=tgt.id;o.amount=0;o.hasWeight=0;o.workmanshipTotalHas=0;o.count=0;o.mergedInto=t2.id;o.stockCardId=tgt.id;
+        }else{o.stockCardId=tgt.id;o.name=nm(tgt);o.productCode=tgt.productCode||tgt.code;o.pusulaCode=tgt.pusulaCode||tgt.productCode;}
+        moved++;
+      });
+      barcodes.forEach(x=>{x.stockCardId=tgt.id;});
+      (state.purchases||[]).forEach(p=>(p.openStockChanges||[]).forEach(ch=>{if(ch.stockCardId===src.id)ch.stockCardId=tgt.id;}));
+      state.stockCardsMaster=state.stockCardsMaster.filter(x=>x.id!==src.id);
+      audit(`${code(src)} ${nm(src)} stok kartı ${code(tgt)} ${nm(tgt)} kartına birleştirildi (${moved} açık stok, ${barcodes.length} barkodlu ürün aktarıldı)`,'Tanımlamalar');
+      closeModal();save();render();toast(`${nm(src)} → ${nm(tgt)} birleştirildi`);
+    },'BİRLEŞTİR');
   }
   function deleteStockCardDefinition(id){
     const card=state.stockCardsMaster.find(x=>x.id===id); if(!card)return;

@@ -1341,3 +1341,31 @@ test('yeni ziynet stok kartı Ziynet Alış ve takas listelerinde çıkar; alı�
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('stok kartı birleştir: eski kartın stoğu yeni karta aktarılır, eski kart silinir', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  p.on('dialog', () => {});
+  await p.evaluate(() => document.querySelector('[data-route="stocks"],[data-go="stocks"]').click());
+  await p.waitForTimeout(300);
+  await p.evaluate(() => (document.getElementById('newStockCard') || document.querySelector('[data-new-stockcard]')).click());
+  await p.waitForSelector('#scProductCode');
+  await p.fill('#scProductDefinition', 'YENI 24 AYAR 5 GRAM');
+  await p.fill('#scPurity', '4975'); await p.fill('#scFixedMilyem', '4975'); await p.fill('#scZGram', '5');
+  await p.selectOption('#scUnit12', 'AD'); await p.check('#scCounted'); await p.check('#scZiynet');
+  await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  // Eski kartı bul ve birleştir
+  const found = await p.evaluate(() => { const b = [...document.querySelectorAll('[data-merge-stockcard]')].find((x) => /24 Ayar 5 Gram Külçe/i.test(x.closest('.stock-card-box')?.innerText || '')); if (b) b.click(); return !!b; });
+  assert.ok(found, 'eski kartın Birleştir düğmesi bulunmalı');
+  await p.waitForSelector('#mergeTarget');
+  await p.selectOption('#mergeTarget', { label: (await p.$$eval('#mergeTarget option', (os) => os.map((o) => o.textContent))).find((x) => x.includes('YENI 24 AYAR 5 GRAM')) });
+  await p.click('#modalConfirm'); await p.waitForTimeout(500);
+  assert.doesNotMatch(await p.innerText('.content'), /24 Ayar 5 Gram Külçe/, 'eski kart silinmeli');
+  await p.evaluate(() => document.querySelector('[data-route="sales"],[data-go="sales"]').click());
+  await p.waitForSelector('#saleProductSearch');
+  await p.fill('#saleProductSearch', '24 ayar 5'); await p.waitForTimeout(400);
+  const list = await p.innerText('#saleSearchResults');
+  assert.match(list, /YENI 24 AYAR 5 GRAM[\s\S]*1 ADET stok/, 'eski kartın 1 adet stoğu yeni karta geçmeli: ' + list);
+  assert.doesNotMatch(list, /Külçe/i);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
