@@ -1049,6 +1049,23 @@ img.brand-mark.brand-logo{width:96px;height:96px}
 .modal.modal-full .modal-body{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .modal.modal-full .sale-hist-wrap{flex:1;min-height:0;overflow:auto}
 .modal.modal-full .sale-hist-wrap thead th{position:sticky;top:0;z-index:1}
+/* Satış Geçmişi telefonda: pencere bütünüyle kayar, her satış bir kart */
+@media(max-width:700px){
+  .modal.modal-full{height:calc(100dvh - 8px)!important}
+  .modal.modal-full .modal-body{display:block!important;overflow:auto!important;-webkit-overflow-scrolling:touch}
+  .modal.modal-full .sale-hist-wrap{flex:none!important;overflow:visible!important;border:0}
+  .sale-hist-wrap table{min-width:0!important;width:100%}
+  .sale-hist-wrap thead{display:none}
+  .sale-hist-wrap tbody tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:var(--panel)}
+  .sale-hist-wrap tbody td{display:block;border:0!important;padding:0!important;grid-column:1/-1;font-size:13px;text-align:left!important;min-width:0}
+  .sale-hist-wrap tbody td:nth-child(1){grid-column:1;grid-row:1;font-size:14px}
+  .sale-hist-wrap tbody td:nth-child(6){grid-column:2;grid-row:1;text-align:right!important;font-size:16px}
+  .sale-hist-wrap tbody td:nth-child(2),.sale-hist-wrap tbody td:nth-child(3),.sale-hist-wrap tbody td:nth-child(4){display:inline;color:var(--muted)}
+  .sale-hist-wrap tbody td:nth-child(7) .btn,.sale-hist-wrap tbody td:nth-child(8) .btn{min-height:36px;flex:1}
+  .sale-hist-wrap tbody td:nth-child(7)>div{display:flex!important;gap:6px}
+  .sale-hist-summary .badge{font-size:12px!important}
+  .modal.modal-full .notice{display:none}
+}
 /* ===== TELEFON (≤700px): PC/Tablet modundan bağımsız sade düzen ===== */
 @media(max-width:700px){
   html,body{overflow-x:hidden}
