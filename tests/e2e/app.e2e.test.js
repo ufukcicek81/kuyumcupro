@@ -662,7 +662,9 @@ test('özel ürün aktarımı altın stoklarına dokunmaz; USD fiyatlı ürün s
   if (usd) assert.ok(Math.abs(price - 100 * usd) < 100 * usd * 0.05);
   await p.keyboard.press('F9');
   await p.waitForSelector('table.gold-stock-v7');
-  assert.match(await p.innerText('table.gold-stock-v7'), /ÖZEL ÜRÜN \(BARKODLU\)/);
+  const goldText = await p.innerText('table.gold-stock-v7');
+  assert.match(goldText, /TOPLAM HURDA/);
+  assert.doesNotMatch(goldText, /ÖZEL ÜRÜN/);
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
@@ -1333,11 +1335,52 @@ test('yeni ziynet stok kartı Ziynet Alış ve takas listelerinde çıkar; alı�
   await p.fill('#saleProductSearch', 'TEST 24 AYAR'); await p.waitForTimeout(400);
   const list = await p.innerText('#saleSearchResults');
   assert.match(list, /TEST 24 AYAR 5 GRAM[\s\S]*2 ADET stok/, 'alış kartın kendi stoğuna işlenmeli: ' + list);
+  // Altın Stokları (F9): kart satırı, adet başına kart HAS'ıyla (2 × 4,975 = 9,95 HAS)
+  await p.keyboard.press('F9');
+  await p.waitForSelector('table.gold-stock-v7');
+  assert.match(await p.innerText('table.gold-stock-v7'), /TEST 24 AYAR 5 GRAM\t4975\t2,00\t9,95/);
+  await p.click('#modalX');
   // Takas (müşteriden alınan) listesinde
   await p.fill('#saleProductSearch', ''); await p.click('[data-pay="Altın / Ziynet"]');
   await p.waitForSelector('#tiItem');
   const ti = await p.$$eval('#tiItem option', (os) => os.map((o) => o.textContent));
   assert.ok(ti.some((x) => x.includes('TEST 24 AYAR 5 GRAM')), 'takas listesinde olmalı');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
+test('satış ekranından alış: eski stokla benzer isimli yeni kart listede çıkar, kendi stoğuna girer, Satış Geçmişinde görünür', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  await p.evaluate(() => document.querySelector('[data-route="stocks"],[data-go="stocks"]').click());
+  await p.waitForTimeout(300);
+  await p.evaluate(() => (document.getElementById('newStockCard') || document.querySelector('[data-new-stockcard]')).click());
+  await p.waitForSelector('#scProductCode');
+  await p.fill('#scProductDefinition', 'REŞAT ÇEYREK BİLEKLİK');
+  await p.fill('#scPurity', '1590'); await p.fill('#scFixedMilyem', '1590'); await p.fill('#scZGram', '1.75');
+  await p.selectOption('#scUnit12', 'AD'); await p.check('#scCounted'); await p.check('#scZiynet');
+  await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.evaluate(() => document.querySelector('[data-route="sales"],[data-go="sales"]').click());
+  await p.waitForSelector('#saleProductSearch');
+  await p.click('[data-pay="Altın / Ziynet"]'); await p.waitForSelector('#tiItem');
+  const opts = await p.$$eval('#tiItem option', (os) => os.map((o) => o.textContent));
+  assert.ok(opts.includes('REŞAT ÇEYREK BİLEKLİK') && opts.includes('RESAT CEYREK BİLEKLİK'), 'yeni kart eski stok satırıyla birlikte listede olmalı: ' + opts.join(', '));
+  await p.selectOption('#tiItem', { label: 'REŞAT ÇEYREK BİLEKLİK' }); await p.fill('#tiQty', '2'); await p.fill('#tiPrice', '10000'); await p.waitForTimeout(200);
+  await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.click('[data-pay="Ödeme"]'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.click('#finalizeSale'); await p.waitForTimeout(500);
+  if (await p.$('#modalConfirm')) await p.click('#modalConfirm');
+  await p.waitForTimeout(1500);
+  const b = await p.$('.critical-alert button'); if (b) await b.click();
+  await p.click('text=Satış Geçmişi');
+  await p.waitForSelector('#saleHistBody tr');
+  assert.match(await p.innerText('#saleHistBody'), /AZA-\d{4}-0+1[\s\S]*ALIŞ[\s\S]*REŞAT ÇEYREK BİLEKLİK · 2/, 'alış Satış Geçmişinde görünmeli');
+  assert.match(await p.innerText('#saleHistSummary'), /1 altın\/ziynet alış · 20\.000,00/);
+  await p.click('#modalX');
+  await p.keyboard.press('F9');
+  await p.waitForSelector('table.gold-stock-v7');
+  const gold = await p.innerText('table.gold-stock-v7');
+  assert.match(gold, /REŞAT ÇEYREK BİLEKLİK\t1590\t2,00\t3,18/, 'yeni kartın kendi satırına girmeli');
+  assert.match(gold, /RESAT CEYREK BİLEKLİK\t1590\t1,00/, 'eski stok değişmemeli');
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
