@@ -55,6 +55,7 @@ function createFakeFirebase({ requireAuth = false } = {}) {
         if (ifMatch && silent) return route.fulfill({ status: 400, headers: cors, body: '{"error":"print=silent not supported with if-match"}' });
         if (ifMatch && ifMatch !== etagOf(db.raw)) return route.fulfill({ status: 412, headers: cors, body: '{"error":"ETag mismatch"}' });
         db.raw = firebaseNormalize(JSON.parse(req.postData())) ?? null; // Firebase boş dizi/nesne ve null saklamaz
+        if (db.dropNextPutResponse) { db.dropNextPutResponse = false; return route.abort('failed'); } // yazıldı ama yanıt kayboldu (mobil ağ)
         return written(db.raw, { ETag: etagOf(db.raw) });
       }
     }
