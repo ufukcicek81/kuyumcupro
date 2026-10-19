@@ -5727,7 +5727,9 @@ function stockSummaryView(){
       const d=(buy?-1:1)*q;h.amount=Math.max(0,Number(h.amount||0)+d);h.hasWeight=Math.max(0,Number(h.hasWeight||0)+d*Number(h.milyem||0)/1000);
     }
     const amt=Number(t.settlementAmount||0);
-    if(t.accountKey){adjustAccount(t.accountKey,buy?amt:-amt);state.financeMoves=(state.financeMoves||[]).filter(f=>f.sourceDocNo!==t.docNo);}
+    // Kasa/banka yalnız hâlâ duran kendi hareketi üzerinden geri alınır: hareket önceden silindiyse ikinci kez düşülmez,
+    // başka cihazda aynı numarayla açılmış işlemin hareketine dokunulmaz.
+    if(t.accountKey){const f=(state.financeMoves||[]).find(f=>f.sourceDocNo===t.docNo&&f.tradeType===t.tradeType&&Math.abs(Number(f.accountAmount||0)-amt)<0.005);if(f){applyFinanceMoveV7(f,-1);state.financeMoves=state.financeMoves.filter(x=>x!==f);}}
     else if(String(t.settlementLabel||'').startsWith('Cari')){
       const c=state.customers.find(x=>x.id===t.customerId);
       if(c)applyCariBalance(c,t.settlementCurrency,buy?0:-amt,buy?-amt:0);
@@ -6425,6 +6427,7 @@ function stockSummaryView(){
       }
     });
 
+    const finBeforeSale=new Set((state.financeMoves||[]).map(f=>f.id));
     saleDraft.payments.forEach(p=>{
       if(p.type==='Altın / Ziynet'){
         addTradeInToStock(p);state.financeMoves.unshift({id:uid('FIN'),period:state.activePeriod,date:now(),direction:'Giriş',type:'Altın / Ziynet Takas',accountKind:'Stok',accountId:'TAKAS',accountName:'Stok / Takas',amount:Number(p.amount||0),accountAmount:Number(p.hasAmount||0),accountCurrency:'HAS',tlAmount:Number(p.amount||0),customer:customer.name,description:p.detail,user:session.name,sourceDocNo:docNo,tradeType:'Takas',sourceCategory:'Takas / Altın Ziynet'});return;
@@ -6444,11 +6447,8 @@ function stockSummaryView(){
       state.financeMoves.unshift({id:uid('FIN'),period:state.activePeriod,date:now(),direction:outgoing?'Çıkış':'Giriş',type:p.type,accountKind:a.kind,accountId:a.id,accountName:a.name,amount:Math.abs(Number(p.amount||0)),accountAmount:native,accountCurrency:p.currency||a.account.currency||'TL',tlAmount:Math.abs(Number(p.amount||0)),commissionRate:0,customer:customer.name,description:docNo,user:session.name,sourceDocNo:docNo,tradeType:'Normal Satış',sourceCategory:'Normal Satış'});
     });
 
-    if(t.remain>.01 && saleDraft.customerId!=='CASH'){
-      const cur=String(saleDraft.saleCurrency||'TL').toUpperCase(),nativeRemain=saleNativeFromTl(t.remain,cur);
-      applyCariBalance(customer,cur,nativeRemain,0);
-      state.customerMoves.unshift({id:uid('CM'),customerId:customer.id,period:state.activePeriod,date:now(),type:'SATIŞ / AÇIK HESAP',unit:cur,debit:nativeRemain,credit:0,sourceUnit:cur,sourceAmount:nativeRemain,sourceRate:saleCurrencyRate(cur),counterEnabled:cur!=='TL',counterUnit:'TL',counterAmount:t.remain,counterRate:1,description:`${docNo} kalan satış bakiyesi · ${qty(nativeRemain)} ${cur}`,user:session.name,sourceType:'sale',sourceId:id,sourceDocNo:docNo});
-    }
+    (state.financeMoves||[]).forEach(f=>{if(!finBeforeSale.has(f.id)&&f.sourceDocNo===docNo)f.saleId=id;});
+    // Kalan tutar yukarıda otomatik "Açık Hesap" ödemesi olarak cariye işlendi; burada ikinci kez yazılmaz.
     audit(collection.active?`${docNo} cari tahsilat / borç mahsubu tamamlandı · ${money(collection.receivedTl)}`:`${docNo} numaralı ${money(t.net)} satış/takas tamamlandı`,collection.active?'Cari':'Satış');saleDraft=newSaleDraft();closeModal();toast(collection.active?`${docNo} cari tahsilat tamamlandı`:`${docNo} satış tamamlandı`);save();render();
   }
 
@@ -7655,7 +7655,7 @@ function stockSummaryView(){
     const m=(state.customerMoves||[]).find(x=>x.id===moveId); if(!m)return;
     const source=String(m.sourceType||'');
     if(source.startsWith('opening')||String(m.code||'').toUpperCase()==='DV'){openOpeningCariEdit(m);return;}
-    if(source==='sale'){if(state.sales.some(x=>x.id===m.sourceId))return reopenSaleForEdit(m.sourceId);toast('Bu hareket satış belgesine bağlı. Satış Geçmişi → Düzelt üzerinden değiştirin.','err');return;}
+    if(source==='sale'||source==='cariCollection'){if(state.sales.some(x=>x.id===m.sourceId))return reopenSaleForEdit(m.sourceId);toast('Bu hareket satış belgesine bağlı. Satış Geçmişi → Düzelt üzerinden değiştirin.','err');return;}
     if(source==='trade'&&(state.tradeMoves||[]).some(x=>x.id===m.sourceId))return cancelTradeFromHistoryV7(m.sourceId,true);
     if(source==='purchase'){toast('Bu hareket alış belgesine bağlı. Altın Giriş / Alış belgesinden düzeltin.','err');return;}
     openCariMove(m.customerId,m.id);
@@ -7674,10 +7674,12 @@ function stockSummaryView(){
     const sale=state.sales.find(x=>x.id===saleId); if(!sale)return {ok:false,msg:'Bağlı satış belgesi bulunamadı'};const resold=(sale.returnItems||[]).filter(r=>r.kind==='barcode').map(r=>state.stocks.find(x=>x.id===r.stockId)).filter(Boolean).find(st=>st.status!=='Stokta');if(resold)return {ok:false,msg:`İade ile stoğa dönen ${resold.barcode||resold.code} daha sonra tekrar satılmış/hareket görmüş. Önce sonraki işlemi geri alın.`};
     state.cancelledDocuments=state.cancelledDocuments||[];
     if(!state.cancelledDocuments.some(x=>x.originalId===sale.id&&x.originalDocNo===sale.docNo)) state.cancelledDocuments.unshift({id:uid('ARC'),originalId:sale.id,originalDocNo:sale.docNo,type:'SATIŞ',date:now(),cancelledBy:session?.name||'Sistem',snapshot:clone(sale)});
-    const cms=state.customerMoves.filter(m=>m.sourceType==='sale' && (m.sourceId===sale.id || m.sourceDocNo===sale.docNo));
+    // Kimliği olan kayıt yalnız kendi satışına bağlanır (iki cihazda aynı belge numarası çıkarsa diğerine dokunulmaz); tahsilat mahsubu da geri alınır.
+    const ownCm=m=>(m.sourceType==='sale'||m.sourceType==='cariCollection')&&(m.sourceId?m.sourceId===sale.id:m.sourceDocNo===sale.docNo),ownFin=f=>f.saleId?f.saleId===sale.id:f.sourceDocNo===sale.docNo;
+    const cms=state.customerMoves.filter(ownCm);
     cms.forEach(m=>{const c=state.customers.find(x=>x.id===m.customerId);if(c)applyCariBalance(c,m.unit,Number(m.credit||0),Number(m.debit||0));});
-    state.customerMoves=state.customerMoves.filter(m=>!(m.sourceType==='sale' && (m.sourceId===sale.id || m.sourceDocNo===sale.docNo)));
-    state.financeMoves.filter(f=>f.sourceDocNo===sale.docNo).forEach(reverseFinanceMove); state.financeMoves=state.financeMoves.filter(f=>f.sourceDocNo!==sale.docNo);
+    state.customerMoves=state.customerMoves.filter(m=>!ownCm(m));
+    state.financeMoves.filter(ownFin).forEach(reverseFinanceMove); state.financeMoves=state.financeMoves.filter(f=>!ownFin(f));
     (sale.lines||[]).forEach(l=>{
       if(l.sourceType==='open'){
         const o=(state.openStocks||[]).find(x=>x.id===l.openStockId);
@@ -7715,10 +7717,10 @@ function stockSummaryView(){
   function deleteAnyCariMove(moveId){
     const m=state.customerMoves.find(x=>x.id===moveId); if(!m)return; const c=state.customers.find(x=>x.id===m.customerId);
     if(m.sourceType==='trade'&&(state.tradeMoves||[]).some(x=>x.id===m.sourceId))return cancelTradeFromHistoryV7(m.sourceId,false);
-    const linked=m.sourceType==='sale'?'satış belgesi':m.sourceType==='purchase'?'altın giriş belgesi':m.sourceType==='cariScrap'?'hurda stok hareketi':state.financeMoves.some(f=>f.sourceType==='cariManual'&&f.sourceId===m.id)?'kasa/finans hareketi':'';
+    const linked=m.sourceType==='sale'||m.sourceType==='cariCollection'?'satış belgesi':m.sourceType==='purchase'?'altın giriş belgesi':m.sourceType==='cariScrap'?'hurda stok hareketi':state.financeMoves.some(f=>f.sourceType==='cariManual'&&f.sourceId===m.id)?'kasa/finans hareketi':'';
     const warning=linked?`<div class="notice"><strong>Bağlı işlem:</strong> Bu cari satırı bir ${linked}ne bağlıdır. Silme işlemi kaynak belgeyi ve ona bağlı stok/finans hareketlerini de geri alacaktır.</div>`:`<div class="notice">Bu manuel cari hareketi silinince bakiye otomatik geri alınacaktır.</div>`;
     modal('Cari Hareketi Sil',`${warning}<div class="summary-row"><span>Cari</span><strong>${esc(c?.name||'-')}</strong></div><div class="summary-row"><span>İşlem</span><strong>${esc(m.type)}</strong></div><div class="summary-row"><span>Belge</span><strong>${esc(m.sourceDocNo||'-')}</strong></div><div class="summary-row"><span>Borç / Alacak</span><strong>${qty(m.debit)} / ${qty(m.credit)} ${esc(m.unit)}</strong></div>`,()=>{
-      let r={ok:true}; if(m.sourceType==='sale')r=cancelSaleById(m.sourceId); else if(m.sourceType==='purchase')r=cancelPurchaseById(m.sourceId); else removeManualCariMove(moveId);
+      let r={ok:true}; if(m.sourceType==='sale'||(m.sourceType==='cariCollection'&&state.sales.some(x=>x.id===m.sourceId)))r=cancelSaleById(m.sourceId); else if(m.sourceType==='purchase')r=cancelPurchaseById(m.sourceId); else removeManualCariMove(moveId);
       if(!r.ok)return toast(r.msg,'err'); closeModal(); save(); render(); toast(linked?'Bağlı belge ve cari hareketi silindi':'Cari hareketi silindi');
     },'SİL');
   }
@@ -8175,6 +8177,10 @@ function stockSummaryView(){
     });
     state.meta.ziynetCardHasV7=1;
   }
+  /* Banka ekstresinden cariye işlenen eski kayıtlar: banka hareketi cari satırına bağlanır (düzeltme/silmede banka da geri alınsın). */
+  function linkBankFeedCariV7(){
+    (state.customerMoves||[]).forEach(m=>{if(m.sourceType!=='bankFeed'||!m.sourceId)return;const f=(state.financeMoves||[]).find(x=>x.id===m.sourceId);if(f&&f.sourceType!=='cariManual'){f.sourceType='cariManual';f.sourceId=m.id;}});
+  }
   function migratePusulaFixedMilyemV684(){
     state.meta=state.meta||{};
     if(Number(state.meta.pusulaFixedMilyemV684||0)>=1)return;
@@ -8199,7 +8205,7 @@ function stockSummaryView(){
   }
 
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion=APP_VERSION;migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();migratePusulaFixedMilyemV684();migrateZiynetCardHasV7();
+    state.meta=state.meta||{};state.meta.appVersion=APP_VERSION;migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();migratePusulaFixedMilyemV684();migrateZiynetCardHasV7();linkBankFeedCariV7();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
@@ -8263,6 +8269,33 @@ function stockSummaryView(){
     // Daha önce taban olmuş sürümlerin zaman damgaları: geç gelen eski akış mesajları bunlarla tanınır.
     const stamp=cloudBaseV7?.meta?.updatedAt;if(stamp&&!cloudSeenStampsV7.includes(stamp)){cloudSeenStampsV7.push(stamp);if(cloudSeenStampsV7.length>30)cloudSeenStampsV7.shift();}
     try{const db=await idbOpenStateV681();try{await new Promise((res,rej)=>{const tx=db.transaction(STATE_IDB_STORE_V681,'readwrite');tx.objectStore(STATE_IDB_STORE_V681).put(cloudBaseV7,CLOUD_BASE_IDB_KEY_V7);tx.oncomplete=()=>res(true);tx.onerror=()=>rej(tx.error);});}finally{try{db.close();}catch(_){}}}catch(_){}
+  }
+  /* Yanıtı alınamayan yazma: veri buluta ulaştıysa taban o yazma olur, yoksa eski taban kalır.
+     Böylece yarıda kalan gönderimden sonra aynı satış/ödeme farkı kasaya ikinci kez eklenmez. */
+  const CLOUD_PENDING_IDB_KEY_V7='cloudPendingV7';let cloudPendingV7;
+  async function cloudPendingSaveV7(value){
+    cloudPendingV7=value?cloudNormV7(value):null;
+    try{const db=await idbOpenStateV681();try{await new Promise((res,rej)=>{const tx=db.transaction(STATE_IDB_STORE_V681,'readwrite');tx.objectStore(STATE_IDB_STORE_V681).put(cloudPendingV7,CLOUD_PENDING_IDB_KEY_V7);tx.oncomplete=()=>res(true);tx.onerror=()=>rej(tx.error);});}finally{try{db.close();}catch(_){}}}catch(_){}
+  }
+  async function cloudPendingLoadV7(){
+    if(cloudPendingV7!==undefined)return cloudPendingV7;
+    try{const db=await idbOpenStateV681();try{cloudPendingV7=await new Promise((res,rej)=>{const rq=db.transaction(STATE_IDB_STORE_V681,'readonly').objectStore(STATE_IDB_STORE_V681).get(CLOUD_PENDING_IDB_KEY_V7);rq.onsuccess=()=>res(rq.result||null);rq.onerror=()=>rej(rq.error);});}finally{try{db.close();}catch(_){}}}catch(_){cloudPendingV7=null;}
+    return cloudPendingV7;
+  }
+  function cloudPendingLandedV7(pend,remote,base){
+    if(pend?.meta?.updatedAt&&pend.meta.updatedAt===remote?.meta?.updatedAt)return true;
+    const ids=v=>new Set(Object.values(v||{}).map(x=>x&&x.id).filter(Boolean));
+    let added=0;
+    for(const k of ['financeMoves','sales','tradeMoves','customerMoves','purchases']){
+      const inBase=ids(base?.[k]),inRemote=ids(remote?.[k]);
+      for(const id of ids(pend?.[k])){if(inBase.has(id))continue;added++;if(!inRemote.has(id))return false;}
+    }
+    return added>0;
+  }
+  async function cloudResolvePendingV7(remote){
+    const pend=await cloudPendingLoadV7();if(!pend)return;
+    if(cloudBaseV7&&remote&&cloudPendingLandedV7(pend,remote,cloudBaseV7))await cloudBaseSaveV7(pend);
+    await cloudPendingSaveV7(null);
   }
   function cloudUnwrapRemoteV7(raw){
     let remote=raw;
@@ -8328,6 +8361,7 @@ function stockSummaryView(){
   async function cloudIntegrateRemoteCoreV7(remote){
     if(!cloudBaseV7||!window.AsilCloudMerge)return null;
     remote=cloudNormV7(remote);
+    await cloudResolvePendingV7(remote);
     if(AsilCloudMerge.deepEqual(remote,cloudBaseV7))return 'same';
     const stamp=remote?.meta?.updatedAt;
     if(stamp&&stamp!==cloudBaseV7?.meta?.updatedAt&&cloudSeenStampsV7.includes(stamp))return 'same'; // eski sürüm, yok say
@@ -8387,6 +8421,7 @@ function stockSummaryView(){
       // V7: Bulutta başka cihazın değişikliği varsa önce birleştir, sonra yaz.
       if(remote&&Array.isArray(remote.stocks)&&!forceDangerous&&cloudBaseV7){
         remote=cloudNormV7(remote);
+        await cloudResolvePendingV7(remote);
         if(!AsilCloudMerge.deepEqual(remote,cloudBaseV7)){
           const merged=AsilCloudMerge.mergeState(cloudBaseV7,cloudLocalV7(),remote,CLOUD_LOCAL_ONLY_KEYS_V7,CLOUD_NON_ADDITIVE_KEYS_V7);
           // Birleştirilen bulut hâli yeni taban olur; yeniden denemede aynı fark tekrar eklenmez.
@@ -8416,10 +8451,12 @@ function stockSummaryView(){
       state.cloudSync.lastStatus='Gönderiliyor';state.meta.updatedAt=now();if(state.meta)delete state.meta.freshSeedV7;
       const payload=cloudSafeStateV5();
       const headers={'Content-Type':'application/json'};if(etag&&!forceDangerous)headers['if-match']=etag;
+      await cloudPendingSaveV7(payload);
       // Sıkıştırılmış yazılır. Koşullu yazımda (if-match) Firebase print=silent kabul etmez (HTTP 400);
       // bu yüzden yalnız koşulsuz yazımda kullanılır. Yanıt zaten sıkıştırılmış ve küçüktür.
       const r=await fetch(CLOUD_STATE_URL+(headers['if-match']?'':'?print=silent'),{method:'PUT',headers,body:JSON.stringify(await cloudPackV7(payload))});
       // 412: Okuma ile yazma arasında başka cihaz yazdı; yeniden oku, birleştir, tekrar dene.
+      if(r.status===412||r.status===401||r.status===403)await cloudPendingSaveV7(null);
       if(r.status===412&&attempt<3)return await cloudPushCoreV7(manual,forceDangerous,attempt+1);
       if(r.status===401||r.status===403)throw new Error('Bulut erişimi reddedildi. Yedek · Bulut sayfasından Bulut Girişi yapın.');
       if(!r.ok){const t=await r.text().catch(()=>'');throw new Error(`HTTP ${r.status}${t?' · '+t.slice(0,160):''}`);}
@@ -8428,7 +8465,7 @@ function stockSummaryView(){
         const ws=stateStatsV682(written),ls=stateStatsV682(payload);
         if(Object.keys(ls).some(k=>Number(ws[k])!==Number(ls[k])))throw new Error('Bulut yazma doğrulaması eşleşmedi');
       }
-      await cloudBaseSaveV7(payload);
+      await cloudBaseSaveV7(payload);await cloudPendingSaveV7(null);
       // Diğer cihazlar yalnız bu küçük sürüm kaydını dinler; tüm veriyi ancak değişince indirirler.
       fetch(CLOUD_REV_URL+'?print=silent',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({stamp:String(payload?.meta?.updatedAt||now()),at:now()})}).catch(()=>{});
       state.cloudSync.lastStatus='Bağlı';state.cloudSync.encrypted=false;state.cloudSync.encryptionMigrationPending=false;state.cloudSync.lastPush=now();state.cloudSync.lastVerified=now();state.cloudSync.lastVerifiedStats=stateStatsV682(state);
@@ -9356,7 +9393,7 @@ function stockSummaryView(){
       <div class="addon-grid" style="margin-top:16px"><div class="addon-kpi"><small>Bekleyen</small><strong>${waiting}</strong></div><div class="addon-kpi"><small>Eşleşen</small><strong>${matched}</strong></div><div class="addon-kpi"><small>Yoksayılan</small><strong>${ignored}</strong></div><div class="addon-kpi"><small>Toplam Ekstre Satırı</small><strong>${bankFeedMoves.length}</strong></div></div>
       <div class="card" style="margin-top:16px"><div class="section-head"><h3>Ekstre Hareketleri</h3><span>${bankFeedMoves.length} kayıt</span></div><div class="addon-filterbar"><div class="labelled"><label>Ara</label><input class="input" id="bankFeedSearch" placeholder="Açıklama, gönderen, referans..."></div><div class="labelled"><label>Banka</label><select class="select" id="bankFeedFilterBank"><option value="">Tüm bankalar</option>${state.bankAccounts.map(b=>`<option value="${b.id}">${esc(b.bank||b.name)}</option>`).join('')}</select></div><div class="labelled"><label>Durum</label><select class="select" id="bankFeedStatus"><option value="">Tümü</option><option>Bekliyor</option><option>Eşleşti</option><option>Yoksay</option></select></div><button class="btn btn-outline" id="bankFeedClear">Temizle</button></div><div class="table-wrap"><table class="table" id="bankFeedTable"><thead><tr><th>Tarih</th><th>Banka</th><th>Yön</th><th class="num">Tutar</th><th>Açıklama / Karşı Taraf</th><th>Referans</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>${bankFeedMoves.map(m=>{const b=state.bankAccounts.find(x=>x.id===m.bankId),cand=m.status==='Bekliyor'?bankFeedCandidate(m):null,search=[m.description,m.counterparty,m.reference,b?.bank].filter(Boolean).join(' ').toLocaleLowerCase('tr-TR');return `<tr class="bank-feed-row" data-bankfeed-row data-search="${esc(search)}" data-bank="${esc(m.bankId)}" data-status="${esc(m.status)}" data-state="${m.status==='Eşleşti'?'matched':m.status==='Yoksay'?'ignored':'waiting'}"><td>${trDate(m.date)}</td><td>${esc(b?.bank||b?.name||'—')}</td><td><span class="badge ${m.direction==='Giriş'?'green':'red'}">${esc(m.direction)}</span></td><td class="num"><strong>${money(m.amount)}</strong></td><td>${esc(m.description)}${m.counterparty?`<br><small>${esc(m.counterparty)}</small>`:''}${cand?`<br><small class="positive">Olası eşleşme: ${esc(cand.sourceDocNo||cand.type)} · ${money(financeTlValue(cand))}</small>`:''}</td><td>${esc(m.reference||'—')}</td><td><span class="badge ${m.status==='Eşleşti'?'green':m.status==='Yoksay'?'gold':'blue'}">${esc(m.status)}</span></td><td><div class="addon-actions">${m.status==='Bekliyor'&&cand?`<button class="btn btn-success" data-bankfeed-match="${m.id}">Eşleştir</button>`:''}${m.status==='Bekliyor'?`<button class="btn btn-primary" data-bankfeed-post="${m.id}">Yeni Hareket Kaydet</button><button class="btn btn-outline" data-bankfeed-ignore="${m.id}">Yoksay</button>`:(state.financeMoves.some(f=>f.bankFeedId===m.id)?`<span class="badge green">Finansa işlendi</span>`:`<button class="btn btn-outline" data-bankfeed-reopen="${m.id}">Geri Aç</button>`)}</div></td></tr>`}).join('')||'<tr><td colspan="8">Henüz ekstre içe aktarılmadı.</td></tr>'}</tbody></table></div></div>`;
   }
-  function postBankFeedMove(id){const m=bankFeedMoves.find(x=>x.id===id),b=state.bankAccounts.find(x=>x.id===m?.bankId);if(!m||!b)return;modal('Banka Hareketini Kaydet',`<div class="summary-row"><span>Banka</span><strong>${esc(b.bank||b.name)}</strong></div><div class="summary-row"><span>Hareket</span><strong>${esc(m.direction)} · ${money(m.amount)}</strong></div><div class="summary-row"><span>Açıklama</span><strong>${esc(m.description)}</strong></div><div class="form-grid" style="margin-top:14px"><div class="labelled"><label>İşlem Türü</label><select id="bfType" class="select">${(m.direction==='Giriş'?['Havale / EFT Tahsilat','Cari Tahsilat','Gelir']:['Havale / EFT Ödeme','Cari Ödeme','Masraf']).map(x=>`<option>${x}</option>`).join('')}</select></div><div class="labelled span-2"><label>Cari (opsiyonel)</label><select id="bfCustomer" class="select"><option value="">— Cari bağlama —</option>${state.customers.filter(c=>['Müşteri','Toptancı','Özel'].includes(c.type)).map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div><div class="labelled span-4"><label>Açıklama</label><input id="bfDesc" class="input" value="${esc(m.description)}"></div></div>`,()=>{const customerId=document.getElementById('bfCustomer').value,c=state.customers.find(x=>x.id===customerId),type=document.getElementById('bfType').value,docNo=`BNK-${state.activePeriod}-${String(Date.now()).slice(-6)}`;b.balance=Number(b.balance||0)+(m.direction==='Giriş'?m.amount:-m.amount);const rec={id:uid('FIN'),period:state.activePeriod,date:m.date||now(),direction:m.direction,type,accountKind:'Banka',accountId:b.id,accountName:b.bank||b.name,amount:m.amount,accountAmount:m.amount,accountCurrency:b.currency||'TL',tlAmount:(b.currency||'TL')==='TL'?m.amount:m.amount*currencyTlRate(b.currency,m.direction==='Giriş'?'buy':'sell'),customer:c?.name||'',customerId:c?.id||'',description:document.getElementById('bfDesc').value.trim(),user:session.name,sourceCategory:'Banka Ekstresi',sourceDocNo:docNo,bankFeedId:m.id};state.financeMoves.unshift(rec);if(c){const code=m.direction==='Giriş'?'NT':'NO',def=CARI_MOVE_TYPES.find(x=>x.code===code),debit=m.direction==='Giriş'?0:m.amount,credit=m.direction==='Giriş'?m.amount:0;applyCariBalance(c,b.currency||'TL',debit,credit);state.customerMoves.unshift({id:uid('CM'),customerId:c.id,period:state.activePeriod,date:rec.date,code,type:cariMoveLabel(def),unit:b.currency||'TL',debit,credit,description:rec.description,user:session.name,sourceType:'bankFeed',sourceId:rec.id,sourceDocNo:docNo});}m.status='Eşleşti';m.linkedFinanceMoveId=rec.id;m.matchedAt=now();saveBankFeed();registerTransactionV5(type,docNo,`${b.bank||b.name} · ${money(m.amount)}`,{customerId:c?.id||''});audit(`${docNo} banka ekstresi hareketi kaydedildi`,'Banka');closeModal();save();render();toast('Banka hareketi kaydedildi');},'HAREKETİ KAYDET');}
+  function postBankFeedMove(id){const m=bankFeedMoves.find(x=>x.id===id),b=state.bankAccounts.find(x=>x.id===m?.bankId);if(!m||!b)return;modal('Banka Hareketini Kaydet',`<div class="summary-row"><span>Banka</span><strong>${esc(b.bank||b.name)}</strong></div><div class="summary-row"><span>Hareket</span><strong>${esc(m.direction)} · ${money(m.amount)}</strong></div><div class="summary-row"><span>Açıklama</span><strong>${esc(m.description)}</strong></div><div class="form-grid" style="margin-top:14px"><div class="labelled"><label>İşlem Türü</label><select id="bfType" class="select">${(m.direction==='Giriş'?['Havale / EFT Tahsilat','Cari Tahsilat','Gelir']:['Havale / EFT Ödeme','Cari Ödeme','Masraf']).map(x=>`<option>${x}</option>`).join('')}</select></div><div class="labelled span-2"><label>Cari (opsiyonel)</label><select id="bfCustomer" class="select"><option value="">— Cari bağlama —</option>${state.customers.filter(c=>['Müşteri','Toptancı','Özel'].includes(c.type)).map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div><div class="labelled span-4"><label>Açıklama</label><input id="bfDesc" class="input" value="${esc(m.description)}"></div></div>`,()=>{const customerId=document.getElementById('bfCustomer').value,c=state.customers.find(x=>x.id===customerId),type=document.getElementById('bfType').value,docNo=`BNK-${state.activePeriod}-${String(Date.now()).slice(-6)}`;b.balance=Number(b.balance||0)+(m.direction==='Giriş'?m.amount:-m.amount);const rec={id:uid('FIN'),period:state.activePeriod,date:m.date||now(),direction:m.direction,type,accountKind:'Banka',accountId:b.id,accountName:b.bank||b.name,amount:m.amount,accountAmount:m.amount,accountCurrency:b.currency||'TL',tlAmount:(b.currency||'TL')==='TL'?m.amount:m.amount*currencyTlRate(b.currency,m.direction==='Giriş'?'buy':'sell'),customer:c?.name||'',customerId:c?.id||'',description:document.getElementById('bfDesc').value.trim(),user:session.name,sourceCategory:'Banka Ekstresi',sourceDocNo:docNo,bankFeedId:m.id};state.financeMoves.unshift(rec);if(c){const code=m.direction==='Giriş'?'NT':'NO',def=CARI_MOVE_TYPES.find(x=>x.code===code),debit=m.direction==='Giriş'?0:m.amount,credit=m.direction==='Giriş'?m.amount:0;applyCariBalance(c,b.currency||'TL',debit,credit);state.customerMoves.unshift({id:uid('CM'),customerId:c.id,period:state.activePeriod,date:rec.date,code,type:cariMoveLabel(def),unit:b.currency||'TL',debit,credit,description:rec.description,user:session.name,sourceType:'bankFeed',sourceId:rec.id,sourceDocNo:docNo});rec.sourceType='cariManual';rec.sourceId=state.customerMoves[0].id;}m.status='Eşleşti';m.linkedFinanceMoveId=rec.id;m.matchedAt=now();saveBankFeed();registerTransactionV5(type,docNo,`${b.bank||b.name} · ${money(m.amount)}`,{customerId:c?.id||''});audit(`${docNo} banka ekstresi hareketi kaydedildi`,'Banka');closeModal();save();render();toast('Banka hareketi kaydedildi');},'HAREKETİ KAYDET');}
   function bindBankingV620(){
     document.getElementById('importBankCsv')?.addEventListener('click',()=>document.getElementById('bankCsvInput')?.click());
     document.getElementById('bankCsvInput')?.addEventListener('change',async e=>{const f=e.target.files?.[0],bankId=document.getElementById('bankFeedBank')?.value;if(!f||!bankId)return;try{const r=importBankCsvText(await f.text(),bankId);toast(`${r.added} hareket eklendi${r.skipped?`, ${r.skipped} mükerrer atlandı`:''}`);render();}catch(err){toast(err.message||'CSV okunamadı','err');}});

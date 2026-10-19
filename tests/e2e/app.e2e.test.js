@@ -1488,6 +1488,51 @@ test('cari nakit tahsilat karşılığı HAS: satış kuruyla, ödemede alış k
   await p.context().close();
 });
 
+test('bulut: yazıldığı hâlde yanıtı kaybolan gönderimden sonra kasa farkı ikinci kez eklenmez', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  const tlCash = (s) => (s.cashAccounts || []).filter((x) => x.currency === 'TL').reduce((n, x) => n + Number(x.balance || 0), 0);
+  const cash0 = tlCash(fb.db.state);
+  fb.db.dropNextPutResponse = true;
+  await p.click('[data-home-trade="Ziynet Alış"]');
+  await p.fill('#stQty', '2'); await p.fill('#stPrice', '5000');
+  await p.click('#modalConfirm'); await p.waitForTimeout(9000);
+  assert.equal(Math.round(tlCash(fb.db.state)), Math.round(cash0 - 10000), 'ilk yazma buluta ulaşmış olmalı');
+  await p.click('[data-home-trade="Ziynet Alış"]');
+  await p.fill('#stQty', '1'); await p.fill('#stPrice', '5000');
+  await p.click('#modalConfirm'); await p.waitForTimeout(9000);
+  const st = fb.db.state, moves = (st.financeMoves || []).filter((f) => String(f.sourceDocNo || '').startsWith('ZA-'));
+  assert.equal(moves.length, 2);
+  assert.equal(Math.round(tlCash(st)), Math.round(cash0 - 15000), 'kasa iki alışın toplamı kadar düşmeli (ilk fark ikinci kez eklenmemeli)');
+  await p.context().close();
+});
+
+test('cariye kısmi ödemeli satış: kalan tutar cariye bir kez yazılır, iptalde tamamen geri alınır', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  await p.click('[data-go="sales"]');
+  const cust = await p.$$eval('#saleCustomerSelect option', (os) => os.map((o) => ({ v: o.value, t: o.textContent })).find((o) => o.v && o.v !== 'CASH' && !/PEŞİN/i.test(o.t)));
+  await p.selectOption('#saleCustomerSelect', cust.v); await p.waitForTimeout(400);
+  const tlOf = () => Number((fb.db.state.customers || []).find((c) => c.id === cust.v)?.tlBalance || 0);
+  const tl0 = tlOf();
+  for (let i = 0; i < 3; i++) {
+    await p.fill('#saleProductSearch', '22'); await p.waitForTimeout(300); await p.press('#saleProductSearch', 'Enter');
+    if (await p.waitForSelector('#saleEntryPrice:not([disabled])', { timeout: 5000 }).catch(() => null)) break;
+  }
+  await p.waitForTimeout(300);
+  await p.fill('#saleEntryPayable', '9000'); await p.click('#saleAddUnified'); await p.waitForTimeout(400);
+  await p.click('[data-pay="Nakit"]'); await p.fill('#payNative', '400'); await p.dispatchEvent('#payNative', 'input'); await p.waitForTimeout(200);
+  await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.selectOption('#salePerson', { index: 1 });
+  await p.click('#finalizeSale'); await p.click('#modalConfirm'); await p.waitForTimeout(9000);
+  const b = await p.$('.critical-alert button'); if (b) await b.click();
+  const moves = (fb.db.state.customerMoves || []).filter((m) => m.customerId === cust.v && /SAT-/.test(m.sourceDocNo || '') && m.type === 'SATIŞ / AÇIK HESAP');
+  assert.equal(moves.length, 1, 'kalan tutar tek satır olmalı');
+  assert.equal(Math.round(tlOf() - tl0), 8600, 'cari borcu yalnız kalan 8.600 TL artmalı');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
 test('stok kartı birleştir: eski kartın stoğu yeni karta aktarılır, eski kart silinir', async () => {
   const p = await newDevice(browser, appUrl, createFakeFirebase());
   p.on('dialog', () => {});
