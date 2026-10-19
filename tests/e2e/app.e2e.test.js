@@ -662,7 +662,9 @@ test('özel ürün aktarımı altın stoklarına dokunmaz; USD fiyatlı ürün s
   if (usd) assert.ok(Math.abs(price - 100 * usd) < 100 * usd * 0.05);
   await p.keyboard.press('F9');
   await p.waitForSelector('table.gold-stock-v7');
-  assert.match(await p.innerText('table.gold-stock-v7'), /ÖZEL ÜRÜN \(BARKODLU\)/);
+  const goldText = await p.innerText('table.gold-stock-v7');
+  assert.match(goldText, /TOPLAM HURDA/);
+  assert.doesNotMatch(goldText, /ÖZEL ÜRÜN/);
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });

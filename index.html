@@ -3370,12 +3370,6 @@ function stockSummaryView(){
     rows.push({kind:'gap'});
     let sq=0,sh=0;goldStockOrderV7('scrap',(state.scrapStocks||[]).filter(x=>x.period===period),x=>x.id).forEach(x=>{sq+=n(x.amount);sh+=n(x.hasWeight);rows.push({kind:'scrap',key:'s:'+x.id,cells:[x.name,n(x.milyem),n(x.amount),n(x.hasWeight),'','','','','']});});
     rows.push({kind:'total',cells:['TOPLAM HURDA','',sq,sh,'','','','','']});
-    // Özel ürünler (barkodlu, TL/USD/HAS fiyatlı) ve Pusula stok özetindeki barkodsuz özel ürün kalemi.
-    const sp=activeStock().filter(isSpecialStockV7),spBy={};sp.forEach(x=>{const c=String(x.priceCurrency||'TL').toUpperCase();if(!spBy[c])spBy[c]={n:0,cost:0};spBy[c].n++;spBy[c].cost+=n(x.costNative??x.costTl??0);});
-    const lot=state.meta?.pusulaSpecialLotV7;
-    if(sp.length||lot){rows.push({kind:'gap'});
-      if(lot)rows.push({kind:'special',key:'sp:LOT',cells:['ÖZEL ÜRÜN','',n(lot.qty),'',n(lot.cost),lot.currency||'USD',n(lot.avg),'','']});
-      Object.keys(spBy).sort().forEach(c=>rows.push({kind:'special',key:'sp:'+c,cells:['ÖZEL ÜRÜN (BARKODLU)','',spBy[c].n,'',spBy[c].cost,c==='TL'?'TL.':c,spBy[c].n?spBy[c].cost/spBy[c].n:0,'','']}));}
     rows.push({kind:'gap'});
     rows.push({kind:'kasa',cells:['KASA','','BORÇ','ALACAK','','','','','']});
     const cur={};(state.cashAccounts||[]).forEach(a=>{const c=String(a.currency||'TL').toUpperCase();cur[c]=(cur[c]||0)+n(a.balance);});
