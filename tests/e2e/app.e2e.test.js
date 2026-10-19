@@ -1381,6 +1381,55 @@ test('satış ekranından alış: eski stokla benzer isimli yeni kart listede ç
   const gold = await p.innerText('table.gold-stock-v7');
   assert.match(gold, /REŞAT ÇEYREK BİLEKLİK\t1590\t2,00\t3,18/, 'yeni kartın kendi satırına girmeli');
   assert.match(gold, /RESAT CEYREK BİLEKLİK\t1590\t1,00/, 'eski stok değişmemeli');
+  // Alış Satış Geçmişinden iptal edilir: stok düşer, ödeme kasaya geri döner
+  await p.click('#modalX');
+  await p.click('text=Satış Geçmişi');
+  await p.waitForSelector('[data-buy-cancel]');
+  await p.click('[data-buy-edit]'); await p.click('#modalConfirm'); await p.waitForTimeout(500);
+  assert.match(await p.innerText('body'), /REŞAT ÇEYREK BİLEKLİK · 2/, 'düzeltmede ürün satış ekranına geri gelmeli');
+  await p.keyboard.press('F9');
+  await p.waitForSelector('table.gold-stock-v7');
+  assert.match(await p.innerText('table.gold-stock-v7'), /REŞAT ÇEYREK BİLEKLİK\t1590\t0,00/, 'iptalde stok geri alınmalı');
+  await p.click('#modalX');
+  await p.click('text=Satış Geçmişi');
+  await p.waitForSelector('#saleHistBody tr');
+  assert.doesNotMatch(await p.innerText('#saleHistBody'), /AZA-/, 'iptal edilen alış listede kalmamalı');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
+test('ziynet alış geçmişinden iptal ve düzelt: stok ve kasa geri alınır, düzeltme eski bilgilerle açılır', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  const st = () => p.evaluate(() => 0).then(() => fb.db.state);
+  const tlCash = (s) => (s.cashAccounts || []).filter((x) => x.currency === 'TL').reduce((n, x) => n + Number(x.balance || 0), 0);
+  const ceyrek = (s) => Number((s.openStocks || []).find((o) => o.name === 'CEYREK')?.amount || 0);
+  await p.waitForTimeout(3000);
+  const cash0 = tlCash(await st()), c0 = ceyrek(await st());
+  await p.click('[data-home-trade="Ziynet Alış"]');
+  await p.selectOption('#stItem', 'CEYREK'); await p.fill('#stQty', '2'); await p.fill('#stPrice', '5000'); await p.waitForTimeout(200);
+  await p.click('#modalConfirm'); await p.waitForTimeout(9000);
+  assert.equal(ceyrek(await st()), c0 + 2); assert.equal(Math.round(tlCash(await st())), Math.round(cash0 - 10000));
+  // İptal
+  await p.click('[data-home-trade="Ziynet Alış"]'); await p.click('#stHistoryToggle');
+  await p.click('[data-trade-cancel]'); await p.click('#modalConfirm'); await p.waitForTimeout(500);
+  await p.click('#modalX'); await p.waitForTimeout(9000);
+  assert.equal(ceyrek(await st()), c0, 'iptalde stok geri alınmalı');
+  assert.equal(Math.round(tlCash(await st())), Math.round(cash0), 'iptalde kasa geri dönmeli');
+  assert.ok(!(fb.db.state.tradeMoves || []).some((x) => String(x.docNo).startsWith('ZA-')), 'iptal edilen kayıt silinmeli');
+  // Düzelt: yeniden kaydedip geri al, ekran eski değerlerle açılır, 3 adede düzeltilir
+  await p.click('[data-home-trade="Ziynet Alış"]');
+  await p.selectOption('#stItem', 'CEYREK'); await p.fill('#stQty', '2'); await p.fill('#stPrice', '5000'); await p.waitForTimeout(200);
+  await p.click('#modalConfirm'); await p.waitForTimeout(500);
+  await p.click('[data-home-trade="Ziynet Alış"]'); await p.click('#stHistoryToggle');
+  await p.click('[data-trade-edit]'); await p.click('#modalConfirm'); await p.waitForTimeout(500);
+  assert.equal(await p.inputValue('#stQty'), '2', 'düzeltme eski adetle açılmalı');
+  assert.equal(await p.inputValue('#stItem'), 'CEYREK');
+  await p.fill('#stQty', '3'); await p.fill('#stPrice', '5000'); await p.waitForTimeout(200);
+  await p.click('#modalConfirm'); await p.waitForTimeout(9000);
+  const za = (fb.db.state.tradeMoves || []).filter((x) => x.tradeType === 'Ziynet Alış' && !x.sourceType);
+  assert.equal(za.length, 1, 'tek kayıt kalmalı'); assert.equal(Number(za[0].quantity), 3);
+  assert.equal(ceyrek(await st()), c0 + 3); assert.equal(Math.round(tlCash(await st())), Math.round(cash0 - 15000));
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
