@@ -1434,6 +1434,60 @@ test('ziynet alış geçmişinden iptal ve düzelt: stok ve kasa geri alınır, 
   await p.context().close();
 });
 
+test('cari ekstre: tarih aralığıyla yazdırılır, son durum çıkar; harekette fiş, düzelt ve sil düğmeleri var', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  const popups = [];
+  p.context().on('page', (pg) => popups.push(pg));
+  await p.evaluate(() => document.querySelector('[data-route="customers"],[data-go="customers"]').click());
+  await p.waitForTimeout(500);
+  const ids = await p.$$eval('[data-cari-card]', (els) => els.map((e) => e.dataset.cariCard));
+  let found = false, foundId = '';
+  for (const id of ids) {
+    await p.evaluate((x) => document.querySelector(`[data-cari-card="${x}"] [data-cari-detail]`).click(), id);
+    await p.waitForTimeout(200);
+    if (await p.$('#cariShowInfo')) { await p.uncheck('#cariShowInfo'); await p.waitForTimeout(200); }
+    if (await p.$('#cariEkstreTable .cari-ekstre-row')) { found = true; foundId = id; break; }
+    await p.click('#modalX');
+  }
+  assert.ok(found, 'hareketli bir cari bulunmalı');
+  await p.click('.cari-ekstre-row[data-ekstre-index="0"]');
+  assert.ok(await p.$('#selectedCariPrint'), 'fiş yazdır düğmesi olmalı');
+  assert.ok(await p.$('#selectedCariEdit'), 'düzelt düğmesi olmalı');
+  assert.ok(await p.$('#selectedCariDelete'), 'sil düğmesi olmalı');
+  await p.click('#selectedCariDelete');
+  await p.waitForSelector('text=Cari Hareketi Sil');
+  await p.click('#modalX');
+  await p.evaluate((x) => document.querySelector(`[data-cari-card="${x}"] [data-cari-detail]`).click(), foundId);
+  await p.waitForSelector('#cariPrintStatement');
+  await p.click('#cariPrintStatement');
+  for (let i = 0; i < 40 && !popups.length; i++) await p.waitForTimeout(250);
+  assert.ok(popups.length, 'ekstre basılmalı');
+  const text = await popups[0].innerText('body');
+  assert.match(text, /CARİ HESAP EKSTRESİ/);
+  assert.match(text, /SON DURUM/);
+  assert.match(text, /Bakiye/);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
+test('cari nakit tahsilat karşılığı HAS: satış kuruyla, ödemede alış kuruyla hesaplanır', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  await p.evaluate(() => document.querySelector('[data-route="customers"],[data-go="customers"]').click());
+  await p.waitForTimeout(400);
+  await p.evaluate(() => document.querySelector('[data-cari-move]').click());
+  await p.waitForSelector('#cmType');
+  await p.selectOption('#cmType', 'NT'); await p.selectOption('#cmUnit', 'TL'); await p.fill('#cmAmount', '93000');
+  await p.check('#cmCounterEnabled'); await p.selectOption('#cmCounterUnit', 'HAS'); await p.waitForTimeout(200);
+  const rate = Number(await p.inputValue('#cmCounterRate'));
+  assert.ok(rate > 0);
+  // Ödeme (BORÇ) seçilince karşılık kuru alış kuruna döner ve satıştan küçük olur
+  await p.selectOption('#cmType', 'NO'); await p.waitForTimeout(200);
+  const rateOut = Number(await p.inputValue('#cmCounterRate'));
+  assert.ok(rate > rateOut, `tahsilatta satış kuru (${rate}) ödemedeki alış kurundan (${rateOut}) büyük olmalı`);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
 test('stok kartı birleştir: eski kartın stoğu yeni karta aktarılır, eski kart silinir', async () => {
   const p = await newDevice(browser, appUrl, createFakeFirebase());
   p.on('dialog', () => {});

@@ -7174,10 +7174,10 @@ function stockSummaryView(){
     const code=String(def?.code||'');
     return customer?.type!=='Banka' && !['AC','AG','CI','HC','HG','ZC','ZG'].includes(code) && def?.effect!=='none';
   }
-  function cariRateForUnit(unit){
+  function cariRateForUnit(unit,mode='buy'){
     const u=String(unit||'TL').toUpperCase();
     if(u==='TL')return 1;
-    return Number(currencyTlRate(u,'buy')||0);
+    return Number(currencyTlRate(u,mode)||0);
   }
   function cariConvertedAmount(sourceAmount, sourceRate, counterRate){
     const a=Number(sourceAmount||0), sr=Number(sourceRate||0), cr=Number(counterRate||0);
@@ -7497,9 +7497,12 @@ function stockSummaryView(){
       const conversionMode=cariMoveUsesConversion(CARI_MOVE_TYPES.find(x=>x.code===typeEl.value),c);
       if(!conversionMode)return;
       const src=unitEl.value;
-      if(document.activeElement!==sourceRateEl)sourceRateEl.value=Number(cariRateForUnit(src)||0).toFixed(src==='TL'?2:6);
+      // ALACAK: müşteri para/altın verir, karşılığında biz ona HAS/döviz satmış oluruz → gelen kalem alış, karşılık satış kuruyla.
+      // BORÇ: tersi → gelen kalem satış, karşılık alış kuruyla.
+      const credit=sideEl.value==='credit',srcMode=credit?'buy':'sell',ctrMode=credit?'sell':'buy';
+      if(document.activeElement!==sourceRateEl)sourceRateEl.value=Number(cariRateForUnit(src,srcMode)||0).toFixed(src==='TL'?2:6);
       const cu=counterUnitEl.value;
-      if(document.activeElement!==counterRateEl)counterRateEl.value=Number(cariRateForUnit(cu)||0).toFixed(cu==='TL'?2:6);
+      if(document.activeElement!==counterRateEl)counterRateEl.value=Number(cariRateForUnit(cu,ctrMode)||0).toFixed(cu==='TL'?2:6);
       const enabled=counterEnabledEl.checked;
       counterUnitEl.disabled=!enabled;counterRateEl.disabled=!enabled;counterAmountEl.readOnly=!enabled;
       const converted=enabled?cariConvertedAmount(Number(amountEl.value||0),Number(sourceRateEl.value||0),Number(counterRateEl.value||0)):Number(amountEl.value||0);
@@ -7541,7 +7544,7 @@ function stockSummaryView(){
     };
     typeEl.addEventListener('change',sync);
     unitEl.addEventListener('change',()=>{syncCounter();if(cariMoveNeedsFinance(CARI_MOVE_TYPES.find(x=>x.code===typeEl.value)))fillFinance();});
-    amountEl.addEventListener('input',syncCounter);sourceRateEl.addEventListener('input',syncCounter);counterEnabledEl.addEventListener('change',syncCounter);counterUnitEl.addEventListener('change',syncCounter);counterRateEl.addEventListener('input',syncCounter);counterAmountEl.addEventListener('input',()=>{const ca=Number(counterAmountEl.value||0),a=Number(amountEl.value||0),sr=Number(sourceRateEl.value||0);if(ca>0&&a>0&&sr>0)counterRateEl.value=(a*sr/ca).toFixed(6);});
+    amountEl.addEventListener('input',syncCounter);sideEl.addEventListener('change',syncCounter);sourceRateEl.addEventListener('input',syncCounter);counterEnabledEl.addEventListener('change',syncCounter);counterUnitEl.addEventListener('change',syncCounter);counterRateEl.addEventListener('input',syncCounter);counterAmountEl.addEventListener('input',()=>{const ca=Number(counterAmountEl.value||0),a=Number(amountEl.value||0),sr=Number(sourceRateEl.value||0);if(ca>0&&a>0&&sr>0)counterRateEl.value=(a*sr/ca).toFixed(6);});
     goldCard?.addEventListener('change',()=>syncGoldCalc(true,true));goldAmount?.addEventListener('input',()=>syncGoldCalc(false,false));goldCount?.addEventListener('input',()=>syncGoldCalc(false,false));goldMilyem?.addEventListener('input',()=>syncGoldCalc(false,false));goldWorkMode?.addEventListener('change',()=>syncGoldCalc(false,false));goldWorkValue?.addEventListener('input',()=>syncGoldCalc(false,false));
     returnStock?.addEventListener('change',()=>syncReturnCalc(true,true));returnCount?.addEventListener('input',()=>syncReturnCalc(false,false));returnGram?.addEventListener('input',()=>syncReturnCalc(false,false));returnMilyem?.addEventListener('input',()=>syncReturnCalc(false,false));
     ziynetStock?.addEventListener('change',()=>syncZiynetCalc(true));ziynetCount?.addEventListener('input',()=>syncZiynetCalc(false));ziynetHasUnit?.addEventListener('input',()=>syncZiynetCalc(false));
@@ -7652,7 +7655,8 @@ function stockSummaryView(){
     const m=(state.customerMoves||[]).find(x=>x.id===moveId); if(!m)return;
     const source=String(m.sourceType||'');
     if(source.startsWith('opening')||String(m.code||'').toUpperCase()==='DV'){openOpeningCariEdit(m);return;}
-    if(source==='sale'){toast('Bu hareket satış belgesine bağlı. Satış Geçmişi → Düzelt üzerinden değiştirin.','err');return;}
+    if(source==='sale'){if(state.sales.some(x=>x.id===m.sourceId))return reopenSaleForEdit(m.sourceId);toast('Bu hareket satış belgesine bağlı. Satış Geçmişi → Düzelt üzerinden değiştirin.','err');return;}
+    if(source==='trade'&&(state.tradeMoves||[]).some(x=>x.id===m.sourceId))return cancelTradeFromHistoryV7(m.sourceId,true);
     if(source==='purchase'){toast('Bu hareket alış belgesine bağlı. Altın Giriş / Alış belgesinden düzeltin.','err');return;}
     openCariMove(m.customerId,m.id);
   }
@@ -7710,6 +7714,7 @@ function stockSummaryView(){
   }
   function deleteAnyCariMove(moveId){
     const m=state.customerMoves.find(x=>x.id===moveId); if(!m)return; const c=state.customers.find(x=>x.id===m.customerId);
+    if(m.sourceType==='trade'&&(state.tradeMoves||[]).some(x=>x.id===m.sourceId))return cancelTradeFromHistoryV7(m.sourceId,false);
     const linked=m.sourceType==='sale'?'satış belgesi':m.sourceType==='purchase'?'altın giriş belgesi':m.sourceType==='cariScrap'?'hurda stok hareketi':state.financeMoves.some(f=>f.sourceType==='cariManual'&&f.sourceId===m.id)?'kasa/finans hareketi':'';
     const warning=linked?`<div class="notice"><strong>Bağlı işlem:</strong> Bu cari satırı bir ${linked}ne bağlıdır. Silme işlemi kaynak belgeyi ve ona bağlı stok/finans hareketlerini de geri alacaktır.</div>`:`<div class="notice">Bu manuel cari hareketi silinince bakiye otomatik geri alınacaktır.</div>`;
     modal('Cari Hareketi Sil',`${warning}<div class="summary-row"><span>Cari</span><strong>${esc(c?.name||'-')}</strong></div><div class="summary-row"><span>İşlem</span><strong>${esc(m.type)}</strong></div><div class="summary-row"><span>Belge</span><strong>${esc(m.sourceDocNo||'-')}</strong></div><div class="summary-row"><span>Borç / Alacak</span><strong>${qty(m.debit)} / ${qty(m.credit)} ${esc(m.unit)}</strong></div>`,()=>{
@@ -7804,6 +7809,7 @@ function stockSummaryView(){
     const bankUnit=bankAcc?String(bankAcc.acc.currency||'TL').toUpperCase():'',bankBal=bankAcc?Number(bankAcc.acc.balance||0):0,bankGap=bankAcc?bankBal-Number(running[bankUnit]||0):0;
     const gapNote=bankAcc?`<div class="notice" style="margin:8px 0">${Math.abs(bankGap)>=0.01?`<strong>Fark var:</strong> Banka hareketlerinin toplamı ${qty(Number(running[bankUnit]||0))} ${esc(bankUnit)}, banka hesabının bakiyesi ${qty(bankBal)} ${esc(bankUnit)}. Aradaki <b>${qty(bankGap)} ${esc(bankUnit)}</b> hareketi olmayan eski bakiyedir (ör. Pusula'dan bakiye olarak gelen). <button class="btn btn-outline" type="button" id="bankGapAsOpening" style="margin-left:6px">Farkı açılış hareketi yap</button> — bakiye değişmez, fark listede görünür ve düzeltilebilir olur.`:'Banka bakiyesi, listedeki banka hareketlerinin toplamıyla tutuyor.'} <span class="muted">“Cari kaydı” satırları bilgi içindir, banka bakiyesine eklenmez.</span></div>`:'';
     const body=rows.length?`
+      <div class="cari-print-bar" style="display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin-bottom:8px"><label class="labelled" style="flex:1 1 130px"><span>Başlangıç</span><input id="cariPrintFrom" type="date" class="input"></label><label class="labelled" style="flex:1 1 130px"><span>Bitiş</span><input id="cariPrintTo" type="date" class="input"></label><button class="btn btn-primary" type="button" id="cariPrintStatement">Ekstre Yazdır</button></div>
       <div class="cari-ekstre-summary">${summary}</div>${gapNote}${infoRows.length?`<label style="display:flex;gap:6px;align-items:center;margin:8px 0;font-size:14px"><input type="checkbox" id="cariShowInfo" ${cariShowInfoV7?'checked':''}> Bakiyeyi etkilemeyen peşin işlemleri de göster (${infoRows.length} işlem: satış, alış, alım-satım, kasa/banka)</label>`:''}
       <div class="cari-ekstre-wrap">
         <table class="cari-ekstre-table" id="cariEkstreTable" tabindex="0">
@@ -7830,6 +7836,7 @@ function stockSummaryView(){
     modal(`Ekstre — ${c.name}`,body,null,'Kapat');
     const modalEl=document.querySelector('#modalRoot .modal'); if(modalEl)modalEl.style.width='min(1080px,96vw)';
     document.getElementById('cariShowInfo')?.addEventListener('change',e=>{cariShowInfoV7=e.target.checked;openCariDetail(c.id);});
+    document.getElementById('cariPrintStatement')?.addEventListener('click',()=>printCariStatementV7(c.id,document.getElementById('cariPrintFrom').value,document.getElementById('cariPrintTo').value));
     document.getElementById('bankGapAsOpening')?.addEventListener('click',()=>{
       const first=(state.financeMoves||[]).filter(f=>f.accountKind===bankAcc.kind&&f.accountId===bankAcc.acc.id).map(f=>String(f.date||'')).sort()[0];
       const date=first?first.slice(0,10)+'T00:00:00':now();
@@ -7855,8 +7862,10 @@ function stockSummaryView(){
           <div><small>Açıklama</small><strong>${esc(x.description||'-')}</strong></div>
         </div>
         <div class="cari-ekstre-selected-balances">${(bs.length?bs:[['HAS',0]]).map(([u,v])=>`<span class="badge ${Number(v)>0?'red':Number(v)<0?'green':'blue'}">${fmtSigned(v,u)}</span>`).join('')}</div>
-        ${x._info?`<div class="notice" style="margin-top:8px">${esc(x._amount)} · Peşin / kapalı işlem: cari bakiyesini etkilemez. Düzeltme ve iptal belgenin kendi ekranından yapılır.</div><div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-primary" id="selectedInfoPrint">Fişi Göster / Yazdır</button></div>`:x._fin?`<div class="notice" style="margin-top:8px">Banka hesabı hareketi${x._link?` · <b>Bağlı belge:</b> ${esc(x._link)}`:''}</div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px"><button class="btn btn-outline" id="selectedFinDelete">Hareketi Sil</button><button class="btn btn-primary" id="selectedFinEdit">Hareketi Düzelt</button></div>`:`<div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-primary" id="selectedCariEdit">İşlemi Düzelt</button></div>`}`;
+        ${x._info?`<div class="notice" style="margin-top:8px">${esc(x._amount)} · Peşin / kapalı işlem: cari bakiyesini etkilemez. Düzeltme ve iptal belgenin kendi ekranından yapılır.</div><div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-primary" id="selectedInfoPrint">Fişi Göster / Yazdır</button></div>`:x._fin?`<div class="notice" style="margin-top:8px">Banka hesabı hareketi${x._link?` · <b>Bağlı belge:</b> ${esc(x._link)}`:''}</div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px"><button class="btn btn-outline" id="selectedFinDelete">Hareketi Sil</button><button class="btn btn-primary" id="selectedFinEdit">Hareketi Düzelt</button></div>`:`<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:10px"><button class="btn btn-outline" id="selectedCariPrint">Fiş Yazdır</button><button class="btn btn-danger" id="selectedCariDelete">Sil</button><button class="btn btn-primary" id="selectedCariEdit">İşlemi Düzelt</button></div>`}`;
       document.getElementById('selectedCariEdit')?.addEventListener('click',()=>editCariMoveFromStatement(x.id));
+      document.getElementById('selectedCariPrint')?.addEventListener('click',()=>printCariReceiptV644(x.id));
+      document.getElementById('selectedCariDelete')?.addEventListener('click',()=>deleteAnyCariMove(x.id));
       document.getElementById('selectedInfoPrint')?.addEventListener('click',()=>printCariHistoryDocV7(x));
       document.getElementById('selectedFinEdit')?.addEventListener('click',()=>editBankFinanceMoveV7(x._fin,c.id));
       document.getElementById('selectedFinDelete')?.addEventListener('click',()=>deleteBankFinanceMoveV7(x._fin,c.id));
@@ -9656,6 +9665,31 @@ function stockSummaryView(){
     body+=receiptPairV644('Kullanıcı',x.user||'',false);
     return receiptDocV644('CARİ HAREKET FİŞİ',x.sourceDocNo||x.id,x.date,cst?cst.name:'',body);
   }
+  /* Cari ekstre çıktısı: seçilen tarih aralığındaki hareketler, öncesinin devri ve son durum (birim bazında). */
+  function cariStatementHtmlV7(c,from,to){
+    var isOpen=function(x){return String(x.code||'').toUpperCase()==='DV'||String(x.type||'').toLocaleUpperCase('tr-TR').indexOf('DEVİR')>=0||String(x.sourceType||'').indexOf('opening')===0;};
+    var moves=(state.customerMoves||[]).filter(function(m){return m.customerId===c.id;}).sort(function(a,b){var ao=isOpen(a)?0:1,bo=isOpen(b)?0:1;return ao-bo||String(a.date||'').localeCompare(String(b.date||''));});
+    var run={},devir={},body='',n=0,signed=function(v,u){v=Number(v||0);return Math.abs(v)<0.000001?'0 '+u:qty(Math.abs(v))+' '+u+(v>0?' Borç':' Alacak');};
+    moves.forEach(function(m){
+      var d=String(m.date||'').slice(0,10),u=String(m.unit||'HAS').toUpperCase(),before=from&&d<from&&!isOpen(m);
+      if(to&&d>to&&!isOpen(m))return;
+      run[u]=Number(run[u]||0)+Number(m.debit||0)-Number(m.credit||0);
+      if(before){devir[u]=run[u];return;}
+      n++;
+      body+=receiptPairV644(trDate(m.date).slice(0,10)+' '+(m.type||m.code||''),(Number(m.debit||0)?'Borç ':'Alacak ')+qty(Number(m.debit||0)||Number(m.credit||0))+' '+u,true);
+      if(m.description)body+='<div style="font-size:9px;padding-left:2mm">'+esc(m.description)+'</div>';
+      body+=receiptPairV644('  Bakiye',signed(run[u],u),false);
+    });
+    var head=receiptPairV644('Aralık',(from?trDate(from).slice(0,10):'Başlangıç')+' - '+(to?trDate(to).slice(0,10):'Bugün'),false);
+    Object.keys(devir).forEach(function(u){head+=receiptPairV644('Devir '+u,signed(devir[u],u),true);});
+    head+=receiptPairV644('Hareket',n+' adet',false)+'<div class="dash"></div>';
+    var cur=to?run:Object.assign({TL:Number(cariDisplayTlBalance(c)||0),HAS:Number(c.hasBalance||0)},c.otherBalances||{});
+    var son='<div class="dash"></div><div class="title">SON DURUM</div>',any=false;
+    Object.keys(cur).forEach(function(u){if(Math.abs(Number(cur[u]||0))>0.000001){any=true;son+=receiptPairV644(u,signed(cur[u],u),true);}});
+    if(!any)son+=receiptPairV644('Bakiye','Borç / alacak yok',true);
+    return receiptDocV644('CARİ HESAP EKSTRESİ',c.code||c.id,now(),c.name||'',head+(n?body:receiptPairV644('Hareket','Bu aralıkta hareket yok',false))+son);
+  }
+  function printCariStatementV7(id,from,to){var c=state.customers.find(function(k){return k.id===id;});if(!c)return toast('Cari bulunamadı','err');if(from&&to&&from>to)return toast('Başlangıç tarihi bitişten sonra olamaz','err');return printReceiptHtmlV644(cariStatementHtmlV7(c,from,to),'Cari ekstre');}
   function financeReceiptHtmlV644(x){
     var cur=String(x.accountCurrency||'TL'),amt=Number(x.accountAmount!=null?x.accountAmount:(x.amount||0)),tl=financeTlValue(x),body='';
     body+=receiptPairV644('Yön',x.direction||'',true);
