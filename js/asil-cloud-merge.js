@@ -57,18 +57,20 @@
   }
   function index(list,field){var m={};(list||[]).forEach(function(x){m[String(x[field])]=x});return m}
 
-  function mergeKeyed(b,l,r,field,additive){
+  // deleteWins: muhasebe kayıtlarında (satış, kasa hareketi...) silme her zaman kazanır. Silen cihaz bakiyeyi zaten geri aldı;
+  // diğer cihazdaki küçük bir alan değişikliği kaydı geri getirirse liste ile bakiye ayrışır.
+  function mergeKeyed(b,l,r,field,additive,deleteWins){
     var bi=index(b,field),li=index(l,field),ri=index(r,field),out=[];
     // Bulut sırası esas alınır; bu cihazda yeni eklenenler kendi konumlarına göre başa/sona eklenir.
     r.forEach(function(rx){
       var k=String(rx[field]),inB=k in bi,inL=k in li;
       if(inL)out.push(merge3(inB?bi[k]:undefined,li[k],rx,additive));
       else if(!inB)out.push(rx);                    // başka cihazda eklendi
-      else if(!deepEqual(bi[k],rx))out.push(rx);    // burada silindi ama orada değişti: değişikliği koru
+      else if(!deleteWins&&!deepEqual(bi[k],rx))out.push(rx);    // burada silindi ama orada değişti: değişikliği koru
       // aksi halde bu cihazda silindi
     });
     var newLocal=l.filter(function(lx){var k=String(lx[field]);return !(k in ri)&&!(k in bi)});
-    var deletedRemoteButChangedLocal=l.filter(function(lx){var k=String(lx[field]);return !(k in ri)&&(k in bi)&&!deepEqual(bi[k],lx)});
+    var deletedRemoteButChangedLocal=deleteWins?[]:l.filter(function(lx){var k=String(lx[field]);return !(k in ri)&&(k in bi)&&!deepEqual(bi[k],lx)});
     var add=newLocal.concat(deletedRemoteButChangedLocal);
     if(!add.length)return out;
     var front=l.length&&add.indexOf(l[0])>=0;
@@ -104,14 +106,17 @@
 
   /* Durum nesnesini birleştirir; cihaza özel alanlar her zaman yerel kalır. */
   /* nonAdditiveKeys: fiyat/ayar gibi alanlarda sayılar toplanmaz, bu cihazın değeri kalır. */
-  function mergeState(base,local,remote,localOnlyKeys,nonAdditiveKeys){
+  function mergeState(base,local,remote,localOnlyKeys,nonAdditiveKeys,deleteWinsKeys){
     if(!remote)return local;
     if(!base)return null; // ortak taban yoksa güvenli birleştirme yapılamaz
     var na=nonAdditiveKeys||[],merged={},keys={};
     Object.keys(remote).forEach(function(k){keys[k]=1});Object.keys(local).forEach(function(k){keys[k]=1});
     Object.keys(keys).forEach(function(k){
       var inL=k in local,inR=k in remote,inB=k in base;
-      if(inL&&inR)merged[k]=merge3(inB?base[k]:undefined,local[k],remote[k],na.indexOf(k)<0);
+      if(inL&&inR){
+        var bl=inB&&Array.isArray(base[k])?base[k]:[],field=(deleteWinsKeys||[]).indexOf(k)>=0&&Array.isArray(local[k])&&Array.isArray(remote[k])?keyFieldOf(bl,local[k],remote[k]):null;
+        merged[k]=field&&!deepEqual(local[k],remote[k])?mergeKeyed(bl,local[k],remote[k],field,na.indexOf(k)<0,true):merge3(inB?base[k]:undefined,local[k],remote[k],na.indexOf(k)<0);
+      }
       else if(inL){if(!inB||!deepEqual(base[k],local[k]))merged[k]=local[k]}
       else if(!inB||!deepEqual(base[k],remote[k]))merged[k]=remote[k];
     });

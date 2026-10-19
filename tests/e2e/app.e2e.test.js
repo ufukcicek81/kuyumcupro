@@ -1533,6 +1533,27 @@ test('cariye kısmi ödemeli satış: kalan tutar cariye bir kez yazılır, ipta
   await p.context().close();
 });
 
+test('kasa sayımı: kasa farkı sisteme işlenir, bakiye sayılan tutara gelir ve hareket olarak görünür', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  const tlCash = (s) => (s.cashAccounts || []).filter((x) => x.currency === 'TL').reduce((n, x) => n + Number(x.balance || 0), 0);
+  const cash0 = tlCash(fb.db.state);
+  await p.keyboard.press('F9');
+  await p.click('#goldCountV7');
+  await p.waitForSelector('.kc-wrap');
+  const num = (t) => Number(String(t).replace(/\./g, '').replace(',', '.'));
+  const cashSys = num(await p.locator('tr[data-kc-row="c:TL"] td').nth(2).innerText());
+  await p.fill('tr[data-kc-row="c:TL"] input', String(cashSys + 500).replace('.', ','));
+  await p.click('#modalConfirm');
+  await p.waitForSelector('#kcCashFixV7');
+  await p.click('#kcCashFixV7'); await p.click('#modalConfirm'); await p.waitForTimeout(9000);
+  assert.equal(Math.round(tlCash(fb.db.state)), Math.round(cash0 + 500), 'kasa sayılan tutara gelmeli');
+  const mv = (fb.db.state.financeMoves || []).find((f) => f.type === 'Kasa Sayım Farkı');
+  assert.ok(mv && mv.direction === 'Giriş' && Math.round(mv.accountAmount) === 500, 'fark kasa hareketi olarak görünmeli');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
 test('stok kartı birleştir: eski kartın stoğu yeni karta aktarılır, eski kart silinir', async () => {
   const p = await newDevice(browser, appUrl, createFakeFirebase());
   p.on('dialog', () => {});

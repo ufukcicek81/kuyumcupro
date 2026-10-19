@@ -92,3 +92,17 @@ test('başka cihazda silinen kayıtlar, bu cihazda boş alanlar farklı görüns
   const m = mergeState(base, local, remote, [], ['meta']);
   assert.deepEqual(m.stocks.map((x) => x.id), ['C']);
 });
+
+test('muhasebe kaydı: bir cihazda silinen (iptal) kayıt, diğerinde küçük bir alan değişse de geri gelmez', () => {
+  const b = { financeMoves: [{ id: 'F1', amount: 100, description: 'a' }, { id: 'F2', amount: 50 }], cash: 1100 };
+  const local = { financeMoves: [{ id: 'F2', amount: 50 }], cash: 1000 }; // F1 iptal edildi, kasa geri alındı
+  const remote = { financeMoves: [{ id: 'F1', amount: 100, description: 'b' }, { id: 'F2', amount: 50 }], cash: 1100 };
+  const m = mergeState(b, local, remote, [], [], ['financeMoves']);
+  assert.deepEqual(m.financeMoves.map((x) => x.id), ['F2']);
+  assert.equal(m.cash, 1000);
+  // Silme kuralı verilmeyen listelerde eski davranış: değişiklik korunur
+  assert.deepEqual(mergeState(b, local, remote, []).financeMoves.map((x) => x.id).sort(), ['F1', 'F2']);
+  // Diğer cihazda yeni eklenen kayıt korunur
+  const remote2 = { financeMoves: [{ id: 'F3', amount: 7 }, ...b.financeMoves], cash: 1107 };
+  assert.deepEqual(mergeState(b, local, remote2, [], [], ['financeMoves']).financeMoves.map((x) => x.id).sort(), ['F2', 'F3']);
+});
