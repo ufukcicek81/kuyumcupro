@@ -2373,6 +2373,31 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       closeModal();route='sales';save();render();toast(`${snapshot.docNo||'Satış'} düzeltme için fişe açıldı`);
     },'DÜZELTMEYE AÇ');
   }
+  /* Satış ekranından yapılan altın/ziynet alışını (AZA) iptal eder: stok, kasa/banka ödemesi ve hareketler geri alınır. */
+  function saleScreenPurchaseToTradeInV7(t){return {itemKind:t.tradeType==='Hurda Alış'?'Hurda':'Ziynet',itemName:t.item,nativeAmount:Number(t.quantity||0),hasAmount:Number(t.totalHas||0),...(t.stockCardId?{stockCardId:t.stockCardId}:{})};}
+  function cancelSaleScreenPurchaseV7(docNo,after){
+    const moves=(state.tradeMoves||[]).filter(t=>t.sourceType==='saleScreenPurchase'&&t.docNo===docNo);if(!moves.length)return toast('Alış belgesi bulunamadı','err');
+    const fins=(state.financeMoves||[]).filter(f=>f.sourceDocNo===docNo);
+    const lines=moves.map(t=>`<div class="summary-row"><span>${esc(t.item)} · ${qty(t.quantity)} ${esc(t.unit||'')}</span><strong>${money(t.totalTL||0)}</strong></div>`).join('')+fins.map(f=>`<div class="summary-row"><span>Ödeme · ${esc(f.accountName||'')}</span><strong>${money(f.amount||0)}</strong></div>`).join('');
+    modal('Alışı İptal Et',`<div class="notice"><strong>${esc(docNo)}</strong> iptal edilince alınan ürün stoktan düşülür, müşteriye yapılan ödeme kasa/bankaya geri eklenir.</div>${lines}`,()=>{
+      for(const t of moves){if(t.tradeType==='Hurda Alış')continue;const o=findTradeInOpenStockV7(saleScreenPurchaseToTradeInV7(t));if(!o||Number(o.amount||0)<Number(t.quantity||0)-1e-9)return toast(`${t.item} stokta yeterli değil; ürün satılmış olabilir. Önce o satışı geri alın.`,'err');}
+      moves.forEach(t=>reverseTradeInFromStock(saleScreenPurchaseToTradeInV7(t)));
+      fins.forEach(f=>applyFinanceMoveV7(f,-1));
+      state.cancelledDocuments=state.cancelledDocuments||[];state.cancelledDocuments.unshift({id:uid('ARC'),originalId:docNo,originalDocNo:docNo,type:'ALTIN / ZİYNET ALIŞ',date:now(),cancelledBy:session?.name||'Sistem',snapshot:clone({tradeMoves:moves,financeMoves:fins})});
+      state.tradeMoves=state.tradeMoves.filter(t=>!moves.includes(t));state.financeMoves=state.financeMoves.filter(f=>!fins.includes(f));
+      const tx=(state.transactions||[]).find(x=>x.docNo===docNo);if(tx){tx.status='Ters Kayıt';tx.reversedAt=now();tx.reversedBy=session?.name||'Sistem';}
+      audit(`${docNo} satış ekranı altın/ziynet alışı iptal edildi; stok ve ödeme geri alındı`,'Alış');
+      closeModal();save();render();if(after)return after();toast(`${docNo} alış iptal edildi`);
+    },after?'GERİ AL VE DÜZELT':'ALIŞI İPTAL ET');
+  }
+  function editSaleScreenPurchaseV7(docNo){
+    const moves=(state.tradeMoves||[]).filter(t=>t.sourceType==='saleScreenPurchase'&&t.docNo===docNo);if(!moves.length)return toast('Alış belgesi bulunamadı','err');
+    cancelSaleScreenPurchaseV7(docNo,()=>{
+      saleDraft=newSaleDraft();if(moves[0].customerId&&state.customers.some(c=>c.id===moves[0].customerId))saleDraft.customerId=moves[0].customerId;
+      moves.forEach(t=>saleDraft.payments.push({type:'Altın / Ziynet',amount:Number(t.totalTL||0),itemCode:t.itemCode,itemName:t.item,itemKind:t.tradeType==='Hurda Alış'?'Hurda':'Ziynet',unit:t.unit||'ADET',nativeAmount:Number(t.quantity||0),hasAmount:Number(t.totalHas||0),...(t.stockCardId?{stockCardId:t.stockCardId}:{}),detail:t.description||`${t.item} · ${qty(t.quantity)} ${t.unit||''}`}));
+      route='sales';render();toast(`${docNo} düzeltmeye açıldı: ürünü / müşteriye ödemeyi kontrol edip yeniden tamamlayın`);
+    });
+  }
   function cancelSaleFromHistory(id){
     const s=state.sales.find(x=>x.id===id);if(!s)return toast('Satış bulunamadı','err');
     modal('Satışı İptal Et',`<div class="notice"><strong>${esc(s.docNo||s.id)}</strong> iptal edilince bağlı stok, cari, kasa/POS ve takas hareketleri geri alınır.</div>${saleDetailHtml(s)}`,()=>{const r=cancelSaleById(id);if(!r.ok)return toast(r.msg,'err');closeModal();save();render();toast('Satış iptal edildi');},'SATIŞI İPTAL ET');
@@ -2428,9 +2453,9 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       filtered.forEach(s=>{total+=Number(s.total||0);salePaymentPartsV7(s).forEach(x=>{const k=x.kind+(x.bank?' · '+x.bank:'');sums[k]=(sums[k]||0)+x.amount;});});
       $('saleHistSummary').innerHTML=`<span class="badge gold" style="font-size:14px">${filtered.length} satış · ${money(total)}</span>`+(fBuys.length?`<span class="badge red" style="font-size:14px">${fBuys.length} altın/ziynet alış · ${money(buyTotal)}</span>`:'')+Object.entries(sums).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class="badge" style="font-size:13px">${esc(k)}: ${money(v)}</span>`).join('');
       const rows=[...filtered.map(s=>({date:s.date,s})),...fBuys.map(b=>({date:b.date,b}))].sort((x,y)=>String(y.date).localeCompare(String(x.date)));
-      const buyRow=b=>`<tr class="sale-hist-buy"><td><strong>${esc(b.docNo)}</strong> <span class="badge red">ALIŞ</span></td><td>${trDate(b.date)}</td><td>${esc(state.customers.find(c=>c.id===b.customerId)?.name||b.customer||'Peşin')}</td><td>${esc(b.user||'')}</td><td>${b.items.map(x=>`<span class="badge" style="margin:1px">${esc(x.item)} · ${qty(x.quantity)} ${esc(x.unit||'')}</span>`).join(' ')}</td><td class="num"><strong>−${money(b.total)}</strong></td><td><span class="muted">Altın / Ziynet alış</span></td></tr>`;
+      const buyRow=b=>`<tr class="sale-hist-buy"><td><strong>${esc(b.docNo)}</strong> <span class="badge red">ALIŞ</span></td><td>${trDate(b.date)}</td><td>${esc(state.customers.find(c=>c.id===b.customerId)?.name||b.customer||'Peşin')}</td><td>${esc(b.user||'')}</td><td>${b.items.map(x=>`<span class="badge" style="margin:1px">${esc(x.item)} · ${qty(x.quantity)} ${esc(x.unit||'')}</span>`).join(' ')}</td><td class="num"><strong>−${money(b.total)}</strong></td><td><div style="display:flex;gap:6px;flex-wrap:nowrap"><button class="btn btn-primary" data-buy-edit="${esc(b.docNo)}">Düzelt</button><button class="btn btn-danger" data-buy-cancel="${esc(b.docNo)}">İptal</button></div></td></tr>`;
       tb.innerHTML=rows.map(r=>r.b?buyRow(r.b):(s=>`<tr><td><strong>${esc(s.docNo||s.id)}</strong></td><td>${trDate(s.date)}</td><td>${esc(state.customers.find(c=>c.id===s.customerId)?.name||'Peşin')}</td><td>${esc(s.salesperson||'')}</td><td>${salePaymentPartsV7(s).map(badge).join(' ')||'—'}</td><td class="num"><strong>${money(s.total||0)}</strong></td><td><div style="display:flex;gap:6px;flex-wrap:nowrap"><button class="btn btn-outline" data-sale-view="${s.id}">Gör</button><button class="btn btn-primary" data-sale-edit="${s.id}">Düzelt</button><button class="btn btn-danger" data-sale-cancel="${s.id}">İptal</button></div></td></tr>`)(r.s)).join('')||'<tr><td colspan="7">Satış bulunamadı.</td></tr>';
-      tb.querySelectorAll('[data-sale-view]').forEach(b=>b.onclick=()=>viewSaleRecord(b.dataset.saleView));tb.querySelectorAll('[data-sale-edit]').forEach(b=>b.onclick=()=>reopenSaleForEdit(b.dataset.saleEdit));tb.querySelectorAll('[data-sale-cancel]').forEach(b=>b.onclick=()=>cancelSaleFromHistory(b.dataset.saleCancel));
+      tb.querySelectorAll('[data-sale-view]').forEach(b=>b.onclick=()=>viewSaleRecord(b.dataset.saleView));tb.querySelectorAll('[data-sale-edit]').forEach(b=>b.onclick=()=>reopenSaleForEdit(b.dataset.saleEdit));tb.querySelectorAll('[data-sale-cancel]').forEach(b=>b.onclick=()=>cancelSaleFromHistory(b.dataset.saleCancel));tb.querySelectorAll('[data-buy-cancel]').forEach(b=>b.onclick=()=>cancelSaleScreenPurchaseV7(b.dataset.buyCancel));tb.querySelectorAll('[data-buy-edit]').forEach(b=>b.onclick=()=>editSaleScreenPurchaseV7(b.dataset.buyEdit));
     };
     ['saleHistSearch','saleHistFrom','saleHistTo','saleHistPay','saleHistBank'].forEach(id=>{$(id).addEventListener('input',draw);$(id).addEventListener('change',draw);});
     document.querySelectorAll('[data-hist-range]').forEach(b=>b.onclick=()=>{const now0=new Date(),r=b.dataset.histRange;let f='',tt='';if(r==='today'){f=tt=iso(now0);}else if(r==='week'){const d=new Date(now0);d.setDate(d.getDate()-((d.getDay()+6)%7));f=iso(d);tt=iso(now0);}else if(r==='month'){f=iso(new Date(now0.getFullYear(),now0.getMonth(),1));tt=iso(now0);}else{$('saleHistSearch').value='';$('saleHistPay').value='';$('saleHistBank').value='';}$('saleHistFrom').value=f;$('saleHistTo').value=tt;draw();});
@@ -5672,12 +5697,65 @@ function stockSummaryView(){
   }
   function tradeHistoryInlineHtml(tradeType){
     const rows=tradeHistoryRows(tradeType),showHas=!String(tradeType||'').startsWith('Döviz');
-    return `<div class="trade-history-bar"><button type="button" class="btn btn-outline" id="stHistoryToggle" tabindex="-1">Geçmiş (${rows.length})</button><span>${esc(tradeType)} kayıtlarını bu işlem ekranından kontrol edin.</span></div><div class="trade-history-panel" id="stHistoryPanel">${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Tarih</th><th>Belge</th><th>Ürün / Döviz</th><th class="num">Miktar</th><th class="num">Birim Fiyat / Kur</th><th class="num">Toplam TL</th>${showHas?'<th class="num">HAS</th>':''}<th>Hesap / Cari</th></tr></thead><tbody>${rows.slice(0,60).map(x=>`<tr><td>${trDate(x.date)}</td><td><strong>${esc(x.docNo||'')}</strong></td><td>${esc(x.item||'')}</td><td class="num">${qty(x.quantity||0)} ${esc(x.unit||'')}</td><td class="num">${Number(x.unitPrice||0)?Number(x.unitPrice||0).toLocaleString('tr-TR',{maximumFractionDigits:4}):'—'}</td><td class="num"><strong>${money(x.totalTL||0)}</strong></td>${showHas?`<td class="num">${Number(x.totalHas||0)?qty(x.totalHas)+' HAS':'—'}</td>`:''}<td>${esc(x.customer||x.accountName||'')}</td></tr>`).join('')}</tbody></table></div>`:`<div class="trade-history-empty">${esc(tradeType)} için henüz kayıt yok.</div>`}</div>`;
+    return `<div class="trade-history-bar"><button type="button" class="btn btn-outline" id="stHistoryToggle" tabindex="-1">Geçmiş (${rows.length})</button><span>${esc(tradeType)} kayıtlarını bu işlem ekranından kontrol edin.</span></div><div class="trade-history-panel" id="stHistoryPanel">${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Tarih</th><th>Belge</th><th>Ürün / Döviz</th><th class="num">Miktar</th><th class="num">Birim Fiyat / Kur</th><th class="num">Toplam TL</th>${showHas?'<th class="num">HAS</th>':''}<th>Hesap / Cari</th>${showHas?'<th>İşlem</th>':''}</tr></thead><tbody>${rows.slice(0,60).map(x=>`<tr><td>${trDate(x.date)}</td><td><strong>${esc(x.docNo||'')}</strong></td><td>${esc(x.item||'')}</td><td class="num">${qty(x.quantity||0)} ${esc(x.unit||'')}</td><td class="num">${Number(x.unitPrice||0)?Number(x.unitPrice||0).toLocaleString('tr-TR',{maximumFractionDigits:4}):'—'}</td><td class="num"><strong>${money(x.totalTL||0)}</strong></td>${showHas?`<td class="num">${Number(x.totalHas||0)?qty(x.totalHas)+' HAS':'—'}</td>`:''}<td>${esc(x.customer||x.accountName||'')}</td>${showHas?`<td>${tradeEditableV7(x)?`<div style="display:flex;gap:6px"><button type="button" class="btn btn-outline" data-trade-edit="${esc(x.id)}">Düzelt</button><button type="button" class="btn btn-danger" data-trade-cancel="${esc(x.id)}">İptal</button></div>`:'<span class="muted">—</span>'}</td>`:''}</tr>`).join('')}</tbody></table></div>`:`<div class="trade-history-empty">${esc(tradeType)} için henüz kayıt yok.</div>`}</div>`;
   }
   function bindTradeHistoryInline(){
     const b=document.getElementById('stHistoryToggle'),p=document.getElementById('stHistoryPanel');
     if(!b||!p)return;
     const base=b.textContent;b.addEventListener('click',()=>{p.classList.toggle('show');b.textContent=p.classList.contains('show')?'Geçmişi Gizle':base;});
+    p.querySelectorAll('[data-trade-cancel]').forEach(x=>x.onclick=()=>cancelTradeFromHistoryV7(x.dataset.tradeCancel,false));
+    p.querySelectorAll('[data-trade-edit]').forEach(x=>x.onclick=()=>cancelTradeFromHistoryV7(x.dataset.tradeEdit,true));
+  }
+  /* Ziynet / Hurda alış-satış kaydının iptali ve düzeltmesi.
+     Ana ekrandan yapılan işlemde stok, kasa/banka veya cari mahsup geri alınır; düzeltmede aynı ekran eski değerlerle yeniden açılır.
+     Satış ekranından yapılan alış (AZA) kendi belgesiyle bütün olarak iptal edilir. */
+  function tradeEditableV7(t){return /^(Ziynet|Hurda) (Alış|Satış)$/.test(String(t.tradeType||''))&&(!t.sourceType||t.sourceType==='saleScreenPurchase');}
+  function reverseHomeTradeV7(t){
+    const q=Number(t.quantity||0),isZ=String(t.tradeType).startsWith('Ziynet'),buy=t.side==='Alış';
+    if(isZ){
+      const o=findOpenTradeStock({code:t.itemCode,name:t.item,...(t.stockCardId?{stockCardId:t.stockCardId}:{})});
+      if(!o)return `${t.item} açık stoğu bulunamadı`;
+      if(buy&&Number(o.amount||0)<q-1e-9)return `${t.item} stokta yeterli değil; ürün satılmış olabilir. Önce o satışı geri alın.`;
+      const per=Number(o.amount||0)>0?Number(o.hasWeight||0)/Number(o.amount):Number(o.displayAyar||0)/1000;
+      if(buy){o.amount=Number(o.amount||0)-q;o.hasWeight=Math.max(0,Number(o.hasWeight||0)-per*q);}
+      else{setOpenWeightedUnitCost(o,q,Number(t.costHas||0));o.amount=Number(o.amount||0)+q;o.hasWeight=Number(o.hasWeight||0)+per*q;}
+      o.count=o.amount;
+    }else{
+      const h=(state.scrapStocks||[]).find(x=>normalizeInventoryName(x.name).includes(normalizeInventoryName(t.item).replace('HURDASI','HURDA')));
+      if(!h)return `${t.item} hurda stoğu bulunamadı`;
+      if(buy&&Number(h.amount||0)<q-1e-9)return `${t.item} hurda stoğu yetersiz; hurda satılmış/eritilmiş olabilir.`;
+      const d=(buy?-1:1)*q;h.amount=Math.max(0,Number(h.amount||0)+d);h.hasWeight=Math.max(0,Number(h.hasWeight||0)+d*Number(h.milyem||0)/1000);
+    }
+    const amt=Number(t.settlementAmount||0);
+    if(t.accountKey){adjustAccount(t.accountKey,buy?amt:-amt);state.financeMoves=(state.financeMoves||[]).filter(f=>f.sourceDocNo!==t.docNo);}
+    else if(String(t.settlementLabel||'').startsWith('Cari')){
+      const c=state.customers.find(x=>x.id===t.customerId);
+      if(c)applyCariBalance(c,t.settlementCurrency,buy?0:-amt,buy?-amt:0);
+      state.customerMoves=(state.customerMoves||[]).filter(m=>!(m.sourceType==='trade'&&m.sourceId===t.id));
+    }
+    return '';
+  }
+  function cancelTradeFromHistoryV7(id,edit){
+    const t=(state.tradeMoves||[]).find(x=>x.id===id);if(!t)return toast('Kayıt bulunamadı','err');
+    if(t.sourceType==='saleScreenPurchase')return edit?editSaleScreenPurchaseV7(t.docNo):cancelSaleScreenPurchaseV7(t.docNo);
+    const tradeType=t.tradeType;
+    modal(edit?`${tradeType} Düzelt`:`${tradeType} İptal`,`<div class="notice"><strong>${esc(t.docNo)}</strong> ${edit?'düzeltme için geri alınır ve işlem ekranı eski bilgilerle yeniden açılır. Kaydetmezseniz işlem iptal edilmiş olarak kalır.':'iptal edilince stok ve ödeme / cari hareketi geri alınır.'}</div><div class="summary-row"><span>${esc(t.item)} · ${qty(t.quantity)} ${esc(t.unit||'')}</span><strong>${money(t.totalTL||0)}</strong></div><div class="summary-row"><span>Hesap / Cari</span><strong>${esc(t.accountName||t.customer||'')}</strong></div>`,()=>{
+      const err=reverseHomeTradeV7(t);if(err)return toast(err,'err');
+      state.cancelledDocuments=state.cancelledDocuments||[];state.cancelledDocuments.unshift({id:uid('ARC'),originalId:t.id,originalDocNo:t.docNo,type:tradeType,date:now(),cancelledBy:session?.name||'Sistem',snapshot:clone(t)});
+      state.tradeMoves=state.tradeMoves.filter(x=>x.id!==t.id);
+      audit(`${t.docNo} ${tradeType} ${edit?'düzeltme için geri alındı':'iptal edildi'}; stok ve ödeme geri alındı`,'Satış');
+      closeModal();save();render();toast(`${t.docNo} ${edit?'düzeltmeye açıldı':'iptal edildi'}`);
+      openSpecialTrade(tradeType);
+      if(edit){
+        const g=id=>document.getElementById(id),set=(id,v,ev='input')=>{const e=g(id);if(e&&v!==undefined&&v!==null){e.value=v;e.dispatchEvent(new Event(ev,{bubbles:true}));}};
+        if(g('stItem')&&[...g('stItem').options].some(o=>o.value===String(t.itemCode)))set('stItem',String(t.itemCode),'change');
+        if(g('stCustomerId')&&[...g('stCustomerId').options].some(o=>o.value===String(t.customerId)))set('stCustomerId',t.customerId,'change');
+        set('stQty',t.quantity);set('stPrice',Number(t.unitPrice||0).toFixed(4));set('stTotal',Number(t.totalTL||0).toFixed(2));
+        const sv=t.accountKey?t.settlementCurrency:('CARI_'+t.settlementCurrency);if(g('stSettlement')&&[...g('stSettlement').options].some(o=>o.value===sv))set('stSettlement',sv,'change');
+        if(t.accountKey&&g('stAccount')&&[...g('stAccount').options].some(o=>o.value===t.accountKey))set('stAccount',t.accountKey,'change');
+        set('stDescription',t.description||'');
+      }
+    },edit?'GERİ AL VE DÜZELT':'İŞLEMİ İPTAL ET');
   }
   function openSpecialTrade(tradeType){
     const side=tradeType.endsWith('Alış')?'Alış':'Satış';
@@ -5756,7 +5834,7 @@ function stockSummaryView(){
         settlementLabel=`${settlementCurrency} ${side==='Alış'?'Ödeme':'Tahsilat'}`;
         addFinanceMove({direction:side==='Alış'?'Çıkış':'Giriş',type:`${tradeType} / ${settlementCurrency}`,accountKey,accountAmount:settleAmount,accountCurrency:settlementCurrency,tlAmount:total,customer:customerLabel,description:`${item.name} · ${qtyVal} ${isZiynet?'ADET':'GR'}${description?' · '+description:''}`,sourceDocNo:docNo,tradeType});
       }
-      state.tradeMoves.unshift({id:tradeId,docNo,period:state.activePeriod,date:now(),tradeType,side,item:item.name,itemCode:item.code,quantity:qtyVal,unit:isZiynet?'ADET':'GR',unitPrice,totalTL:total,totalHas,settlementCurrency,settlementAmount:settleAmount,settlementRate:settleRate,settlementLabel,accountKey,accountName,customerId,customer:customerLabel,description,user:session.name,costHas:Number(inv.costHas||0),profitHas,hasRateAtTrade:hasRate});
+      state.tradeMoves.unshift({id:tradeId,docNo,period:state.activePeriod,date:now(),tradeType,side,item:item.name,itemCode:item.code,quantity:qtyVal,unit:isZiynet?'ADET':'GR',unitPrice,totalTL:total,totalHas,settlementCurrency,settlementAmount:settleAmount,settlementRate:settleRate,settlementLabel,accountKey,accountName,customerId,customer:customerLabel,description,user:session.name,costHas:Number(inv.costHas||0),profitHas,hasRateAtTrade:hasRate,...(item.stockCardId?{stockCardId:item.stockCardId}:{})});
       audit(`${docNo} ${tradeType} ${qtyVal} ${isZiynet?'adet':'gr'} / ${qty(totalHas)} HAS / ${qty(settleAmount)} ${settlementCurrency}`,'Satış');closeModal();save();render();
     },`${tradeType} Kaydet`);
     bindTradeHistoryInline();
@@ -6282,14 +6360,17 @@ function stockSummaryView(){
   }
 
 
+  function findTradeInOpenStockV7(p){
+    const adetOpen=(state.openStocks||[]).filter(x=>x.unit==='ADET'&&x.period===state.activePeriod),pName=String(p.itemName||'').toUpperCase().replace(' / TAM','');
+    return p.stockCardId?adetOpen.find(x=>x.stockCardId===p.stockCardId):(adetOpen.find(x=>String(x.name).toUpperCase()===pName)||adetOpen.find(x=>String(x.name).toUpperCase().includes(pName)));
+  }
   function addTradeInToStock(p){
     if(p.itemKind==='Hurda'){
       let h=(state.scrapStocks||[]).find(x=>String(x.name).toUpperCase()===String(p.itemName).toUpperCase()&&x.period===state.activePeriod);
       if(!h){h={id:uid('SCR'),period:state.activePeriod,name:p.itemName,milyem:Number(p.purity||0),amount:0,hasWeight:0,unit:'GR'};state.scrapStocks.push(h);}
       h.amount=Number(h.amount||0)+Number(p.nativeAmount||0);h.hasWeight=Number(h.hasWeight||0)+Number(p.hasAmount||0);return;
     }
-    const adetOpen=(state.openStocks||[]).filter(x=>x.unit==='ADET'&&x.period===state.activePeriod),pName=String(p.itemName).toUpperCase().replace(' / TAM','');
-    let o=p.stockCardId?adetOpen.find(x=>x.stockCardId===p.stockCardId):(adetOpen.find(x=>String(x.name).toUpperCase()===pName)||adetOpen.find(x=>String(x.name).toUpperCase().includes(pName)));
+    let o=findTradeInOpenStockV7(p);
     if(!o){o={id:uid('OPEN'),period:state.activePeriod,source:'Satış Takası',...(p.stockCardId?{stockCardId:p.stockCardId}:{}),stockMode:'Açık',name:p.itemName,productCode:p.itemCode,pusulaCode:p.itemCode,displayAyar:Number(p.hasAmount||0)/(Number(p.nativeAmount||1))*1000,purity:Number(p.purity||916),amount:0,unit:'ADET',hasWeight:0,workmanshipTotalHas:0,averageWorkmanship:0,count:0,zGram:Number(p.zGram||0),location:'Açık Stok'};state.openStocks.push(o);}
     o.amount=Number(o.amount||0)+Number(p.nativeAmount||0);o.count=Number(o.amount||0);o.hasWeight=Number(o.hasWeight||0)+Number(p.hasAmount||0);
   }
@@ -6304,7 +6385,7 @@ function stockSummaryView(){
       addTradeInToStock(p);
       const tradeType=p.itemKind==='Hurda'?'Hurda Alış':'Ziynet Alış';
       const unitPrice=Math.abs(Number(p.amount||0))/Math.max(.000001,Number(p.nativeAmount||1));
-      state.tradeMoves.unshift({id:uid('TRD'),docNo,period:state.activePeriod,date,tradeType,side:'Alış',item:p.itemName,itemCode:p.itemCode,quantity:Number(p.nativeAmount||0),unit:p.unit||'ADET',unitPrice,totalTL:Math.abs(Number(p.amount||0)),totalHas:Number(p.hasAmount||0),settlementCurrency:'TL',settlementAmount:Math.abs(Number(p.amount||0)),settlementLabel:'Satış ekranından Altın/Ziynet Alış',accountName:'Ödeme / Takas',customerId:customer.id,customer:customerName,description:p.detail,user:session.name,sourceType:'saleScreenPurchase'});
+      state.tradeMoves.unshift({id:uid('TRD'),docNo,period:state.activePeriod,date,tradeType,side:'Alış',item:p.itemName,itemCode:p.itemCode,quantity:Number(p.nativeAmount||0),unit:p.unit||'ADET',unitPrice,totalTL:Math.abs(Number(p.amount||0)),totalHas:Number(p.hasAmount||0),settlementCurrency:'TL',settlementAmount:Math.abs(Number(p.amount||0)),settlementLabel:'Satış ekranından Altın/Ziynet Alış',accountName:'Ödeme / Takas',customerId:customer.id,customer:customerName,description:p.detail,user:session.name,sourceType:'saleScreenPurchase',...(p.stockCardId?{stockCardId:p.stockCardId}:{})});
     });
     st.payouts.forEach(p=>{
       const a=accountByKey(p.accountKey);if(!a.account)return;
@@ -7582,8 +7663,7 @@ function stockSummaryView(){
       if(h){h.amount=Math.max(0,Number(h.amount||0)-Number(p.nativeAmount||0));h.hasWeight=Math.max(0,Number(h.hasWeight||0)-Number(p.hasAmount||0));}
       return;
     }
-    const key=String(p.itemName||'').toUpperCase().replace(' / TAM','');
-    const o=(state.openStocks||[]).find(x=>String(x.name).toUpperCase().includes(key)&&x.unit==='ADET'&&x.period===state.activePeriod);
+    const o=findTradeInOpenStockV7(p);
     if(o){o.amount=Math.max(0,Number(o.amount||0)-Number(p.nativeAmount||0));o.count=Number(o.amount||0);o.hasWeight=Math.max(0,Number(o.hasWeight||0)-Number(p.hasAmount||0));}
   }
   function cancelSaleById(saleId){
