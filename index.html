@@ -7174,10 +7174,10 @@ function stockSummaryView(){
     const code=String(def?.code||'');
     return customer?.type!=='Banka' && !['AC','AG','CI','HC','HG','ZC','ZG'].includes(code) && def?.effect!=='none';
   }
-  function cariRateForUnit(unit){
+  function cariRateForUnit(unit,mode='buy'){
     const u=String(unit||'TL').toUpperCase();
     if(u==='TL')return 1;
-    return Number(currencyTlRate(u,'buy')||0);
+    return Number(currencyTlRate(u,mode)||0);
   }
   function cariConvertedAmount(sourceAmount, sourceRate, counterRate){
     const a=Number(sourceAmount||0), sr=Number(sourceRate||0), cr=Number(counterRate||0);
@@ -7497,9 +7497,12 @@ function stockSummaryView(){
       const conversionMode=cariMoveUsesConversion(CARI_MOVE_TYPES.find(x=>x.code===typeEl.value),c);
       if(!conversionMode)return;
       const src=unitEl.value;
-      if(document.activeElement!==sourceRateEl)sourceRateEl.value=Number(cariRateForUnit(src)||0).toFixed(src==='TL'?2:6);
+      // ALACAK: müşteri para/altın verir, karşılığında biz ona HAS/döviz satmış oluruz → gelen kalem alış, karşılık satış kuruyla.
+      // BORÇ: tersi → gelen kalem satış, karşılık alış kuruyla.
+      const credit=sideEl.value==='credit',srcMode=credit?'buy':'sell',ctrMode=credit?'sell':'buy';
+      if(document.activeElement!==sourceRateEl)sourceRateEl.value=Number(cariRateForUnit(src,srcMode)||0).toFixed(src==='TL'?2:6);
       const cu=counterUnitEl.value;
-      if(document.activeElement!==counterRateEl)counterRateEl.value=Number(cariRateForUnit(cu)||0).toFixed(cu==='TL'?2:6);
+      if(document.activeElement!==counterRateEl)counterRateEl.value=Number(cariRateForUnit(cu,ctrMode)||0).toFixed(cu==='TL'?2:6);
       const enabled=counterEnabledEl.checked;
       counterUnitEl.disabled=!enabled;counterRateEl.disabled=!enabled;counterAmountEl.readOnly=!enabled;
       const converted=enabled?cariConvertedAmount(Number(amountEl.value||0),Number(sourceRateEl.value||0),Number(counterRateEl.value||0)):Number(amountEl.value||0);
@@ -7541,7 +7544,7 @@ function stockSummaryView(){
     };
     typeEl.addEventListener('change',sync);
     unitEl.addEventListener('change',()=>{syncCounter();if(cariMoveNeedsFinance(CARI_MOVE_TYPES.find(x=>x.code===typeEl.value)))fillFinance();});
-    amountEl.addEventListener('input',syncCounter);sourceRateEl.addEventListener('input',syncCounter);counterEnabledEl.addEventListener('change',syncCounter);counterUnitEl.addEventListener('change',syncCounter);counterRateEl.addEventListener('input',syncCounter);counterAmountEl.addEventListener('input',()=>{const ca=Number(counterAmountEl.value||0),a=Number(amountEl.value||0),sr=Number(sourceRateEl.value||0);if(ca>0&&a>0&&sr>0)counterRateEl.value=(a*sr/ca).toFixed(6);});
+    amountEl.addEventListener('input',syncCounter);sideEl.addEventListener('change',syncCounter);sourceRateEl.addEventListener('input',syncCounter);counterEnabledEl.addEventListener('change',syncCounter);counterUnitEl.addEventListener('change',syncCounter);counterRateEl.addEventListener('input',syncCounter);counterAmountEl.addEventListener('input',()=>{const ca=Number(counterAmountEl.value||0),a=Number(amountEl.value||0),sr=Number(sourceRateEl.value||0);if(ca>0&&a>0&&sr>0)counterRateEl.value=(a*sr/ca).toFixed(6);});
     goldCard?.addEventListener('change',()=>syncGoldCalc(true,true));goldAmount?.addEventListener('input',()=>syncGoldCalc(false,false));goldCount?.addEventListener('input',()=>syncGoldCalc(false,false));goldMilyem?.addEventListener('input',()=>syncGoldCalc(false,false));goldWorkMode?.addEventListener('change',()=>syncGoldCalc(false,false));goldWorkValue?.addEventListener('input',()=>syncGoldCalc(false,false));
     returnStock?.addEventListener('change',()=>syncReturnCalc(true,true));returnCount?.addEventListener('input',()=>syncReturnCalc(false,false));returnGram?.addEventListener('input',()=>syncReturnCalc(false,false));returnMilyem?.addEventListener('input',()=>syncReturnCalc(false,false));
     ziynetStock?.addEventListener('change',()=>syncZiynetCalc(true));ziynetCount?.addEventListener('input',()=>syncZiynetCalc(false));ziynetHasUnit?.addEventListener('input',()=>syncZiynetCalc(false));

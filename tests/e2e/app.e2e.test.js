@@ -1470,6 +1470,24 @@ test('cari ekstre: tarih aralığıyla yazdırılır, son durum çıkar; hareket
   await p.context().close();
 });
 
+test('cari nakit tahsilat karşılığı HAS: satış kuruyla, ödemede alış kuruyla hesaplanır', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  await p.evaluate(() => document.querySelector('[data-route="customers"],[data-go="customers"]').click());
+  await p.waitForTimeout(400);
+  await p.evaluate(() => document.querySelector('[data-cari-move]').click());
+  await p.waitForSelector('#cmType');
+  await p.selectOption('#cmType', 'NT'); await p.selectOption('#cmUnit', 'TL'); await p.fill('#cmAmount', '93000');
+  await p.check('#cmCounterEnabled'); await p.selectOption('#cmCounterUnit', 'HAS'); await p.waitForTimeout(200);
+  const rate = Number(await p.inputValue('#cmCounterRate'));
+  assert.ok(rate > 0);
+  // Ödeme (BORÇ) seçilince karşılık kuru alış kuruna döner ve satıştan küçük olur
+  await p.selectOption('#cmType', 'NO'); await p.waitForTimeout(200);
+  const rateOut = Number(await p.inputValue('#cmCounterRate'));
+  assert.ok(rate > rateOut, `tahsilatta satış kuru (${rate}) ödemedeki alış kurundan (${rateOut}) büyük olmalı`);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
 test('stok kartı birleştir: eski kartın stoğu yeni karta aktarılır, eski kart silinir', async () => {
   const p = await newDevice(browser, appUrl, createFakeFirebase());
   p.on('dialog', () => {});
