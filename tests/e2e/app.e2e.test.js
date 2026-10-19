@@ -1335,6 +1335,11 @@ test('yeni ziynet stok kartı Ziynet Alış ve takas listelerinde çıkar; alı�
   await p.fill('#saleProductSearch', 'TEST 24 AYAR'); await p.waitForTimeout(400);
   const list = await p.innerText('#saleSearchResults');
   assert.match(list, /TEST 24 AYAR 5 GRAM[\s\S]*2 ADET stok/, 'alış kartın kendi stoğuna işlenmeli: ' + list);
+  // Altın Stokları (F9): kart satırı, adet başına kart HAS'ıyla (2 × 4,975 = 9,95 HAS)
+  await p.keyboard.press('F9');
+  await p.waitForSelector('table.gold-stock-v7');
+  assert.match(await p.innerText('table.gold-stock-v7'), /TEST 24 AYAR 5 GRAM\t4975\t2,00\t9,95/);
+  await p.click('#modalX');
   // Takas (müşteriden alınan) listesinde
   await p.fill('#saleProductSearch', ''); await p.click('[data-pay="Altın / Ziynet"]');
   await p.waitForSelector('#tiItem');

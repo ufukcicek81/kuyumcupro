@@ -5629,6 +5629,7 @@ function stockSummaryView(){
   }
 
   function ziynetPhysicalHasPerUnit(item){
+    if(item?.fromCard&&Number(item.unitHas)>0)return Number(item.unitHas);
     const grams={CEYREK:1.750,YARIM:3.500,ZIYNET:7.000,ATA:7.216,RESAT:7.216};
     const g=Number(grams[String(item?.code||'').toUpperCase()]||0); return g?g*0.916:Number(item?.buyMilyem||0)/1000;
   }
@@ -5639,7 +5640,7 @@ function stockSummaryView(){
     return (state.openStocks||[]).find(o=>o.period===state.activePeriod&&(String(o.pusulaCode||o.productCode||'').toUpperCase()===code||normalizeInventoryName(o.name).includes(n.replace('ZIYNET LIRA','ZIYNET').replace('ÇEYREK','CEYREK'))));
   }
   function applyZiynetTradeInventory(item,side,amount,costHas){
-    let o=findOpenTradeStock(item); if(!o&&side==='Alış'){o={id:uid('OPEN'),period:state.activePeriod,source:'Ziynet İşlemi',stockMode:'Açık',name:item.name,productCode:item.code,pusulaCode:item.code,displayAyar:Number(item.buyMilyem||0),purity:Number(item.fromCard?item.purity:916),amount:0,unit:'ADET',hasWeight:0,workmanshipTotalHas:0,averageWorkmanship:0,count:0,zGram:Number(item.fromCard?item.zGram:0),...(item.stockCardId?{stockCardId:item.stockCardId}:{}),location:'Açık Stok',inventoryUnitCostHas:costHas/Math.max(1,amount)};state.openStocks.push(o);}
+    let o=findOpenTradeStock(item); if(!o&&side==='Alış'){o={id:uid('OPEN'),period:state.activePeriod,source:'Ziynet İşlemi',stockMode:'Açık',name:item.name,productCode:item.code,pusulaCode:item.code,displayAyar:item.fromCard?Number(item.unitHas||0)*1000:Number(item.buyMilyem||0),purity:Number(item.fromCard?item.purity:916),amount:0,unit:'ADET',hasWeight:0,workmanshipTotalHas:0,averageWorkmanship:0,count:0,zGram:Number(item.fromCard?item.zGram:0),...(item.stockCardId?{stockCardId:item.stockCardId}:{}),location:'Açık Stok',inventoryUnitCostHas:costHas/Math.max(1,amount)};state.openStocks.push(o);}
     if(!o)return {ok:false,costHas:0};
     if(side==='Satış'&&Number(o.amount||0)<amount)return {ok:false,costHas:0,message:`${o.name} açık stok yetersiz`};
     if(side==='Alış'){setOpenWeightedUnitCost(o,amount,costHas);o.amount=Number(o.amount||0)+amount;o.count=o.amount;o.hasWeight=Number(o.hasWeight||0)+ziynetPhysicalHasPerUnit(item)*amount;return {ok:true,costHas};}
@@ -8057,6 +8058,19 @@ function stockSummaryView(){
     return {added,relinked};
   }
 
+  /* Ziynet Alış ile stok kartından açılan adetli stokların HAS'ı adet başına kart HAS'ıyla yeniden hesaplanır
+     (önceden ayar/1000 alınıyordu: 2 adet 1600 milyem çeyrek bileklik 3,20 yerine 1,83 HAS görünüyordu). */
+  function migrateZiynetCardHasV7(){
+    state.meta=state.meta||{};
+    if(Number(state.meta.ziynetCardHasV7||0)>=1)return;
+    const items=ziynetCardTradeItemsV7();
+    (state.openStocks||[]).forEach(o=>{
+      if(o.source!=='Ziynet İşlemi'||!o.stockCardId||String(o.unit||'').toUpperCase()!=='ADET')return;
+      const it=items.find(x=>x.stockCardId===o.stockCardId);if(!it||!(it.unitHas>0))return;
+      o.hasWeight=Number(o.amount||0)*it.unitHas;o.displayAyar=it.unitHas*1000;
+    });
+    state.meta.ziynetCardHasV7=1;
+  }
   function migratePusulaFixedMilyemV684(){
     state.meta=state.meta||{};
     if(Number(state.meta.pusulaFixedMilyemV684||0)>=1)return;
@@ -8081,7 +8095,7 @@ function stockSummaryView(){
   }
 
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion=APP_VERSION;migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();migratePusulaFixedMilyemV684();
+    state.meta=state.meta||{};state.meta.appVersion=APP_VERSION;migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();migratePusulaFixedMilyemV684();migrateZiynetCardHasV7();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
