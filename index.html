@@ -3645,9 +3645,24 @@ function stockSummaryView(){
       <div class="sep"></div><div class="miss">İmza: ______________________</div>
       <script>window.onload=()=>setTimeout(()=>window.print(),200)<\/script></body></html>`;
   }
+  /* Sayılan kasa ile sistem farkı: düzeltme hareketi olarak işlenir (bakiye sayılan tutara gelir, hareket listede görünür). */
+  function applyKasaCashDiffV7(res,items,values){
+    if(!v5Guard('canManageFinance'))return;
+    const rows=res.rows.filter(r=>r.cash&&r.off),plan=rows.map(r=>({r,acc:(state.cashAccounts||[]).find(a=>String(a.currency||'TL').toUpperCase()===r.unit)})).filter(x=>x.acc);
+    if(!plan.length)return toast('İşlenecek kasa farkı yok','err');
+    modal('Kasa Farkını Sisteme İşle',`<div class="notice">Kasa bakiyesi sayılan tutara getirilir. Fark, kasa hareketlerinde <b>Kasa Sayım Farkı</b> olarak görünür; yanlışsa oradan silinebilir.</div>${plan.map(({r,acc})=>`<div class="summary-row"><span>${esc(acc.name||('Kasa '+r.unit))} · sistem ${kasaCountFmtV7(r.sys,r.unit)} → sayılan ${kasaCountFmtV7(r.counted,r.unit)}</span><strong style="color:${r.diff>0?'#0a7a2f':'#c0262d'}">${r.diff>0?'+':''}${kasaCountFmtV7(r.diff,r.unit)} ${esc(r.unit)}</strong></div>`).join('')}`,()=>{
+      plan.forEach(({r,acc})=>{
+        const key=`Kasa:${acc.id}`,amt=Math.abs(r.diff),dir=r.diff>0?'Giriş':'Çıkış';
+        if(!adjustAccount(key,r.diff))return;
+        addFinanceMove({direction:dir,type:'Kasa Sayım Farkı',accountKey:key,accountAmount:amt,accountCurrency:r.unit,tlAmount:r.unit==='TL'?amt:amt*currencyTlRate(r.unit,'buy'),description:`Kasa sayımı: sistem ${kasaCountFmtV7(r.sys,r.unit)}, sayılan ${kasaCountFmtV7(r.counted,r.unit)}`,sourceCategory:'Kasa Sayımı'});
+      });
+      audit(`Kasa sayım farkı işlendi: ${plan.map(({r})=>`${r.diff>0?'+':''}${kasaCountFmtV7(r.diff,r.unit)} ${r.unit}`).join(', ')}`,'Kasa');
+      save();toast('Kasa farkı işlendi; bakiye sayılan tutara getirildi');openKasaCountReportV7(kasaCountItemsV7(),values);
+    },'FARKI İŞLE');
+  }
   function openKasaCountReportV7(items,values,saved){
     const res=saved||{...kasaCountResultV7(items,values),date:now(),user:session?.name||''};
-    modal('KASA SAYIM RAPORU',`${kasaCountReportHtmlV7(res)}<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn btn-outline" type="button" id="kcPrintV7">Yazdır</button><button class="btn btn-outline" type="button" id="kcExcelV7">Excel</button></div>`,saved?null:()=>{
+    modal('KASA SAYIM RAPORU',`${kasaCountReportHtmlV7(res)}<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn btn-outline" type="button" id="kcPrintV7">Yazdır</button><button class="btn btn-outline" type="button" id="kcExcelV7">Excel</button>${!saved&&res.rows.some(r=>r.cash&&r.off)?'<button class="btn btn-danger" type="button" id="kcCashFixV7">Kasa farkını sisteme işle</button>':''}</div>`,saved?null:()=>{
       state.kasaCountsV7=Array.isArray(state.kasaCountsV7)?state.kasaCountsV7:[];
       const slim=r=>({key:r.key,group:r.group,name:r.name,unit:r.unit,sys:r.sys,counted:r.counted,diff:r.diff,off:r.off,diffHas:r.diffHas,cash:!!r.cash});
       state.kasaCountsV7.unshift({id:uid('KSY'),period:state.activePeriod,date:res.date,user:res.user,rows:res.rows.map(slim)});
@@ -3657,6 +3672,7 @@ function stockSummaryView(){
       save();toast('Kasa sayımı kaydedildi');openGoldStocksV7();
     },'SAYIMI KAYDET');
     const cancel=document.getElementById('modalCancel');if(cancel){cancel.textContent=saved?'← GEÇMİŞ':'← SAYIMA DÖN';cancel.onclick=()=>saved?openKasaCountHistoryV7():openKasaCountV7();}
+    document.getElementById('kcCashFixV7')?.addEventListener('click',()=>applyKasaCashDiffV7(res,items,values));
     document.getElementById('kcPrintV7')?.addEventListener('click',()=>{
       const w=window.open('','_blank','width=420,height=800');if(!w)return toast('Tarayıcı açılır pencereyi engelledi','err');
       w.document.write(kasaCountPrintHtmlV7(res));w.document.close();
@@ -8257,6 +8273,8 @@ function stockSummaryView(){
   const CLOUD_LOCAL_ONLY_KEYS_V7=['cloudSync','currentUser','activePeriod'];
   const CLOUD_NON_ADDITIVE_KEYS_V7=['meta','prices','settings','systemParameters','complianceSettings','definitions','users'];
   const CLOUD_BASE_IDB_KEY_V7='cloudBaseV7';
+  // Muhasebe kayıtlarında bir cihazdaki silme (iptal) diğer cihazdaki küçük değişikliğe karşı korunur.
+  const CLOUD_DELETE_WINS_KEYS_V7=['sales','financeMoves','tradeMoves','customerMoves','purchases','stockMoves','transactions'];
   let cloudBaseV7=null,cloudLockTailV7=Promise.resolve(),cloudSeenStampsV7=[];
   // Gönderme ve buluttan alma aynı anda çalışırsa aynı fark iki kez uygulanabilir; sıraya alınır.
   function cloudLockV7(fn){const run=cloudLockTailV7.then(fn,fn);cloudLockTailV7=run.catch(()=>{});return run;}
@@ -8366,7 +8384,7 @@ function stockSummaryView(){
     const stamp=remote?.meta?.updatedAt;
     if(stamp&&stamp!==cloudBaseV7?.meta?.updatedAt&&cloudSeenStampsV7.includes(stamp))return 'same'; // eski sürüm, yok say
     const local=cloudLocalV7(),localChanged=!AsilCloudMerge.deepEqual(cloudNormV7(cloudSafeStateV5()),cloudBaseV7);
-    const merged=localChanged?AsilCloudMerge.mergeState(cloudBaseV7,local,remote,CLOUD_LOCAL_ONLY_KEYS_V7,CLOUD_NON_ADDITIVE_KEYS_V7):Object.assign(clone(remote),Object.fromEntries(CLOUD_LOCAL_ONLY_KEYS_V7.filter(k=>k in local).map(k=>[k,local[k]])));
+    const merged=localChanged?AsilCloudMerge.mergeState(cloudBaseV7,local,remote,CLOUD_LOCAL_ONLY_KEYS_V7,CLOUD_NON_ADDITIVE_KEYS_V7,CLOUD_DELETE_WINS_KEYS_V7):Object.assign(clone(remote),Object.fromEntries(CLOUD_LOCAL_ONLY_KEYS_V7.filter(k=>k in local).map(k=>[k,local[k]])));
     if(!merged)return null;
     cloudApplyStateV7(merged);
     await cloudBaseSaveV7(remote);
@@ -8423,7 +8441,7 @@ function stockSummaryView(){
         remote=cloudNormV7(remote);
         await cloudResolvePendingV7(remote);
         if(!AsilCloudMerge.deepEqual(remote,cloudBaseV7)){
-          const merged=AsilCloudMerge.mergeState(cloudBaseV7,cloudLocalV7(),remote,CLOUD_LOCAL_ONLY_KEYS_V7,CLOUD_NON_ADDITIVE_KEYS_V7);
+          const merged=AsilCloudMerge.mergeState(cloudBaseV7,cloudLocalV7(),remote,CLOUD_LOCAL_ONLY_KEYS_V7,CLOUD_NON_ADDITIVE_KEYS_V7,CLOUD_DELETE_WINS_KEYS_V7);
           // Birleştirilen bulut hâli yeni taban olur; yeniden denemede aynı fark tekrar eklenmez.
           if(merged){cloudApplyStateV7(merged);await cloudBaseSaveV7(remote);persistStateBackgroundV681(state);if(!manual)cloudRenderV7();}
         }
