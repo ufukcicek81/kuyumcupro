@@ -1559,6 +1559,26 @@ test('kasa sayımı: kasa farkı sisteme işlenir, bakiye sayılan tutara gelir 
   await p.context().close();
 });
 
+test('banka bakiyesi gerçek tutara eşitlenir; kasa değişmez', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  const tlCash = (s) => (s.cashAccounts || []).filter((x) => x.currency === 'TL').reduce((n, x) => n + Number(x.balance || 0), 0);
+  const cash0 = tlCash(fb.db.state);
+  await p.evaluate(() => document.querySelector('[data-route="customers"],[data-go="customers"]').click());
+  await p.waitForTimeout(500);
+  const bankName = await p.evaluate(() => { const e = [...document.querySelectorAll('[data-cari-card][data-cari-type="Banka"]')].find((x) => /İŞ BANKASI/.test(x.innerText)); const n = e.querySelector('h3').innerText.trim(); e.querySelector('[data-cari-detail]').click(); return n; });
+  await p.waitForSelector('#bankSetBalanceV7');
+  await p.click('#bankSetBalanceV7');
+  await p.fill('#bankRealBalV7', '26900'); await p.click('#modalConfirm'); await p.waitForTimeout(9000);
+  const st = fb.db.state, acc = (st.bankAccounts || []).find((b) => String(b.bank || b.name).includes(bankName) || bankName.includes(String(b.bank || b.name)));
+  assert.ok(acc, 'banka hesabı bulunmalı: ' + bankName);
+  assert.equal(Math.round(Number(acc.balance)), 26900, 'banka bakiyesi gerçek tutara eşitlenmeli');
+  assert.equal(Math.round(tlCash(st)), Math.round(cash0), 'kasa değişmemeli');
+  assert.ok((st.financeMoves || []).some((f) => f.type === 'Banka Bakiye Düzeltme' && f.accountId === acc.id), 'düzeltme hareketi görünmeli');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
 test('stok kartı birleştir: eski kartın stoğu yeni karta aktarılır, eski kart silinir', async () => {
   const p = await newDevice(browser, appUrl, createFakeFirebase());
   p.on('dialog', () => {});

@@ -7840,7 +7840,7 @@ function stockSummaryView(){
     const summaryUnits=['HAS','TL',...Object.keys(currentMap).filter(u=>!['HAS','TL'].includes(u))].filter((u,i,a)=>a.indexOf(u)===i).slice(0,8);
     const summary=summaryUnits.map(u=>`<div class="cari-ekstre-balance"><small>${esc(u)} Son Bakiye</small><strong class="${Number(currentMap[u]||0)>0?'negative':Number(currentMap[u]||0)<0?'positive':''}">${fmtSigned(currentMap[u]||0,u)}</strong></div>`).join('');
     const bankUnit=bankAcc?String(bankAcc.acc.currency||'TL').toUpperCase():'',bankBal=bankAcc?Number(bankAcc.acc.balance||0):0,bankGap=bankAcc?bankBal-Number(running[bankUnit]||0):0;
-    const gapNote=bankAcc?`<div class="notice" style="margin:8px 0">${Math.abs(bankGap)>=0.01?`<strong>Fark var:</strong> Banka hareketlerinin toplamı ${qty(Number(running[bankUnit]||0))} ${esc(bankUnit)}, banka hesabının bakiyesi ${qty(bankBal)} ${esc(bankUnit)}. Aradaki <b>${qty(bankGap)} ${esc(bankUnit)}</b> hareketi olmayan eski bakiyedir (ör. Pusula'dan bakiye olarak gelen). <button class="btn btn-outline" type="button" id="bankGapAsOpening" style="margin-left:6px">Farkı açılış hareketi yap</button> — bakiye değişmez, fark listede görünür ve düzeltilebilir olur.`:'Banka bakiyesi, listedeki banka hareketlerinin toplamıyla tutuyor.'} <span class="muted">“Cari kaydı” satırları bilgi içindir, banka bakiyesine eklenmez.</span></div>`:'';
+    const gapNote=bankAcc?`<div class="notice" style="margin:8px 0">${Math.abs(bankGap)>=0.01?`<strong>Fark var:</strong> Banka hareketlerinin toplamı ${qty(Number(running[bankUnit]||0))} ${esc(bankUnit)}, banka hesabının bakiyesi ${qty(bankBal)} ${esc(bankUnit)}. Aradaki <b>${qty(bankGap)} ${esc(bankUnit)}</b> hareketi olmayan eski bakiyedir (ör. Pusula'dan bakiye olarak gelen). <button class="btn btn-outline" type="button" id="bankGapAsOpening" style="margin-left:6px">Farkı açılış hareketi yap</button> — bakiye değişmez, fark listede görünür ve düzeltilebilir olur.`:'Banka bakiyesi, listedeki banka hareketlerinin toplamıyla tutuyor.'} <span class="muted">“Cari kaydı” satırları bilgi içindir, banka bakiyesine eklenmez.</span> <button class="btn btn-outline" type="button" id="bankSetBalanceV7" style="margin-left:6px">Bakiyeyi gerçek tutara eşitle</button></div>`:'';
     const body=rows.length?`
       <div class="cari-print-bar" style="display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin-bottom:8px"><label class="labelled" style="flex:1 1 130px"><span>Başlangıç</span><input id="cariPrintFrom" type="date" class="input"></label><label class="labelled" style="flex:1 1 130px"><span>Bitiş</span><input id="cariPrintTo" type="date" class="input"></label><button class="btn btn-primary" type="button" id="cariPrintStatement">Ekstre Yazdır</button></div>
       <div class="cari-ekstre-summary">${summary}</div>${gapNote}${infoRows.length?`<label style="display:flex;gap:6px;align-items:center;margin:8px 0;font-size:14px"><input type="checkbox" id="cariShowInfo" ${cariShowInfoV7?'checked':''}> Bakiyeyi etkilemeyen peşin işlemleri de göster (${infoRows.length} işlem: satış, alış, alım-satım, kasa/banka)</label>`:''}
@@ -7865,11 +7865,27 @@ function stockSummaryView(){
       </div>
       <div class="cari-ekstre-detail" id="cariEkstreDetail"></div>
       <div class="notice" style="margin-top:12px"><strong>Kullanım:</strong> Bir hareketin üzerine tıklayın. Alt bölümde o işlemden sonraki <strong>Son Durum</strong> görünür. Yukarı/Aşağı ok tuşlarıyla hareketler arasında gezebilirsiniz.</div>
-    `:'<div class="empty-state"><strong>Hareket yok</strong></div>';
+    `:`${gapNote}<div class="empty-state"><strong>Hareket yok</strong></div>`;
     modal(`Ekstre — ${c.name}`,body,null,'Kapat');
     const modalEl=document.querySelector('#modalRoot .modal'); if(modalEl)modalEl.style.width='min(1080px,96vw)';
     document.getElementById('cariShowInfo')?.addEventListener('change',e=>{cariShowInfoV7=e.target.checked;openCariDetail(c.id);});
     document.getElementById('cariPrintStatement')?.addEventListener('click',()=>printCariStatementV7(c.id,document.getElementById('cariPrintFrom').value,document.getElementById('cariPrintTo').value));
+    // Banka bakiyesini bankadaki gerçek tutara getirir; fark yalnız banka hesabına "Banka Bakiye Düzeltme" olarak yazılır, kasaya dokunmaz.
+    document.getElementById('bankSetBalanceV7')?.addEventListener('click',()=>{
+      if(!v5Guard('canManageFinance'))return;
+      const name=bankAcc.acc.bank||bankAcc.acc.name||'Banka';
+      modal('Banka Bakiyesini Eşitle',`<div class="notice">Bankadaki <b>gerçek</b> tutarı yazın. Aradaki fark yalnız <b>${esc(name)}</b> hesabına "Banka Bakiye Düzeltme" hareketi olarak işlenir; <b>kasa değişmez</b>. Yanlışsa ekstreden silinebilir.</div><div class="summary-row"><span>Sistemdeki bakiye</span><strong>${qty(bankBal)} ${esc(bankUnit)}</strong></div><div class="labelled" style="margin-top:10px"><label>Bankadaki gerçek bakiye (${esc(bankUnit)})</label><input id="bankRealBalV7" class="input" inputmode="decimal" autocomplete="off"></div><div class="labelled"><label>Açıklama</label><input id="bankRealDescV7" class="input" value="Banka bakiyesi gerçek tutara eşitlendi"></div>`,()=>{
+        const real=parseTrNumber(document.getElementById('bankRealBalV7').value),diff=real-bankBal;
+        if(!Number.isFinite(real)||document.getElementById('bankRealBalV7').value.trim()==='')return toast('Gerçek bakiyeyi yazın','err');
+        if(Math.abs(diff)<0.005)return toast('Bakiye zaten bu tutarda','err');
+        const key=`${bankAcc.kind}:${bankAcc.acc.id}`,amt=Math.abs(diff);
+        adjustAccount(key,diff);
+        const fm=addFinanceMove({direction:diff>0?'Giriş':'Çıkış',type:'Banka Bakiye Düzeltme',accountKey:key,accountAmount:amt,accountCurrency:bankUnit,tlAmount:bankUnit==='TL'?amt:amt*currencyTlRate(bankUnit,'buy'),description:`${document.getElementById('bankRealDescV7').value||''} · sistem ${qty(bankBal)} → gerçek ${qty(real)}`,sourceCategory:'Banka Düzeltme'});
+        audit(`${name}: bakiye ${qty(bankBal)} → ${qty(real)} ${bankUnit} (kasa etkilenmedi)`,'Banka');
+        closeModal();toast('Banka bakiyesi eşitlendi; kasa değişmedi');afterBankFinanceChangeV7(fm||{},c.id);
+      },'EŞİTLE');
+      setTimeout(()=>document.getElementById('bankRealBalV7')?.focus(),50);
+    });
     document.getElementById('bankGapAsOpening')?.addEventListener('click',()=>{
       const first=(state.financeMoves||[]).filter(f=>f.accountKind===bankAcc.kind&&f.accountId===bankAcc.acc.id).map(f=>String(f.date||'')).sort()[0];
       const date=first?first.slice(0,10)+'T00:00:00':now();
