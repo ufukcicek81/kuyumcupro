@@ -2419,7 +2419,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       <label class="labelled" style="flex:1 1 140px"><span>Bitiş</span><input id="saleHistTo" type="date" class="input"></label>
       <label class="labelled" style="flex:1 1 140px"><span>Ödeme</span><select id="saleHistPay" class="select"><option value="">Tümü</option><option>Nakit</option><option>Kart</option><option>Havale</option><option>Altın</option><option>Açık Hesap</option></select></label>
       <label class="labelled" style="flex:1 1 160px"><span>Banka</span><select id="saleHistBank" class="select"><option value="">Tüm bankalar</option>${banks.map(b=>`<option>${esc(b)}</option>`).join('')}</select></label>
-      <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-outline" type="button" data-hist-range="today">Bugün</button><button class="btn btn-outline" type="button" data-hist-range="week">Bu Hafta</button><button class="btn btn-outline" type="button" data-hist-range="month">Bu Ay</button><button class="btn btn-outline" type="button" data-hist-range="">Temizle</button></div></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-outline" type="button" data-hist-range="today">Bugün</button><button class="btn btn-outline" type="button" data-hist-range="week">Bu Hafta</button><button class="btn btn-outline" type="button" data-hist-range="month">Bu Ay</button><button class="btn btn-outline" type="button" data-hist-range="">Temizle</button><button class="btn btn-outline" type="button" id="saleHistExcel">Excel</button></div></div>
       <div id="saleHistSummary" class="sale-hist-summary" style="display:flex;flex-wrap:wrap;gap:8px;margin:10px 0"></div>
       <div class="table-wrap sale-hist-wrap"><table class="table" style="min-width:1000px"><thead><tr><th>Belge</th><th>Tarih</th><th>Müşteri</th><th>Personel</th><th>Ödeme / Banka</th><th class="num">Toplam</th><th>İşlem</th></tr></thead><tbody id="saleHistBody"></tbody></table></div>
       <div class="notice" style="margin-top:10px">Tarih seçilmezse aktif dönemin (${state.activePeriod}) satışları listelenir; tarih seçilince tüm dönemlerde aranır. Düzeltme, eski fişi güvenli şekilde geri alıp aynı belge numarasıyla satış ekranına yeniden açar.</div>`;
@@ -2428,6 +2428,20 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const $=id=>document.getElementById(id),tb=$('saleHistBody');
     const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     const badge=x=>`<span class="badge ${x.kind==='Nakit'?'green':x.kind==='Kart'?'blue':x.kind==='Havale'?'gold':x.amount<0?'red':''}" style="margin:1px">${esc(x.kind)}${x.bank?' · '+esc(x.bank):''} ${money(Math.abs(x.amount))}${x.amount<0?' (ödeme)':''}</span>`;
+    let lastRows=[];
+    // Görünen (süzülmüş) satış ve alışlar: ürünler ve ödeme şekilleriyle Excel'e (Pusula ile karşılaştırma için).
+    const exportExcel=async()=>{
+      try{const X=await loadXlsxV7();const cust=id=>state.customers.find(c=>c.id===id)?.name||'Peşin';
+        const aoa=[['TARİH','BELGE','TÜR','MÜŞTERİ','PERSONEL','ÜRÜNLER','TUTAR','ÖDEMELER']];
+        lastRows.slice().reverse().forEach(r=>{
+          if(r.b){const b=r.b;aoa.push([trDate(b.date),b.docNo,'ALTIN/ZİYNET ALIŞ',cust(b.customerId)||b.customer||'',b.user||'',b.items.map(x=>`${x.item} ${qty(x.quantity)} ${x.unit||''}`).join(', '),-Number(b.total||0),'Müşteriye ödendi']);return;}
+          const s=r.s,lines=(s.lines||[]).map(l=>`${l.name||l.code||''} ${qty(l.displayAmount??l.qty??l.amount??1)} ${l.unit||''} = ${qty(Number(l.total??l.price??0))}`),ret=(s.returnItems||[]).map(x=>`İADE ${x.itemName||''} ${qty(x.quantity||0)}`);
+          aoa.push([trDate(s.date),s.docNo||s.id,'SATIŞ',cust(s.customerId),s.salesperson||'',[...lines,...ret].join(', '),Number(s.total||0),salePaymentPartsV7(s).map(x=>`${x.kind}${x.bank?' '+x.bank:''} ${qty(x.amount)}`).join(', ')]);
+        });
+        const ws=X.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:17},{wch:17},{wch:18},{wch:22},{wch:14},{wch:60},{wch:12},{wch:50}];
+        const wb=X.utils.book_new();X.utils.book_append_sheet(wb,ws,'Satış Geçmişi');X.writeFile(wb,`SATIS_GECMISI_${localDayV7()}.xlsx`);
+      }catch(e){toast('Excel oluşturulamadı: '+(e?.message||e),'err');}
+    };
     const draw=()=>{
       const term=String($('saleHistSearch').value||'').toLocaleUpperCase('tr-TR').trim(),from=$('saleHistFrom').value,to=$('saleHistTo').value,pay=$('saleHistPay').value,bank=$('saleHistBank').value;
       const filtered=all.filter(s=>{
@@ -2452,11 +2466,12 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       const sums={};let total=0;
       filtered.forEach(s=>{total+=Number(s.total||0);salePaymentPartsV7(s).forEach(x=>{const k=x.kind+(x.bank?' · '+x.bank:'');sums[k]=(sums[k]||0)+x.amount;});});
       $('saleHistSummary').innerHTML=`<span class="badge gold" style="font-size:14px">${filtered.length} satış · ${money(total)}</span>`+(fBuys.length?`<span class="badge red" style="font-size:14px">${fBuys.length} altın/ziynet alış · ${money(buyTotal)}</span>`:'')+Object.entries(sums).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class="badge" style="font-size:13px">${esc(k)}: ${money(v)}</span>`).join('');
-      const rows=[...filtered.map(s=>({date:s.date,s})),...fBuys.map(b=>({date:b.date,b}))].sort((x,y)=>String(y.date).localeCompare(String(x.date)));
+      const rows=[...filtered.map(s=>({date:s.date,s})),...fBuys.map(b=>({date:b.date,b}))].sort((x,y)=>String(y.date).localeCompare(String(x.date)));lastRows=rows;
       const buyRow=b=>`<tr class="sale-hist-buy"><td><strong>${esc(b.docNo)}</strong> <span class="badge red">ALIŞ</span></td><td>${trDate(b.date)}</td><td>${esc(state.customers.find(c=>c.id===b.customerId)?.name||b.customer||'Peşin')}</td><td>${esc(b.user||'')}</td><td>${b.items.map(x=>`<span class="badge" style="margin:1px">${esc(x.item)} · ${qty(x.quantity)} ${esc(x.unit||'')}</span>`).join(' ')}</td><td class="num"><strong>−${money(b.total)}</strong></td><td><div style="display:flex;gap:6px;flex-wrap:nowrap"><button class="btn btn-primary" data-buy-edit="${esc(b.docNo)}">Düzelt</button><button class="btn btn-danger" data-buy-cancel="${esc(b.docNo)}">İptal</button></div></td></tr>`;
       tb.innerHTML=rows.map(r=>r.b?buyRow(r.b):(s=>`<tr><td><strong>${esc(s.docNo||s.id)}</strong></td><td>${trDate(s.date)}</td><td>${esc(state.customers.find(c=>c.id===s.customerId)?.name||'Peşin')}</td><td>${esc(s.salesperson||'')}</td><td>${salePaymentPartsV7(s).map(badge).join(' ')||'—'}</td><td class="num"><strong>${money(s.total||0)}</strong></td><td><div style="display:flex;gap:6px;flex-wrap:nowrap"><button class="btn btn-outline" data-sale-view="${s.id}">Gör</button><button class="btn btn-primary" data-sale-edit="${s.id}">Düzelt</button><button class="btn btn-danger" data-sale-cancel="${s.id}">İptal</button></div></td></tr>`)(r.s)).join('')||'<tr><td colspan="7">Satış bulunamadı.</td></tr>';
       tb.querySelectorAll('[data-sale-view]').forEach(b=>b.onclick=()=>viewSaleRecord(b.dataset.saleView));tb.querySelectorAll('[data-sale-edit]').forEach(b=>b.onclick=()=>reopenSaleForEdit(b.dataset.saleEdit));tb.querySelectorAll('[data-sale-cancel]').forEach(b=>b.onclick=()=>cancelSaleFromHistory(b.dataset.saleCancel));tb.querySelectorAll('[data-buy-cancel]').forEach(b=>b.onclick=()=>cancelSaleScreenPurchaseV7(b.dataset.buyCancel));tb.querySelectorAll('[data-buy-edit]').forEach(b=>b.onclick=()=>editSaleScreenPurchaseV7(b.dataset.buyEdit));
     };
+    $('saleHistExcel')?.addEventListener('click',exportExcel);
     ['saleHistSearch','saleHistFrom','saleHistTo','saleHistPay','saleHistBank'].forEach(id=>{$(id).addEventListener('input',draw);$(id).addEventListener('change',draw);});
     document.querySelectorAll('[data-hist-range]').forEach(b=>b.onclick=()=>{const now0=new Date(),r=b.dataset.histRange;let f='',tt='';if(r==='today'){f=tt=iso(now0);}else if(r==='week'){const d=new Date(now0);d.setDate(d.getDate()-((d.getDay()+6)%7));f=iso(d);tt=iso(now0);}else if(r==='month'){f=iso(new Date(now0.getFullYear(),now0.getMonth(),1));tt=iso(now0);}else{$('saleHistSearch').value='';$('saleHistPay').value='';$('saleHistBank').value='';}$('saleHistFrom').value=f;$('saleHistTo').value=tt;draw();});
     draw();
