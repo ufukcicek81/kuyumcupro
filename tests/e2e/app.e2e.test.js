@@ -1159,6 +1159,11 @@ test('satış geçmişi: tam pencere, tarih ve ödeme/banka filtresi, ödeme şe
   assert.ok(mw > vw - 40, `pencere ekranı doldurmalı (${mw}/${vw})`);
   assert.match(await p.innerText('#saleHistBody'), /Havale · İŞ BANKASI/, 'ödeme şekli ve banka görünmeli');
   assert.match(await p.innerText('#saleHistSummary'), /1 satış · 5\.000,00/);
+  const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#saleHistExcel')]);
+  assert.match(dl.suggestedFilename(), /^SATIS_GECMISI_.*\.xlsx$/);
+  const XLSX = require('xlsx'); const wb = XLSX.readFile(await dl.path());
+  const aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+  assert.ok(aoa.some((r) => /SAT-/.test(r[1]) && /Havale/.test(r[7] || '') && Number(r[6]) === 5000), 'satış ödeme şekliyle Excel\'de olmalı');
   await p.selectOption('#saleHistPay', 'Nakit');
   assert.match(await p.innerText('#saleHistBody'), /Satış bulunamadı/, 'nakit filtresinde havale satışı çıkmamalı');
   await p.selectOption('#saleHistPay', '');
