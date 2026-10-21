@@ -502,6 +502,29 @@ body[data-theme="light"] .nav-search input{background:#f7f8fa;color:#18202a}body
 .sale-inline-help{display:block;margin-top:5px;font-size:11px;color:var(--muted);white-space:nowrap}
 
 /* === V2.9 ASİL CANLI FİYAT ENTEGRASYONU === */
+/* Fiyat panosu: gün boyu açık kalacak büyük, okunaklı fiyat ekranı */
+.price-board{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:14px}
+.price-board:fullscreen{background:var(--bg);padding:24px;overflow:auto;border-radius:0}
+.pb-head{display:grid;grid-template-columns:minmax(220px,1.4fr) 1fr 1fr;gap:12px}
+.pb-status,.pb-has{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px}
+.pb-status i{width:14px;height:14px;border-radius:50%;background:#f0ad4e;flex:none}.pb-status.live i{background:#24b47e;box-shadow:0 0 0 5px rgba(36,180,126,.16);animation:pbPulse 2s infinite}.pb-status.offline i{background:#ef4c4c}
+.pb-status strong{display:block;font-size:20px}.pb-status small{color:var(--muted);font-size:13px}
+.pb-has{flex-direction:column;align-items:flex-start;gap:2px}.pb-has span:first-child{color:var(--muted);font-size:14px;font-weight:700}.pb-has .pb-num{font-size:clamp(28px,3vw,40px);font-weight:800;color:var(--red)}.pb-has.sell .pb-num{color:var(--green)}
+.pb-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(300px,1fr);gap:14px;align-items:start}
+.pb-side{display:grid;gap:14px}
+.pb-card{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.pb-card h3{margin:0;padding:12px 16px;font-size:18px;letter-spacing:.02em;border-bottom:1px solid var(--line);color:var(--gold)}
+.pb-table{width:100%;border-collapse:collapse}
+.pb-table th{font-size:13px;color:var(--muted);text-align:right;padding:8px 16px;font-weight:700}.pb-table th:first-child{text-align:left}
+.pb-table td{padding:10px 16px;border-top:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pb-table td:first-child{text-align:left;font-weight:800;font-size:clamp(17px,1.6vw,24px);white-space:normal}
+.pb-table .pb-num{font-weight:800;font-size:clamp(20px,2.1vw,32px);border-radius:6px;padding:0 4px;transition:background-color .6s}
+.pb-side .pb-table .pb-num{font-size:clamp(18px,1.7vw,26px)}
+.pb-table td.a .pb-num{color:var(--red)}.pb-table td.s .pb-num{color:var(--green)}.pb-table td.k .pb-num{color:var(--blue)}
+.pb-num.up{animation:pbUp 1.6s ease-out}.pb-num.down{animation:pbDown 1.6s ease-out}
+@keyframes pbUp{from{background:rgba(36,180,126,.32)}to{background:transparent}}@keyframes pbDown{from{background:rgba(239,76,76,.32)}to{background:transparent}}
+@keyframes pbPulse{50%{box-shadow:0 0 0 9px rgba(36,180,126,0)}}
+@media(max-width:900px){.pb-head{grid-template-columns:1fr 1fr}.pb-status{grid-column:1/-1}.pb-grid{grid-template-columns:1fr}.pb-table td{padding:8px 10px}}
 .market-sync{display:inline-flex;align-items:center;gap:6px;padding:5px 8px;border:1px solid var(--line);border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap}
 .market-sync .dot{width:7px;height:7px;border-radius:50%;background:#f0ad4e;box-shadow:0 0 0 3px rgba(240,173,78,.12)}
 .market-sync.live .dot{background:#24b47e;box-shadow:0 0 0 3px rgba(36,180,126,.14)}
@@ -2569,6 +2592,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     if(txt)txt.textContent=state.settings.livePriceSync===false?'MANUEL':state.market?.status==='live'?'CANLI':state.market?.status==='offline'?'SON KAYIT':'BAĞLANIYOR';
     const st=document.getElementById('livePriceState'); if(st)st.textContent=state.settings.livePriceSync===false?'Otomatik fiyat kapalı':state.market?.status==='live'?'Canlı fiyat bağlı':state.market?.status==='offline'?'Bağlantı yok — son fiyat kullanılıyor':'Canlı fiyat bekleniyor';
     const tm=document.getElementById('livePriceTime'); if(tm)tm.textContent=state.market?.lastUpdated?trDate(state.market.lastUpdated):'—';
+    updatePriceBoardV7();
     document.querySelectorAll('[data-price]').forEach(i=>{if(document.activeElement===i)return;const [k,f]=i.dataset.price.split('.');if(state.prices[k]&&Number.isFinite(Number(state.prices[k][f])))i.value=state.prices[k][f];});
     document.querySelectorAll('[data-item]').forEach(i=>{if(document.activeElement===i)return;const [idx,f]=i.dataset.item.split('.');const row=state.prices.items?.[Number(idx)];if(row&&Number.isFinite(Number(row[f])))i.value=row[f];});
   }
@@ -2587,20 +2611,68 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   const ASIL_SCREEN_ITEMS_V7=[{id:'has24',label:'24 Ayar',defA:1,defS:1.003},{id:'ayar22',label:'22 Ayar',defA:.91,defS:.922},{id:'tam',label:'Tam',defA:.993,defS:1.008},{id:'yarim',label:'Yarım',defA:.993,defS:1.009},{id:'ceyrek',label:'Çeyrek',defA:.992,defS:1.01},{id:'besli',label:'Beşli',defA:.993,defS:1.008},{id:'yarimbes',label:'Yarım Beşli',defA:.993,defS:1.0085},{id:'resat',label:'Reşat',defA:.993,defS:1.007},{id:'ata',label:'Ata',defA:.993,defS:1.007},{id:'gremise',label:'Gremise',defA:.993,defS:1.008}];
   const asilPriceKeyV7=x=>String(x||'').toLocaleUpperCase('tr-TR').replace(/LİRA|ALTIN|AYAR|ADET/g,'').replace(/[^A-Z0-9ÇĞİÖŞÜ.]/g,'');
   let asilLiveRawV7={};
-  // Fiyat ekranında görünen tablonun aynısı (ürünler + K. Kartı, döviz, hurda); Fiyat & Kur sayfasında gösterilir.
-  function asilScreenTableHtmlV7(){
-    if(!asilScreenLoadedV7())return `<div class="card" style="margin-top:16px"><div class="section-head"><h3>Fiyat Ekranı</h3><span>bağlanıyor</span></div><div class="muted">Fiyat ekranı ayarları henüz okunamadı. İnternet bağlantısını kontrol edip "Şimdi Güncelle"ye basın.</div></div>`;
-    const st=remoteAsilPriceSettings,hb=Number(state.prices.has?.buy||0),hs=Number(state.prices.has?.sell||0),kk=Number(st.kkOran)||0,f=v=>v?Math.round(v).toLocaleString('tr-TR'):'—';
-    const items=asilScreenItemsV7().filter(i=>!i.hidden),order=st.itemOrder||[];items.sort((a,b)=>{const x=order.indexOf(a.id),y=order.indexOf(b.id);return (x<0?999:x)-(y<0?999:y);});
-    const fx=(Array.isArray(st.dovizItems)&&st.dovizItems.length?st.dovizItems:[{id:'usd',label:'USD'},{id:'eur',label:'EUR'},{id:'gbp',label:'GBP'},{id:'sar',label:'SAR'},{id:'chf',label:'CHF'}]).map(d=>{const a=Number(asilLiveRawV7[d.id+'Alis'])||0,sl=Number(asilLiveRawV7[d.id+'Satis'])||0,dz=st.dovizDuz||{};return {label:d.label||d.id.toUpperCase(),a:a?a+(Number(dz[d.id+'A'])||0):0,s:sl?sl+(Number(dz[d.id+'S'])||0):0};});
-    return `<div class="grid grid-2" style="margin-top:16px"><div class="card"><div class="section-head"><h3>Fiyat Ekranındaki Altın Fiyatları</h3><span>otomatik</span></div><div class="table-wrap"><table class="table" id="asilScreenPrices"><thead><tr><th>Birim</th><th class="num">Alış</th><th class="num">Satış</th><th class="num">K. Kartı</th></tr></thead><tbody>${items.map(i=>{const a=hb*i.a,sl=hs*i.s;return `<tr><td><strong>${esc(i.label)}</strong></td><td class="num">${f(a)}</td><td class="num">${f(sl)}</td><td class="num">${f(Math.round(sl)*(1+kk/100))}</td></tr>`;}).join('')}</tbody></table></div></div>
-      <div class="card"><div class="section-head"><h3>Döviz ve Hurda</h3><span>fiyat ekranından</span></div><div class="table-wrap"><table class="table"><thead><tr><th>Cins</th><th class="num">Alış</th><th class="num">Satış</th></tr></thead><tbody>${fx.map(d=>`<tr><td><strong>${esc(d.label)}</strong></td><td class="num">${d.a?d.a.toFixed(2):'—'}</td><td class="num">${d.s?d.s.toFixed(2):'—'}</td></tr>`).join('')}${asilScreenHurdaV7().map(h=>`<tr><td><strong>${esc(h.label)}</strong></td><td class="num">${f(hb*h.a)}</td><td class="num">${f(hs*h.s)}</td></tr>`).join('')}</tbody></table></div></div></div>`;
+  // Programın kendi döviz farkları (fiyat ekranındaki farkların üstüne eklenir; varsayılan 0).
+  const BOARD_FX_V7=[{id:'usd',label:'USD',name:'Amerikan Doları'},{id:'eur',label:'EUR',name:'Euro'},{id:'gbp',label:'GBP',name:'İngiliz Sterlini'},{id:'chf',label:'CHF',name:'İsviçre Frangı'},{id:'sar',label:'SAR',name:'Suudi Riyali'}];
+  function programFxAdjV7(id,side){const n=Number(state.settings.fxProgramAdj?.[id]?.[side]);return Number.isFinite(n)?n:0;}
+  function boardFxRowsV7(){
+    return BOARD_FX_V7.map(d=>{
+      const rawA=Number(asilLiveRawV7[d.id+'Alis'])||0,rawS=Number(asilLiveRawV7[d.id+'Satis'])||0;
+      let a=Number(state.prices[d.id]?.buy)||0,sl=Number(state.prices[d.id]?.sell)||0;
+      if(!state.prices[d.id]&&rawA){a=rawA+remoteFxAdjustment(d.id,'buy')+programFxAdjV7(d.id,'buy');sl=rawS+remoteFxAdjustment(d.id,'sell')+programFxAdjV7(d.id,'sell');}
+      return {...d,rawA,rawS,a,s:sl};
+    }).filter(d=>d.a||d.s);
+  }
+  // Fiyat panosu satırları: fiyat ekranı ayarları geldiyse ekrandaki ürünler, gelmediyse programın fiyat listesi.
+  function boardGoldRowsV7(){
+    const hb=Number(state.prices.has?.buy||0),hs=Number(state.prices.has?.sell||0);
+    if(asilScreenLoadedV7()){
+      const st=remoteAsilPriceSettings,kk=Number(st.kkOran)||0,order=st.itemOrder||[];
+      const items=asilScreenItemsV7().filter(i=>!i.hidden);items.sort((x,y)=>{const i=order.indexOf(x.id),j=order.indexOf(y.id);return (i<0?999:i)-(j<0?999:j);});
+      return items.map(i=>{const a=Math.round(hb*i.a),sl=Math.round(hs*i.s);return {key:i.id,label:i.label,a,s:sl,k:kk?Math.round(sl*(1+kk/100)):0};});
+    }
+    return (state.prices.items||[]).filter(x=>!/H$/.test(String(x.code||''))).map(x=>({key:x.code,label:x.name,a:Number(x.buy)||0,s:Number(x.sell)||0,k:0}));
+  }
+  function boardHurdaRowsV7(){
+    const hb=Number(state.prices.has?.buy||0),hs=Number(state.prices.has?.sell||0);
+    if(asilScreenLoadedV7())return asilScreenHurdaV7().map(h=>({key:h.id,label:h.label,a:Math.round(hb*h.a),s:Math.round(hs*h.s)}));
+    return (state.prices.items||[]).filter(x=>/H$/.test(String(x.code||''))).map(x=>({key:x.code,label:x.name,a:Number(x.buy)||0,s:Number(x.sell)||0}));
+  }
+  const boardPrevV7={};
+  // Değer değişince hücre kısa süre yeşil (yükseldi) / kırmızı (düştü) yanar.
+  function boardCellV7(key,v,digits=0){
+    const prev=boardPrevV7[key],cls=prev!==undefined&&v&&prev!==v?(v>prev?' up':' down'):'';boardPrevV7[key]=v;
+    const txt=v?Number(v).toLocaleString('tr-TR',{minimumFractionDigits:digits,maximumFractionDigits:digits}):'—';
+    return `<span class="pb-num${cls}">${txt}</span>`;
+  }
+  function priceBoardInnerV7(){
+    const live=state.market?.status==='live',off=state.settings.livePriceSync===false,gold=boardGoldRowsV7(),hurda=boardHurdaRowsV7(),fx=boardFxRowsV7(),hasK=gold.some(r=>r.k);
+    return `<div class="pb-head">
+        <div class="pb-status ${off?'':live?'live':'offline'}"><i></i><div><strong>${off?'Otomatik fiyat kapalı':live?'Piyasa Canlı':state.market?.status==='offline'?'Bağlantı yok — son fiyat':'Bağlanıyor'}</strong><small>Son güncelleme: ${state.market?.lastUpdated?new Date(state.market.lastUpdated).toLocaleTimeString('tr-TR'):'—'}</small></div></div>
+        <div class="pb-has"><span>Has Alış</span>${boardCellV7('has.a',Number(state.prices.has?.buy||0))}</div>
+        <div class="pb-has sell"><span>Has Satış</span>${boardCellV7('has.s',Number(state.prices.has?.sell||0))}</div>
+      </div>
+      <div class="pb-grid">
+        <section class="pb-card pb-gold"><h3>Altın Fiyatları</h3><table class="pb-table" id="asilScreenPrices"><thead><tr><th>Birim</th><th>Alış</th><th>Satış</th>${hasK?'<th>K. Kartı</th>':''}</tr></thead><tbody>${gold.map(r=>`<tr><td>${esc(r.label)}</td><td class="a">${boardCellV7('g.'+r.key+'.a',r.a)}</td><td class="s">${boardCellV7('g.'+r.key+'.s',r.s)}</td>${hasK?`<td class="k">${boardCellV7('g.'+r.key+'.k',r.k)}</td>`:''}</tr>`).join('')}</tbody></table></section>
+        <div class="pb-side">
+          <section class="pb-card"><h3>Döviz Kurları</h3><table class="pb-table" id="boardFx"><thead><tr><th>Döviz</th><th>Alış</th><th>Satış</th></tr></thead><tbody>${fx.map(d=>`<tr><td>${esc(d.label)}</td><td class="a">${boardCellV7('fx.'+d.id+'.a',d.a,2)}</td><td class="s">${boardCellV7('fx.'+d.id+'.s',d.s,2)}</td></tr>`).join('')||'<tr><td colspan="3" class="muted">Kur bekleniyor</td></tr>'}</tbody></table></section>
+          <section class="pb-card"><h3>Hurda Altın</h3><table class="pb-table"><thead><tr><th>Tür</th><th>Alış</th><th>Satış</th></tr></thead><tbody>${hurda.map(r=>`<tr><td>${esc(r.label)}</td><td class="a">${boardCellV7('h.'+r.key+'.a',r.a)}</td><td class="s">${boardCellV7('h.'+r.key+'.s',r.s)}</td></tr>`).join('')||'<tr><td colspan="3" class="muted">—</td></tr>'}</tbody></table></section>
+        </div>
+      </div>`;
+  }
+  function updatePriceBoardV7(){const el=document.getElementById('priceBoard');if(el)el.innerHTML=priceBoardInnerV7();}
+  function fxAdjPanelHtmlV7(){
+    const f2=v=>v?Number(v).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:4}):'—';
+    return `<div class="card" style="margin-top:16px"><div class="section-head"><h3>Döviz Alış / Satış Farkı</h3><span>kurlara eklenen TL farkı</span></div>
+      <p class="muted" style="margin:0 0 10px">Piyasa kuruna önce fiyat ekranındaki fark, sonra buradaki fark eklenir. Kuru düşürmek için eksi yazın (örn. -0,50). Fark 0 ise yalnız fiyat ekranının farkı geçerlidir.</p>
+      <div class="table-wrap"><table class="table" id="fxAdjTable"><thead><tr><th>Döviz</th><th class="num">Piyasa Alış</th><th class="num">Piyasa Satış</th><th class="num">Fiyat Ekranı Farkı (A / S)</th><th class="num">Alış Farkı (TL)</th><th class="num">Satış Farkı (TL)</th><th class="num">Kullanılan Alış</th><th class="num">Kullanılan Satış</th></tr></thead><tbody>${BOARD_FX_V7.filter(d=>d.id!=='sar').map(d=>{const ra=Number(asilLiveRawV7[d.id+'Alis'])||0,rs=Number(asilLiveRawV7[d.id+'Satis'])||0;return `<tr><td><strong>${d.label}</strong> <small class="muted">${d.name}</small></td><td class="num">${f2(ra)}</td><td class="num">${f2(rs)}</td><td class="num">${remoteFxAdjustment(d.id,'buy').toLocaleString('tr-TR')} / ${remoteFxAdjustment(d.id,'sell').toLocaleString('tr-TR')}</td><td class="num"><input class="input" style="max-width:110px;text-align:right" type="number" step="0.01" data-fx-adj="${d.id}.buy" value="${programFxAdjV7(d.id,'buy')}"></td><td class="num"><input class="input" style="max-width:110px;text-align:right" type="number" step="0.01" data-fx-adj="${d.id}.sell" value="${programFxAdjV7(d.id,'sell')}"></td><td class="num"><strong>${f2(state.prices[d.id]?.buy)}</strong></td><td class="num"><strong>${f2(state.prices[d.id]?.sell)}</strong></td></tr>`;}).join('')}</tbody></table></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-primary" id="saveFxAdj">Farkları Kaydet</button></div></div>`;
   }
   const asilScreenLoadedV7=()=>Object.keys(remoteAsilPriceSettings||{}).length>0;
   function asilScreenItemsV7(){
     if(!asilScreenLoadedV7())return [];
     const st=remoteAsilPriceSettings||{},hidden=st.hiddenItems||[],deleted=st.deletedItems||[];
-    return ASIL_SCREEN_ITEMS_V7.concat(Array.isArray(st.customItems)?st.customItems:[]).filter(i=>i&&i.id&&!deleted.includes(i.id)).map(i=>{
+    const seen=new Set();
+    return ASIL_SCREEN_ITEMS_V7.concat(Array.isArray(st.customItems)?st.customItems:[]).filter(i=>i&&i.id&&!deleted.includes(i.id)&&!seen.has(i.id)&&seen.add(i.id)).map(i=>{
       const l=(st.aktifMod==='hareketli'&&st.laborH?.[i.id])||st.labor?.[i.id]||{a:i.defA,s:i.defS};
       return {id:i.id,label:String(i.label||i.id),a:Number(l.a)||0,s:Number(l.s)||0,hidden:hidden.includes(i.id)};
     });
@@ -2637,7 +2709,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       Object.entries(fxMap).forEach(([id,keys])=>{
         const b=nestedMarketValue(data,[keys[0],id+'.alis',id.toUpperCase()+'.alis','data.'+keys[0]]);
         const sl=nestedMarketValue(data,[keys[1],id+'.satis',id.toUpperCase()+'.satis','data.'+keys[1]]);
-        if(b||sl){state.prices[id]=state.prices[id]||{buy:0,sell:0}; if(b)state.prices[id].buy=b+remoteFxAdjustment(id,'buy'); if(sl)state.prices[id].sell=sl+remoteFxAdjustment(id,'sell');}
+        if(b||sl){state.prices[id]=state.prices[id]||{buy:0,sell:0}; if(b)state.prices[id].buy=b+remoteFxAdjustment(id,'buy')+programFxAdjV7(id,'buy'); if(sl)state.prices[id].sell=sl+remoteFxAdjustment(id,'sell')+programFxAdjV7(id,'sell');}
       });
       recalcGoldItemsFromHas();
       state.market.status='live'; state.market.lastUpdated=now(); state.market.lastError=''; state.market.source='Asil Kuyumcu / Cloudflare Worker';
@@ -4705,12 +4777,15 @@ function stockSummaryView(){
 
   function pagePrices(){
     const p=state.prices;
-    return `<div class="page-title"><div><h1>Fiyat & Kur</h1><p>HAS ve döviz fiyatları Asil Kuyumcu canlı fiyat sisteminden otomatik gelir.</p></div><button class="btn btn-primary" id="savePrices">Fiyatları Kaydet</button></div>
-      <div class="card live-price-panel"><div><div><strong id="livePriceState">${state.settings.livePriceSync===false?'Otomatik fiyat kapalı':state.market?.status==='live'?'Canlı fiyat bağlı':state.market?.status==='offline'?'Bağlantı yok — son fiyat kullanılıyor':'Canlı fiyat bekleniyor'}</strong></div><div class="source">Kaynak: Asil Kuyumcu fiyat ekranı · Canlı fiyat + ${esc(state.market?.settingsSource||'ayarlar bekleniyor')} · Son güncelleme: <span id="livePriceTime">${state.market?.lastUpdated?trDate(state.market.lastUpdated):'—'}</span></div></div><div class="actions"><button class="btn btn-outline" id="refreshLivePrices">Şimdi Güncelle</button><button class="btn ${state.settings.livePriceSync===false?'btn-outline':'btn-success'}" id="toggleLivePrices">${state.settings.livePriceSync===false?'Otomatik Fiyatı Aç':'Otomatik Fiyat Açık'}</button></div></div>
+    return `<div class="page-title"><div><h1>Fiyat Panosu</h1><p>Fiyatlar Asil Kuyumcu fiyat ekranından otomatik gelir ve kendiliğinden yenilenir.</p></div><div class="actions" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" id="boardFullscreen">⛶ Tam Ekran</button><button class="btn btn-outline" id="refreshLivePrices">Şimdi Güncelle</button><button class="btn ${state.settings.livePriceSync===false?'btn-outline':'btn-success'}" id="toggleLivePrices">${state.settings.livePriceSync===false?'Otomatik Fiyatı Aç':'Otomatik Fiyat Açık'}</button></div></div>
+      <div class="price-board" id="priceBoard">${priceBoardInnerV7()}</div>
+      ${fxAdjPanelHtmlV7()}
+      <details class="card" style="margin-top:16px"><summary style="cursor:pointer;font-weight:700">Gelişmiş: manuel fiyat ve milyem girişi</summary>
+      <div class="live-price-panel" style="margin-top:12px"><div><strong id="livePriceState">${state.settings.livePriceSync===false?'Otomatik fiyat kapalı':state.market?.status==='live'?'Canlı fiyat bağlı':state.market?.status==='offline'?'Bağlantı yok — son fiyat kullanılıyor':'Canlı fiyat bekleniyor'}</strong><div class="source">Kaynak: Asil Kuyumcu fiyat ekranı · Canlı fiyat + ${esc(state.market?.settingsSource||'ayarlar bekleniyor')} · Son güncelleme: <span id="livePriceTime">${state.market?.lastUpdated?trDate(state.market.lastUpdated):'—'}</span></div></div><button class="btn btn-primary" id="savePrices">Fiyatları Kaydet</button></div>
       <div class="price-grid">
         <div class="card price-card"><div class="section-head"><h3>Kur Girişleri</h3><span>Alış / Satış</span></div><table><thead><tr><th>Cins</th><th>Alış</th><th>Satış</th></tr></thead><tbody>${[['HAS','has'],['22','gold22'],['USD','usd'],['EUR','eur'],['CHF','chf'],['GBP','gbp']].map(([label,key])=>`<tr><td><strong>${label}</strong></td><td><input data-price="${key}.buy" value="${p[key].buy}"></td><td><input data-price="${key}.sell" value="${p[key].sell}"></td></tr>`).join('')}</tbody></table></div>
         <div class="card price-card"><div class="section-head"><h3>Altın Fiyatları</h3><span>Milyem + TL</span></div><div class="table-wrap"><table class="table"><thead><tr><th>Stok</th><th class="num">Alış</th><th class="num">Satış</th><th class="num">Al.Mil</th><th class="num">Sat.Mil</th></tr></thead><tbody>${p.items.map((x,i)=>`<tr><td>${esc(x.name)}</td><td class="num"><input data-item="${i}.buy" value="${x.buy}"></td><td class="num"><input data-item="${i}.sell" value="${x.sell}"></td><td class="num"><input data-item="${i}.buyMilyem" value="${x.buyMilyem}"></td><td class="num"><input data-item="${i}.sellMilyem" value="${x.sellMilyem}"></td></tr>`).join('')}</tbody></table></div></div>
-      </div>${asilScreenTableHtmlV7()}`;
+      </div></details>`;
   }
 
   function pageCount(){
@@ -8142,6 +8217,14 @@ function stockSummaryView(){
     document.getElementById('savePrices').addEventListener('click',()=>{document.querySelectorAll('[data-price]').forEach(i=>{const [k,f]=i.dataset.price.split('.');state.prices[k][f]=Number(i.value||0)});document.querySelectorAll('[data-item]').forEach(i=>{const [idx,f]=i.dataset.item.split('.');state.prices.items[Number(idx)][f]=Number(i.value||0)});audit('Kur ve altın fiyatları güncellendi','Fiyat');save();toast(state.settings.livePriceSync===false?'Manuel fiyatlar kaydedildi':'Fiyatlar kaydedildi; canlı sistem bir sonraki güncellemede HAS/dövizi yeniler');render();});
     document.getElementById('refreshLivePrices')?.addEventListener('click',async()=>{await loadAsilRemotePriceSettings();await fetchLiveMarketPrices(true);toast(state.market.status==='live'?'Canlı fiyatlar güncellendi':'Canlı fiyat bağlantısı kurulamadı',state.market.status==='live'?'ok':'err');updateMarketTickerDom();if(route==='prices')render();});
     document.getElementById('toggleLivePrices')?.addEventListener('click',()=>{state.settings.livePriceSync=state.settings.livePriceSync===false?true:false;save();if(state.settings.livePriceSync)fetchLiveMarketPrices(true);render();});
+    document.getElementById('boardFullscreen')?.addEventListener('click',()=>{const el=document.getElementById('priceBoard');if(document.fullscreenElement)document.exitFullscreen?.();else el?.requestFullscreen?.().catch(()=>toast('Tam ekran açılamadı; F11 tuşunu kullanın','err'));});
+    document.getElementById('saveFxAdj')?.addEventListener('click',async()=>{
+      const adj={};let changed=[];
+      document.querySelectorAll('[data-fx-adj]').forEach(i=>{const [id,side]=i.dataset.fxAdj.split('.'),v=Number(String(i.value||'0').replace(',','.'));adj[id]=adj[id]||{};adj[id][side]=Number.isFinite(v)?v:0;const old=programFxAdjV7(id,side);if(Math.abs(old-adj[id][side])>1e-9){changed.push(`${id.toUpperCase()} ${side==='buy'?'alış':'satış'} ${old} → ${adj[id][side]}`);const p=state.prices[id];if(p)p[side]=Number(p[side]||0)-old+adj[id][side];}});
+      state.settings.fxProgramAdj=adj;
+      if(changed.length)audit('Döviz farkları güncellendi: '+changed.join(', '),'Fiyat');
+      save();render();toast(changed.length?'Döviz farkları kaydedildi':'Değişiklik yok');
+    });
   }
 
   function bindCount(){

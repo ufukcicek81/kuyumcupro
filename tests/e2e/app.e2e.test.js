@@ -1490,12 +1490,19 @@ test('fiyatlar Asil fiyat ekranının ayarlarından gelir: işçilik, döviz dü
   const ceyrek = rows.find((r) => r[0] === 'Çeyrek');
   assert.deepEqual(ceyrek, ['Çeyrek', (Math.round(6002 * 1.6)).toLocaleString('tr-TR'), (Math.round(6100 * 1.65)).toLocaleString('tr-TR'), (Math.round(Math.round(6100 * 1.65) * 1.05)).toLocaleString('tr-TR')]);
   assert.ok(rows.some((r) => r[0] === '22 Ayar 1 Gram Altın'), 'özel ürün de listelenmeli');
-  const page = await p.innerText('body');
-  assert.match(page, /Fiyat ekranı/);
   const usdBuy = await p.$eval('[data-price="usd.buy"]', (e) => Number(e.value));
   assert.equal(usdBuy, 48.5, 'döviz düzeltmesi uygulanmalı');
+  const fxRow = await p.$$eval('#boardFx tbody tr', (trs) => trs.map((tr) => [...tr.cells].map((c) => c.innerText.trim())));
+  assert.deepEqual(fxRow.find((r) => r[0] === 'USD'), ['USD', '48,50', '49,75'], 'panoda döviz farklı kur görünmeli');
+  // Programın kendi döviz farkı: fiyat ekranının farkının üstüne eklenir ve sonraki güncellemede de kalır
+  await p.fill('[data-fx-adj="usd.buy"]', '0.3'); await p.fill('[data-fx-adj="usd.sell"]', '-0.15');
+  await p.evaluate(() => document.getElementById('saveFxAdj').click()); await p.waitForTimeout(300);
+  await p.evaluate(() => document.getElementById('refreshLivePrices').click()); await p.waitForTimeout(800);
+  assert.equal(await p.$eval('[data-price="usd.buy"]', (e) => Number(e.value)), 48.8);
+  assert.equal(await p.$eval('[data-price="usd.sell"]', (e) => Number(e.value)), 49.6);
+  assert.deepEqual((await p.$$eval('#boardFx tbody tr', (trs) => trs.map((tr) => [...tr.cells].map((c) => c.innerText.trim())))).find((r) => r[0] === 'USD'), ['USD', '48,80', '49,60']);
   // Programın kendi fiyat listesi (satış / ziynet ekranları bunu kullanır) ekranla aynı rakamı almalı
-  const itemVal = async (code, f) => p.evaluate(([c, f]) => { const el = [...document.querySelectorAll('[data-item]')].find((e) => e.dataset.item.endsWith('.' + f) && e.closest('tr')?.innerText.includes(c)); return el ? Number(el.value) : null; }, [code, f]);
+  const itemVal = async (code, f) => p.evaluate(([c, f]) => { const el = [...document.querySelectorAll('[data-item]')].find((e) => e.dataset.item.endsWith('.' + f) && e.closest('tr')?.textContent.includes(c)); return el ? Number(el.value) : null; }, [code, f]);
   assert.equal(await itemVal('Çeyrek', 'buy'), Math.round(6002 * 1.6), 'çeyrek alış ekrandaki gibi');
   assert.equal(await itemVal('22 Ayar 1 Gram', 'sell'), Math.round(6100 * 0.96), '22 ayar 1 gram ada göre eşleşmeli');
   assert.equal(await itemVal('22 Hurda', 'buy'), Math.round(6002 * 0.9), 'hurda çarpanı ekrandan gelmeli');
