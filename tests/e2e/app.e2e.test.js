@@ -1797,10 +1797,16 @@ test('stok kartı birleştir: eski kartın stoğu yeni karta aktarılır, eski k
 test('fiyat panosu ↔ satış ekranı: düğmeyle ve F7 ile geçilir (satışta imleç kutudayken de)', async () => {
   const p = await newDevice(browser, appUrl, createFakeFirebase());
   await p.click('[data-go="sales"]'); await p.waitForSelector('#saleProductSearch');
-  await p.click('#goPriceBoard'); await p.waitForSelector('#priceBoard');
+  await p.click('#goPriceBoard'); await p.waitForSelector('#priceBoard'); await p.waitForTimeout(300);
+  await p.evaluate(() => document.exitFullscreen()); await p.waitForTimeout(300); // tam ekrandan çıkınca (Esc) sayfadaki düğme de çalışır
   await p.click('#goSalesFromBoard'); await p.waitForSelector('#saleProductSearch');
-  await p.focus('#saleProductSearch'); await p.keyboard.press('F7'); await p.waitForSelector('#priceBoard');
-  await p.keyboard.press('F7'); await p.waitForSelector('#saleProductSearch');
+  await p.focus('#saleProductSearch'); await p.keyboard.press('F7'); await p.waitForSelector('#priceBoard'); await p.waitForTimeout(300);
+  assert.equal(await p.evaluate(() => document.fullscreenElement?.id), 'priceBoard', 'F7 fiyat panosunu tam ekran açmalı');
+  assert.ok(await p.isVisible('.pb-go-sales'), 'tam ekranda Satışa Geç düğmesi görünmeli');
+  await p.keyboard.press('F7'); await p.waitForSelector('#saleProductSearch'); await p.waitForTimeout(300);
+  assert.equal(await p.evaluate(() => document.fullscreenElement), null, 'satışa dönünce tam ekrandan çıkmalı');
+  await p.click('#goPriceBoard'); await p.waitForSelector('#priceBoard'); await p.waitForTimeout(300);
+  await p.click('.pb-go-sales'); await p.waitForSelector('#saleProductSearch');
   assert.ok(await p.isVisible('.sale-product-card'), 'satış ekranı tam açılmalı');
   assert.deepEqual(p.errors, []);
   await p.context().close();
