@@ -10209,7 +10209,8 @@ function stockSummaryView(){
   var categories={'tümü':'Tümü','müşteri':'Müşteri','musteri':'Müşteri','toptancı':'Toptancı','toptanci':'Toptancı','banka':'Banka','özel':'Özel','ozel':'Özel'};
   function norm(x){return String(x||'').replace(/\s+/g,' ').trim().toLocaleLowerCase('tr-TR')}
   function cat(x){return categories[norm(x)]||null}
-  function input(){return document.querySelector('#cariCardSearch,input[placeholder*="Cari /"],input[placeholder*="Cari"]')}
+  // Yalnız Cari Hesaplar sayfasının arama kutusu: geniş eşleşme satış ekranındaki "Cari ara" kutusunu yakalayıp satış kartlarını gizliyordu.
+  function input(){return document.body.dataset.screen==='customers'?document.getElementById('cariCardSearch'):null}
   function root(){
     var i=input(); if(!i)return null;
     var p=i.parentElement;

@@ -1628,6 +1628,8 @@ test('satış ekranı: cari ad yazarak aranır; hızlı yeni cari eklenip seçil
   assert.match(await p.innerText('#saleCustomerHint'), /bulunamadı/, 'bulunamayan cari kutunun altında yazmalı');
   assert.ok(!(await p.$('.critical-alert')), 'engelleyici uyarı açılmamalı');
   assert.ok(await p.$('#saleProductSearch'), 'satış ekranı yerinde kalmalı');
+  // Cari sayfasının eski kart filtresi bu kutuyu kendi aramasi sanıp satış kartlarını gizliyordu (ekran boşalıyordu).
+  for (const sel of ['.sale-head-card', '.sale-product-card', '.sale-payment-card', '.sale-summary']) assert.ok(await p.isVisible(sel), sel + ' görünür kalmalı');
   assert.equal(await p.evaluate(() => document.activeElement?.id), 'saleCustomerSearch', 'odak arama kutusunda kalmalı');
   await p.click('#saleQuickCustomer'); await p.waitForSelector('#qcName');
   await p.fill('#qcName', 'TEST HIZLI CARİ'); await p.fill('#qcPhone', '5551112233');
