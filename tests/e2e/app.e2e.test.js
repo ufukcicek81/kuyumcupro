@@ -1638,6 +1638,41 @@ test('satış ekranı: cari ad yazarak aranır; hızlı yeni cari eklenip seçil
   await p.context().close();
 });
 
+test('satış düzeltmesi yarım kalırsa uyarı + eski hâliyle geri yükleme; iptal edilen satış Silinenler bölümünden geri gelir', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  await p.click('[data-go="sales"]');
+  for (let i = 0; i < 3; i++) {
+    await p.fill('#saleProductSearch', '22'); await p.waitForTimeout(300); await p.press('#saleProductSearch', 'Enter');
+    if (await p.waitForSelector('#saleEntryPrice:not([disabled])', { timeout: 5000 }).catch(() => null)) break;
+  }
+  await p.waitForTimeout(300);
+  await p.fill('#saleEntryPayable', '4321'); await p.click('#saleAddUnified'); await p.waitForTimeout(400);
+  await p.click('[data-pay="Nakit"]'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.selectOption('#salePerson', { index: 1 });
+  await p.click('#finalizeSale'); await p.click('#modalConfirm'); await p.waitForTimeout(1500);
+  const b = await p.$('.critical-alert button'); if (b) await b.click();
+  // Düzeltmeye aç, sonra Yeni Fiş → uyarı → eski hâliyle geri yükle
+  await p.click('text=Satış Geçmişi'); await p.waitForSelector('[data-sale-edit]');
+  await p.click('[data-sale-edit]'); await p.click('#modalConfirm'); await p.waitForTimeout(500);
+  assert.match(await p.innerText('#saleEditBanner'), /DÜZELTİLİYOR/);
+  await p.click('#resetSale'); await p.waitForSelector('text=Düzeltme Yarım Kaldı');
+  await p.click('#modalCancel'); await p.waitForTimeout(9000);
+  let sales = (fb.db.state.sales || []).filter((x) => /4\.?321|4321/.test(String(x.total)));
+  assert.equal(sales.length, 1, 'satış eski hâliyle geri yüklenmeli');
+  assert.ok(!(await p.$('#saleEditBanner')), 'geri yüklenince uyarı kalkmalı');
+  // İptal et, Silinenler'den geri yükle
+  await p.click('text=Satış Geçmişi'); await p.waitForSelector('[data-sale-cancel]');
+  await p.evaluate(() => document.querySelector('#saleHistBody [data-sale-cancel]').click()); await p.click('#modalConfirm'); await p.waitForTimeout(500);
+  await p.click('text=Satış Geçmişi'); await p.waitForSelector('#saleHistCancelled');
+  await p.click('#saleHistCancelled'); await p.waitForSelector('[data-cs-restore]');
+  await p.click('[data-cs-restore]'); await p.click('#modalConfirm'); await p.waitForTimeout(9000);
+  sales = (fb.db.state.sales || []).filter((x) => Number(x.total) === 4321);
+  assert.equal(sales.length, 1, 'iptal edilen satış geri yüklenmeli');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
 test('stok kartı birleştir: eski kartın stoğu yeni karta aktarılır, eski kart silinir', async () => {
   const p = await newDevice(browser, appUrl, createFakeFirebase());
   p.on('dialog', () => {});

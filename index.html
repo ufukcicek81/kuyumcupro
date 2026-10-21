@@ -2364,12 +2364,35 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const s=state.sales.find(x=>x.id===id);if(!s)return toast('Satış bulunamadı','err');
     modal(`Satış — ${s.docNo||s.id}`,saleDetailHtml(s),null,'Kapat');
   }
+  /* İptal edilen / düzeltmesi yarım kalan satışı eski hâliyle yeniden kaydeder (aynı belge numarası ve tarih). */
+  function saleDraftFromSnapshotV7(snap){return {customerId:snap.customerId||'CASH',customerType:state.customers.find(c=>c.id===snap.customerId)?.type||'Müşteri',masakIdentityId:snap.masakIdentityId||'',salesperson:snap.salesperson||'',saleCurrency:snap.saleCurrency||'TL',note:snap.note||'',lines:clone(snap.lines||[]),payments:clone(snap.payments||[]),returnItems:clone(snap.returnItems||[]),discount:Number(snap.discount||0),commission:Number(snap.commission||0),returns:Number(snap.returns||0),saleMode:'Otomatik',entrySelection:null,entryQuery:'',editingDocNo:snap.docNo||'',editingOriginalId:snap.id||'',editSnapshot:snap};}
+  function restoreEditedSaleV7(snap){
+    snap=snap||saleDraft.editSnapshot;if(!snap)return toast('Eski satış bilgisi bulunamadı','err');
+    if(state.sales.some(x=>x.id===snap.id))return toast(`${snap.docNo} zaten sistemde`,'err');
+    const busy=(snap.lines||[]).map(l=>l.sourceType==='barcode'?(state.stocks||[]).find(x=>x.id===l.stockId):null).find(st=>st&&st.status!=='Stokta');
+    if(busy)return toast(`${busy.barcode||busy.code} başka bir satışta kullanılmış; satışı satış ekranından elle yeniden girin`,'err');
+    saleDraft=saleDraftFromSnapshotV7(snap);finalizeSale();
+    const s=state.sales.find(x=>x.id===snap.id);
+    if(s){if(snap.date){s.date=snap.date;(state.financeMoves||[]).forEach(f=>{if(f.saleId===s.id)f.date=snap.date;});(state.customerMoves||[]).forEach(m=>{if(m.sourceId===s.id&&(m.sourceType==='sale'||m.sourceType==='cariCollection'))m.date=snap.date;});}
+      audit(`${snap.docNo} satışı eski hâliyle geri yüklendi`,'Satış');save();render();toast(`${snap.docNo} eski hâliyle geri yüklendi`);}
+  }
+  function openCancelledSalesV7(){
+    const list=(state.cancelledDocuments||[]).filter(x=>x.type==='SATIŞ'&&x.snapshot).slice(0,200);
+    const cust=id=>state.customers.find(c=>c.id===id)?.name||'Peşin';
+    const pay=s=>salePaymentPartsV7(s).map(x=>`${x.kind}${x.bank?' '+x.bank:''} ${money(Math.abs(x.amount))}`).join(', ');
+    const rows=list.map(x=>{const s=x.snapshot,back=state.sales.some(y=>y.id===s.id);
+      return `<tr><td>${trDate(x.date)}<br><small class="muted">${esc(x.cancelledBy||'')}</small></td><td><strong>${esc(s.docNo||'')}</strong><br><small class="muted">${trDate(s.date)}</small></td><td>${esc(cust(s.customerId))}</td><td>${(s.lines||[]).map(l=>esc(`${l.name||l.code||''} ${qty(l.displayAmount??l.qty??1)} ${l.unit||''}`)).join('<br>')}</td><td class="num"><strong>${money(s.total||0)}</strong></td><td>${esc(pay(s))}</td><td>${back?'<span class="badge green">Yeniden kaydedilmiş</span>':`<span class="badge red">SİLİNDİ</span><div style="display:flex;gap:6px;margin-top:6px"><button class="btn btn-primary" data-cs-restore="${esc(x.id)}">Geri yükle</button></div>`}</td></tr>`;}).join('');
+    modal('Silinen / İptal Edilen Satışlar',`<div class="notice">İptal edilen ya da düzeltmeye açılıp tamamlanmayan satışlar burada durur. <b>Yeniden kaydedilmiş</b> olanlar düzeltmesi tamamlanmış satışlardır. <b>SİLİNDİ</b> olanları <b>Geri yükle</b> ile eski hâli, belge numarası ve tarihiyle yeniden kaydedebilirsiniz.</div><div class="table-wrap"><table class="table"><thead><tr><th>İptal</th><th>Belge</th><th>Müşteri</th><th>Ürünler</th><th class="num">Tutar</th><th>Ödeme</th><th>Durum</th></tr></thead><tbody>${rows||'<tr><td colspan="7">İptal edilen satış yok.</td></tr>'}</tbody></table></div>`,null,'Kapat');
+    const m=document.querySelector('#modalRoot .modal');if(m)m.classList.add('modal-full');
+    document.querySelectorAll('[data-cs-restore]').forEach(b=>b.onclick=()=>{const x=list.find(y=>y.id===b.dataset.csRestore);if(!x)return;
+      modal('Satışı Geri Yükle',`<div class="notice"><strong>${esc(x.snapshot.docNo||'')}</strong> eski hâliyle yeniden kaydedilecek: stok düşer, ödemeler kasa/banka/cariye yeniden işlenir.</div>${saleDetailHtml(x.snapshot)}`,()=>{closeModal();restoreEditedSaleV7(x.snapshot);},'GERİ YÜKLE');});
+  }
   function reopenSaleForEdit(id){
     const s=state.sales.find(x=>x.id===id);if(!s)return toast('Satış bulunamadı','err');
     const snapshot=clone(s);
     modal('Satışı Düzelt',`<div class="notice"><strong>${esc(s.docNo||s.id)}</strong> bağlı stok, cari ve kasa hareketleri geri alınacak; fiş satış ekranına yeniden açılacak. Değişiklikten sonra tekrar <b>Satış Onayla</b> demelisiniz.</div>${saleDetailHtml(s)}`,()=>{
       const r=cancelSaleById(id);if(!r.ok)return toast(r.msg,'err');
-      saleDraft={customerId:snapshot.customerId||'CASH',customerType:state.customers.find(c=>c.id===snapshot.customerId)?.type||'Müşteri',masakIdentityId:snapshot.masakIdentityId||'',salesperson:snapshot.salesperson||'',saleCurrency:snapshot.saleCurrency||'TL',note:snapshot.note||'',lines:clone(snapshot.lines||[]),payments:clone(snapshot.payments||[]),returnItems:clone(snapshot.returnItems||[]),discount:Number(snapshot.discount||0),commission:Number(snapshot.commission||0),returns:Number(snapshot.returns||0),saleMode:'Otomatik',entrySelection:null,entryQuery:'',editingDocNo:snapshot.docNo||'',editingOriginalId:snapshot.id||''};
+      saleDraft={customerId:snapshot.customerId||'CASH',customerType:state.customers.find(c=>c.id===snapshot.customerId)?.type||'Müşteri',masakIdentityId:snapshot.masakIdentityId||'',salesperson:snapshot.salesperson||'',saleCurrency:snapshot.saleCurrency||'TL',note:snapshot.note||'',lines:clone(snapshot.lines||[]),payments:clone(snapshot.payments||[]),returnItems:clone(snapshot.returnItems||[]),discount:Number(snapshot.discount||0),commission:Number(snapshot.commission||0),returns:Number(snapshot.returns||0),saleMode:'Otomatik',entrySelection:null,entryQuery:'',editingDocNo:snapshot.docNo||'',editingOriginalId:snapshot.id||'',editSnapshot:snapshot};
       closeModal();route='sales';save();render();toast(`${snapshot.docNo||'Satış'} düzeltme için fişe açıldı`);
     },'DÜZELTMEYE AÇ');
   }
@@ -2419,7 +2442,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       <label class="labelled" style="flex:1 1 140px"><span>Bitiş</span><input id="saleHistTo" type="date" class="input"></label>
       <label class="labelled" style="flex:1 1 140px"><span>Ödeme</span><select id="saleHistPay" class="select"><option value="">Tümü</option><option>Nakit</option><option>Kart</option><option>Havale</option><option>Altın</option><option>Açık Hesap</option></select></label>
       <label class="labelled" style="flex:1 1 160px"><span>Banka</span><select id="saleHistBank" class="select"><option value="">Tüm bankalar</option>${banks.map(b=>`<option>${esc(b)}</option>`).join('')}</select></label>
-      <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-outline" type="button" data-hist-range="today">Bugün</button><button class="btn btn-outline" type="button" data-hist-range="week">Bu Hafta</button><button class="btn btn-outline" type="button" data-hist-range="month">Bu Ay</button><button class="btn btn-outline" type="button" data-hist-range="">Temizle</button><button class="btn btn-outline" type="button" id="saleHistExcel">Excel</button></div></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-outline" type="button" data-hist-range="today">Bugün</button><button class="btn btn-outline" type="button" data-hist-range="week">Bu Hafta</button><button class="btn btn-outline" type="button" data-hist-range="month">Bu Ay</button><button class="btn btn-outline" type="button" data-hist-range="">Temizle</button><button class="btn btn-outline" type="button" id="saleHistExcel">Excel</button><button class="btn btn-outline" type="button" id="saleHistCancelled">Silinenler</button></div></div>
       <div id="saleHistSummary" class="sale-hist-summary" style="display:flex;flex-wrap:wrap;gap:8px;margin:10px 0"></div>
       <div class="table-wrap sale-hist-wrap"><table class="table" style="min-width:1000px"><thead><tr><th>Belge</th><th>Tarih</th><th>Müşteri</th><th>Personel</th><th>Ödeme / Banka</th><th class="num">Toplam</th><th>İşlem</th></tr></thead><tbody id="saleHistBody"></tbody></table></div>
       <div class="notice" style="margin-top:10px">Tarih seçilmezse aktif dönemin (${state.activePeriod}) satışları listelenir; tarih seçilince tüm dönemlerde aranır. Düzeltme, eski fişi güvenli şekilde geri alıp aynı belge numarasıyla satış ekranına yeniden açar.</div>`;
@@ -2472,6 +2495,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       tb.querySelectorAll('[data-sale-view]').forEach(b=>b.onclick=()=>viewSaleRecord(b.dataset.saleView));tb.querySelectorAll('[data-sale-edit]').forEach(b=>b.onclick=()=>reopenSaleForEdit(b.dataset.saleEdit));tb.querySelectorAll('[data-sale-cancel]').forEach(b=>b.onclick=()=>cancelSaleFromHistory(b.dataset.saleCancel));tb.querySelectorAll('[data-buy-cancel]').forEach(b=>b.onclick=()=>cancelSaleScreenPurchaseV7(b.dataset.buyCancel));tb.querySelectorAll('[data-buy-edit]').forEach(b=>b.onclick=()=>editSaleScreenPurchaseV7(b.dataset.buyEdit));
     };
     $('saleHistExcel')?.addEventListener('click',exportExcel);
+    $('saleHistCancelled')?.addEventListener('click',openCancelledSalesV7);
     ['saleHistSearch','saleHistFrom','saleHistTo','saleHistPay','saleHistBank'].forEach(id=>{$(id).addEventListener('input',draw);$(id).addEventListener('change',draw);});
     document.querySelectorAll('[data-hist-range]').forEach(b=>b.onclick=()=>{const now0=new Date(),r=b.dataset.histRange;let f='',tt='';if(r==='today'){f=tt=iso(now0);}else if(r==='week'){const d=new Date(now0);d.setDate(d.getDate()-((d.getDay()+6)%7));f=iso(d);tt=iso(now0);}else if(r==='month'){f=iso(new Date(now0.getFullYear(),now0.getMonth(),1));tt=iso(now0);}else{$('saleHistSearch').value='';$('saleHistPay').value='';$('saleHistBank').value='';}$('saleHistFrom').value=f;$('saleHistTo').value=tt;draw();});
     draw();
@@ -2749,6 +2773,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const entryCostHas=isBarcode?Number(barcodeItem.costHas||0):(openItem?openInventoryCostHas(openItem,Number(entryAmount||0)):0);
     const entrySaleHas=entryPayableTl/Math.max(1,Number(state.prices.has.sell||1));
     return `<div class="sales-shell">
+      ${saleDraft.editingDocNo?`<div class="notice" id="saleEditBanner" style="border:2px solid #c0262d;background:rgba(192,38,45,.08);margin-bottom:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between"><span><strong style="color:#c0262d">⚠ ${esc(saleDraft.editingDocNo)} DÜZELTİLİYOR.</strong> Eski kayıt geri alındı; <b>Satışı Onayla</b> demezseniz bu satış sistemde <b>silinmiş</b> kalır.</span>${saleDraft.editSnapshot?'<button class="btn btn-outline" type="button" id="saleEditRestore">Değiştirmeden eski hâliyle geri yükle</button>':''}</div>`:''}
       <div class="card sale-head-card">
         <div class="sale-head-row">
           <div class="sale-title-block"><h1>İşlem Merkezi</h1><p>Ürünü seç → Ödemeyi ekle → Özeti kontrol et</p></div>
@@ -6084,7 +6109,14 @@ function stockSummaryView(){
     });
     const saleCurEl=document.getElementById('saleCurrency');saleCurEl?.addEventListener('change',e=>{saleDraft.saleCurrency=e.target.value;saleDraft.entrySelection=null;saleDraft.entryQuery='';render();setTimeout(()=>focusAndSelect(document.getElementById('saleProductSearch')),0);});
     const person=document.getElementById('salePerson'); person?.addEventListener('change',e=>saleDraft.salesperson=e.target.value);
-    document.getElementById('resetSale')?.addEventListener('click',()=>{saleDraft=newSaleDraft();render();});
+    document.getElementById('resetSale')?.addEventListener('click',()=>{
+      if(saleDraft.editingDocNo){
+        modal('Düzeltme Yarım Kaldı',`<div class="notice"><strong>${esc(saleDraft.editingDocNo)}</strong> düzeltme için açılmıştı ve eski kaydı geri alındı. Yeni fişe geçerseniz bu satış <b>silinmiş</b> kalır.</div>`,()=>{saleDraft=newSaleDraft();closeModal();render();toast('Satış silinmiş olarak kaldı; Satış Geçmişi → Silinenler bölümünden geri getirebilirsiniz','err');},'SATIŞI SİL VE YENİ FİŞ');
+        const c=document.getElementById('modalCancel');if(c&&saleDraft.editSnapshot){c.textContent='Eski hâliyle geri yükle';c.onclick=()=>{closeModal();restoreEditedSaleV7();};}
+        return;
+      }
+      saleDraft=newSaleDraft();render();});
+    document.getElementById('saleEditRestore')?.addEventListener('click',()=>restoreEditedSaleV7());
     document.getElementById('simpleSaleFocus')?.addEventListener('click',()=>focusAndSelect(document.getElementById('saleProductSearch')));
     document.getElementById('saleHistory')?.addEventListener('click',openSalesHistory);
 
