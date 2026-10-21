@@ -1482,7 +1482,15 @@ test('fiyatlar Asil fiyat ekranının ayarlarından gelir: işçilik, döviz dü
     dovizDuz: { usdA: 0.5, usdS: -0.25 }, hurdaItems: [{ id: 'hurda22', label: '22 Ayar Hurda', oran: 22 / 24 }, { id: 'hurda14', label: '14 Ayar Hurda', oran: 14 / 24 }], hurdaCarp: { hurda22A: 0.9, hurda22S: 0.92, hurda14A: 0.55, hurda14S: 0.58 } };
   settings.labor.c1 = { a: 0.91, s: 0.96 };
   const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' };
-  await p.context().route(/supabase\.co/, (r) => r.request().method() === 'OPTIONS' ? r.fulfill({ status: 204, headers: cors }) : r.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: JSON.stringify([{ data: settings, updated_at: '2026-10-21' }]) }));
+  // Supabase (PostgREST) gibi davranır: bilinmeyen sorgu parametresi (örn. v=...) 400 döner; PATCH kaydı günceller.
+  const patches = [];
+  await p.context().route(/supabase\.co/, (r) => {
+    const req = r.request(), u = new URL(req.url());
+    if (req.method() === 'OPTIONS') return r.fulfill({ status: 204, headers: cors });
+    if ([...u.searchParams.keys()].some((k) => !['id', 'select', 'limit'].includes(k))) return r.fulfill({ status: 400, headers: cors, contentType: 'application/json', body: '{"message":"column app_settings.v does not exist"}' });
+    if (req.method() === 'PATCH') { const b = JSON.parse(req.postData()); patches.push(b); Object.keys(settings).forEach((k) => delete settings[k]); Object.assign(settings, b.data); return r.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: JSON.stringify([{ id: 'asil_settings', data: settings }]) }); }
+    return r.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: JSON.stringify([{ data: settings, updated_at: '2026-10-21' }]) });
+  });
   await p.context().route(/workers\.dev/, (r) => r.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: JSON.stringify({ hasAlis: 6000, hasSatis: 6100, usdAlis: 48, usdSatis: 50, sarAlis: 12, sarSatis: 13 }) }));
   await p.evaluate(() => document.querySelector('[data-go="prices"],[data-route="prices"]').click()); await p.waitForSelector('#refreshLivePrices');
   await p.evaluate(() => document.getElementById('refreshLivePrices').click()); await p.waitForSelector('#asilScreenPrices'); await p.waitForTimeout(500);
@@ -1494,18 +1502,26 @@ test('fiyatlar Asil fiyat ekranının ayarlarından gelir: işçilik, döviz dü
   assert.equal(usdBuy, 48.5, 'döviz düzeltmesi uygulanmalı');
   const fxRow = await p.$$eval('#boardFx tbody tr', (trs) => trs.map((tr) => [...tr.cells].map((c) => c.innerText.trim())));
   assert.deepEqual(fxRow.find((r) => r[0] === 'USD'), ['USD', '48,50', '49,75'], 'panoda döviz farklı kur görünmeli');
-  // Programın kendi döviz farkı: fiyat ekranının farkının üstüne eklenir ve sonraki güncellemede de kalır
-  await p.fill('[data-fx-adj="usd.buy"]', '0.3'); await p.fill('[data-fx-adj="usd.sell"]', '-0.15');
-  await p.evaluate(() => document.getElementById('saveFxAdj').click()); await p.waitForTimeout(300);
-  await p.evaluate(() => document.getElementById('refreshLivePrices').click()); await p.waitForTimeout(800);
-  assert.equal(await p.$eval('[data-price="usd.buy"]', (e) => Number(e.value)), 48.8);
-  assert.equal(await p.$eval('[data-price="usd.sell"]', (e) => Number(e.value)), 49.6);
-  assert.deepEqual((await p.$$eval('#boardFx tbody tr', (trs) => trs.map((tr) => [...tr.cells].map((c) => c.innerText.trim())))).find((r) => r[0] === 'USD'), ['USD', '48,80', '49,60']);
   // Programın kendi fiyat listesi (satış / ziynet ekranları bunu kullanır) ekranla aynı rakamı almalı
   const itemVal = async (code, f) => p.evaluate(([c, f]) => { const el = [...document.querySelectorAll('[data-item]')].find((e) => e.dataset.item.endsWith('.' + f) && e.closest('tr')?.textContent.includes(c)); return el ? Number(el.value) : null; }, [code, f]);
   assert.equal(await itemVal('Çeyrek', 'buy'), Math.round(6002 * 1.6), 'çeyrek alış ekrandaki gibi');
   assert.equal(await itemVal('22 Ayar 1 Gram', 'sell'), Math.round(6100 * 0.96), '22 ayar 1 gram ada göre eşleşmeli');
   assert.equal(await itemVal('22 Hurda', 'buy'), Math.round(6002 * 0.9), 'hurda çarpanı ekrandan gelmeli');
+  // Programdaki Fiyat Ekranı Ayarları: değişiklik fiyat ekranının kaydına yazılır, diğer ayarlar korunur
+  await p.evaluate(() => document.getElementById('openScreenSettings').click()); await p.waitForSelector('#ssA_ceyrek');
+  await p.fill('#ssA_ceyrek', '1.7');
+  await p.click('[data-ss-tab="ssFx"]'); await p.fill('#ssFxA_sar', '0.1');
+  await p.click('[data-ss-tab="ssGen"]'); await p.fill('#ssKK', '6');
+  await p.evaluate(() => document.getElementById('modalConfirm').click()); await p.waitForTimeout(1200);
+  assert.equal(patches.length, 1, 'fiyat ekranına bir kez yazılmalı');
+  const saved = patches[0].data;
+  assert.equal(saved.labor.ceyrek.a, 1.7); assert.equal(saved.labor.ceyrek.s, 1.65, 'değişmeyen satış çarpanı korunmalı');
+  assert.equal(saved.labor.c1.a, 0.91, 'diğer ürünlerin işçiliği korunmalı');
+  assert.equal(saved.dovizDuz.sarA, 0.1); assert.equal(saved.dovizDuz.usdA, 0.5, 'diğer döviz farkı korunmalı'); assert.equal(saved.kkOran, 6);
+  assert.equal(saved.customItems.length, 1, 'özel ürünler silinmemeli');
+  assert.equal(await itemVal('Çeyrek', 'buy'), Math.round(6002 * 1.7), 'programdaki fiyat yeni işçilikle güncellenmeli');
+  const sarRow = (await p.$$eval('#boardFx tbody tr', (trs) => trs.map((tr) => [...tr.cells].map((c) => c.innerText.trim())))).find((r) => r[0] === 'SAR');
+  assert.deepEqual(sarRow, ['SAR', '12,10', '13,00'], 'SAR panoda farkıyla görünmeli');
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
