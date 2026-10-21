@@ -1439,6 +1439,70 @@ test('ziynet alış geçmişinden iptal ve düzelt: stok ve kasa geri alınır, 
   await p.context().close();
 });
 
+test('döviz alış geçmişinden iptal ve düzelt: TL ve USD kasası geri alınır, düzeltme eski bilgilerle açılır', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  const st = () => p.evaluate(() => 0).then(() => fb.db.state);
+  const cash = (s, cur) => (s.cashAccounts || []).filter((x) => x.currency === cur).reduce((n, x) => n + Number(x.balance || 0), 0);
+  await p.waitForTimeout(3000);
+  const tl0 = cash(await st(), 'TL'), usd0 = cash(await st(), 'USD');
+  await p.click('[data-home-trade="Döviz Alış"]');
+  await p.selectOption('#stFx', 'USD'); await p.fill('#stQty', '100'); await p.fill('#stPrice', '40'); await p.waitForTimeout(200);
+  await p.click('#modalConfirm'); await p.click('text=ONAYLA VE İŞLEMİ TAMAMLA'); await p.waitForTimeout(9000);
+  assert.equal(Math.round(cash(await st(), 'TL')), Math.round(tl0 - 4000)); assert.equal(Math.round(cash(await st(), 'USD')), Math.round(usd0 + 100));
+  // İptal
+  await p.click('[data-home-trade="Döviz Alış"]'); await p.click('#stHistoryToggle');
+  await p.click('[data-trade-cancel]'); await p.click('#modalConfirm'); await p.waitForTimeout(500);
+  await p.click('#modalX'); await p.waitForTimeout(9000);
+  assert.equal(Math.round(cash(await st(), 'TL')), Math.round(tl0), 'iptalde TL kasa geri dönmeli');
+  assert.equal(Math.round(cash(await st(), 'USD')), Math.round(usd0), 'iptalde USD kasa geri dönmeli');
+  assert.ok(!(fb.db.state.tradeMoves || []).some((x) => String(x.docNo).startsWith('DA-')), 'iptal edilen kayıt silinmeli');
+  assert.ok(!(fb.db.state.financeMoves || []).some((x) => String(x.sourceDocNo || '').startsWith('DA-')), 'kasa hareketleri silinmeli');
+  // Düzelt: 100 USD kaydedip geri al, ekran eski değerlerle açılır, 150 USD'ye düzeltilir
+  await p.click('[data-home-trade="Döviz Alış"]');
+  await p.selectOption('#stFx', 'USD'); await p.fill('#stQty', '100'); await p.fill('#stPrice', '40'); await p.waitForTimeout(200);
+  await p.click('#modalConfirm'); await p.click('text=ONAYLA VE İŞLEMİ TAMAMLA'); await p.waitForTimeout(500);
+  await p.click('[data-home-trade="Döviz Alış"]'); await p.click('#stHistoryToggle');
+  await p.click('[data-trade-edit]'); await p.click('#modalConfirm'); await p.waitForTimeout(500);
+  assert.equal(await p.inputValue('#stQty'), '100', 'düzeltme eski miktarla açılmalı');
+  assert.equal(await p.inputValue('#stFx'), 'USD');
+  assert.equal(Number(await p.inputValue('#stPrice')), 40, 'düzeltme eski kurla açılmalı');
+  await p.fill('#stQty', '150'); await p.waitForTimeout(200);
+  await p.click('#modalConfirm'); await p.click('text=ONAYLA VE İŞLEMİ TAMAMLA'); await p.waitForTimeout(9000);
+  const da = (fb.db.state.tradeMoves || []).filter((x) => x.tradeType === 'Döviz Alış');
+  assert.equal(da.length, 1, 'tek kayıt kalmalı'); assert.equal(Number(da[0].quantity), 150);
+  assert.equal(Math.round(cash(await st(), 'TL')), Math.round(tl0 - 6000)); assert.equal(Math.round(cash(await st(), 'USD')), Math.round(usd0 + 150));
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
+test('fiyatlar Asil fiyat ekranının ayarlarından gelir: işçilik, döviz düzeltmesi, hurda ve K. Kartı', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  const settings = { labor: { ceyrek: { a: 1.6, s: 1.65 } }, customItems: [{ id: 'c1', label: '22 Ayar 1 Gram Altın' }], kkOran: 5, hasDuzA: 2, hasDuzS: 0,
+    dovizDuz: { usdA: 0.5, usdS: -0.25 }, hurdaItems: [{ id: 'hurda22', label: '22 Ayar Hurda', oran: 22 / 24 }, { id: 'hurda14', label: '14 Ayar Hurda', oran: 14 / 24 }], hurdaCarp: { hurda22A: 0.9, hurda22S: 0.92, hurda14A: 0.55, hurda14S: 0.58 } };
+  settings.labor.c1 = { a: 0.91, s: 0.96 };
+  const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' };
+  await p.context().route(/supabase\.co/, (r) => r.request().method() === 'OPTIONS' ? r.fulfill({ status: 204, headers: cors }) : r.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: JSON.stringify([{ data: settings, updated_at: '2026-10-21' }]) }));
+  await p.context().route(/workers\.dev/, (r) => r.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: JSON.stringify({ hasAlis: 6000, hasSatis: 6100, usdAlis: 48, usdSatis: 50, sarAlis: 12, sarSatis: 13 }) }));
+  await p.evaluate(() => document.querySelector('[data-go="prices"],[data-route="prices"]').click()); await p.waitForSelector('#refreshLivePrices');
+  await p.evaluate(() => document.getElementById('refreshLivePrices').click()); await p.waitForSelector('#asilScreenPrices'); await p.waitForTimeout(500);
+  const rows = await p.$$eval('#asilScreenPrices tbody tr', (trs) => trs.map((tr) => [...tr.cells].map((c) => c.innerText.trim())));
+  const ceyrek = rows.find((r) => r[0] === 'Çeyrek');
+  assert.deepEqual(ceyrek, ['Çeyrek', (Math.round(6002 * 1.6)).toLocaleString('tr-TR'), (Math.round(6100 * 1.65)).toLocaleString('tr-TR'), (Math.round(Math.round(6100 * 1.65) * 1.05)).toLocaleString('tr-TR')]);
+  assert.ok(rows.some((r) => r[0] === '22 Ayar 1 Gram Altın'), 'özel ürün de listelenmeli');
+  const page = await p.innerText('body');
+  assert.match(page, /Fiyat ekranı/);
+  const usdBuy = await p.$eval('[data-price="usd.buy"]', (e) => Number(e.value));
+  assert.equal(usdBuy, 48.5, 'döviz düzeltmesi uygulanmalı');
+  // Programın kendi fiyat listesi (satış / ziynet ekranları bunu kullanır) ekranla aynı rakamı almalı
+  const itemVal = async (code, f) => p.evaluate(([c, f]) => { const el = [...document.querySelectorAll('[data-item]')].find((e) => e.dataset.item.endsWith('.' + f) && e.closest('tr')?.innerText.includes(c)); return el ? Number(el.value) : null; }, [code, f]);
+  assert.equal(await itemVal('Çeyrek', 'buy'), Math.round(6002 * 1.6), 'çeyrek alış ekrandaki gibi');
+  assert.equal(await itemVal('22 Ayar 1 Gram', 'sell'), Math.round(6100 * 0.96), '22 ayar 1 gram ada göre eşleşmeli');
+  assert.equal(await itemVal('22 Hurda', 'buy'), Math.round(6002 * 0.9), 'hurda çarpanı ekrandan gelmeli');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
 test('cari ekstre: tarih aralığıyla yazdırılır, son durum çıkar; harekette fiş, düzelt ve sil düğmeleri var', async () => {
   const p = await newDevice(browser, appUrl, createFakeFirebase());
   const popups = [];
