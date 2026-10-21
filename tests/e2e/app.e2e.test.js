@@ -1522,6 +1522,10 @@ test('fiyatlar Asil fiyat ekranının ayarlarından gelir: işçilik, döviz dü
   assert.equal(await itemVal('Çeyrek', 'buy'), Math.round(6002 * 1.7), 'programdaki fiyat yeni işçilikle güncellenmeli');
   const sarRow = (await p.$$eval('#boardFx tbody tr', (trs) => trs.map((tr) => [...tr.cells].map((c) => c.innerText.trim())))).find((r) => r[0] === 'SAR');
   assert.deepEqual(sarRow, ['SAR', '12,10', '13,00'], 'SAR panoda farkıyla görünmeli');
+  // Fiyat ekranında (başka cihazda) yapılan değişiklik birkaç saniyede kendiliğinden gelir
+  settings.labor.ceyrek = { a: 1.8, s: 1.85 };
+  await p.waitForTimeout(6500);
+  assert.equal(await itemVal('Çeyrek', 'buy'), Math.round(6002 * 1.8), 'fiyat ekranındaki değişiklik dakika beklemeden gelmeli');
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });

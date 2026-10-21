@@ -2613,7 +2613,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   // Fiyat ekranının varsayılan ürünleri (ekranda ayar girilmemişse bu çarpanlar kullanılır).
   const ASIL_SCREEN_ITEMS_V7=[{id:'has24',label:'24 Ayar',defA:1,defS:1.003},{id:'ayar22',label:'22 Ayar',defA:.91,defS:.922},{id:'tam',label:'Tam',defA:.993,defS:1.008},{id:'yarim',label:'Yarım',defA:.993,defS:1.009},{id:'ceyrek',label:'Çeyrek',defA:.992,defS:1.01},{id:'besli',label:'Beşli',defA:.993,defS:1.008},{id:'yarimbes',label:'Yarım Beşli',defA:.993,defS:1.0085},{id:'resat',label:'Reşat',defA:.993,defS:1.007},{id:'ata',label:'Ata',defA:.993,defS:1.007},{id:'gremise',label:'Gremise',defA:.993,defS:1.008}];
   const asilPriceKeyV7=x=>String(x||'').toLocaleUpperCase('tr-TR').replace(/LİRA|ALTIN|AYAR|ADET/g,'').replace(/[^A-Z0-9ÇĞİÖŞÜ.]/g,'');
-  let asilLiveRawV7={};
+  let asilLiveRawV7={},asilSettingsBusyV7=false;
   // Programın kendi döviz farkları (fiyat ekranındaki farkların üstüne eklenir; varsayılan 0).
   const BOARD_FX_V7=[{id:'usd',label:'USD',name:'Amerikan Doları'},{id:'eur',label:'EUR',name:'Euro'},{id:'gbp',label:'GBP',name:'İngiliz Sterlini'},{id:'chf',label:'CHF',name:'İsviçre Frangı'},{id:'sar',label:'SAR',name:'Suudi Riyali'}];
   function boardFxRowsV7(){
@@ -2771,7 +2771,8 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     loadAsilRemotePriceSettings().then(()=>fetchLiveMarketPrices());
     clearInterval(livePriceTimer); clearInterval(asilSettingsTimer);
     livePriceTimer=setInterval(()=>fetchLiveMarketPrices(),LIVE_PRICE_INTERVAL_MS);
-    asilSettingsTimer=setInterval(()=>loadAsilRemotePriceSettings(),60000);
+    // Fiyat ekranında yapılan işçilik/fark değişikliği birkaç saniyede programa yansır (kayıt küçük; fiyat ekranı da sık okur).
+    asilSettingsTimer=setInterval(()=>{if(asilSettingsBusyV7)return;asilSettingsBusyV7=true;loadAsilRemotePriceSettings().then(()=>{recalcGoldItemsFromHas();updateMarketTickerDom();}).finally(()=>{asilSettingsBusyV7=false;});},5000);
     updateMarketTickerDom();
   }
 
@@ -10049,18 +10050,15 @@ function stockSummaryView(){
     body+=receiptPairV644('Kullanıcı',x.user||'',false);
     return receiptDocV644('KASA / BANKA HAREKET FİŞİ',x.sourceDocNo||x.id,x.date,x.customer||'',body);
   }
+  // Ziynet / hurda / döviz fişi sade: işlem, ürün, miktar, tutar ve tarih. Peşin müşteride cari satırı yazılmaz.
+  function tradeReceiptPartyV7(x){var c=String(x.customer||'').trim();return /^PEŞİN MÜŞTERİ$/i.test(c.toLocaleUpperCase('tr-TR'))||/^peşin müşteri$/i.test(c)?'':c;}
   function tradeReceiptHtmlV644(x){
-    var body='';
+    var body='',q=Number(x.quantity||0);
     body+=receiptPairV644('İşlem',x.tradeType||'',true);
-    body+=receiptPairV644('Ürün / Döviz',x.item||'',false);
-    body+=receiptPairV644('Miktar',qty(x.quantity||0)+' '+String(x.unit||''),false);
-    if(Number(x.unitPrice||0))body+=receiptPairV644('Birim Fiyat / Kur',Number(x.unitPrice||0).toLocaleString('tr-TR',{maximumFractionDigits:4}),false);
-    body+=receiptPairV644('Toplam TL',money(x.totalTL||0),true);
-    if(!String(x.tradeType||'').startsWith('Döviz'))body+=receiptPairV644('Toplam HAS',qty(x.totalHas||0)+' HAS',true);
-    body+=receiptPairV644('Karşılık',x.settlementLabel||x.settlementCurrency||'',false);
-    body+=receiptPairV644('Hesap',x.accountName||'',false);
-    body+=receiptPairV644('Kullanıcı',x.user||'',false);
-    return receiptDocV644(String(x.tradeType||'').startsWith('Döviz')?'DÖVİZ İŞLEM FİŞİ':'ALTIN / ZİYNET İŞLEM FİŞİ',x.docNo||x.id,x.date,x.customer||'',body);
+    body+=receiptPairV644(x.item||'',qty(q)+' '+String(x.unit||''),true);
+    if(Number(x.unitPrice||0)&&Math.abs(q-1)>1e-9)body+=receiptPairV644('Birim Fiyat',Number(x.unitPrice||0).toLocaleString('tr-TR',{maximumFractionDigits:4}),false);
+    body+=receiptPairV644('Tutar',money(x.totalTL||0),true);
+    return receiptDocV644(String(x.tradeType||'').startsWith('Döviz')?'DÖVİZ İŞLEM FİŞİ':'ALTIN / ZİYNET İŞLEM FİŞİ',x.docNo||x.id,x.date,tradeReceiptPartyV7(x),body);
   }
   function repairReceiptHtmlV644(x){
     var body='';
@@ -10088,19 +10086,15 @@ function stockSummaryView(){
   function combinedTradeReceiptHtmlV7(moves){
     var first=moves[0],isFx=moves.every(function(x){return String(x.tradeType||'').startsWith('Döviz');});
     var types=[...new Set(moves.map(function(x){return x.tradeType||'';}))].join(' / ');
-    var body=receiptPairV644('İşlem',types,true)+'<div class="dash"></div>',total=0,totalHas=0;
-    moves.forEach(function(x,i){
-      total+=Number(x.totalTL||0);totalHas+=Number(x.totalHas||0);
-      body+=receiptPairV644((i+1)+'. '+(x.item||''),qty(x.quantity||0)+' '+String(x.unit||'')+(Number(x.unitPrice||0)?' × '+Number(x.unitPrice||0).toLocaleString('tr-TR',{maximumFractionDigits:4}):''),false);
+    var body=receiptPairV644('İşlem',types,true)+'<div class="dash"></div>',total=0;
+    moves.forEach(function(x){
+      total+=Number(x.totalTL||0);
+      body+=receiptPairV644(x.item||'',qty(x.quantity||0)+' '+String(x.unit||'')+(Number(x.unitPrice||0)&&Math.abs(Number(x.quantity||0)-1)>1e-9?' × '+Number(x.unitPrice||0).toLocaleString('tr-TR',{maximumFractionDigits:4}):''),false);
       body+=receiptPairV644('   Tutar',money(x.totalTL||0),false);
     });
-    body+='<div class="dash"></div>'+receiptPairV644('Toplam TL',money(total),true);
-    if(!isFx)body+=receiptPairV644('Toplam HAS',qty(totalHas)+' HAS',true);
-    var accounts=[...new Set(moves.map(function(x){return x.accountName||'';}).filter(Boolean))].join(', ');
-    if(accounts)body+=receiptPairV644('Hesap',accounts,false);
-    body+=receiptPairV644('Kullanıcı',first.user||'',false);
+    body+='<div class="dash"></div>'+receiptPairV644('Toplam',money(total),true);
     var docs=moves.map(function(x){return x.docNo||x.id;});
-    return receiptDocV644(isFx?'DÖVİZ İŞLEM FİŞİ':'ALTIN / ZİYNET İŞLEM FİŞİ',docs.length>1?docs[0]+' … '+docs[docs.length-1]:docs[0],first.date,first.customer||'',body);
+    return receiptDocV644(isFx?'DÖVİZ İŞLEM FİŞİ':'ALTIN / ZİYNET İŞLEM FİŞİ',docs.length>1?docs[0]+' … '+docs[docs.length-1]:docs[0],first.date,tradeReceiptPartyV7(first),body);
   }
   async function printTradeReceiptsCombinedV7(ids,copies){
     var moves=(ids||[]).map(function(id){return state.tradeMoves.find(function(s){return s.id===id;});}).filter(Boolean).sort(function(a,b){return String(a.docNo||'').localeCompare(String(b.docNo||''),'tr',{numeric:true});});
