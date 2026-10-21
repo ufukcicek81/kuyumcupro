@@ -1624,6 +1624,11 @@ test('satış ekranı: cari ad yazarak aranır; hızlı yeni cari eklenip seçil
   const namePart = cust.t.split(' · ').find((x) => /[A-Za-zÇĞİÖŞÜçğıöşü]{3}/.test(x)).slice(0, 5);
   await p.fill('#saleCustomerSearch', namePart); await p.press('#saleCustomerSearch', 'Enter'); await p.waitForTimeout(400);
   assert.notEqual(await p.inputValue('#saleCustomerSelect'), 'CASH', 'yazılan isimle cari seçilmeli');
+  await p.fill('#saleCustomerSearch', 'xyzqw olmayan'); await p.press('#saleCustomerSearch', 'Enter'); await p.waitForTimeout(400);
+  assert.match(await p.innerText('#saleCustomerHint'), /bulunamadı/, 'bulunamayan cari kutunun altında yazmalı');
+  assert.ok(!(await p.$('.critical-alert')), 'engelleyici uyarı açılmamalı');
+  assert.ok(await p.$('#saleProductSearch'), 'satış ekranı yerinde kalmalı');
+  assert.equal(await p.evaluate(() => document.activeElement?.id), 'saleCustomerSearch', 'odak arama kutusunda kalmalı');
   await p.click('#saleQuickCustomer'); await p.waitForSelector('#qcName');
   await p.fill('#qcName', 'TEST HIZLI CARİ'); await p.fill('#qcPhone', '5551112233');
   await p.click('#modalConfirm'); await p.waitForTimeout(500);
