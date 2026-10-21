@@ -505,6 +505,7 @@ body[data-theme="light"] .nav-search input{background:#f7f8fa;color:#18202a}body
 /* Fiyat panosu: gün boyu açık kalacak büyük, okunaklı fiyat ekranı */
 .price-board{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:14px}
 .price-board:fullscreen{background:var(--bg);padding:24px;overflow:auto;border-radius:0}
+.pb-go-sales{display:none}.price-board:fullscreen .pb-head{grid-template-columns:minmax(220px,1.4fr) 1fr 1fr auto}.price-board:fullscreen .pb-go-sales{display:inline-flex;align-self:center}
 .pb-head{display:grid;grid-template-columns:minmax(220px,1.4fr) 1fr 1fr;gap:12px}
 .pb-status,.pb-has{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px}
 .pb-status i{width:14px;height:14px;border-radius:50%;background:#f0ad4e;flex:none}.pb-status.live i{background:#24b47e;box-shadow:0 0 0 5px rgba(36,180,126,.16);animation:pbPulse 2s infinite}.pb-status.offline i{background:#ef4c4c}
@@ -2653,6 +2654,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
         <div class="pb-status ${off?'':live?'live':'offline'}"><i></i><div><strong>${off?'Otomatik fiyat kapalı':live?'Piyasa Canlı':state.market?.status==='offline'?'Bağlantı yok — son fiyat':'Bağlanıyor'}</strong><small>Son güncelleme: ${state.market?.lastUpdated?new Date(state.market.lastUpdated).toLocaleTimeString('tr-TR'):'—'}</small></div></div>
         <div class="pb-has"><span>Has Alış</span>${boardCellV7('has.a',Number(state.prices.has?.buy||0))}</div>
         <div class="pb-has sell"><span>Has Satış</span>${boardCellV7('has.s',Number(state.prices.has?.sell||0))}</div>
+        <button type="button" class="btn btn-primary pb-go-sales" title="Satış ekranına geç (F7)">▣ Satışa Geç · F7</button>
       </div>
       <div class="pb-grid">
         <section class="pb-card pb-gold"><h3>Altın Fiyatları</h3><table class="pb-table" id="asilScreenPrices"><thead><tr><th>Birim</th><th>Alış</th><th>Satış</th>${hasK?'<th>K. Kartı</th>':''}</tr></thead><tbody>${gold.map(r=>`<tr><td>${esc(r.label)}</td><td class="a">${boardCellV7('g.'+r.key+'.a',r.a)}</td><td class="s">${boardCellV7('g.'+r.key+'.s',r.s)}</td>${hasK?`<td class="k">${boardCellV7('g.'+r.key+'.k',r.k)}</td>`:''}</tr>`).join('')}</tbody></table></section>
@@ -2942,7 +2944,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       <div class="card sale-head-card">
         <div class="sale-head-row">
           <div class="sale-title-block"><h1>İşlem Merkezi</h1><p>Ürünü seç → Ödemeyi ekle → Özeti kontrol et</p></div>
-          <div class="sale-head-actions"><button class="btn btn-outline" id="saleHistory">Satış Geçmişi</button><button class="btn btn-outline" id="resetSale">Yeni Fiş</button><button class="btn btn-outline" data-go="prices" id="goPriceBoard" title="Fiyat panosuna geç (F7)">Fiyat Panosu · F7</button></div>
+          <div class="sale-head-actions"><button class="btn btn-outline" id="saleHistory">Satış Geçmişi</button><button class="btn btn-outline" id="resetSale">Yeni Fiş</button><button class="btn btn-outline" id="goPriceBoard" title="Fiyat panosuna tam ekran geç (F7)">Fiyat Panosu · F7</button></div>
         </div>
         <div class="simple-operation-bar"><button class="simple-operation sale" id="simpleSaleFocus"><b>Satış</b><span>Müşteriye satış yap</span></button><button class="simple-operation buy" data-special-trade="Ziynet Alış"><b>Alış</b><span>Müşteriden altın / ziynet al</span></button><button class="simple-operation swap" data-pay="Altın / Ziynet"><b>Takas</b><span>Altını satışa mahsup et</span></button></div><div class="form-grid sale-head-grid">
           <div class="labelled span-2"><label>Cari Hesap</label><div style="display:flex;gap:6px;margin-bottom:6px"><input id="saleCustomerSearch" class="input" list="saleCustomerList" placeholder="Cari ara: ad, kod veya telefon yazın" autocomplete="off" style="flex:1;min-width:0"><button type="button" class="btn btn-outline" id="saleQuickCustomer" title="Hızlı yeni cari">+ Yeni Cari</button></div><small id="saleCustomerHint" style="display:none;color:#c0262d;font-weight:700;margin:-2px 0 6px"></small><datalist id="saleCustomerList">${saleCustomerCandidates('Tümü').filter(c=>c.id!=='CASH').map(c=>`<option value="${esc(c.name)}">${esc([c.code,c.phone,c.type].filter(Boolean).join(' · '))}</option>`).join('')}</datalist><select class="select" id="saleCustomerSelect">${saleCustomerCandidates('Tümü').map(c=>`<option value="${c.id}" ${c.id===currentCustomer?.id?'selected':''}>${esc(c.code?c.code+' · ':'')}${esc(c.name)}${c.type&&c.id!=='CASH'?' · '+esc(c.type):''}</option>`).join('')}</select><small class="sale-inline-help">Tüm cariler tek listede. Açık hesap doğrudan seçilen cariye işlenir.</small></div>
@@ -3943,8 +3945,11 @@ function stockSummaryView(){
   }
   // Her ekrandan erişim: F9, üst çubuktaki düğme, ana menü kutucuğu.
   document.addEventListener('keydown',e=>{if(e.key==='F9'&&session&&!e.altKey&&!e.ctrlKey&&!e.metaKey){e.preventDefault();openGoldStocksV7();}});
+  // Fiyat panosu tam ekran açılır (F7 / düğme tıklaması kullanıcı hareketi sayıldığı için tarayıcı izin verir).
+  function openPriceBoardFullV7(){route='prices';render();document.getElementById('priceBoard')?.requestFullscreen?.().catch(()=>{});}
+  function goSalesFromBoardV7(){if(document.fullscreenElement)document.exitFullscreen?.().catch(()=>{});route='sales';render();}
   // F7: Fiyat Panosu ↔ Satış ekranı (yazı kutusundayken de çalışır; satış ekranında imleç hep bir kutudadır).
-  document.addEventListener('keydown',e=>{if(e.key!=='F7'||!session||e.altKey||e.ctrlKey||e.metaKey||document.getElementById('modalRoot'))return;e.preventDefault();if(document.fullscreenElement)document.exitFullscreen?.().catch(()=>{});route=route==='prices'?'sales':'prices';render();});
+  document.addEventListener('keydown',e=>{if(e.key!=='F7'||!session||e.altKey||e.ctrlKey||e.metaKey||document.getElementById('modalRoot'))return;e.preventDefault();if(route==='prices')goSalesFromBoardV7();else openPriceBoardFullV7();});
   document.addEventListener('keydown',e=>{if(e.key==='F10'&&session&&!e.altKey&&!e.ctrlKey&&!e.metaKey){e.preventDefault();openRecentReceiptsV7();}});
   document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-go="salesreport"]');if(!b)return;e.preventDefault();e.stopPropagation();openPusulaReportV660('sales_general');},true);
   document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-gold-stocks],[data-go="goldstocks"]');if(!b)return;e.preventDefault();e.stopPropagation();openGoldStocksV7();},true);
@@ -4827,7 +4832,7 @@ function stockSummaryView(){
 
   function pagePrices(){
     const p=state.prices;
-    return `<div class="page-title"><div><h1>Fiyat Panosu</h1><p>Fiyatlar Asil Kuyumcu fiyat ekranından otomatik gelir ve kendiliğinden yenilenir.</p></div><div class="actions" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary" data-go="sales" id="goSalesFromBoard" title="Satış ekranına geç (F7)">▣ Satışa Geç · F7</button><button class="btn btn-outline" id="boardFullscreen">⛶ Tam Ekran</button><button class="btn btn-outline" id="refreshLivePrices">Şimdi Güncelle</button><button class="btn ${state.settings.livePriceSync===false?'btn-outline':'btn-success'}" id="toggleLivePrices">${state.settings.livePriceSync===false?'Otomatik Fiyatı Aç':'Otomatik Fiyat Açık'}</button></div></div>
+    return `<div class="page-title"><div><h1>Fiyat Panosu</h1><p>Fiyatlar Asil Kuyumcu fiyat ekranından otomatik gelir ve kendiliğinden yenilenir.</p></div><div class="actions" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary" id="goSalesFromBoard" title="Satış ekranına geç (F7)">▣ Satışa Geç · F7</button><button class="btn btn-outline" id="boardFullscreen">⛶ Tam Ekran</button><button class="btn btn-outline" id="refreshLivePrices">Şimdi Güncelle</button><button class="btn ${state.settings.livePriceSync===false?'btn-outline':'btn-success'}" id="toggleLivePrices">${state.settings.livePriceSync===false?'Otomatik Fiyatı Aç':'Otomatik Fiyat Açık'}</button></div></div>
       <div class="price-board" id="priceBoard">${priceBoardInnerV7()}</div>
       <div class="card" style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><strong>İşçilik, döviz farkı ve hurda ayarları</strong><div class="muted" style="font-size:13px">${state.market?.settingsSource==='Fiyat ekranı'?`Fiyat ekranının ayarları kullanılıyor · son okuma ${state.market.settingsAt?new Date(state.market.settingsAt).toLocaleTimeString('tr-TR'):'—'}`:`<span style="color:var(--red);font-weight:700">Fiyat ekranının ayarları okunamadı${state.market?.settingsError?' ('+esc(state.market.settingsError)+')':''}</span>`}</div></div>${canEditPriceScreenV7()?'<button class="btn btn-primary" id="openScreenSettings">⚙ Fiyat Ekranı Ayarları</button>':''}</div>
       <details class="card" style="margin-top:16px"><summary style="cursor:pointer;font-weight:700">Gelişmiş: manuel fiyat ve milyem girişi</summary>
@@ -6260,6 +6265,7 @@ function stockSummaryView(){
 
   function bindSales(){
     document.querySelectorAll('[data-special-trade]').forEach(b=>b.addEventListener('click',()=>openSpecialTrade(b.dataset.specialTrade)));
+    document.getElementById('goPriceBoard')?.addEventListener('click',openPriceBoardFullV7);
     setTimeout(()=>{
       let target=document.getElementById('saleProductSearch');
       if(saleDraft.entrySelection?.type==='open')target=document.getElementById('saleEntryAmount');
@@ -8269,6 +8275,8 @@ function stockSummaryView(){
     document.getElementById('toggleLivePrices')?.addEventListener('click',()=>{state.settings.livePriceSync=state.settings.livePriceSync===false?true:false;save();if(state.settings.livePriceSync)fetchLiveMarketPrices(true);render();});
     document.getElementById('boardFullscreen')?.addEventListener('click',()=>{const el=document.getElementById('priceBoard');if(document.fullscreenElement)document.exitFullscreen?.();else el?.requestFullscreen?.().catch(()=>toast('Tam ekran açılamadı; F11 tuşunu kullanın','err'));});
     document.getElementById('openScreenSettings')?.addEventListener('click',openAsilScreenSettingsV7);
+    document.getElementById('goSalesFromBoard')?.addEventListener('click',goSalesFromBoardV7);
+    document.getElementById('priceBoard')?.addEventListener('click',e=>{if(e.target.closest('.pb-go-sales'))goSalesFromBoardV7();});
   }
 
   function bindCount(){
