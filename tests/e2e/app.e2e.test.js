@@ -1559,6 +1559,80 @@ test('kasa sayımı: kasa farkı sisteme işlenir, bakiye sayılan tutara gelir 
   await p.context().close();
 });
 
+test('banka bakiyesi gerçek tutara eşitlenir; kasa değişmez', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  const tlCash = (s) => (s.cashAccounts || []).filter((x) => x.currency === 'TL').reduce((n, x) => n + Number(x.balance || 0), 0);
+  const cash0 = tlCash(fb.db.state);
+  await p.evaluate(() => document.querySelector('[data-route="customers"],[data-go="customers"]').click());
+  await p.waitForTimeout(500);
+  const bankName = await p.evaluate(() => { const e = [...document.querySelectorAll('[data-cari-card][data-cari-type="Banka"]')].find((x) => /İŞ BANKASI/.test(x.innerText)); const n = e.querySelector('h3').innerText.trim(); e.querySelector('[data-cari-detail]').click(); return n; });
+  await p.waitForSelector('#bankSetBalanceV7');
+  await p.click('#bankSetBalanceV7');
+  await p.fill('#bankRealBalV7', '26900'); await p.click('#modalConfirm'); await p.waitForTimeout(9000);
+  const st = fb.db.state, acc = (st.bankAccounts || []).find((b) => String(b.bank || b.name).includes(bankName) || bankName.includes(String(b.bank || b.name)));
+  assert.ok(acc, 'banka hesabı bulunmalı: ' + bankName);
+  assert.equal(Math.round(Number(acc.balance)), 26900, 'banka bakiyesi gerçek tutara eşitlenmeli');
+  assert.equal(Math.round(tlCash(st)), Math.round(cash0), 'kasa değişmemeli');
+  assert.ok((st.financeMoves || []).some((f) => f.type === 'Banka Bakiye Düzeltme' && f.accountId === acc.id), 'düzeltme hareketi görünmeli');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
+test('mahsup iki taraflı: karşı cari zorunlu, tutar karşı cariye ters yazılır, silince ikisi de geri alınır', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  await p.evaluate(() => document.querySelector('[data-route="customers"],[data-go="customers"]').click());
+  await p.waitForTimeout(400);
+  const aId = await p.evaluate(() => document.querySelector('[data-cari-move]').dataset.cariMove);
+  const hasOf = (id) => Number((fb.db.state.customers || []).find((c) => c.id === id)?.hasBalance || 0);
+  await p.evaluate(() => document.querySelector('[data-cari-move]').click());
+  await p.waitForSelector('#cmType');
+  await p.selectOption('#cmType', 'MH'); await p.waitForTimeout(150);
+  assert.ok(await p.isVisible('#cmMahsupCari'), 'mahsupta karşı cari alanı görünmeli');
+  await p.selectOption('#cmUnit', 'HAS'); await p.fill('#cmAmount', '9.95'); await p.selectOption('#cmSide', 'credit');
+  await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  assert.ok(!(await p.$('#cariSummaryRoot')), 'karşı cari seçilmeden özet açılmamalı');
+  const bId = await p.$$eval('#cmMahsupCari option', (os) => os.map((o) => o.value).filter(Boolean)[0]);
+  await p.waitForTimeout(3000);
+  const a0 = hasOf(aId), b0 = hasOf(bId);
+  await p.selectOption('#cmMahsupCari', bId);
+  await p.evaluate(() => document.getElementById('modalConfirm').click()); await p.waitForSelector('#cariSummarySave');
+  assert.match(await p.innerText('#cariSummaryRoot'), /Karşı cari/);
+  await p.evaluate(() => document.getElementById('cariSummarySave').click()); await p.waitForTimeout(9000);
+  assert.equal(Math.round((hasOf(aId) - a0) * 100), -995, 'cari alacaklanmalı');
+  assert.equal(Math.round((hasOf(bId) - b0) * 100), 995, 'karşı cari aynı tutarda borçlanmalı');
+  const mv = (fb.db.state.customerMoves || []).find((m) => m.customerId === aId && m.code === 'MH');
+  assert.ok(mv && mv.pairId, 'mahsup eşli kaydedilmeli');
+  if (await p.$('#modalX')) await p.click('#modalX').catch(() => {});
+  await p.evaluate((x) => document.querySelector(`[data-cari-card="${x}"] [data-cari-detail]`).click(), aId);
+  await p.waitForSelector('#cariEkstreTable');
+  await p.evaluate(() => [...document.querySelectorAll('.cari-ekstre-row')].find((r) => /MAHSUP/.test(r.innerText)).click());
+  await p.evaluate(() => document.getElementById('selectedCariDelete').click()); await p.waitForSelector('text=Cari Hareketi Sil');
+  await p.evaluate(() => document.getElementById('modalConfirm').click());
+  await p.waitForTimeout(9000);
+  assert.equal(Math.round((hasOf(aId) - a0) * 100), 0, 'silince cari geri dönmeli');
+  assert.equal(Math.round((hasOf(bId) - b0) * 100), 0, 'silince karşı cari de geri dönmeli');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
+test('satış ekranı: cari ad yazarak aranır; hızlı yeni cari eklenip seçilir', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  await p.click('[data-go="sales"]'); await p.waitForSelector('#saleCustomerSearch');
+  const cust = await p.$$eval('#saleCustomerSelect option', (os) => os.map((o) => ({ v: o.value, t: o.textContent })).find((o) => o.v && o.v !== 'CASH' && !/PEŞİN/i.test(o.t)));
+  const namePart = cust.t.split(' · ').find((x) => /[A-Za-zÇĞİÖŞÜçğıöşü]{3}/.test(x)).slice(0, 5);
+  await p.fill('#saleCustomerSearch', namePart); await p.press('#saleCustomerSearch', 'Enter'); await p.waitForTimeout(400);
+  assert.notEqual(await p.inputValue('#saleCustomerSelect'), 'CASH', 'yazılan isimle cari seçilmeli');
+  await p.click('#saleQuickCustomer'); await p.waitForSelector('#qcName');
+  await p.fill('#qcName', 'TEST HIZLI CARİ'); await p.fill('#qcPhone', '5551112233');
+  await p.click('#modalConfirm'); await p.waitForTimeout(500);
+  const sel = await p.$eval('#saleCustomerSelect', (s) => s.options[s.selectedIndex].textContent);
+  assert.match(sel, /TEST HIZLI CARİ/, 'yeni cari eklenip seçilmeli');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
 test('stok kartı birleştir: eski kartın stoğu yeni karta aktarılır, eski kart silinir', async () => {
   const p = await newDevice(browser, appUrl, createFakeFirebase());
   p.on('dialog', () => {});
