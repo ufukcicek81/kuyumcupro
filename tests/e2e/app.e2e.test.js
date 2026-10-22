@@ -1811,3 +1811,22 @@ test('fiyat panosu ↔ satış ekranı: düğmeyle ve F7 ile geçilir (satışta
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('satış fişindeki satırın fiyatı sonradan değiştirilir (Fiyat düğmesi)', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  await p.click('[data-go="sales"]'); await p.waitForSelector('#saleProductSearch');
+  for (let i = 0; i < 3; i++) {
+    await p.fill('#saleProductSearch', '22'); await p.waitForTimeout(300); await p.press('#saleProductSearch', 'Enter');
+    if (await p.waitForSelector('#saleEntryPrice:not([disabled])', { timeout: 5000 }).catch(() => null)) break;
+  }
+  await p.waitForTimeout(300);
+  await p.fill('#saleEntryPrice', '2500'); await p.fill('#saleEntryPayable', '7000');
+  await p.click('#saleAddUnified'); await p.waitForTimeout(500);
+  await p.click('[data-line-price="0"]'); await p.waitForSelector('#slpTotal');
+  await p.fill('#slpTotal', '6500'); await p.click('#modalConfirm'); await p.waitForTimeout(400);
+  const body = await p.innerText('.sale-product-card');
+  assert.match(body, /6\.500,00/, 'yeni tutar fişte görünmeli'); assert.doesNotMatch(body, /7\.000,00/);
+  assert.match(await p.innerText('.sale-summary'), /6\.500,00/, 'toplam da değişmeli');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});

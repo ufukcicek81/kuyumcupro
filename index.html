@@ -2971,7 +2971,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
               <button class="btn btn-primary" id="saleAddUnified" ${selected?'':'disabled'}>Ekle</button>
             </div>
             ${selected?`<div class="sale-stock-preview" style="display:grid"><div class="metric"><span>${isBarcode?'Gram':'Stok Türü'}</span><strong>${isBarcode?qty(stockAmount(barcodeItem))+' GR':esc(openItem.unit||'')}</strong></div><div class="metric"><span>Satış HAS</span><strong>${qty(entrySaleHas)} HAS</strong></div><div class="metric"><span>Ayar</span><strong>${esc(String(entryKarat||''))}</strong></div>${state.currentUser?.permissions?.showCost===false?'':`<div class="metric"><span>Maliyet / Tahmini Kâr</span><strong>${qty(entryCostHas)} / ${qty(entrySaleHas-entryCostHas)} HAS</strong></div>`}</div>`:''}
-            ${saleDraft.lines.length?`<div class="table-wrap" style="margin-top:12px"><table class="table" style="min-width:1000px"><thead><tr><th>Ürün Kodu / Ürün</th><th>Birim</th><th class="num">Gram / Adet</th><th>Ayar</th><th class="num">Birim Fiyat</th><th class="num">Ödenecek Tutar</th><th class="num">Satış HAS</th><th>Maliyet / Kâr</th><th></th></tr></thead><tbody>${saleDraft.lines.map((l,i)=>{const sh=Number(l.saleHas??((Number(l.total||0))/(Number(state.prices.has.sell||1))));const ch=Number(l.costHas||0);const ph=sh-ch;const display=Number(l.displayQty??l.displayAmount??l.weight??l.qty??1);const lineCur=String(l.saleCurrency||'TL').toUpperCase(),lineRate=Number(l.fxRate||saleCurrencyRate(lineCur));const unitPriceTl=Number(l.unitPrice??l.price??(display?Number(l.total||0)/display:Number(l.total||0))),payableTl=Number(l.total??unitPriceTl*display),unitNative=Number(l.unitPriceNative??unitPriceTl/lineRate),payableNative=Number(l.totalNative??payableTl/lineRate);return `<tr><td><strong>${esc(l.code)}</strong><br><small>${esc(l.name)}</small></td><td>${esc(l.unit||'GR')}</td><td class="num"><strong>${qty(display)}</strong></td><td>${esc(l.karat||'')}</td><td class="num"><strong>${saleNativeLabel(unitNative,lineCur)}<br><small>${money(unitPriceTl)}</small></strong></td><td class="num"><strong>${saleNativeLabel(payableNative,lineCur)}<br><small>${money(payableTl)}</small></strong></td><td class="num"><strong>${qty(sh)} HAS</strong></td><td>${state.currentUser?.permissions?.showCost===false?'—':`<div class="sale-cost-mini">${sh+0.0005<ch?'<span class="badge red">MALİYET ALTI</span><br>':''}Maliyet <strong>${qty(ch)} HAS</strong><br>Kâr <strong class="${ph>=0?'positive':'negative'}">${qty(ph)} HAS</strong></div>`}</td><td><button class="btn btn-danger" data-remove-line="${i}">Sil</button></td></tr>`}).join('')}</tbody></table></div>`:`<div class="empty-state" style="padding:18px"><strong>Satış fişi boş</strong>Stok kodu veya barkod yazıp Enter'a basın.</div>`}
+            ${saleDraft.lines.length?`<div class="table-wrap" style="margin-top:12px"><table class="table" style="min-width:1000px"><thead><tr><th>Ürün Kodu / Ürün</th><th>Birim</th><th class="num">Gram / Adet</th><th>Ayar</th><th class="num">Birim Fiyat</th><th class="num">Ödenecek Tutar</th><th class="num">Satış HAS</th><th>Maliyet / Kâr</th><th></th></tr></thead><tbody>${saleDraft.lines.map((l,i)=>{const sh=Number(l.saleHas??((Number(l.total||0))/(Number(state.prices.has.sell||1))));const ch=Number(l.costHas||0);const ph=sh-ch;const display=Number(l.displayQty??l.displayAmount??l.weight??l.qty??1);const lineCur=String(l.saleCurrency||'TL').toUpperCase(),lineRate=Number(l.fxRate||saleCurrencyRate(lineCur));const unitPriceTl=Number(l.unitPrice??l.price??(display?Number(l.total||0)/display:Number(l.total||0))),payableTl=Number(l.total??unitPriceTl*display),unitNative=Number(l.unitPriceNative??unitPriceTl/lineRate),payableNative=Number(l.totalNative??payableTl/lineRate);return `<tr><td><strong>${esc(l.code)}</strong><br><small>${esc(l.name)}</small></td><td>${esc(l.unit||'GR')}</td><td class="num"><strong>${qty(display)}</strong></td><td>${esc(l.karat||'')}</td><td class="num"><strong>${saleNativeLabel(unitNative,lineCur)}<br><small>${money(unitPriceTl)}</small></strong></td><td class="num"><strong>${saleNativeLabel(payableNative,lineCur)}<br><small>${money(payableTl)}</small></strong></td><td class="num"><strong>${qty(sh)} HAS</strong></td><td>${state.currentUser?.permissions?.showCost===false?'—':`<div class="sale-cost-mini">${sh+0.0005<ch?'<span class="badge red">MALİYET ALTI</span><br>':''}Maliyet <strong>${qty(ch)} HAS</strong><br>Kâr <strong class="${ph>=0?'positive':'negative'}">${qty(ph)} HAS</strong></div>`}</td><td><div style="display:flex;gap:6px"><button class="btn btn-outline" data-line-price="${i}" title="Birim fiyatı / tutarı değiştir">Fiyat</button><button class="btn btn-danger" data-remove-line="${i}">Sil</button></div></td></tr>`}).join('')}</tbody></table></div>`:`<div class="empty-state" style="padding:18px"><strong>Satış fişi boş</strong>Stok kodu veya barkod yazıp Enter'a basın.</div>`}
           </div>
 
           <div class="card sale-payment-card">
@@ -6263,6 +6263,26 @@ function stockSummaryView(){
   }
 
 
+  // Fişteki satırın fiyatı sonradan değiştirilir (satış düzeltmesinde yanlış fiyatı düzeltmek için de).
+  // Satış HAS'ı satırın kendi kuruyla oranlanır; düzeltilen eski satışın HAS kuru korunur.
+  function editSaleLinePriceV7(i){
+    const l=saleDraft.lines[i];if(!l)return;
+    const cur=String(l.saleCurrency||'TL').toUpperCase(),rate=Number(l.fxRate||saleCurrencyRate(cur))||1,amount=l.sourceType==='open'?Number(l.qty||0):1;
+    const oldTotalNative=Number(l.totalNative??Number(l.total||0)/rate),oldUnitNative=amount>0?oldTotalNative/amount:oldTotalNative,f=v=>Number(v||0).toFixed(2);
+    modal('Satır Fiyatını Değiştir',`<div class="notice" style="margin-bottom:10px"><b>${esc(l.code||'')}</b> ${esc(l.name||'')} · ${qty(Number(l.displayQty??l.displayAmount??l.qty??1))} ${esc(l.unit||'')}</div><div class="form-grid">${amount!==1?`<div class="labelled"><label>Birim Fiyat (${cur})</label><input id="slpUnit" class="input" type="number" step="0.01" value="${f(oldUnitNative)}"></div>`:''}<div class="labelled"><label>Ödenecek Tutar (${cur})</label><input id="slpTotal" class="input" type="number" step="0.01" value="${f(oldTotalNative)}"></div></div>`,()=>{
+      const totalNative=parseTrNumber(document.getElementById('slpTotal')?.value);if(!(totalNative>0))return toast('Tutar girin','err');
+      const oldTotal=Number(l.total||0),total=totalNative*rate,unitNative=amount>0?totalNative/amount:totalNative;
+      l.totalNative=totalNative;l.total=total;l.unitPriceNative=unitNative;l.unitPrice=unitNative*rate;l.price=l.unitPrice;
+      l.saleHas=oldTotal>0&&Number(l.saleHas)>0?Number(l.saleHas)*total/oldTotal:total/Number(state.prices.has.sell||1);
+      l.belowCost=belowCostInfo(l.saleHas,Number(l.costHas||0)).isBelow;
+      closeModal();render();toast(l.belowCost?'Fiyat değişti — DİKKAT: maliyetin altında':'Fiyat değişti; ödemeyi kontrol edin',l.belowCost?'err':'ok');
+    },'FİYATI DEĞİŞTİR');
+    const u=document.getElementById('slpUnit'),t=document.getElementById('slpTotal');
+    u?.addEventListener('input',()=>{t.value=(parseTrNumber(u.value)*amount).toFixed(2);});
+    t?.addEventListener('input',()=>{if(u&&amount>0)u.value=(parseTrNumber(t.value)/amount).toFixed(2);});
+    setTimeout(()=>focusAndSelect(u||t),0);
+  }
+
   function bindSales(){
     document.querySelectorAll('[data-special-trade]').forEach(b=>b.addEventListener('click',()=>openSpecialTrade(b.dataset.specialTrade)));
     document.getElementById('goPriceBoard')?.addEventListener('click',openPriceBoardFullV7);
@@ -6391,6 +6411,7 @@ function stockSummaryView(){
     });
 
     document.querySelectorAll('[data-remove-line]').forEach(b=>b.addEventListener('click',()=>{saleDraft.lines.splice(Number(b.dataset.removeLine),1);render();}));
+    document.querySelectorAll('[data-line-price]').forEach(b=>b.addEventListener('click',()=>editSaleLinePriceV7(Number(b.dataset.linePrice))));
     document.querySelectorAll('[data-pay]').forEach(b=>b.addEventListener('click',()=>openPaymentModal(b.dataset.pay)));
     document.querySelectorAll('[data-remove-pay]').forEach(b=>b.addEventListener('click',()=>{saleDraft.payments.splice(Number(b.dataset.removePay),1);render();}));
     document.querySelectorAll('[data-remove-return]').forEach(b=>b.addEventListener('click',()=>{saleDraft.returnItems=saleDraft.returnItems||[];saleDraft.returnItems.splice(Number(b.dataset.removeReturn),1);recalcSaleReturnTotal();render();}));
