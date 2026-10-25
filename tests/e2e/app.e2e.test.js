@@ -1844,6 +1844,14 @@ test('yeni hurda stok kartı Hurda Alış/Satış ve takas listesinde çıkar; a
     await p.evaluate(() => document.querySelector('[data-route="dashboard"],[data-go="dashboard"]').click()); await p.waitForTimeout(200);
   };
   await newCard('18 AYAR HURDA', '750'); await newCard('8 AYAR HURDA', '333');
+  // Stok kartları listesinde hurdalar kendi grubunda art arda; ürün grubu seçeneklerinde HURDA var
+  await p.evaluate(() => document.querySelector('[data-route="stocks"],[data-go="stocks"]').click()); await p.waitForTimeout(300);
+  await p.evaluate(() => (document.getElementById('newStockCard') || document.querySelector('[data-new-stockcard]')).click()); await p.waitForSelector('#scProductGroup');
+  assert.ok((await p.$$eval('#scProductGroup option', (os) => os.map((o) => o.value))).includes('HURDA'), 'ürün grubunda HURDA olmalı');
+  await p.click('#modalX');
+  const hurdaGroup = await p.evaluate(() => { const h = [...document.querySelectorAll('.stock-card-group-head')].find((e) => /^HURDA/.test(e.innerText)); const out = []; let n = h && h.nextElementSibling; while (n && !n.classList.contains('stock-card-group-head')) { out.push(n.querySelector('h4')?.innerText.trim()); n = n.nextElementSibling; } return out; });
+  assert.deepEqual(hurdaGroup.sort(), ['18 AYAR HURDA', '8 AYAR HURDA'], 'hurda kartları HURDA başlığı altında art arda olmalı');
+  await p.evaluate(() => document.querySelector('[data-route="dashboard"],[data-go="dashboard"]').click()); await p.waitForTimeout(200);
   for (const t of ['Hurda Alış', 'Hurda Satış']) {
     await p.click(`[data-home-trade="${t}"]`); await p.waitForSelector('#stItem');
     const opts = await p.$$eval('#stItem option', (os) => os.map((o) => o.textContent));
