@@ -915,6 +915,8 @@ body[data-ui-mode="pc"] .stock-card-box{padding:10px}
 .stock-order-row.dragging,.stock-card-box.dragging{opacity:.45}
 .stock-order-handle{display:inline-flex;align-items:center;justify-content:center;width:21px;height:21px;border:1px solid var(--line);border-radius:6px;margin-right:7px;color:var(--muted);font-size:12px;vertical-align:middle;user-select:none}
 .stock-card-box[data-stockcard-order]{cursor:grab}
+.stock-card-group-head{grid-column:1/-1;font-weight:800;font-size:15px;letter-spacing:.04em;color:var(--gold);border-bottom:1px solid var(--line);padding:10px 2px 4px;margin-top:4px}.stock-card-group-head small{color:var(--muted);font-weight:600;letter-spacing:0}
+.stock-card-box.dup{border-color:#d92d20!important}
 .stock-card-order-hint{font-size:11px;color:var(--muted);margin-top:6px}
 </style>
 <style id="simple-interface-v645">
@@ -3252,8 +3254,19 @@ function stockSummaryView(){
     return `${stockMetrics(rows)}<div class="card"><div class="filter-panel"><input id="stockSearch" class="input" placeholder="Barkod, kısa kod (örn. 1348 / ALY1348), ürün, toptancı"><select id="stockSort" class="select"><option value="code_asc" ${sortKey==='code_asc'?'selected':''}>Kod ↑</option><option value="code_desc" ${sortKey==='code_desc'?'selected':''}>Kod ↓</option><option value="name_asc" ${sortKey==='name_asc'?'selected':''}>Ürün A-Z</option><option value="gram_desc" ${sortKey==='gram_desc'?'selected':''}>Gram ↓</option><option value="karat_desc" ${sortKey==='karat_desc'?'selected':''}>Ayar ↓</option><option value="recent_desc" ${sortKey==='recent_desc'?'selected':''}>Son Eklenen</option></select><select id="stockGroupFilter" class="select"><option value="">Tüm Gruplar</option>${groups.map(x=>`<option>${esc(x)}</option>`).join('')}</select><select id="stockCategoryFilter" class="select"><option value="">Tüm Tanımlar</option>${cats.map(x=>`<option>${esc(x)}</option>`).join('')}</select><select id="stockKaratFilter" class="select"><option value="">Tüm Ayarlar</option>${karats.map(x=>`<option>${esc(x)}</option>`).join('')}</select><select id="stockSupplierFilter" class="select"><option value="">Tüm Toptancılar</option>${suppliers.map(x=>`<option>${esc(x)}</option>`).join('')}</select><select id="stockStatusFilter" class="select"><option value="">Tüm Durumlar</option>${statuses.map(x=>`<option>${esc(x)}</option>`).join('')}</select></div>
     <div class="table-wrap"><table class="table" id="stockTable" style="min-width:1320px"><thead><tr><th></th><th>Ürün Kodu</th><th>Mal Tanımı</th><th>Ürün Grubu</th><th>Toptancı</th><th class="num">Miktar</th><th class="num">Ayar</th><th class="num">Mal HAS</th><th class="num">İşçilik</th><th class="num">Karşı Hesap</th><th>Konum</th><th>Durum</th><th>Barkod</th><th>İşlem</th></tr></thead><tbody>${list.map(x=>`<tr data-search="${esc([x.pusulaCode,x.code,x.name,x.productType,x.group,`${x.group||''}${x.pusulaCode||''}`,x.category,x.supplier,x.barcode,x.rfid].join(' ').toLocaleLowerCase('tr-TR'))}" data-stock-code="${esc(x.code||'')}" data-barcode="${esc(x.barcode||'')}" data-pusula-code="${esc(x.pusulaCode||'')}" data-group="${esc(x.group)}" data-category="${esc(x.category)}" data-karat="${esc(x.purity||x.karat)}" data-supplier="${esc(x.supplier)}" data-status="${esc(x.status)}"><td><input type="checkbox" class="stock-check" value="${x.id}"></td><td><strong>${esc(x.code)}</strong></td><td><div class="product-name"><strong>${esc(x.name)}</strong><small>${esc(x.purchaseDocNo||x.partyId||'')}</small></div></td><td><span class="badge blue">${esc(x.group||x.productType)}</span></td><td>${esc(x.supplier)}</td><td class="num">${qty(stockAmount(x))} GR</td><td class="num"><span class="badge gold">${qty(Number(x.purity||0))}</span></td><td class="num">${qty(stockHas(x))} HAS</td><td class="num">${qty(stockWorkmanshipHas(x))} HAS</td><td class="num"><strong>${qty(stockCounterHas(x))} HAS</strong></td><td>${esc([x.showcase,x.location].filter(Boolean).join(' / '))}</td><td><span class="badge ${stockStatusClass(x.status)}">${esc(x.status)}</span></td><td>${esc(x.barcode)}</td><td><div class="row-actions"><button class="btn btn-outline" data-stock-detail="${x.id}">Detay</button><button class="btn" data-stock-status="${x.id}">Durum</button>${x.openSourceId&&x.status==='Stokta'?`<button class="btn btn-danger" data-return-open="${x.id}">Barkodu Geri Al</button>`:''}</div></td></tr>`).join('')}</tbody></table></div></div>`;
   }
+  // Pusula'daki gibi kartlar ürün grubuna göre art arda: ALTIN, HURDA, ZİYNET, TAŞ, diğerleri. Grup içinde kullanıcının sürükle-bırak sırası korunur.
+  function withHurdaGroupV7(list){const g=[...(list||[])];if(!g.some(x=>String(x).toLocaleUpperCase('tr-TR')==='HURDA'))g.splice(Math.max(0,g.indexOf('ALTIN')+1),0,'HURDA');return g;}
+  function cardGroupV7(c){const g=String(c.productGroup||c.group||'').toLocaleUpperCase('tr-TR');if(g==='HURDA'||/HURDA/i.test(String(c.productDefinition||c.name||'')))return 'HURDA';if(c.ziynet&&(!g||g==='ALTIN'))return 'ZİYNET';return g||'DİĞER';}
+  const cardNameKeyV7=c=>normalizeInventoryName(c.productDefinition||c.name||'').replace(/\s+/g,' ');
+  function stockCardDupNamesV7(){const n=new Map();(state.stockCardsMaster||[]).forEach(c=>{const k=cardNameKeyV7(c);if(k)n.set(k,(n.get(k)||0)+1);});return new Set([...n].filter(([,v])=>v>1).map(([k])=>k));}
+  function stockCardGroupsV7(){
+    const order=['ALTIN','HURDA','ZİYNET','TAŞ',...withHurdaGroupV7(state.definitions?.productMainGroups||[])],m=new Map();
+    (state.stockCardsMaster||[]).forEach(c=>{const g=cardGroupV7(c);if(!m.has(g))m.set(g,[]);m.get(g).push(c);});
+    return [...m].sort((a,b)=>{const i=order.indexOf(a[0]),j=order.indexOf(b[0]);return (i<0?999:i)-(j<0?999:j);});
+  }
   function stockCardsView(){
-    return `<div class="page-title" style="margin-top:4px"><div><h1 style="font-size:22px">Stok Kartı Tanımlama</h1><p>Pusula ekranındaki ürün grubu, ürün kodu, takip birimleri ve sabit milyem mantığı.</p></div><button class="btn btn-primary" data-new-stockcard="1">+ Yeni Stok Kartı</button></div><div class="notice">Altın kartında <strong>Milyem Sabiti</strong> tanımlanır. Altın girişinde mal seçildiğinde ayar otomatik gelir ve miktardan HAS hesaplanır.</div><div class="stock-card-order-hint">Kartları fareyle tutup sürükleyerek istediğin sıraya al. Sıralama kalıcı kaydedilir.</div><div class="master-card-grid" id="stockCardOrderGrid" style="margin-top:8px">${state.stockCardsMaster.map(c=>`<div class="stock-card-box" draggable="true" data-stockcard-order="${c.id}"><div class="section-head"><h4>${esc(c.productDefinition||c.name)}</h4><span class="badge gold">Kod ${esc(c.productCode||c.code)}</span></div><p>${esc(c.productGroup||c.productType)} · Stok: ${esc(c.stockTrackingUnit||'')} · İşçilik: ${esc(c.workmanshipTrackingUnit||'')}</p><div class="meta"><span class="badge">Sabit ${qty(c.fixedMilyem||c.purity)}</span>${c.ziynet?`<span class="badge">Saflık ${qty(c.purity||c.karat||0)}</span>`:'' }<span class="badge">${esc(c.unit12||'GR')}</span>${c.countedTracking?'<span class="badge blue">Adetli Takip</span>':''}${c.ziynet?'<span class="badge gold">Ziynet</span>':''}${c.ziynet&&Number(c.zGram||0)>0?`<span class="badge green">1 Adet = ${qty(c.zGram)} GR</span>`:''}</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px"><button class="btn btn-outline" data-edit-stockcard="${c.id}">Düzenle</button><button class="btn btn-outline" data-merge-stockcard="${c.id}" title="Bu kartın stoğunu ve geçmişini başka karta aktarıp bu kartı siler">Birleştir</button><button class="btn btn-danger" data-delete-stockcard="${c.id}">Sil</button></div></div>`).join('')}</div>`;
+    const dupNames=stockCardDupNamesV7();
+    return `<div class="page-title" style="margin-top:4px"><div><h1 style="font-size:22px">Stok Kartı Tanımlama</h1><p>Pusula ekranındaki ürün grubu, ürün kodu, takip birimleri ve sabit milyem mantığı.</p></div><button class="btn btn-primary" data-new-stockcard="1">+ Yeni Stok Kartı</button></div><div class="notice">Altın kartında <strong>Milyem Sabiti</strong> tanımlanır. Altın girişinde mal seçildiğinde ayar otomatik gelir ve miktardan HAS hesaplanır.</div>${dupNames.size?`<div class="notice" style="border-color:#d92d20">Aynı adla birden fazla tanımlanmış <b>${dupNames.size}</b> kart var (kırmızı <b>ÇİFT KART</b>). Fazla olanı kartındaki <b>Birleştir</b> ile asıl karta aktarın; stok ve geçmiş kaybolmaz.</div>`:''}<div class="stock-card-order-hint">Kartları fareyle tutup sürükleyerek istediğin sıraya al. Sıralama kalıcı kaydedilir.</div><div class="master-card-grid" id="stockCardOrderGrid" style="margin-top:8px">${stockCardGroupsV7().map(([g,list])=>`<div class="stock-card-group-head">${esc(g)} <small>${list.length} kart</small></div>`+list.map(c=>`<div class="stock-card-box${dupNames.has(cardNameKeyV7(c))?' dup':''}" draggable="true" data-stockcard-order="${c.id}"><div class="section-head"><h4>${esc(c.productDefinition||c.name)}${dupNames.has(cardNameKeyV7(c))?' <span class="badge red">ÇİFT KART</span>':''}</h4><span class="badge gold">Kod ${esc(c.productCode||c.code)}</span></div><p>${esc(c.productGroup||c.productType)} · Stok: ${esc(c.stockTrackingUnit||'')} · İşçilik: ${esc(c.workmanshipTrackingUnit||'')}</p><div class="meta"><span class="badge">Sabit ${qty(c.fixedMilyem||c.purity)}</span>${c.ziynet?`<span class="badge">Saflık ${qty(c.purity||c.karat||0)}</span>`:'' }<span class="badge">${esc(c.unit12||'GR')}</span>${c.countedTracking?'<span class="badge blue">Adetli Takip</span>':''}${c.ziynet?'<span class="badge gold">Ziynet</span>':''}${c.ziynet&&Number(c.zGram||0)>0?`<span class="badge green">1 Adet = ${qty(c.zGram)} GR</span>`:''}</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px"><button class="btn btn-outline" data-edit-stockcard="${c.id}">Düzenle</button><button class="btn btn-outline" data-merge-stockcard="${c.id}" title="Bu kartın stoğunu ve geçmişini başka karta aktarıp bu kartı siler">Birleştir</button><button class="btn btn-danger" data-delete-stockcard="${c.id}">Sil</button></div></div>`).join('')).join('')}</div>`;
   }
 
   function labelFieldCatalogV665(){
@@ -5916,7 +5929,7 @@ function stockSummaryView(){
     const invCost=openInventoryCostHas(o,amount);o.amount=Math.max(0,Number(o.amount||0)-amount);o.count=o.amount;o.hasWeight=Math.max(0,Number(o.hasWeight||0)-ziynetPhysicalHasPerUnit(item)*amount);return {ok:true,costHas:invCost};
   }
   function applyScrapTradeInventory(item,side,gram,costHas){
-    let h=(state.scrapStocks||[]).find(x=>normalizeInventoryName(x.name).includes(normalizeInventoryName(item.name).replace('HURDASI','HURDA')));
+    let h=findScrapForTradeV7(item.name);
     if(!h&&side==='Alış'){h={id:uid('SCR'),period:state.activePeriod,name:item.name,milyem:Number(item.buyMilyem||0),amount:0,hasWeight:0,unit:'GR',unitCostHas:costHas/Math.max(.001,gram)};state.scrapStocks.push(h);}
     if(!h)return {ok:false,costHas:0};
     if(side==='Satış'&&Number(h.amount||0)<gram)return {ok:false,costHas:0,message:`${h.name} hurda stoku yetersiz`};
@@ -5967,7 +5980,7 @@ function stockSummaryView(){
       else{setOpenWeightedUnitCost(o,q,Number(t.costHas||0));o.amount=Number(o.amount||0)+q;o.hasWeight=Number(o.hasWeight||0)+per*q;}
       o.count=o.amount;
     }else{
-      const h=(state.scrapStocks||[]).find(x=>normalizeInventoryName(x.name).includes(normalizeInventoryName(t.item).replace('HURDASI','HURDA')));
+      const h=findScrapForTradeV7(t.item);
       if(!h)return `${t.item} hurda stoğu bulunamadı`;
       if(buy&&Number(h.amount||0)<q-1e-9)return `${t.item} hurda stoğu yetersiz; hurda satılmış/eritilmiş olabilir.`;
       const d=(buy?-1:1)*q;h.amount=Math.max(0,Number(h.amount||0)+d);h.hasWeight=Math.max(0,Number(h.hasWeight||0)+d*Number(h.milyem||0)/1000);
@@ -6038,7 +6051,7 @@ function stockSummaryView(){
       fxEl.addEventListener('change',recalc); totalEl.addEventListener('input',()=>{const q=Number(qtyEl.value||0),t=Number(totalEl.value||0);if(q>0)priceEl.value=t>0?(t/q).toFixed(4):'';}); qtyEl.addEventListener('input',()=>totalEl.value=(Number(qtyEl.value||0)*Number(priceEl.value||0)).toFixed(2)); priceEl.addEventListener('input',()=>totalEl.value=(Number(qtyEl.value||0)*Number(priceEl.value||0)).toFixed(2)); recalc(); return;
     }
 
-    const items=isZiynet?state.prices.items.filter(x=>['CEYREK','YARIM','ZIYNET','ATA','RESAT'].includes(x.code)):state.prices.items.filter(x=>['14H','22H'].includes(x.code));
+    const items=isZiynet?state.prices.items.filter(x=>['CEYREK','YARIM','ZIYNET','ATA','RESAT'].includes(x.code)):hurdaTradeItemsV7();
     if(isZiynet){const seenN=new Set(items.map(x=>normalizeInventoryName(x.name))),seenC=new Set(items.map(x=>String(x.code)));ziynetCardTradeItemsV7().forEach(c=>{if(!seenC.has(c.code)&&!seenN.has(normalizeInventoryName(c.name))){items.push(c);seenC.add(c.code);seenN.add(normalizeInventoryName(c.name));}});}
     const cashCustomer=state.customers.find(c=>c.id==='CASH'||String(c.name||'').toLocaleUpperCase('tr-TR').includes('PEŞİN MÜŞTERİ'));
     const customers=state.customers.filter(c=>c.type==='Müşteri'&&c.id!==cashCustomer?.id);
@@ -6067,7 +6080,7 @@ function stockSummaryView(){
       if(side==='Satış'){
         let previewCostHas=0;
         if(isZiynet){const o=findOpenTradeStock(item);if(o)previewCostHas=openInventoryCostHas(o,qtyVal);}
-        else{const h=(state.scrapStocks||[]).find(x=>normalizeInventoryName(x.name).includes(normalizeInventoryName(item.name).replace('HURDASI','HURDA')));if(h)previewCostHas=qtyVal*Number(h.unitCostHas||h.milyem/1000||0);}
+        else{const h=findScrapForTradeV7(item.name);if(h)previewCostHas=qtyVal*Number(h.unitCostHas||h.milyem/1000||0);}
         const warn=belowCostInfo(totalHas,previewCostHas),confirmBtn=document.getElementById('modalConfirm');
         if(warn.isBelow&&confirmBtn?.dataset.belowCostApproved!=='1'){
           confirmBtn.dataset.belowCostApproved='1';confirmBtn.textContent='MALİYET ALTI SATIŞI ONAYLA';confirmBtn.classList.remove('btn-primary');confirmBtn.classList.add('btn-danger');
@@ -6449,6 +6462,24 @@ function stockSummaryView(){
   }
 
   /* Adetli / ziynet stok kartları (yeni açılanlar dahil) ziynet alış-satış ve takas listelerinde de çıkar. */
+  /* Hurda Alış/Satış listesi sabit değil: fiyat listesindeki hurdalar + adında ya da grubunda HURDA geçen
+     stok kartları + stokta duran hurda kalemleri. Yeni tanımlanan hurda kartı kendiliğinden listeye gelir. */
+  // Hurda stoğu: önce adı birebir aynı olan (bu dönem), yoksa eski davranış (ad içinde geçen). "8 HURDA" "18 HURDA"ya yazılmaz.
+  function findScrapForTradeV7(name){
+    const k=normalizeInventoryName(name).replace('HURDASI','HURDA'),list=state.scrapStocks||[],key=x=>normalizeInventoryName(x.name).replace('HURDASI','HURDA');
+    const part=x=>{const v=key(x),i=v.indexOf(k);return i>=0&&!(i>0&&/\d/.test(v[i-1])&&/^\d/.test(k));};
+    return list.find(x=>x.period===state.activePeriod&&key(x)===k)||list.find(x=>key(x)===k)||list.find(x=>x.period===state.activePeriod&&part(x))||list.find(part);
+  }
+  function hurdaTradeItemsV7(){
+    const out=[],seen=new Set(),hb=Number(state.prices.has?.buy||0),hs=Number(state.prices.has?.sell||0);
+    const add=(code,name,purity,base)=>{const key=normalizeInventoryName(name).replace('HURDASI','HURDA');if(!name||seen.has(key))return;seen.add(key);
+      const pm=Number(purity||0)/1000,bm=remoteProductMultiplier(code,'buy',name)||Number(base?.buyMilyem||0)/1000||pm,sm=remoteProductMultiplier(code,'sell',name)||Number(base?.sellMilyem||0)/1000||pm;
+      out.push({...(base||{}),code:String(code),name:String(name),buyMilyem:Number(base?.buyMilyem||purity||0),sellMilyem:Number(base?.sellMilyem||purity||0),buy:base?.buy&&!asilScreenLoadedV7()?Number(base.buy):Math.round(hb*bm*100)/100,sell:base?.sell&&!asilScreenLoadedV7()?Number(base.sell):Math.round(hs*sm*100)/100});};
+    (state.prices.items||[]).filter(x=>/H$/.test(String(x.code||''))||/HURDA/i.test(String(x.name||''))).forEach(x=>add(x.code,x.name,x.buyMilyem,x));
+    (state.stockCardsMaster||[]).filter(c=>!c.hideFromSale&&(/HURDA/i.test(String(c.productDefinition||c.name||''))||/HURDA/i.test(String(c.productGroup||c.group||'')))).forEach(c=>add(c.productCode||c.pusulaCode||c.code||c.id,c.productDefinition||c.name,Number(c.fixedMilyem||c.purity||0)));
+    (state.scrapStocks||[]).filter(h=>h.period===state.activePeriod).forEach(h=>add('SCR:'+h.id,h.name,Number(h.milyem||0)));
+    return out;
+  }
   function ziynetCardTradeItemsV7(){
     return (state.stockCardsMaster||[]).filter(c=>!c.hideFromSale&&(c.ziynet||c.countedTracking||String(c.unit12||'').toUpperCase()==='AD')).map(c=>{
       const fm=Number(c.fixedMilyem||c.purity||0);let zGram=Number(c.zGram||0),purity=fm;
@@ -6471,6 +6502,8 @@ function stockSummaryView(){
     (state.scrapStocks||[]).filter(x=>x.period===state.activePeriod).forEach(h=>add({code:h.id,name:h.name,kind:'Hurda',unit:'GR',purity:Number(h.milyem||0),priceCode:(state.prices.items||[]).find(p=>normalizeInventoryName(p.name).includes(normalizeInventoryName(h.name).replace('HURDASI','HURDA')))?.code||''}));
     // Fiyat sistemindeki hurda kartları stokta henüz hareket görmemiş olsa da listede bulunsun.
     (state.prices.items||[]).filter(x=>/HURDA/i.test(String(x.name||''))||/H$/i.test(String(x.code||''))).forEach(x=>add({code:x.code,name:x.name,kind:'Hurda',unit:'GR',purity:Number(x.buyMilyem||x.sellMilyem||0),priceCode:x.code}));
+    // Tanımlanan hurda stok kartları (adında/grubunda HURDA): stok hareketi olmasa da takasta seçilebilir.
+    (state.stockCardsMaster||[]).filter(c=>!c.hideFromSale&&(/HURDA/i.test(String(c.productDefinition||c.name||''))||/HURDA/i.test(String(c.productGroup||c.group||'')))).forEach(c=>add({code:String(c.productCode||c.pusulaCode||c.code||c.id),name:String(c.productDefinition||c.name||''),kind:'Hurda',unit:'GR',purity:Number(c.fixedMilyem||c.purity||0)}));
     // Adetli açık stokların tamamı: çeyrek, yarım, ata, reşat, gram altın vb.
     (state.openStocks||[]).filter(o=>o.period===state.activePeriod&&String(o.unit||'').toUpperCase()==='ADET').forEach(o=>{
       const n=normalizeInventoryName(o.name),px=(state.prices.items||[]).find(x=>normalizeInventoryName(x.name)===n||n.includes(normalizeInventoryName(x.name))||normalizeInventoryName(x.name).includes(n));
@@ -6967,7 +7000,7 @@ function stockSummaryView(){
     const existing=editId?getStockCard(editId):null;
     const v=(key,def='')=>existing?.[key] ?? def;
     const checked=key=>v(key,false)?'checked':'';
-    const groups=state.definitions.productMainGroups||['ALTIN','PIRLANTA','SAAT','GÜMÜŞ','ÇELİK','ZİYNET','TAŞ','DİĞER'];
+    const groups=withHurdaGroupV7(state.definitions.productMainGroups||['ALTIN','PIRLANTA','SAAT','GÜMÜŞ','ÇELİK','ZİYNET','TAŞ','DİĞER']);
     modal(existing?'Stok Kartı Tanımlama — Düzenle':'Stok Kartı Tanımlama',`<div class="form-grid">
       <div class="labelled span-2"><label>Ürün Grubu</label><select id="scProductGroup" class="select">${groups.map(x=>`<option ${x===v('productGroup','ALTIN')?'selected':''}>${esc(x)}</option>`).join('')}</select></div>
       <div class="labelled"><label>Ürün Kodu *</label><input id="scProductCode" class="input" value="${esc(existing?v('productCode',v('code','')):nextStockCardCodeV7())}"></div>

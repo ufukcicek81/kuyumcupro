@@ -1830,3 +1830,47 @@ test('satış fişindeki satırın fiyatı sonradan değiştirilir (Fiyat düğm
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('yeni hurda stok kartı Hurda Alış/Satış ve takas listesinde çıkar; alış kendi hurda stoğuna işlenir (8 → 18 karışmaz)', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  const newCard = async (name, milyem) => {
+    await p.evaluate(() => document.querySelector('[data-route="stocks"],[data-go="stocks"]').click()); await p.waitForTimeout(300);
+    await p.evaluate(() => (document.getElementById('newStockCard') || document.querySelector('[data-new-stockcard]')).click());
+    await p.waitForSelector('#scProductCode');
+    await p.fill('#scProductDefinition', name); await p.fill('#scPurity', milyem); await p.fill('#scFixedMilyem', milyem);
+    await p.selectOption('#scUnit12', 'GR');
+    await p.click('#modalConfirm'); await p.waitForTimeout(300);
+    await p.evaluate(() => document.querySelector('[data-route="dashboard"],[data-go="dashboard"]').click()); await p.waitForTimeout(200);
+  };
+  await newCard('18 AYAR HURDA', '750'); await newCard('8 AYAR HURDA', '333');
+  // Stok kartları listesinde hurdalar kendi grubunda art arda; ürün grubu seçeneklerinde HURDA var
+  await p.evaluate(() => document.querySelector('[data-route="stocks"],[data-go="stocks"]').click()); await p.waitForTimeout(300);
+  await p.evaluate(() => (document.getElementById('newStockCard') || document.querySelector('[data-new-stockcard]')).click()); await p.waitForSelector('#scProductGroup');
+  assert.ok((await p.$$eval('#scProductGroup option', (os) => os.map((o) => o.value))).includes('HURDA'), 'ürün grubunda HURDA olmalı');
+  await p.click('#modalX');
+  const hurdaGroup = await p.evaluate(() => { const h = [...document.querySelectorAll('.stock-card-group-head')].find((e) => /^HURDA/.test(e.innerText)); const out = []; let n = h && h.nextElementSibling; while (n && !n.classList.contains('stock-card-group-head')) { out.push(n.querySelector('h4')?.innerText.trim()); n = n.nextElementSibling; } return out; });
+  assert.deepEqual(hurdaGroup.sort(), ['18 AYAR HURDA', '8 AYAR HURDA'], 'hurda kartları HURDA başlığı altında art arda olmalı');
+  await p.evaluate(() => document.querySelector('[data-route="dashboard"],[data-go="dashboard"]').click()); await p.waitForTimeout(200);
+  for (const t of ['Hurda Alış', 'Hurda Satış']) {
+    await p.click(`[data-home-trade="${t}"]`); await p.waitForSelector('#stItem');
+    const opts = await p.$$eval('#stItem option', (os) => os.map((o) => o.textContent));
+    assert.ok(opts.includes('18 AYAR HURDA') && opts.includes('8 AYAR HURDA'), t + ' listesinde yeni kartlar olmalı: ' + opts.join(', '));
+    await p.click('#modalX');
+  }
+  // 18 ayar 10 gr alış, sonra 8 ayar 5 gr alış: her biri kendi stoğuna
+  for (const [name, gr] of [['18 AYAR HURDA', '10'], ['8 AYAR HURDA', '5']]) {
+    await p.click('[data-home-trade="Hurda Alış"]'); await p.waitForSelector('#stItem');
+    await p.selectOption('#stItem', { label: name }); await p.waitForTimeout(200);
+    assert.ok(Number(await p.inputValue('#stPrice')) > 0, name + ' için fiyat önerilmeli');
+    await p.fill('#stQty', gr); await p.fill('#stPrice', '3000'); await p.waitForTimeout(200);
+    await p.click('#modalConfirm'); await p.waitForTimeout(800);
+    const b = await p.$('.critical-alert button'); if (b) await b.click();
+  }
+  await p.waitForTimeout(9000);
+  const scrap = (fb.db.state.scrapStocks || []).map((x) => [x.name, Number(x.amount)]);
+  assert.deepEqual(scrap.find((x) => x[0] === '18 AYAR HURDA'), ['18 AYAR HURDA', 10], 'scrap: ' + JSON.stringify(scrap));
+  assert.deepEqual(scrap.find((x) => x[0] === '8 AYAR HURDA'), ['8 AYAR HURDA', 5], '8 ayar 18 ayara karışmamalı: ' + JSON.stringify(scrap));
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
