@@ -6573,25 +6573,42 @@ function stockSummaryView(){
     kindEl.addEventListener('change',syncKind);os?.addEventListener('change',()=>syncOpen(true));oq?.addEventListener('input',()=>syncOpen(false));op?.addEventListener('input',()=>syncOpen(false));ot?.addEventListener('input',()=>{const q=Number(oq.value||0),t=Number(ot.value||0);if(q>0)op.value=t>0?(t/q).toFixed(4):'';});bi?.addEventListener('input',findBarcode);bi?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();findBarcode();if(barcodeMatch)focusAndSelect(ba);}});syncKind();syncOpen(true);
   }
 
+  /* Altın / Ziynet takas (Pusula düzeni): ürün yaz → Enter → miktar → Enter → fiyat → Enter = kalem eklenir,
+     pencere açık kalır ve imleç yeniden ürün kutusuna döner. Boş ürün kutusunda Enter ya da BİTTİ ile kapanır. */
   function openTradeInPayment(){
     const items=tradePaymentItems();
     if(!items.length)return toast('Altın / ziynet tahsilat tanımı bulunamadı','err');
-    modal('Altın / Ziynet — Müşteriden Al / Takas Mahsubu',`<div class="form-grid">
-      <div class="labelled span-2"><label>Hurda / Ziynet Grup</label><select id="tiItem" class="select">${items.map((x,i)=>`<option value="${i}">${esc(x.name)}</option>`).join('')}</select></div>
+    const key=v=>normalizeInventoryName(v).replace(/\s+/g,' ').trim();
+    const findItem=v=>{const k=key(v);if(!k)return null;return items.find(x=>String(x.name).trim()===String(v).trim())||items.find(x=>key(x.name)===k)||items.find(x=>key(x.code)===k)||items.find(x=>key(x.name).startsWith(k))||items.find(x=>key(x.name).includes(k))||null;};
+    const listHtml=()=>{const rows=(saleDraft.payments||[]).map((p,i)=>({p,i})).filter(x=>x.p.type==='Altın / Ziynet');const tot=rows.reduce((a,x)=>a+Number(x.p.amount||0),0),th=rows.reduce((a,x)=>a+Number(x.p.hasAmount||0),0);
+      return rows.length?`<div class="table-wrap" style="max-height:30vh;overflow:auto"><table class="table"><thead><tr><th>Ürün</th><th class="num">Miktar</th><th class="num">HAS</th><th class="num">Tutar</th><th></th></tr></thead><tbody>${rows.map(({p,i})=>`<tr><td>${esc(p.itemName||'')}</td><td class="num">${qty(p.nativeAmount||0)} ${esc(p.unit||'')}</td><td class="num">${qty(p.hasAmount||0)}</td><td class="num">${money(p.amount||0)}</td><td><button type="button" class="btn btn-danger" data-ti-del="${i}" tabindex="-1">Sil</button></td></tr>`).join('')}</tbody><tfoot><tr><th>Toplam</th><th></th><th class="num">${qty(th)}</th><th class="num">${money(tot)}</th><th></th></tr></tfoot></table></div>`:'<div class="muted">Henüz kalem yok.</div>';};
+    modal('Altın / Ziynet — Müşteriden Al / Takas Mahsubu',`<div class="notice" style="margin-bottom:8px;padding:8px 12px">Ürünü yazın <b>Enter</b> → miktar <b>Enter</b> → fiyat <b>Enter</b>: kalem eklenir, sıradakine geçilir. Bitince ürün kutusu boşken <b>Enter</b> ya da <b>BİTTİ</b>.</div><div class="form-grid">
+      <div class="labelled span-2"><label>Ürün (ad veya kod)</label><input id="tiSearch" class="input" list="tiItemList" autocomplete="off" placeholder="Örn. çeyrek, 22 hurda, ata"><datalist id="tiItemList">${items.map(x=>`<option value="${esc(x.name)}">${esc([x.code,x.kind,x.unit].filter(Boolean).join(' · '))}</option>`).join('')}</datalist><small id="tiHint" style="display:none;color:#c0262d;font-weight:700"></small></div>
       <div class="labelled"><label>Miktar</label><input id="tiQty" class="input" type="number" step="0.001" value="1"></div>
-      <div class="labelled"><label>Birim</label><input id="tiUnit" class="input" readonly></div>
-      <div class="labelled"><label>Fiyat (TL)</label><input id="tiPrice" class="input" type="number" step="0.01"></div>
-      <div class="labelled"><label>Milyem</label><input id="tiPurity" class="input" readonly></div>
-      <div class="labelled"><label>HAS</label><input id="tiHas" class="input" readonly></div>
+      <div class="labelled"><label>Birim</label><input id="tiUnit" class="input" readonly tabindex="-1"></div>
+      <div class="labelled"><label>Birim Fiyat (TL)</label><input id="tiPrice" class="input" type="number" step="0.01"></div>
+      <div class="labelled"><label>Milyem</label><input id="tiPurity" class="input" readonly tabindex="-1"></div>
+      <div class="labelled"><label>HAS</label><input id="tiHas" class="input" readonly tabindex="-1"></div>
       <div class="labelled"><label>Toplam Tutar</label><input id="tiTotal" class="input" type="number" step="0.01"></div>
-    </div>`,()=>{
-      const item=items[Number(document.getElementById('tiItem').value)],n=Number(document.getElementById('tiQty').value||0),price=Number(document.getElementById('tiPrice').value||0),has=Number(document.getElementById('tiHas').value||0),total=Number(document.getElementById('tiTotal').value||0);
-      if(n<=0||total<=0)return toast('Miktar ve fiyatı kontrol edin','err');
-      saleDraft.payments.push({type:'Altın / Ziynet',amount:total,itemCode:item.code,itemName:item.name,itemKind:item.kind,unit:item.unit,...(item.stockCardId?{stockCardId:item.stockCardId}:{}),nativeAmount:n,purity:item.purity,zGram:item.zGram||0,hasAmount:has,detail:`${item.name} · ${qty(n)} ${item.unit} · ${qty(has)} HAS`});closeModal();render();
-    },'TAKASA EKLE');
-    const itemEl=document.getElementById('tiItem'),qEl=document.getElementById('tiQty'),pEl=document.getElementById('tiPrice'),uEl=document.getElementById('tiUnit'),mEl=document.getElementById('tiPurity'),hEl=document.getElementById('tiHas'),tEl=document.getElementById('tiTotal');
-    const recalc=(autoPrice=false)=>{const item=items[Number(itemEl.value)],n=Number(qEl.value||0),gram=item.unit==='ADET'?n*Number(item.zGram||0):n,has=calcHas(gram,item.purity);let price=Number(pEl.value||0);if(!price&&autoPrice){const px=state.prices.items.find(x=>x.code===item.priceCode||x.code===item.code);price=Number(px?.buy||0);if(!price&&item.unit==='GR')price=Number(state.prices.has.buy||0)*(item.purity/1000);if(!price&&item.unit==='ADET'){const unitHas=calcHas(Number(item.zGram||0),Number(item.purity||916));price=unitHas*Number(state.prices.has.buy||0);}pEl.value=price.toFixed(2);}uEl.value=item.unit;mEl.value=item.purity;hEl.value=has.toFixed(3);tEl.value=(n*price).toFixed(2);};
-    itemEl.addEventListener('change',()=>{pEl.value='';recalc(true);}); qEl.addEventListener('input',()=>recalc());pEl.addEventListener('input',()=>recalc());tEl.addEventListener('input',()=>{const n=Number(qEl.value||0),t=Number(tEl.value||0);if(n>0)pEl.value=t>0?(t/n).toFixed(2):'';});recalc(true);
+    </div><div id="tiList" style="margin-top:10px">${listHtml()}</div>`,()=>{closeModal();render();},'BİTTİ');
+    const sEl=document.getElementById('tiSearch'),qEl=document.getElementById('tiQty'),pEl=document.getElementById('tiPrice'),uEl=document.getElementById('tiUnit'),mEl=document.getElementById('tiPurity'),hEl=document.getElementById('tiHas'),tEl=document.getElementById('tiTotal'),hint=document.getElementById('tiHint'),listEl=document.getElementById('tiList');
+    const mEl0=document.querySelector('#modalRoot .modal');if(mEl0){mEl0.style.width='96vw';mEl0.style.maxWidth='860px';}
+    let item=null;
+    const priceFor=it=>{const px=state.prices.items.find(x=>x.code===it.priceCode||x.code===it.code);let price=Number(px?.buy||0);if(!price&&it.unit==='GR')price=Number(state.prices.has.buy||0)*(it.purity/1000);if(!price&&it.unit==='ADET')price=calcHas(Number(it.zGram||0),Number(it.purity||916))*Number(state.prices.has.buy||0);return price;};
+    const recalc=()=>{if(!item){uEl.value='';mEl.value='';hEl.value='';return;}const n=Number(qEl.value||0),gram=item.unit==='ADET'?n*Number(item.zGram||0):n;uEl.value=item.unit;mEl.value=item.purity;hEl.value=calcHas(gram,item.purity).toFixed(3);tEl.value=(n*Number(pEl.value||0)).toFixed(2);};
+    const pick=()=>{const it=findItem(sEl.value);if(!it){hint.textContent=sEl.value.trim()?`"${sEl.value.trim()}" bulunamadı`:'';hint.style.display=sEl.value.trim()?'block':'none';item=null;recalc();return false;}hint.style.display='none';if(item!==it){item=it;sEl.value=it.name;pEl.value=priceFor(it).toFixed(2);}recalc();return true;};
+    const bindDel=()=>listEl.querySelectorAll('[data-ti-del]').forEach(b=>b.onclick=()=>{saleDraft.payments.splice(Number(b.dataset.tiDel),1);listEl.innerHTML=listHtml();bindDel();render();focusAndSelect(sEl);});
+    const add=()=>{if(!item&&!pick())return focusAndSelect(sEl);const n=Number(qEl.value||0),total=Number(tEl.value||0),has=Number(hEl.value||0);
+      if(n<=0||total<=0){toast('Miktar ve fiyatı kontrol edin','err');return focusAndSelect(n<=0?qEl:pEl);}
+      saleDraft.payments.push({type:'Altın / Ziynet',amount:total,itemCode:item.code,itemName:item.name,itemKind:item.kind,unit:item.unit,...(item.stockCardId?{stockCardId:item.stockCardId}:{}),nativeAmount:n,purity:item.purity,zGram:item.zGram||0,hasAmount:has,detail:`${item.name} · ${qty(n)} ${item.unit} · ${qty(has)} HAS`});
+      render();listEl.innerHTML=listHtml();bindDel();
+      item=null;sEl.value='';qEl.value='1';pEl.value='';tEl.value='';recalc();setTimeout(()=>focusAndSelect(sEl),0);};
+    const onEnter=(el,fn)=>el.addEventListener('keydown',e=>{if(e.key!=='Enter')return;e.preventDefault();e.stopPropagation();fn();});
+    onEnter(sEl,()=>{if(!sEl.value.trim()){closeModal();render();return;}if(pick())focusAndSelect(qEl);});
+    onEnter(qEl,()=>focusAndSelect(pEl));onEnter(pEl,add);onEnter(tEl,add);
+    sEl.addEventListener('change',()=>{if(sEl.value.trim())pick();});sEl.addEventListener('input',()=>{hint.style.display='none';});
+    qEl.addEventListener('input',recalc);pEl.addEventListener('input',recalc);tEl.addEventListener('input',()=>{const n=Number(qEl.value||0),t=Number(tEl.value||0);if(n>0)pEl.value=t>0?(t/n).toFixed(2):'';const gram=item&&item.unit==='ADET'?n*Number(item.zGram||0):n;if(item)hEl.value=calcHas(gram,item.purity).toFixed(3);});
+    bindDel();setTimeout(()=>{if(!['tiQty','tiPrice','tiTotal'].includes(document.activeElement?.id))focusAndSelect(sEl);},30);
   }
 
   function openSupplierReturnFromSale(){
