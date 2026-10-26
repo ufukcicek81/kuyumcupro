@@ -3266,7 +3266,7 @@ function stockSummaryView(){
   }
   function stockCardsView(){
     const dupNames=stockCardDupNamesV7();
-    return `<div class="page-title" style="margin-top:4px"><div><h1 style="font-size:22px">Stok Kartı Tanımlama</h1><p>Pusula ekranındaki ürün grubu, ürün kodu, takip birimleri ve sabit milyem mantığı.</p></div><button class="btn btn-primary" data-new-stockcard="1">+ Yeni Stok Kartı</button></div><div class="notice">Altın kartında <strong>Milyem Sabiti</strong> tanımlanır. Altın girişinde mal seçildiğinde ayar otomatik gelir ve miktardan HAS hesaplanır.</div>${dupNames.size?`<div class="notice" style="border-color:#d92d20">Aynı adla birden fazla tanımlanmış <b>${dupNames.size}</b> kart var (kırmızı <b>ÇİFT KART</b>). Fazla olanı kartındaki <b>Birleştir</b> ile asıl karta aktarın; stok ve geçmiş kaybolmaz.</div>`:''}<div class="stock-card-order-hint">Kartları fareyle tutup sürükleyerek istediğin sıraya al. Sıralama kalıcı kaydedilir.</div><div class="master-card-grid" id="stockCardOrderGrid" style="margin-top:8px">${stockCardGroupsV7().map(([g,list])=>`<div class="stock-card-group-head">${esc(g)} <small>${list.length} kart</small></div>`+list.map(c=>`<div class="stock-card-box${dupNames.has(cardNameKeyV7(c))?' dup':''}" draggable="true" data-stockcard-order="${c.id}"><div class="section-head"><h4>${esc(c.productDefinition||c.name)}${dupNames.has(cardNameKeyV7(c))?' <span class="badge red">ÇİFT KART</span>':''}</h4><span class="badge gold">Kod ${esc(c.productCode||c.code)}</span></div><p>${esc(c.productGroup||c.productType)} · Stok: ${esc(c.stockTrackingUnit||'')} · İşçilik: ${esc(c.workmanshipTrackingUnit||'')}</p><div class="meta"><span class="badge">Sabit ${qty(c.fixedMilyem||c.purity)}</span>${c.ziynet?`<span class="badge">Saflık ${qty(c.purity||c.karat||0)}</span>`:'' }<span class="badge">${esc(c.unit12||'GR')}</span>${c.countedTracking?'<span class="badge blue">Adetli Takip</span>':''}${c.ziynet?'<span class="badge gold">Ziynet</span>':''}${c.ziynet&&Number(c.zGram||0)>0?`<span class="badge green">1 Adet = ${qty(c.zGram)} GR</span>`:''}</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px"><button class="btn btn-outline" data-edit-stockcard="${c.id}">Düzenle</button><button class="btn btn-outline" data-merge-stockcard="${c.id}" title="Bu kartın stoğunu ve geçmişini başka karta aktarıp bu kartı siler">Birleştir</button><button class="btn btn-danger" data-delete-stockcard="${c.id}">Sil</button></div></div>`).join('')).join('')}</div>`;
+    return `<div class="page-title" style="margin-top:4px"><div><h1 style="font-size:22px">Stok Kartı Tanımlama</h1><p>Pusula ekranındaki ürün grubu, ürün kodu, takip birimleri ve sabit milyem mantığı.</p></div><button class="btn btn-primary" data-new-stockcard="1">+ Yeni Stok Kartı</button></div><div class="notice">Altın kartında <strong>Milyem Sabiti</strong> tanımlanır. Altın girişinde mal seçildiğinde ayar otomatik gelir ve miktardan HAS hesaplanır.</div>${dupNames.size?`<div class="notice" style="border-color:#d92d20">Aynı adla birden fazla tanımlanmış <b>${dupNames.size}</b> kart var (kırmızı <b>ÇİFT KART</b>). Fazla kartın stoğu yoksa <b>Sil</b> ile kaldırın; stoğu varsa önce stoğu asıl kart üzerinden düzenleyin.</div>`:''}<div class="stock-card-order-hint">Kartları fareyle tutup sürükleyerek istediğin sıraya al. Sıralama kalıcı kaydedilir.</div><div class="master-card-grid" id="stockCardOrderGrid" style="margin-top:8px">${stockCardGroupsV7().map(([g,list])=>`<div class="stock-card-group-head">${esc(g)} <small>${list.length} kart</small></div>`+list.map(c=>`<div class="stock-card-box${dupNames.has(cardNameKeyV7(c))?' dup':''}" draggable="true" data-stockcard-order="${c.id}"><div class="section-head"><h4>${esc(c.productDefinition||c.name)}${dupNames.has(cardNameKeyV7(c))?' <span class="badge red">ÇİFT KART</span>':''}</h4><span class="badge gold">Kod ${esc(c.productCode||c.code)}</span></div><p>${esc(c.productGroup||c.productType)} · Stok: ${esc(c.stockTrackingUnit||'')} · İşçilik: ${esc(c.workmanshipTrackingUnit||'')}</p><div class="meta"><span class="badge">Sabit ${qty(c.fixedMilyem||c.purity)}</span>${c.ziynet?`<span class="badge">Saflık ${qty(c.purity||c.karat||0)}</span>`:'' }<span class="badge">${esc(c.unit12||'GR')}</span>${c.countedTracking?'<span class="badge blue">Adetli Takip</span>':''}${c.ziynet?'<span class="badge gold">Ziynet</span>':''}${c.ziynet&&Number(c.zGram||0)>0?`<span class="badge green">1 Adet = ${qty(c.zGram)} GR</span>`:''}</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px"><button class="btn btn-outline" data-edit-stockcard="${c.id}">Düzenle</button><button class="btn btn-danger" data-delete-stockcard="${c.id}">Sil</button></div></div>`).join('')).join('')}</div>`;
   }
 
   function labelFieldCatalogV665(){
@@ -3909,60 +3909,6 @@ function stockSummaryView(){
     const cancel=document.getElementById('modalCancel');if(cancel){cancel.textContent='← SAYIM';cancel.onclick=()=>openKasaCountV7();}
     document.querySelectorAll('#modalRoot [data-kc-open]').forEach(b=>b.addEventListener('click',()=>{const r=list.find(x=>x.id===b.dataset.kcOpen);if(r)openKasaCountReportV7(null,null,view(r));}));
   }
-  /* Birleştirmeyi geri ayır: yanlış karta birleştirilen açık stok (örn. ÇEYREK → ZİYNET LİRA) eski satırına geri alınır.
-     Birleştirme kaydı varsa birebir geri alınır; eski birleştirmelerde adet, iki ürünün adet başı HAS'ından hesaplanıp önerilir. */
-  function mergedOpenStocksV7(){return (state.openStocks||[]).filter(o=>o.period===state.activePeriod&&o.mergedInto&&Math.abs(Number(o.amount||0))<1e-6&&(state.openStocks||[]).some(t=>t.id===o.mergedInto));}
-  function openUnitHasV7(o){const d=Number(o.displayAyar||0);if(d>0)return d/1000;const z=Number(o.zGram||0),p=Number(o.purity||0);return z&&p?z*p/1000:(p>0?p/1000:0);}
-  /* Stok Aktar: bir açık stok satırındaki malın bir kısmını başka satıra taşır (yanlış satıra girilmiş/birleştirilmiş ürün).
-     Taşınan mal hedef ürün sayılır: HAS = adet × hedefin adet başı HAS'ı. Kaynak satırda başka ürün karışmışsa
-     (adet başı HAS kendi ayarından sapıyorsa) karışan adet hesaplanıp önerilir. */
-  function transferOpenStockV7(id){
-    const src=(state.openStocks||[]).find(x=>x.id===id);if(!src)return;
-    const targets=(state.openStocks||[]).filter(x=>x.id!==src.id&&x.period===src.period&&String(x.unit||'').toUpperCase()===String(src.unit||'').toUpperCase()).sort((a,b)=>String(a.name).localeCompare(String(b.name),'tr'));
-    if(!targets.length)return toast('Aynı birimde başka açık stok satırı yok','err');
-    const A=Number(src.amount||0),H=Number(src.hasWeight||0),us=openUnitHasV7(src);
-    const suggest=t=>{const ut=openUnitHasV7(t);if(!(A>0)||Math.abs(us-ut)<1e-6)return '';const own=(H-A*ut)/(us-ut),q=Math.round(A-own);return q>0&&q<=A&&Math.abs(own-Math.round(own))<0.05?q:'';};
-    modal('Stok Aktar',`<div class="notice"><b>${esc(src.name)}</b> satırında ${qty(A)} ${esc(src.unit||'')} · ${qty(H)} HAS var. Taşınacak mal, seçtiğiniz <b>hedef ürün</b> sayılır (HAS = adet × hedefin adet başı HAS'ı).</div>
-      <div class="form-grid" style="margin-top:10px"><div class="labelled span-2"><label>Hedef satır</label><select id="stfTarget" class="select"><option value="">— Seçin —</option>${targets.map(t=>`<option value="${esc(t.id)}">${esc(t.name)} · ${qty(t.amount||0)} ${esc(t.unit||'')} · ${qty(openUnitHasV7(t))} HAS/adet</option>`).join('')}</select></div>
-      <div class="labelled"><label>Aktarılacak miktar (${esc(src.unit||'')})</label><input id="stfQty" class="input" type="number" step="${String(src.unit||'').toUpperCase()==='ADET'?'1':'0.01'}" min="0"></div><div class="labelled"><label>Aktarılacak HAS</label><input id="stfHas" class="input" type="number" step="0.001" min="0"></div></div><div id="stfPrev" class="muted" style="margin-top:8px"></div>`,()=>{
-      const t=targets.find(x=>x.id===document.getElementById('stfTarget').value);if(!t)return toast('Hedef satırı seçin','err');
-      const q=Number(document.getElementById('stfQty').value||0),h=Number(document.getElementById('stfHas').value||0);
-      if(!(q>0)||q>A+1e-9)return toast('Geçerli miktar girin','err');if(!(h>=0)||h>H+1e-6)return toast('HAS kaynak satırdakinden fazla olamaz','err');
-      const cs=Number(src.inventoryUnitCostHas||0),ct=Number(t.inventoryUnitCostHas||0),cm=ct>0?ct:cs,At=Number(t.amount||0),left=A-q;
-      if(left>0){const c=(A*cs-q*cm)/left;if(c>0)src.inventoryUnitCostHas=c;}
-      if(At+q>0&&cm>0)t.inventoryUnitCostHas=(At*ct+q*cm)/(At+q);
-      src.amount=left;src.hasWeight=Math.max(0,H-h);src.count=left;t.amount=At+q;t.hasWeight=Number(t.hasWeight||0)+h;t.count=t.amount;
-      if(src.mergedInto===t.id){delete src.mergedInto;delete src.mergeUndo;}
-      (state.openStocks||[]).forEach(o=>{if(o.mergedInto===src.id&&o.id===t.id){delete o.mergedInto;delete o.mergeUndo;}});
-      audit(`Stok aktarıldı: ${src.name} → ${t.name}, ${qty(q)} ${src.unit||''} / ${qty(h)} HAS`,'Stok');
-      closeModal();save();toast(`${qty(q)} ${src.unit||''} ${src.name} → ${t.name} aktarıldı`);openGoldStocksV7();
-    },'AKTAR');
-    const tEl=document.getElementById('stfTarget'),qEl=document.getElementById('stfQty'),hEl=document.getElementById('stfHas'),pEl=document.getElementById('stfPrev');
-    const upd=(fromQty=true)=>{const t=targets.find(x=>x.id===tEl.value);if(!t){pEl.textContent='';return;}const q=Number(qEl.value||0);if(fromQty){const ut=openUnitHasV7(t),left=A-q,byOwn=H-left*us;hEl.value=(left>0&&us>0&&Math.abs(byOwn-q*ut)<Math.max(.05,ut/2)?byOwn:q*ut).toFixed(3);}const h=Number(hEl.value||0);pEl.innerHTML=`Sonuç: <b>${esc(src.name)}</b> ${qty(A-q)} ${esc(src.unit||'')} · ${qty(H-h)} HAS &nbsp;|&nbsp; <b>${esc(t.name)}</b> ${qty(Number(t.amount||0)+q)} ${esc(t.unit||'')} · ${qty(Number(t.hasWeight||0)+h)} HAS`;};
-    tEl.addEventListener('change',()=>{const t=targets.find(x=>x.id===tEl.value);const sg=t?suggest(t):'';if(sg!=='')qEl.value=sg;upd();});
-    qEl.addEventListener('input',()=>upd(true));hEl.addEventListener('input',()=>upd(false));
-  }
-  function undoOpenMergeV7(id){
-    const o=(state.openStocks||[]).find(x=>x.id===id),t=o&&(state.openStocks||[]).find(x=>x.id===o.mergedInto);if(!o||!t)return toast('Birleştirme bulunamadı','err');
-    const u=openUnitHasV7(o),ut=openUnitHasV7(t),A=Number(t.amount||0),H=Number(t.hasWeight||0),rec=o.mergeUndo;
-    let sug=rec?Number(rec.amount||0):(Math.abs(ut-u)>1e-6?Math.round(A-(H-A*u)/(ut-u)):0);if(!(sug>=0&&sug<=A))sug=0;
-    const hasFor=q=>{if(rec&&Math.abs(q-Number(rec.amount))<1e-9)return Number(rec.hasWeight||0);const bt=A-q>0&&ut>0?H-(A-q)*ut:q*u;return Math.abs(bt-q*u)<Math.max(.05,u/2)?bt:q*u;};
-    const preview=q=>`<div class="summary-row"><span>${esc(o.name)}</span><strong>${qty(q)} ${esc(o.unit||'')} · ${qty(hasFor(q))} HAS</strong></div><div class="summary-row"><span>${esc(t.name)} (kalan)</span><strong>${qty(A-q)} ${esc(t.unit||'')} · ${qty(H-hasFor(q))} HAS</strong></div>`;
-    modal('Birleştirmeyi Geri Ayır',`<div class="notice"><b>${esc(o.name)}</b> stoğu <b>${esc(t.name)}</b> satırına birleştirilmiş. ${rec?'Birleştirme kaydı bulundu; birebir geri alınır.':`Eski birleştirme: adet, iki ürünün HAS'ından hesaplandı (${esc(t.name)} ${qty(ut)} HAS/adet, ${esc(o.name)} ${qty(u)} HAS/adet). Kontrol edin.`}</div><div class="labelled" style="margin-top:10px"><label>${esc(o.name)} satırına geri alınacak miktar (${esc(o.unit||'')})</label><input id="umQty" class="input" type="number" step="1" min="0" max="${A}" value="${sug}"></div><div id="umPrev" style="margin-top:8px">${preview(sug)}</div>`,()=>{
-      const q=Number(document.getElementById('umQty').value||0);if(!(q>0)||q>A+1e-9)return toast('Geçerli bir miktar girin','err');
-      const exact=rec&&Math.abs(q-Number(rec.amount))<1e-9,hq=hasFor(q),cMix=Number(t.inventoryUnitCostHas||0),cSrc=exact?Number(rec.unitCostHas||0):Number(o.inventoryUnitCostHas||cMix),left=A-q;
-      t.amount=left;t.hasWeight=Math.max(0,H-hq);t.count=left;
-      if(exact){t.inventoryUnitCostHas=Number(rec.targetCostHas||cMix);t.workmanshipTotalHas=Math.max(0,Number(t.workmanshipTotalHas||0)-Number(rec.workmanshipTotalHas||0));o.workmanshipTotalHas=Number(rec.workmanshipTotalHas||0);}
-      else if(left>0){const c=(A*cMix-q*cSrc)/left;if(c>0)t.inventoryUnitCostHas=c;}
-      o.amount=q;o.hasWeight=hq;o.count=q;if(cSrc>0)o.inventoryUnitCostHas=cSrc;
-      const own=(state.stockCardsMaster||[]).find(c=>cardNameKeyV7(c)===normalizeInventoryName(o.name).replace(/\s+/g,' '));
-      if(own)o.stockCardId=own.id;else if(exact&&rec.stockCardId&&(state.stockCardsMaster||[]).some(c=>c.id===rec.stockCardId))o.stockCardId=rec.stockCardId;else delete o.stockCardId;
-      delete o.mergedInto;delete o.mergeUndo;
-      audit(`${o.name} birleştirmesi geri ayrıldı: ${qty(q)} ${o.unit||''} ${t.name} satırından ${o.name} satırına geri alındı`,'Stok');
-      closeModal();save();toast(`${qty(q)} ${o.unit||''} ${o.name} geri ayrıldı`);openGoldStocksV7();
-    },'GERİ AYIR');
-    document.getElementById('umQty')?.addEventListener('input',e=>{const q=Number(e.target.value||0);document.getElementById('umPrev').innerHTML=preview(q);});
-  }
   function openGoldStocksV7(sorting=false){
     const rows=goldStockRowsV7();
     modal('ALTIN STOKLARI',`<style>
@@ -3983,10 +3929,8 @@ function stockSummaryView(){
       table.gold-stock-v7 .gold-ord-v7 button{border:1px solid #fff;background:#4b5160;color:#fff;border-radius:4px;padding:0 6px;font-size:11px;line-height:18px;cursor:pointer}
       table.gold-stock-v7 tr.cash td:first-child{background:#6b7180}
     </style>
-    <div class="gold-bar-v7"><div class="muted">Dönem ${state.activePeriod} · ${new Date().toLocaleString('tr-TR')} · ${sorting?'▲▼ ile açık stok, barkodlu ve hurda satırlarının sırasını değiştirin':'Satıra çift tıklayınca hareketleri açılır'}</div><div style="display:flex;gap:8px;flex-wrap:wrap">${sorting?'<button class="btn btn-outline" id="goldOrderResetV7" type="button">Varsayılan sıra</button><button class="btn btn-primary" id="goldOrderDoneV7" type="button">SIRALAMA BİTTİ</button>':'<button class="btn btn-primary" id="goldCountV7" type="button">KASA SAYIMI</button><button class="btn btn-outline" id="goldMovesV7" type="button" disabled>Hareketler</button><button class="btn btn-outline" id="goldTransferV7" type="button" disabled title="Seçili açık stok satırından başka bir satıra adet/HAS aktar">Stok Aktar</button><button class="btn btn-outline" id="goldOrderV7" type="button">Sırala</button><button class="btn btn-outline" id="goldExcelV7" type="button">Excel</button><button class="btn btn-outline" id="goldPrintV7" type="button">Yazdır</button>'}</div></div>
-    ${mergedOpenStocksV7().map(o=>{const t=state.openStocks.find(x=>x.id===o.mergedInto);return `<div class="notice" style="margin-bottom:8px;border-color:#d92d20;display:flex;justify-content:space-between;align-items:center;gap:10px"><span><b>${esc(o.name)}</b> stoğu <b>${esc(t.name)}</b> satırına birleştirilmiş. Yanlışlıkla yapıldıysa geri ayırın.</span><button type="button" class="btn btn-danger" data-undo-merge="${esc(o.id)}">↩ Geri Ayır</button></div>`;}).join('')}
+    <div class="gold-bar-v7"><div class="muted">Dönem ${state.activePeriod} · ${new Date().toLocaleString('tr-TR')} · ${sorting?'▲▼ ile açık stok, barkodlu ve hurda satırlarının sırasını değiştirin':'Satıra çift tıklayınca hareketleri açılır'}</div><div style="display:flex;gap:8px;flex-wrap:wrap">${sorting?'<button class="btn btn-outline" id="goldOrderResetV7" type="button">Varsayılan sıra</button><button class="btn btn-primary" id="goldOrderDoneV7" type="button">SIRALAMA BİTTİ</button>':'<button class="btn btn-primary" id="goldCountV7" type="button">KASA SAYIMI</button><button class="btn btn-outline" id="goldMovesV7" type="button" disabled>Hareketler</button><button class="btn btn-outline" id="goldOrderV7" type="button">Sırala</button><button class="btn btn-outline" id="goldExcelV7" type="button">Excel</button><button class="btn btn-outline" id="goldPrintV7" type="button">Yazdır</button>'}</div></div>
     <div class="gold-wrap-v7">${goldStockTableHtmlV7(rows,sorting)}</div>`,null);
-    document.querySelectorAll('[data-undo-merge]').forEach(b=>b.addEventListener('click',()=>undoOpenMergeV7(b.dataset.undoMerge)));
     const m=document.querySelector('#modalRoot .modal');if(m)m.classList.add('gold-wide');
     const cancel=document.getElementById('modalCancel');if(cancel){cancel.textContent='MENÜ';}
     document.getElementById('goldExcelV7')?.addEventListener('click',async()=>{
@@ -4006,10 +3950,9 @@ function stockSummaryView(){
       return;
     }
     let selected='';
-    wrap?.addEventListener('click',e=>{const tr=e.target.closest('tr[data-gold-key]');if(!tr)return;wrap.querySelectorAll('tr.sel').forEach(x=>x.classList.remove('sel'));tr.classList.add('sel');selected=tr.dataset.goldKey;const b=document.getElementById('goldMovesV7');if(b)b.disabled=false;const tb=document.getElementById('goldTransferV7');if(tb)tb.disabled=!String(selected).startsWith('o:');});
+    wrap?.addEventListener('click',e=>{const tr=e.target.closest('tr[data-gold-key]');if(!tr)return;wrap.querySelectorAll('tr.sel').forEach(x=>x.classList.remove('sel'));tr.classList.add('sel');selected=tr.dataset.goldKey;const b=document.getElementById('goldMovesV7');if(b)b.disabled=false;});
     wrap?.addEventListener('dblclick',e=>{const tr=e.target.closest('tr[data-gold-key]');if(tr)openGoldStockMovesV7(tr.dataset.goldKey);});
     document.getElementById('goldMovesV7')?.addEventListener('click',()=>{if(selected)openGoldStockMovesV7(selected);});
-    document.getElementById('goldTransferV7')?.addEventListener('click',()=>{if(String(selected).startsWith('o:'))transferOpenStockV7(String(selected).slice(2));});
     document.getElementById('goldOrderV7')?.addEventListener('click',()=>openGoldStocksV7(true));
     document.getElementById('goldCountV7')?.addEventListener('click',openKasaCountV7);
   }
@@ -6931,7 +6874,6 @@ function stockSummaryView(){
     document.querySelectorAll('[data-new-stockcard]').forEach(b=>b.addEventListener('click',()=>openStockCardModal()));
     document.querySelectorAll('[data-edit-stockcard]').forEach(b=>b.addEventListener('click',()=>openStockCardModal(b.dataset.editStockcard)));
     document.querySelectorAll('[data-delete-stockcard]').forEach(b=>b.addEventListener('click',()=>deleteStockCardDefinition(b.dataset.deleteStockcard)));
-    document.querySelectorAll('[data-merge-stockcard]').forEach(b=>b.addEventListener('click',()=>mergeStockCardV7(b.dataset.mergeStockcard)));
     const fields=['stockSearch','stockGroupFilter','stockCategoryFilter','stockKaratFilter','stockSupplierFilter','stockStatusFilter'];
     const apply=()=>document.querySelectorAll('#stockTable tbody tr').forEach(r=>{
       const raw=String(document.getElementById('stockSearch')?.value||'').trim(),q=raw.toLocaleLowerCase('tr-TR'),shortMatch=raw&&[r.dataset.barcode,r.dataset.stockCode,r.dataset.pusulaCode,`${r.dataset.group||''}${r.dataset.pusulaCode||''}`].some(v=>barcodeLookupMatches(v,raw));
@@ -6964,38 +6906,6 @@ function stockSummaryView(){
   function canDeleteDefinitions(){
     const u=state.currentUser||state.users.find(x=>x.id===session?.id)||state.users[0];
     return Boolean(u?.permissions?.canManageDefinitions!==false && (u?.permissions?.canDelete!==false || u?.role==='Yönetici'));
-  }
-  /* Kart birleştirme: kaynak kartın açık stokları, barkodlu ürünleri ve alış bağlantıları hedef karta aktarılır, kaynak kart silinir. */
-  function mergeStockCardV7(srcId){
-    const src=state.stockCardsMaster.find(x=>x.id===srcId);if(!src)return;
-    if(!canDeleteDefinitions())return toast('Bu kullanıcı tanımlama birleştiremez / silemez.','err');
-    const code=c=>String(c.pusulaCode||c.productCode||c.code||'').trim(),nm=c=>c.productDefinition||c.name||'';
-    const others=state.stockCardsMaster.filter(x=>x.id!==srcId).sort((a,b)=>nm(a).localeCompare(nm(b),'tr'));
-    const linked=o=>o.stockCardId===src.id||(!o.stockCardId&&code(src)&&String(o.pusulaCode||o.productCode||'').trim()===code(src));
-    const opens=(state.openStocks||[]).filter(linked),barcodes=(state.stocks||[]).filter(x=>x.stockCardId===src.id);
-    modal('Stok Kartı Birleştir',`<div class="notice"><b>${esc(code(src))} · ${esc(nm(src))}</b> kartının stoğu ve geçmişi seçtiğiniz karta aktarılır, sonra bu kart silinir.<br>Aktarılacak: ${opens.length} açık stok kaydı (${opens.map(o=>`${o.period}: ${qty(o.amount||0)} ${esc(o.unit||'')}`).join(', ')||'stok yok'}), ${barcodes.length} barkodlu ürün.</div>
-      <div class="labelled" style="margin-top:10px"><label>Kalacak (hedef) kart — yalnız <b>aynı ürünün</b> çift kartını seçin</label><select id="mergeTarget" class="select"><option value="">— Kalacak kartı seçin —</option>${others.map(c=>`<option value="${c.id}" ${cardNameKeyV7(c)===cardNameKeyV7(src)?'selected':''}>${cardNameKeyV7(c)===cardNameKeyV7(src)?'★ AYNI AD · ':''}${esc(code(c))} · ${esc(nm(c))}</option>`).join('')}</select></div>`,()=>{
-      const tgt=state.stockCardsMaster.find(x=>x.id===document.getElementById('mergeTarget').value);if(!tgt)return toast('Kalacak kartı seçin','err');
-      const same=cardNameKeyV7(tgt)===cardNameKeyV7(src);
-      if(!confirm(same?`${nm(src)} → ${nm(tgt)} birleştirilsin mi?`:`DİKKAT: FARKLI ÜRÜN!\n\n"${nm(src)}" stoğu "${nm(tgt)}" kartına eklenecek.\nÇift kartı birleştirmiyorsanız VAZGEÇİN.\n\nYine de birleştirilsin mi?`))return;
-      let moved=0;
-      opens.forEach(o=>{
-        const t2=(state.openStocks||[]).find(x=>x!==o&&x.period===o.period&&(x.stockCardId===tgt.id||(!x.stockCardId&&code(tgt)&&String(x.pusulaCode||x.productCode||'').trim()===code(tgt))));
-        if(t2&&String(t2.unit||'').toUpperCase()===String(o.unit||'').toUpperCase()){
-          const a1=Number(t2.amount||0),a2=Number(o.amount||0),c1=Number(t2.inventoryUnitCostHas||0),c2=Number(o.inventoryUnitCostHas||0);
-          t2.amount=a1+a2;t2.hasWeight=Number(t2.hasWeight||0)+Number(o.hasWeight||0);t2.workmanshipTotalHas=Number(t2.workmanshipTotalHas||0)+Number(o.workmanshipTotalHas||0);t2.count=Number(t2.count||0)+Number(o.count||0);
-          if(a1+a2>0)t2.inventoryUnitCostHas=(a1*c1+a2*c2)/(a1+a2);
-          o.mergeUndo={amount:a2,hasWeight:Number(o.hasWeight||0),workmanshipTotalHas:Number(o.workmanshipTotalHas||0),count:Number(o.count||0),unitCostHas:c2,targetCostHas:c1,stockCardId:o.stockCardId||'',cardName:nm(src),at:now()};
-          t2.stockCardId=tgt.id;o.amount=0;o.hasWeight=0;o.workmanshipTotalHas=0;o.count=0;o.mergedInto=t2.id;o.stockCardId=tgt.id;
-        }else{o.stockCardId=tgt.id;o.name=nm(tgt);o.productCode=tgt.productCode||tgt.code;o.pusulaCode=tgt.pusulaCode||tgt.productCode;}
-        moved++;
-      });
-      barcodes.forEach(x=>{x.stockCardId=tgt.id;});
-      (state.purchases||[]).forEach(p=>(p.openStockChanges||[]).forEach(ch=>{if(ch.stockCardId===src.id)ch.stockCardId=tgt.id;}));
-      state.stockCardsMaster=state.stockCardsMaster.filter(x=>x.id!==src.id);
-      audit(`${code(src)} ${nm(src)} stok kartı ${code(tgt)} ${nm(tgt)} kartına birleştirildi (${moved} açık stok, ${barcodes.length} barkodlu ürün aktarıldı)`,'Tanımlamalar');
-      closeModal();save();render();toast(`${nm(src)} → ${nm(tgt)} birleştirildi`);
-    },'BİRLEŞTİR');
   }
   function deleteStockCardDefinition(id){
     const card=state.stockCardsMaster.find(x=>x.id===id); if(!card)return;

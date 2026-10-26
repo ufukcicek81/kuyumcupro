@@ -1766,34 +1766,6 @@ test('satış düzeltmesi yarım kalırsa uyarı + eski hâliyle geri yükleme; 
   await p.context().close();
 });
 
-test('stok kartı birleştir: eski kartın stoğu yeni karta aktarılır, eski kart silinir', async () => {
-  const p = await newDevice(browser, appUrl, createFakeFirebase());
-  p.on('dialog', () => {});
-  await p.evaluate(() => document.querySelector('[data-route="stocks"],[data-go="stocks"]').click());
-  await p.waitForTimeout(300);
-  await p.evaluate(() => (document.getElementById('newStockCard') || document.querySelector('[data-new-stockcard]')).click());
-  await p.waitForSelector('#scProductCode');
-  await p.fill('#scProductDefinition', 'YENI 24 AYAR 5 GRAM');
-  await p.fill('#scPurity', '4975'); await p.fill('#scFixedMilyem', '4975'); await p.fill('#scZGram', '5');
-  await p.selectOption('#scUnit12', 'AD'); await p.check('#scCounted'); await p.check('#scZiynet');
-  await p.click('#modalConfirm'); await p.waitForTimeout(300);
-  // Eski kartı bul ve birleştir
-  const found = await p.evaluate(() => { const b = [...document.querySelectorAll('[data-merge-stockcard]')].find((x) => /24 Ayar 5 Gram Külçe/i.test(x.closest('.stock-card-box')?.innerText || '')); if (b) b.click(); return !!b; });
-  assert.ok(found, 'eski kartın Birleştir düğmesi bulunmalı');
-  await p.waitForSelector('#mergeTarget');
-  await p.selectOption('#mergeTarget', { label: (await p.$$eval('#mergeTarget option', (os) => os.map((o) => o.textContent))).find((x) => x.includes('YENI 24 AYAR 5 GRAM')) });
-  await p.click('#modalConfirm'); await p.waitForTimeout(500);
-  assert.doesNotMatch(await p.innerText('.content'), /24 Ayar 5 Gram Külçe/, 'eski kart silinmeli');
-  await p.evaluate(() => document.querySelector('[data-route="sales"],[data-go="sales"]').click());
-  await p.waitForSelector('#saleProductSearch');
-  await p.fill('#saleProductSearch', '24 ayar 5'); await p.waitForTimeout(400);
-  const list = await p.innerText('#saleSearchResults');
-  assert.match(list, /YENI 24 AYAR 5 GRAM[\s\S]*1 ADET stok/, 'eski kartın 1 adet stoğu yeni karta geçmeli: ' + list);
-  assert.doesNotMatch(list, /Külçe/i);
-  assert.deepEqual(p.errors, []);
-  await p.context().close();
-});
-
 test('fiyat panosu ↔ satış ekranı: düğmeyle ve F7 ile geçilir (satışta imleç kutudayken de)', async () => {
   const p = await newDevice(browser, appUrl, createFakeFirebase());
   await p.click('[data-go="sales"]'); await p.waitForSelector('#saleProductSearch');
@@ -1875,60 +1847,3 @@ test('yeni hurda stok kartı Hurda Alış/Satış ve takas listesinde çıkar; a
   await p.context().close();
 });
 
-test('yanlış karta birleştirilen açık stok (ÇEYREK → ATA LİRA) Altın Stokları ekranından geri ayrılır; eski birleştirmede adet HAS\'tan bulunur', async () => {
-  const fb = createFakeFirebase();
-  const a = await newDevice(browser, appUrl, fb);
-  const ceyrek0 = await (async () => { await a.keyboard.press('F9'); await a.waitForSelector('table.gold-stock-v7'); const r = await a.$$eval('table.gold-stock-v7 tr', (trs) => trs.map((t) => [...t.cells].map((c) => c.innerText.trim()))); await a.click('#modalCancel'); return r; })();
-  const row = (rows, name) => rows.find((r) => r[0] === name);
-  const c0 = row(ceyrek0, 'CEYREK'), l0 = row(ceyrek0, 'ATA LIRA');
-  // Çeyrek kartını yanlışlıkla ATA LIRA kartına birleştir (farklı ürün uyarısı onaylanır)
-  await a.evaluate(() => document.querySelector('[data-route="stocks"],[data-go="stocks"]').click()); await a.waitForTimeout(300);
-  await a.evaluate(() => (document.querySelector('[data-stockcard-view="cards"],[data-stock-view="cards"]') || [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Stok Kartları'))?.click()); await a.waitForTimeout(300);
-  await a.evaluate(() => [...document.querySelectorAll('.stock-card-box')].find((b) => b.querySelector('h4')?.innerText.trim() === 'CEYREK').querySelector('[data-merge-stockcard]').click());
-  await a.waitForSelector('#mergeTarget');
-  assert.equal(await a.inputValue('#mergeTarget'), '', 'kalacak kart kendiliğinden seçili gelmemeli');
-  await a.selectOption('#mergeTarget', { label: (await a.$$eval('#mergeTarget option', (os) => os.map((o) => o.textContent))).find((x) => /· ATA LIRA$/.test(x)) });
-  await a.click('#modalConfirm'); await a.waitForTimeout(9000);
-  // Eski sürümle yapılmış birleştirme gibi: geri alma kaydı yok
-  const st = fb.db.state; (st.openStocks || []).forEach((o) => { delete o.mergeUndo; }); fb.db.state = st;
-  const b = await newDevice(browser, appUrl, fb);
-  await b.keyboard.press('F9'); await b.waitForSelector('[data-undo-merge]');
-  await b.click('[data-undo-merge]'); await b.waitForSelector('#umQty');
-  assert.equal(await b.inputValue('#umQty'), c0[2].split(',')[0], 'çeyrek adedi HAS\'tan doğru hesaplanmalı');
-  await b.click('#modalConfirm'); await b.waitForSelector('table.gold-stock-v7');
-  const r1 = await b.$$eval('table.gold-stock-v7 tr', (trs) => trs.map((t) => [...t.cells].map((c) => c.innerText.trim())));
-  assert.deepEqual(row(r1, 'CEYREK').slice(1, 4), c0.slice(1, 4), 'çeyrek adet ve HAS geri gelmeli');
-  assert.deepEqual(row(r1, 'ATA LIRA').slice(1, 4), l0.slice(1, 4), 'ata lira eski hâline dönmeli');
-  assert.ok(!(await b.$('[data-undo-merge]')), 'uyarı kalkmalı');
-  assert.deepEqual([...a.errors, ...b.errors], []);
-  await a.context().close(); await b.context().close();
-});
-
-test('Stok Aktar: başka ürün karışmış satırdan (ATA LIRA içinde çeyrek) karışan adet önerilir ve kendi satırına aktarılır', async () => {
-  const fb = createFakeFirebase();
-  const a = await newDevice(browser, appUrl, fb);
-  const rowsOf = async (p) => { await p.keyboard.press('F9'); await p.waitForSelector('table.gold-stock-v7'); const r = await p.$$eval('table.gold-stock-v7 tr', (trs) => trs.map((t) => [...t.cells].map((c) => c.innerText.trim()))); return r; };
-  const row = (rows, name) => rows.find((r) => r[0] === name);
-  const r0 = await rowsOf(a); await a.click('#modalCancel');
-  await a.evaluate(() => document.querySelector('[data-route="stocks"],[data-go="stocks"]').click()); await a.waitForTimeout(300);
-  await a.evaluate(() => (document.querySelector('[data-stockcard-view="cards"],[data-stock-view="cards"]') || [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Stok Kartları'))?.click()); await a.waitForTimeout(300);
-  await a.evaluate(() => [...document.querySelectorAll('.stock-card-box')].find((b) => b.querySelector('h4')?.innerText.trim() === 'CEYREK').querySelector('[data-merge-stockcard]').click());
-  await a.waitForSelector('#mergeTarget');
-  await a.selectOption('#mergeTarget', { label: (await a.$$eval('#mergeTarget option', (os) => os.map((o) => o.textContent))).find((x) => /· ATA LIRA$/.test(x)) });
-  await a.click('#modalConfirm'); await a.waitForTimeout(9000);
-  // Nedeni bilinmeyen karışma: birleştirme izi yok
-  const st = fb.db.state; (st.openStocks || []).forEach((o) => { delete o.mergeUndo; delete o.mergedInto; }); fb.db.state = st;
-  const b = await newDevice(browser, appUrl, fb);
-  await rowsOf(b);
-  assert.ok(!(await b.$('[data-undo-merge]')));
-  await b.evaluate(() => [...document.querySelectorAll('tr[data-gold-key]')].find((t) => t.cells[0].innerText.trim() === 'ATA LIRA').click());
-  await b.click('#goldTransferV7'); await b.waitForSelector('#stfTarget');
-  await b.selectOption('#stfTarget', { label: (await b.$$eval('#stfTarget option', (os) => os.map((o) => o.textContent))).find((x) => /^CEYREK ·/.test(x)) });
-  assert.equal(await b.inputValue('#stfQty'), r0.find((r) => r[0] === 'CEYREK')[2].split(',')[0], 'karışan çeyrek adedi önerilmeli');
-  await b.click('#modalConfirm'); await b.waitForSelector('table.gold-stock-v7');
-  const r1 = await b.$$eval('table.gold-stock-v7 tr', (trs) => trs.map((t) => [...t.cells].map((c) => c.innerText.trim())));
-  assert.deepEqual(row(r1, 'CEYREK').slice(1, 4), row(r0, 'CEYREK').slice(1, 4));
-  assert.deepEqual(row(r1, 'ATA LIRA').slice(1, 4), row(r0, 'ATA LIRA').slice(1, 4));
-  assert.deepEqual([...a.errors, ...b.errors], []);
-  await a.context().close(); await b.context().close();
-});
