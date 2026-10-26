@@ -1874,3 +1874,32 @@ test('yeni hurda stok kartı Hurda Alış/Satış ve takas listesinde çıkar; a
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('yanlış karta birleştirilen açık stok (ÇEYREK → ATA LİRA) Altın Stokları ekranından geri ayrılır; eski birleştirmede adet HAS\'tan bulunur', async () => {
+  const fb = createFakeFirebase();
+  const a = await newDevice(browser, appUrl, fb);
+  const ceyrek0 = await (async () => { await a.keyboard.press('F9'); await a.waitForSelector('table.gold-stock-v7'); const r = await a.$$eval('table.gold-stock-v7 tr', (trs) => trs.map((t) => [...t.cells].map((c) => c.innerText.trim()))); await a.click('#modalCancel'); return r; })();
+  const row = (rows, name) => rows.find((r) => r[0] === name);
+  const c0 = row(ceyrek0, 'CEYREK'), l0 = row(ceyrek0, 'ATA LIRA');
+  // Çeyrek kartını yanlışlıkla ATA LIRA kartına birleştir (farklı ürün uyarısı onaylanır)
+  await a.evaluate(() => document.querySelector('[data-route="stocks"],[data-go="stocks"]').click()); await a.waitForTimeout(300);
+  await a.evaluate(() => (document.querySelector('[data-stockcard-view="cards"],[data-stock-view="cards"]') || [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Stok Kartları'))?.click()); await a.waitForTimeout(300);
+  await a.evaluate(() => [...document.querySelectorAll('.stock-card-box')].find((b) => b.querySelector('h4')?.innerText.trim() === 'CEYREK').querySelector('[data-merge-stockcard]').click());
+  await a.waitForSelector('#mergeTarget');
+  assert.equal(await a.inputValue('#mergeTarget'), '', 'kalacak kart kendiliğinden seçili gelmemeli');
+  await a.selectOption('#mergeTarget', { label: (await a.$$eval('#mergeTarget option', (os) => os.map((o) => o.textContent))).find((x) => /· ATA LIRA$/.test(x)) });
+  await a.click('#modalConfirm'); await a.waitForTimeout(9000);
+  // Eski sürümle yapılmış birleştirme gibi: geri alma kaydı yok
+  const st = fb.db.state; (st.openStocks || []).forEach((o) => { delete o.mergeUndo; }); fb.db.state = st;
+  const b = await newDevice(browser, appUrl, fb);
+  await b.keyboard.press('F9'); await b.waitForSelector('[data-undo-merge]');
+  await b.click('[data-undo-merge]'); await b.waitForSelector('#umQty');
+  assert.equal(await b.inputValue('#umQty'), c0[2].split(',')[0], 'çeyrek adedi HAS\'tan doğru hesaplanmalı');
+  await b.click('#modalConfirm'); await b.waitForSelector('table.gold-stock-v7');
+  const r1 = await b.$$eval('table.gold-stock-v7 tr', (trs) => trs.map((t) => [...t.cells].map((c) => c.innerText.trim())));
+  assert.deepEqual(row(r1, 'CEYREK').slice(1, 4), c0.slice(1, 4), 'çeyrek adet ve HAS geri gelmeli');
+  assert.deepEqual(row(r1, 'ATA LIRA').slice(1, 4), l0.slice(1, 4), 'ata lira eski hâline dönmeli');
+  assert.ok(!(await b.$('[data-undo-merge]')), 'uyarı kalkmalı');
+  assert.deepEqual([...a.errors, ...b.errors], []);
+  await a.context().close(); await b.context().close();
+});
