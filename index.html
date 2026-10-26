@@ -3911,8 +3911,37 @@ function stockSummaryView(){
   }
   /* Birleştirmeyi geri ayır: yanlış karta birleştirilen açık stok (örn. ÇEYREK → ZİYNET LİRA) eski satırına geri alınır.
      Birleştirme kaydı varsa birebir geri alınır; eski birleştirmelerde adet, iki ürünün adet başı HAS'ından hesaplanıp önerilir. */
-  function mergedOpenStocksV7(){return (state.openStocks||[]).filter(o=>o.period===state.activePeriod&&o.mergedInto&&Number(o.amount||0)===0&&(state.openStocks||[]).some(t=>t.id===o.mergedInto));}
+  function mergedOpenStocksV7(){return (state.openStocks||[]).filter(o=>o.period===state.activePeriod&&o.mergedInto&&Math.abs(Number(o.amount||0))<1e-6&&(state.openStocks||[]).some(t=>t.id===o.mergedInto));}
   function openUnitHasV7(o){const d=Number(o.displayAyar||0);if(d>0)return d/1000;const z=Number(o.zGram||0),p=Number(o.purity||0);return z&&p?z*p/1000:(p>0?p/1000:0);}
+  /* Stok Aktar: bir açık stok satırındaki malın bir kısmını başka satıra taşır (yanlış satıra girilmiş/birleştirilmiş ürün).
+     Taşınan mal hedef ürün sayılır: HAS = adet × hedefin adet başı HAS'ı. Kaynak satırda başka ürün karışmışsa
+     (adet başı HAS kendi ayarından sapıyorsa) karışan adet hesaplanıp önerilir. */
+  function transferOpenStockV7(id){
+    const src=(state.openStocks||[]).find(x=>x.id===id);if(!src)return;
+    const targets=(state.openStocks||[]).filter(x=>x.id!==src.id&&x.period===src.period&&String(x.unit||'').toUpperCase()===String(src.unit||'').toUpperCase()).sort((a,b)=>String(a.name).localeCompare(String(b.name),'tr'));
+    if(!targets.length)return toast('Aynı birimde başka açık stok satırı yok','err');
+    const A=Number(src.amount||0),H=Number(src.hasWeight||0),us=openUnitHasV7(src);
+    const suggest=t=>{const ut=openUnitHasV7(t);if(!(A>0)||Math.abs(us-ut)<1e-6)return '';const own=(H-A*ut)/(us-ut),q=Math.round(A-own);return q>0&&q<=A&&Math.abs(own-Math.round(own))<0.05?q:'';};
+    modal('Stok Aktar',`<div class="notice"><b>${esc(src.name)}</b> satırında ${qty(A)} ${esc(src.unit||'')} · ${qty(H)} HAS var. Taşınacak mal, seçtiğiniz <b>hedef ürün</b> sayılır (HAS = adet × hedefin adet başı HAS'ı).</div>
+      <div class="form-grid" style="margin-top:10px"><div class="labelled span-2"><label>Hedef satır</label><select id="stfTarget" class="select"><option value="">— Seçin —</option>${targets.map(t=>`<option value="${esc(t.id)}">${esc(t.name)} · ${qty(t.amount||0)} ${esc(t.unit||'')} · ${qty(openUnitHasV7(t))} HAS/adet</option>`).join('')}</select></div>
+      <div class="labelled"><label>Aktarılacak miktar (${esc(src.unit||'')})</label><input id="stfQty" class="input" type="number" step="${String(src.unit||'').toUpperCase()==='ADET'?'1':'0.01'}" min="0"></div><div class="labelled"><label>Aktarılacak HAS</label><input id="stfHas" class="input" type="number" step="0.001" min="0"></div></div><div id="stfPrev" class="muted" style="margin-top:8px"></div>`,()=>{
+      const t=targets.find(x=>x.id===document.getElementById('stfTarget').value);if(!t)return toast('Hedef satırı seçin','err');
+      const q=Number(document.getElementById('stfQty').value||0),h=Number(document.getElementById('stfHas').value||0);
+      if(!(q>0)||q>A+1e-9)return toast('Geçerli miktar girin','err');if(!(h>=0)||h>H+1e-6)return toast('HAS kaynak satırdakinden fazla olamaz','err');
+      const cs=Number(src.inventoryUnitCostHas||0),ct=Number(t.inventoryUnitCostHas||0),cm=ct>0?ct:cs,At=Number(t.amount||0),left=A-q;
+      if(left>0){const c=(A*cs-q*cm)/left;if(c>0)src.inventoryUnitCostHas=c;}
+      if(At+q>0&&cm>0)t.inventoryUnitCostHas=(At*ct+q*cm)/(At+q);
+      src.amount=left;src.hasWeight=Math.max(0,H-h);src.count=left;t.amount=At+q;t.hasWeight=Number(t.hasWeight||0)+h;t.count=t.amount;
+      if(src.mergedInto===t.id){delete src.mergedInto;delete src.mergeUndo;}
+      (state.openStocks||[]).forEach(o=>{if(o.mergedInto===src.id&&o.id===t.id){delete o.mergedInto;delete o.mergeUndo;}});
+      audit(`Stok aktarıldı: ${src.name} → ${t.name}, ${qty(q)} ${src.unit||''} / ${qty(h)} HAS`,'Stok');
+      closeModal();save();toast(`${qty(q)} ${src.unit||''} ${src.name} → ${t.name} aktarıldı`);openGoldStocksV7();
+    },'AKTAR');
+    const tEl=document.getElementById('stfTarget'),qEl=document.getElementById('stfQty'),hEl=document.getElementById('stfHas'),pEl=document.getElementById('stfPrev');
+    const upd=(fromQty=true)=>{const t=targets.find(x=>x.id===tEl.value);if(!t){pEl.textContent='';return;}const q=Number(qEl.value||0);if(fromQty){const ut=openUnitHasV7(t),left=A-q,byOwn=H-left*us;hEl.value=(left>0&&us>0&&Math.abs(byOwn-q*ut)<Math.max(.05,ut/2)?byOwn:q*ut).toFixed(3);}const h=Number(hEl.value||0);pEl.innerHTML=`Sonuç: <b>${esc(src.name)}</b> ${qty(A-q)} ${esc(src.unit||'')} · ${qty(H-h)} HAS &nbsp;|&nbsp; <b>${esc(t.name)}</b> ${qty(Number(t.amount||0)+q)} ${esc(t.unit||'')} · ${qty(Number(t.hasWeight||0)+h)} HAS`;};
+    tEl.addEventListener('change',()=>{const t=targets.find(x=>x.id===tEl.value);const sg=t?suggest(t):'';if(sg!=='')qEl.value=sg;upd();});
+    qEl.addEventListener('input',()=>upd(true));hEl.addEventListener('input',()=>upd(false));
+  }
   function undoOpenMergeV7(id){
     const o=(state.openStocks||[]).find(x=>x.id===id),t=o&&(state.openStocks||[]).find(x=>x.id===o.mergedInto);if(!o||!t)return toast('Birleştirme bulunamadı','err');
     const u=openUnitHasV7(o),ut=openUnitHasV7(t),A=Number(t.amount||0),H=Number(t.hasWeight||0),rec=o.mergeUndo;
@@ -3954,7 +3983,7 @@ function stockSummaryView(){
       table.gold-stock-v7 .gold-ord-v7 button{border:1px solid #fff;background:#4b5160;color:#fff;border-radius:4px;padding:0 6px;font-size:11px;line-height:18px;cursor:pointer}
       table.gold-stock-v7 tr.cash td:first-child{background:#6b7180}
     </style>
-    <div class="gold-bar-v7"><div class="muted">Dönem ${state.activePeriod} · ${new Date().toLocaleString('tr-TR')} · ${sorting?'▲▼ ile açık stok, barkodlu ve hurda satırlarının sırasını değiştirin':'Satıra çift tıklayınca hareketleri açılır'}</div><div style="display:flex;gap:8px;flex-wrap:wrap">${sorting?'<button class="btn btn-outline" id="goldOrderResetV7" type="button">Varsayılan sıra</button><button class="btn btn-primary" id="goldOrderDoneV7" type="button">SIRALAMA BİTTİ</button>':'<button class="btn btn-primary" id="goldCountV7" type="button">KASA SAYIMI</button><button class="btn btn-outline" id="goldMovesV7" type="button" disabled>Hareketler</button><button class="btn btn-outline" id="goldOrderV7" type="button">Sırala</button><button class="btn btn-outline" id="goldExcelV7" type="button">Excel</button><button class="btn btn-outline" id="goldPrintV7" type="button">Yazdır</button>'}</div></div>
+    <div class="gold-bar-v7"><div class="muted">Dönem ${state.activePeriod} · ${new Date().toLocaleString('tr-TR')} · ${sorting?'▲▼ ile açık stok, barkodlu ve hurda satırlarının sırasını değiştirin':'Satıra çift tıklayınca hareketleri açılır'}</div><div style="display:flex;gap:8px;flex-wrap:wrap">${sorting?'<button class="btn btn-outline" id="goldOrderResetV7" type="button">Varsayılan sıra</button><button class="btn btn-primary" id="goldOrderDoneV7" type="button">SIRALAMA BİTTİ</button>':'<button class="btn btn-primary" id="goldCountV7" type="button">KASA SAYIMI</button><button class="btn btn-outline" id="goldMovesV7" type="button" disabled>Hareketler</button><button class="btn btn-outline" id="goldTransferV7" type="button" disabled title="Seçili açık stok satırından başka bir satıra adet/HAS aktar">Stok Aktar</button><button class="btn btn-outline" id="goldOrderV7" type="button">Sırala</button><button class="btn btn-outline" id="goldExcelV7" type="button">Excel</button><button class="btn btn-outline" id="goldPrintV7" type="button">Yazdır</button>'}</div></div>
     ${mergedOpenStocksV7().map(o=>{const t=state.openStocks.find(x=>x.id===o.mergedInto);return `<div class="notice" style="margin-bottom:8px;border-color:#d92d20;display:flex;justify-content:space-between;align-items:center;gap:10px"><span><b>${esc(o.name)}</b> stoğu <b>${esc(t.name)}</b> satırına birleştirilmiş. Yanlışlıkla yapıldıysa geri ayırın.</span><button type="button" class="btn btn-danger" data-undo-merge="${esc(o.id)}">↩ Geri Ayır</button></div>`;}).join('')}
     <div class="gold-wrap-v7">${goldStockTableHtmlV7(rows,sorting)}</div>`,null);
     document.querySelectorAll('[data-undo-merge]').forEach(b=>b.addEventListener('click',()=>undoOpenMergeV7(b.dataset.undoMerge)));
@@ -3977,9 +4006,10 @@ function stockSummaryView(){
       return;
     }
     let selected='';
-    wrap?.addEventListener('click',e=>{const tr=e.target.closest('tr[data-gold-key]');if(!tr)return;wrap.querySelectorAll('tr.sel').forEach(x=>x.classList.remove('sel'));tr.classList.add('sel');selected=tr.dataset.goldKey;const b=document.getElementById('goldMovesV7');if(b)b.disabled=false;});
+    wrap?.addEventListener('click',e=>{const tr=e.target.closest('tr[data-gold-key]');if(!tr)return;wrap.querySelectorAll('tr.sel').forEach(x=>x.classList.remove('sel'));tr.classList.add('sel');selected=tr.dataset.goldKey;const b=document.getElementById('goldMovesV7');if(b)b.disabled=false;const tb=document.getElementById('goldTransferV7');if(tb)tb.disabled=!String(selected).startsWith('o:');});
     wrap?.addEventListener('dblclick',e=>{const tr=e.target.closest('tr[data-gold-key]');if(tr)openGoldStockMovesV7(tr.dataset.goldKey);});
     document.getElementById('goldMovesV7')?.addEventListener('click',()=>{if(selected)openGoldStockMovesV7(selected);});
+    document.getElementById('goldTransferV7')?.addEventListener('click',()=>{if(String(selected).startsWith('o:'))transferOpenStockV7(String(selected).slice(2));});
     document.getElementById('goldOrderV7')?.addEventListener('click',()=>openGoldStocksV7(true));
     document.getElementById('goldCountV7')?.addEventListener('click',openKasaCountV7);
   }
