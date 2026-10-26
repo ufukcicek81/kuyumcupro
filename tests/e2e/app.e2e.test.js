@@ -1854,7 +1854,7 @@ test('satış ekranı Altın / Ziynet: klavyeyle art arda kalem girilir (ürün 
   const p = await newDevice(browser, appUrl, createFakeFirebase());
   await p.click('[data-go="sales"]'); await p.waitForSelector('#saleProductSearch');
   await p.click('[data-pay="Altın / Ziynet"]'); await p.waitForSelector('#tiSearch');
-  assert.equal(await p.evaluate(() => document.activeElement?.id), 'tiSearch', 'imleç ürün kutusunda başlamalı');
+  await p.waitForFunction(() => document.activeElement?.id === 'tiSearch', null, { timeout: 2000 }); // imleç ürün kutusunda başlamalı
   for (const [name, n, price] of [['ceyrek', '2', '10000'], ['YARIM', '1', '20000']]) {
     await p.keyboard.type(name); await p.keyboard.press('Enter');
     assert.equal(await p.evaluate(() => document.activeElement?.id), 'tiQty');
@@ -1862,7 +1862,7 @@ test('satış ekranı Altın / Ziynet: klavyeyle art arda kalem girilir (ürün 
     assert.equal(await p.evaluate(() => document.activeElement?.id), 'tiPrice');
     await p.keyboard.press('Control+A'); await p.keyboard.type(price); await p.keyboard.press('Enter'); await p.waitForTimeout(200);
     assert.ok(await p.$('#tiSearch'), 'pencere açık kalmalı');
-    assert.equal(await p.evaluate(() => document.activeElement?.id), 'tiSearch', 'sonraki ürün için imleç ürün kutusuna dönmeli');
+    await p.waitForFunction(() => document.activeElement?.id === 'tiSearch', null, { timeout: 2000 }); // sonraki ürün için imleç ürün kutusuna dönmeli
   }
   const list = await p.innerText('#tiList');
   assert.match(list, /CEYREK[\s\S]*20\.000,00/); assert.match(list, /YARIM[\s\S]*20\.000,00/); assert.match(list, /40\.000,00/, 'toplam');
