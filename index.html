@@ -3818,7 +3818,8 @@ function stockSummaryView(){
     document.getElementById('kcFillV7')?.addEventListener('click',()=>{inputs.forEach(inp=>{if(!inp.value.trim()){const it=byKey.get(inp.dataset.kc);inp.value=kasaCountInputV7(it.sys,it.unit);values[it.key]=inp.value;paint(it.key);}});kasaCountSaveDraftV7(values);info();});
     document.getElementById('kcClearV7')?.addEventListener('click',()=>{if(!confirm('Yazılan sayım değerleri silinsin mi?'))return;try{localStorage.removeItem(KASA_COUNT_DRAFT_V7);}catch{}openKasaCountV7();});
     document.getElementById('kcHistoryV7')?.addEventListener('click',openKasaCountHistoryV7);
-    setTimeout(()=>{const first=inputs.find(x=>!x.value)||inputs[0];first?.focus();},50);
+    // Yalnız kullanıcı henüz bir kutuya geçmediyse ilk boş kutuya git: hızlı yazarken imleç başka satıra kaçmasın.
+    setTimeout(()=>{if(document.activeElement?.classList?.contains('kc-in'))return;const first=inputs.find(x=>!x.value)||inputs[0];first?.focus();},50);
   }
   function kasaCountReportHtmlV7(rec){
     const line=r=>`<tr><td>${esc(r.name)}</td><td>${esc(r.unit)}</td><td class="num">${kasaCountFmtV7(r.sys,r.unit)}</td><td class="num">${kasaCountFmtV7(r.counted,r.unit)}</td><td class="num"><b>${r.diff>0?'+':''}${kasaCountFmtV7(r.diff,r.unit)}</b></td><td class="num">${r.diffHas?qty(r.diffHas)+' HAS':''}</td></tr>`;
