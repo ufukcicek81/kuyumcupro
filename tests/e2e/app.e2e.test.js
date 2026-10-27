@@ -466,6 +466,7 @@ test('KASA SAYIMI: sayılan miktar sistemle karşılaştırılır; fazla AL, eks
   await p.waitForSelector('.kc-wrap');
   const num = (t) => Number(String(t).replace(/\./g, '').replace(',', '.'));
   const rowSys = async (sel) => num(await p.locator(sel).locator('td').nth(2).innerText());
+  assert.equal(await p.locator('tr[data-kc-row^="b:"], tr[data-kc-row="sp"]').count(), 0, 'barkodlu ürünler kasa sayımına girmemeli');
   const openRow = p.locator('tr[data-kc-row^="o:"]').first();
   const openName = (await openRow.locator('td').first().innerText()).trim();
   const openSys = await rowSys('tr[data-kc-row^="o:"] >> nth=0');
@@ -1396,7 +1397,7 @@ test('satış ekranından alış: eski stokla benzer isimli yeni kart listede ç
   assert.match(await p.innerText('body'), /REŞAT ÇEYREK BİLEKLİK · 2/, 'düzeltmede ürün satış ekranına geri gelmeli');
   await p.keyboard.press('F9');
   await p.waitForSelector('table.gold-stock-v7');
-  assert.match(await p.innerText('table.gold-stock-v7'), /REŞAT ÇEYREK BİLEKLİK\t1590\t0,00/, 'iptalde stok geri alınmalı');
+  assert.ok(!(await p.innerText('table.gold-stock-v7')).includes('REŞAT ÇEYREK BİLEKLİK'), 'iptalde stok geri alınmalı; sıfır stoklu kart listede gizlenir');
   await p.click('#modalX');
   await p.click('text=Satış Geçmişi');
   await p.waitForSelector('#saleHistBody tr');
@@ -1899,6 +1900,28 @@ test('satış raporu: kart komisyonu düşülür, hurda kârı eklenir ve NET K�
   assert.match(t, /Kart Komisyonu\s*− 1\.400,00 TL/);
   const num = (label) => Number(t.match(new RegExp(label + '\\s*([\\d.,]+) TL'))[1].replace(/\./g, '').replace(',', '.'));
   assert.ok(Math.abs(num('Brüt Kâr') - 1400 - num('NET KÂR')) < 0.01, 'net = brüt − komisyon');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
+test('ALTIN STOKLARI: stoğu olmayan açık stok ve hurda kartları listede görünmez', async () => {
+  const fb = createFakeFirebase();
+  let p = await newDevice(browser, appUrl, fb);
+  await p.waitForTimeout(2500);
+  const st = fb.db.state;
+  const o = st.openStocks.find((x) => x.period === st.activePeriod);
+  st.openStocks.push({ ...o, id: 'OPEN-SIFIR-TEST', name: 'SIFIR STOK KARTI', amount: 0, hasWeight: 0, workmanshipTotalHas: 0 });
+  st.scrapStocks = st.scrapStocks || [];
+  st.scrapStocks.push({ id: 'SCR-SIFIR-TEST', period: st.activePeriod, name: 'SIFIR HURDA KARTI', milyem: 585, amount: 0, hasWeight: 0 });
+  fb.db.state = st;
+  await p.context().close();
+  p = await newDevice(browser, appUrl, fb);
+  await p.keyboard.press('F9');
+  await p.waitForSelector('table.gold-stock-v7');
+  const t = await p.innerText('table.gold-stock-v7');
+  assert.ok(t.includes(o.name), 'stoğu olan kart görünmeli');
+  assert.ok(!t.includes('SIFIR STOK KARTI'), 'sıfır açık stok gizlenmeli');
+  assert.ok(!t.includes('SIFIR HURDA KARTI'), 'sıfır hurda gizlenmeli');
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });

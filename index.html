@@ -3615,7 +3615,9 @@ function stockSummaryView(){
   function goldStockRowsV7(){
     const period=state.activePeriod,rows=[],n=v=>Number(v||0);
     // Pusula sırası: ürün koduna göre (8 K, 14 K, 22 K, ÇEYREK, YARIM…).
-    const open=goldStockOrderV7('open',(state.openStocks||[]).filter(x=>x.period===period).slice().sort((a,b)=>(Number(a.pusulaCode)||1e9)-(Number(b.pusulaCode)||1e9)||String(a.name).localeCompare(String(b.name),'tr')),x=>x.id);
+    // Stoğu olmayan (miktar ve HAS sıfır) kartlar listede gösterilmez.
+    const has0=x=>Math.abs(n(x.amount))<1e-6&&Math.abs(n(x.hasWeight))<1e-6;
+    const open=goldStockOrderV7('open',(state.openStocks||[]).filter(x=>x.period===period&&!has0(x)).slice().sort((a,b)=>(Number(a.pusulaCode)||1e9)-(Number(b.pusulaCode)||1e9)||String(a.name).localeCompare(String(b.name),'tr')),x=>x.id);
     rows.push({kind:'head',cells:['TANIM','AYAR','MİKTAR','HAS','İŞÇİLİK','BİRİM','ORTALAMA','Adet','TİP']});
     let tq=0,th=0,tw=0;
     open.forEach(x=>{const q=n(x.amount),h=n(x.hasWeight),w=n(x.workmanshipTotalHas);tq+=q;th+=h;tw+=w;
@@ -3626,7 +3628,7 @@ function stockSummaryView(){
     goldStockOrderV7('barcode',Object.values(by).sort((a,b)=>String(PURITY_LABEL_V7[a.p]||a.p).localeCompare(String(PURITY_LABEL_V7[b.p]||b.p),'tr',{numeric:true})),x=>String(x.p)).forEach(x=>{bq+=x.q;bh+=x.h;bw+=x.w;bc+=x.c;rows.push({kind:'barcode',key:'b:'+x.p,purity:x.p,cells:[PURITY_LABEL_V7[x.p]||(x.p+' MİLYEM'),x.p,x.q,x.h,x.w,'HAS',`${x.c} ADET`,'','']});});
     rows.push({kind:'total',cells:['TOPLAM BARKOD','',bq,bh,bw,'',`${bc} ADET`,'','']});
     rows.push({kind:'gap'});
-    let sq=0,sh=0;goldStockOrderV7('scrap',(state.scrapStocks||[]).filter(x=>x.period===period),x=>x.id).forEach(x=>{sq+=n(x.amount);sh+=n(x.hasWeight);rows.push({kind:'scrap',key:'s:'+x.id,cells:[x.name,n(x.milyem),n(x.amount),n(x.hasWeight),'','','','','']});});
+    let sq=0,sh=0;goldStockOrderV7('scrap',(state.scrapStocks||[]).filter(x=>x.period===period&&!has0(x)),x=>x.id).forEach(x=>{sq+=n(x.amount);sh+=n(x.hasWeight);rows.push({kind:'scrap',key:'s:'+x.id,cells:[x.name,n(x.milyem),n(x.amount),n(x.hasWeight),'','','','','']});});
     rows.push({kind:'total',cells:['TOPLAM HURDA','',sq,sh,'','','','','']});
     rows.push({kind:'gap'});
     rows.push({kind:'kasa',cells:['KASA','','BORÇ','ALACAK','','','','','']});
@@ -3758,10 +3760,7 @@ function stockSummaryView(){
     const period=state.activePeriod,n=v=>Number(v||0),items=[];
     goldStockOrderV7('open',(state.openStocks||[]).filter(x=>x.period===period).slice().sort((a,b)=>(Number(a.pusulaCode)||1e9)-(Number(b.pusulaCode)||1e9)||String(a.name).localeCompare(String(b.name),'tr')),x=>x.id)
       .forEach(o=>{const q=n(o.amount);items.push({key:'o:'+o.id,group:'AÇIK STOK',name:o.name,unit:String(o.unit||'GR').toUpperCase(),sys:q,hasPer:q?n(o.hasWeight)/q:n(o.purity)/1000});});
-    const by={};activeStock().filter(x=>!isSpecialStockV7(x)).forEach(x=>{const p=Math.round(n(x.purity));if(!by[p])by[p]={p,c:0,g:0,h:0};by[p].c++;by[p].g+=stockAmount(x);by[p].h+=stockHas(x);});
-    goldStockOrderV7('barcode',Object.values(by).sort((a,b)=>String(PURITY_LABEL_V7[a.p]||a.p).localeCompare(String(PURITY_LABEL_V7[b.p]||b.p),'tr',{numeric:true})),x=>String(x.p))
-      .forEach(x=>items.push({key:'b:'+x.p,group:'BARKODLU',name:(PURITY_LABEL_V7[x.p]||x.p+' MİLYEM')+' barkodlu ürün',unit:'ADET',sys:x.c,hasPer:x.c?x.h/x.c:0,note:qty(x.g)+' GR'}));
-    const sp=activeStock().filter(isSpecialStockV7).length;if(sp)items.push({key:'sp',group:'ÖZEL ÜRÜN',name:'Özel ürün (barkodlu)',unit:'ADET',sys:sp,hasPer:0});
+    // Barkodlu ürünler (14K, 8K vb.) günlük kasa sayımına girmez; her gün tüm dükkan sayılmıyor.
     goldStockOrderV7('scrap',(state.scrapStocks||[]).filter(x=>x.period===period),x=>x.id)
       .forEach(h=>{const q=n(h.amount);items.push({key:'s:'+h.id,group:'HURDA',name:h.name,unit:'GR',sys:q,hasPer:q?n(h.hasWeight)/q:n(h.milyem)/1000});});
     const cur={};(state.cashAccounts||[]).forEach(a=>{const c=String(a.currency||'TL').toUpperCase();cur[c]=(cur[c]||0)+n(a.balance);});
