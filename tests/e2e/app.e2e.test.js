@@ -1350,7 +1350,8 @@ test('yeni ziynet stok kartı Ziynet Alış ve takas listelerinde çıkar; alı�
   // Takas (müşteriden alınan) listesinde
   await p.fill('#saleProductSearch', ''); await p.click('[data-pay="Altın / Ziynet"]');
   await p.waitForSelector('#tiSearch');
-  const ti = await p.$$eval('#tiItemList option', (os) => os.map((o) => o.value));
+  await p.fill('#tiSearch', 'TEST 24'); await p.waitForSelector('#tiSuggest [data-ti-sug]');
+  const ti = await p.$$eval('#tiSuggest [data-ti-sug] b', (os) => os.map((o) => o.textContent));
   assert.ok(ti.some((x) => x.includes('TEST 24 AYAR 5 GRAM')), 'takas listesinde olmalı');
   assert.deepEqual(p.errors, []);
   await p.context().close();
@@ -1369,7 +1370,8 @@ test('satış ekranından alış: eski stokla benzer isimli yeni kart listede ç
   await p.evaluate(() => document.querySelector('[data-route="sales"],[data-go="sales"]').click());
   await p.waitForSelector('#saleProductSearch');
   await p.click('[data-pay="Altın / Ziynet"]'); await p.waitForSelector('#tiSearch');
-  const opts = await p.$$eval('#tiItemList option', (os) => os.map((o) => o.value));
+  await p.fill('#tiSearch', 'BİLEKLİK'); await p.waitForSelector('#tiSuggest [data-ti-sug]');
+  const opts = await p.$$eval('#tiSuggest [data-ti-sug] b', (os) => os.map((o) => o.textContent));
   assert.ok(opts.includes('REŞAT ÇEYREK BİLEKLİK') && opts.includes('RESAT CEYREK BİLEKLİK'), 'yeni kart eski stok satırıyla birlikte listede olmalı: ' + opts.join(', '));
   await p.fill('#tiSearch', 'REŞAT ÇEYREK BİLEKLİK'); await p.press('#tiSearch', 'Enter');
   await p.fill('#tiQty', '2'); await p.press('#tiQty', 'Enter'); await p.fill('#tiPrice', '10000'); await p.press('#tiPrice', 'Enter'); await p.waitForTimeout(200);
@@ -1922,6 +1924,24 @@ test('ALTIN STOKLARI: stoğu olmayan açık stok ve hurda kartları listede gör
   assert.ok(t.includes(o.name), 'stoğu olan kart görünmeli');
   assert.ok(!t.includes('SIFIR STOK KARTI'), 'sıfır açık stok gizlenmeli');
   assert.ok(!t.includes('SIFIR HURDA KARTI'), 'sıfır hurda gizlenmeli');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
+test('Altın / Ziynet: yazarken ürün listesi açılır; ok tuşu ve Enter ile seçilir', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  await p.click('[data-go="sales"]');
+  await p.click('[data-pay="Altın / Ziynet"]'); await p.waitForSelector('#tiSearch');
+  await p.click('#tiSearch');
+  await p.keyboard.type('CEY');
+  await p.waitForSelector('#tiSuggest [data-ti-sug]', { state: 'visible' });
+  const names = await p.$$eval('#tiSuggest [data-ti-sug] b', (os) => os.map((o) => o.textContent));
+  assert.ok(names.length > 1, 'liste açılmalı: ' + names.join(', '));
+  await p.keyboard.press('ArrowDown');
+  await p.keyboard.press('Enter');
+  await p.waitForFunction(() => document.activeElement?.id === 'tiQty', null, { timeout: 2000 });
+  assert.equal(await p.inputValue('#tiSearch'), names[1], 'ok tuşuyla seçilen ürün alınmalı');
+  assert.ok(!(await p.isVisible('#tiSuggest')), 'seçimden sonra liste kapanmalı');
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
