@@ -1902,3 +1902,25 @@ test('satış raporu: kart komisyonu düşülür, hurda kârı eklenir ve NET K�
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('ALTIN STOKLARI: stoğu olmayan açık stok ve hurda kartları listede görünmez', async () => {
+  const fb = createFakeFirebase();
+  let p = await newDevice(browser, appUrl, fb);
+  await p.waitForTimeout(2500);
+  const st = fb.db.state;
+  const o = st.openStocks.find((x) => x.period === st.activePeriod);
+  st.openStocks.push({ ...o, id: 'OPEN-SIFIR-TEST', name: 'SIFIR STOK KARTI', amount: 0, hasWeight: 0, workmanshipTotalHas: 0 });
+  st.scrapStocks = st.scrapStocks || [];
+  st.scrapStocks.push({ id: 'SCR-SIFIR-TEST', period: st.activePeriod, name: 'SIFIR HURDA KARTI', milyem: 585, amount: 0, hasWeight: 0 });
+  fb.db.state = st;
+  await p.context().close();
+  p = await newDevice(browser, appUrl, fb);
+  await p.keyboard.press('F9');
+  await p.waitForSelector('table.gold-stock-v7');
+  const t = await p.innerText('table.gold-stock-v7');
+  assert.ok(t.includes(o.name), 'stoğu olan kart görünmeli');
+  assert.ok(!t.includes('SIFIR STOK KARTI'), 'sıfır açık stok gizlenmeli');
+  assert.ok(!t.includes('SIFIR HURDA KARTI'), 'sıfır hurda gizlenmeli');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
