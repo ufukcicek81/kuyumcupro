@@ -5504,12 +5504,23 @@ function stockSummaryView(){
     const a=[...m.values()].sort((x,y)=>y.sale-x.sale),head=[label.replace('Satış Raporu — ','').replace(' Raporu',''),'Satır','Miktar',`Maliyet ${U}`,`Satış ${U}`,`Kâr ${U}`];
     return {title:label,html:v660SimpleTable(head,a.map(x=>[`<strong>${esc(x.name)}</strong>`,String(x.count),qty(x.qty),srvFmt(x.cost),srvFmt(x.sale),`<strong class="${x.profit>=0?'positive':'negative'}">${srvFmt(x.profit)}</strong>`])),csv:[['Grup','Satır','Miktar',`Maliyet ${U}`,`Satış ${U}`,`Kâr ${U}`],...a.map(x=>[x.name,x.count,x.qty,x.cost,x.sale,x.profit])]};
   }
+  /* Net kâr: brüt satış kârından kart komisyonu düşülür, hurda alım-satım kârı eklenir (Pusula NET ile aynı mantık). */
+  function salesNetProfitPartsV7(saleIds,from,to){
+    const ids=new Set(saleIds),r={feeTl:0,feeHas:0,scrapTl:0,scrapHas:0,scrapCount:0};
+    (state.sales||[]).filter(s=>ids.has(s.id)).forEach(s=>{
+      const rate=Number(s.hasBuyRateAtSale||historicalHasRate(s.date,'buy')||state.prices.has?.buy||1);
+      (s.payments||[]).filter(p=>p.type==='Kredi Kartı'&&Number(p.amount||0)>0).forEach(p=>{const acc=accountByKey(p.accountKey||'').account,fee=Number(p.amount||0)*Number(p.commissionRate??acc?.posCommission??0)/100;r.feeTl+=fee;r.feeHas+=fee/rate;});
+    });
+    (state.tradeMoves||[]).filter(t=>/hurda/i.test(String(t.tradeType||''))&&Number(t.profitHas||0)&&explicitRangeInside(t.date,from,to)).forEach(t=>{const ph=Number(t.profitHas||0);r.scrapHas+=ph;r.scrapTl+=ph*Number(t.hasRateAtTrade||historicalHasRate(t.date,'buy')||state.prices.has?.buy||1);r.scrapCount++;});
+    return r;
+  }
   function v660Report(type,from,to,extra=''){
     const rows=v660Sales(from,to);
     if(type==='sales_general'||type==='general_sales'||type==='sales_profit'){
       const U=srvU(),byDoc=new Map(); rows.forEach(r=>{const x=byDoc.get(r.saleId)||{date:r.date,doc:r.docNo,customer:r.customer,person:r.salesperson,cost:0,sale:0,profit:0};x.cost+=Number(r[srvF('cost')]||0);x.sale+=Number(r[srvF('sale')]||0);x.profit+=Number(r[srvF('profit')]||0);byDoc.set(r.saleId,x);});
       const a=[...byDoc.values()],sale=a.reduce((s,x)=>s+x.sale,0),cost=a.reduce((s,x)=>s+x.cost,0),profit=sale-cost,head=['Tarih','Fiş','Müşteri','Personel',`Maliyet ${U}`,`Satış ${U}`,`Kâr ${U}`];
-      return {title:type==='sales_profit'?'Satış Kâr Raporu':type==='general_sales'?'Genel Satış Raporu':'Satış Raporu Genel',html:`<div class="grid grid-3" style="margin-bottom:12px">${metric('Satış',`${srvFmt(sale)}${U==='HAS'?' HAS':''}`,`${a.length} fiş`)}${metric('Maliyet',`${srvFmt(cost)}${U==='HAS'?' HAS':''}`,'')}${metric('Kâr',`${srvFmt(profit)}${U==='HAS'?' HAS':''}`,'',profit>=0?'positive':'negative')}</div>${v660SimpleTable(head,a.map(x=>[trDate(x.date),esc(x.doc),esc(x.customer),esc(x.person),srvFmt(x.cost),srvFmt(x.sale),`<strong class="${x.profit>=0?'positive':'negative'}">${srvFmt(x.profit)}</strong>`]))}`,csv:[head,...a.map(x=>[trDate(x.date),x.doc,x.customer,x.person,x.cost,x.sale,x.profit])]};
+      const nk=salesNetProfitPartsV7([...byDoc.keys()],from,to),fee=U==='TL'?nk.feeTl:nk.feeHas,scrap=U==='TL'?nk.scrapTl:nk.scrapHas,net=profit-fee+scrap,u=U==='HAS'?' HAS':'';
+      return {title:type==='sales_profit'?'Satış Kâr Raporu':type==='general_sales'?'Genel Satış Raporu':'Satış Raporu Genel',html:`<div class="grid grid-3" style="margin-bottom:12px">${metric('Satış',`${srvFmt(sale)}${u}`,`${a.length} fiş`)}${metric('Maliyet',`${srvFmt(cost)}${u}`,'')}${metric('Brüt Kâr',`${srvFmt(profit)}${u}`,'Satış − maliyet',profit>=0?'positive':'negative')}${metric('Kart Komisyonu',`− ${srvFmt(fee)}${u}`,'Kredi kartı / POS kesintisi','negative')}${metric('Hurda Kâr / Zarar',`${srvFmt(scrap)}${u}`,`${nk.scrapCount} hurda işlemi`,scrap>=0?'positive':'negative')}${metric('NET KÂR',`${srvFmt(net)}${u}`,'Brüt − komisyon + hurda',net>=0?'positive':'negative')}</div>${v660SimpleTable(head,a.map(x=>[trDate(x.date),esc(x.doc),esc(x.customer),esc(x.person),srvFmt(x.cost),srvFmt(x.sale),`<strong class="${x.profit>=0?'positive':'negative'}">${srvFmt(x.profit)}</strong>`]))}`,csv:[head,...a.map(x=>[trDate(x.date),x.doc,x.customer,x.person,x.cost,x.sale,x.profit]),[],['','','','','','BRÜT KÂR',profit],['','','','','','KART KOMİSYONU',-fee],['','','','','','HURDA KÂR/ZARAR',scrap],['','','','','','NET KÂR',net]]};
     }
     if(type==='sales_detail'){
       const U=srvU(),head=['Tarih','Fiş','Ürün','Ayar','Miktar',`Maliyet ${U}`,`Satış ${U}`,`Kâr ${U}`];

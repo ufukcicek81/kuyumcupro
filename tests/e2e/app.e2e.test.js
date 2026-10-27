@@ -1872,3 +1872,33 @@ test('satış ekranı Altın / Ziynet: klavyeyle art arda kalem girilir (ürün 
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('satış raporu: kart komisyonu düşülür, hurda kârı eklenir ve NET KÂR gösterilir', async () => {
+  const fb = createFakeFirebase();
+  let p = await newDevice(browser, appUrl, fb);
+  await p.waitForTimeout(2500);
+  const st = fb.db.state; st.bankAccounts.forEach((x) => { x.posCommission = 2; }); fb.db.state = st;
+  await p.context().close();
+  p = await newDevice(browser, appUrl, fb);
+  await p.click('[data-go="sales"]');
+  for (let i = 0; i < 3; i++) {
+    await p.fill('#saleProductSearch', '22'); await p.waitForTimeout(300); await p.press('#saleProductSearch', 'Enter');
+    if (await p.waitForSelector('#saleEntryPrice:not([disabled])', { timeout: 5000 }).catch(() => null)) break;
+  }
+  await p.waitForTimeout(300);
+  await p.fill('#saleEntryPayable', '70000'); await p.click('#saleAddUnified'); await p.waitForTimeout(400);
+  await p.click('[data-pay="Kredi Kartı"]'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.selectOption('#salePerson', { index: 1 });
+  await p.click('#finalizeSale'); await p.click('#modalConfirm'); await p.waitForTimeout(1500);
+  await p.evaluate(() => document.querySelector('[data-route="reports"],[data-go="reports"]').click());
+  await p.click('[data-pusula-report="sales_general"]');
+  await p.waitForSelector('#prResult table');
+  await p.selectOption('#prUnit', 'TL');
+  await p.waitForFunction(() => /NET KÂR/.test(document.querySelector('#prResult')?.innerText || ''));
+  const t = await p.innerText('#prResult');
+  assert.match(t, /Kart Komisyonu\s*− 1\.400,00 TL/);
+  const num = (label) => Number(t.match(new RegExp(label + '\\s*([\\d.,]+) TL'))[1].replace(/\./g, '').replace(',', '.'));
+  assert.ok(Math.abs(num('Brüt Kâr') - 1400 - num('NET KÂR')) < 0.01, 'net = brüt − komisyon');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
