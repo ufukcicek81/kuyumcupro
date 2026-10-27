@@ -1397,7 +1397,7 @@ test('satış ekranından alış: eski stokla benzer isimli yeni kart listede ç
   assert.match(await p.innerText('body'), /REŞAT ÇEYREK BİLEKLİK · 2/, 'düzeltmede ürün satış ekranına geri gelmeli');
   await p.keyboard.press('F9');
   await p.waitForSelector('table.gold-stock-v7');
-  assert.match(await p.innerText('table.gold-stock-v7'), /REŞAT ÇEYREK BİLEKLİK\t1590\t0,00/, 'iptalde stok geri alınmalı');
+  assert.ok(!(await p.innerText('table.gold-stock-v7')).includes('REŞAT ÇEYREK BİLEKLİK'), 'iptalde stok geri alınmalı; sıfır stoklu kart listede gizlenir');
   await p.click('#modalX');
   await p.click('text=Satış Geçmişi');
   await p.waitForSelector('#saleHistBody tr');
