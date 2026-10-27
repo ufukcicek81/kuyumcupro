@@ -466,6 +466,7 @@ test('KASA SAYIMI: sayılan miktar sistemle karşılaştırılır; fazla AL, eks
   await p.waitForSelector('.kc-wrap');
   const num = (t) => Number(String(t).replace(/\./g, '').replace(',', '.'));
   const rowSys = async (sel) => num(await p.locator(sel).locator('td').nth(2).innerText());
+  assert.equal(await p.locator('tr[data-kc-row^="b:"], tr[data-kc-row="sp"]').count(), 0, 'barkodlu ürünler kasa sayımına girmemeli');
   const openRow = p.locator('tr[data-kc-row^="o:"]').first();
   const openName = (await openRow.locator('td').first().innerText()).trim();
   const openSys = await rowSys('tr[data-kc-row^="o:"] >> nth=0');
