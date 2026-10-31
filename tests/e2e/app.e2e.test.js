@@ -1913,6 +1913,7 @@ test('ALTIN STOKLARI: stoğu olmayan açık stok ve hurda kartları listede gör
   const st = fb.db.state;
   const o = st.openStocks.find((x) => x.period === st.activePeriod);
   st.openStocks.push({ ...o, id: 'OPEN-SIFIR-TEST', name: 'SIFIR STOK KARTI', amount: 0, hasWeight: 0, workmanshipTotalHas: 0 });
+  st.openStocks.push({ ...o, id: 'OPEN-KUSURAT-TEST', name: 'KUSURAT STOK KARTI', amount: 0.001, hasWeight: 0.0009, workmanshipTotalHas: 0 });
   st.scrapStocks = st.scrapStocks || [];
   st.scrapStocks.push({ id: 'SCR-SIFIR-TEST', period: st.activePeriod, name: 'SIFIR HURDA KARTI', milyem: 585, amount: 0, hasWeight: 0 });
   fb.db.state = st;
@@ -1923,6 +1924,7 @@ test('ALTIN STOKLARI: stoğu olmayan açık stok ve hurda kartları listede gör
   const t = await p.innerText('table.gold-stock-v7');
   assert.ok(t.includes(o.name), 'stoğu olan kart görünmeli');
   assert.ok(!t.includes('SIFIR STOK KARTI'), 'sıfır açık stok gizlenmeli');
+  assert.ok(!t.includes('KUSURAT STOK KARTI'), '0,00 görünen kuruş artığı da gizlenmeli');
   assert.ok(!t.includes('SIFIR HURDA KARTI'), 'sıfır hurda gizlenmeli');
   assert.deepEqual(p.errors, []);
   await p.context().close();
