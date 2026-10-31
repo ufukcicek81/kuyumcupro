@@ -1947,3 +1947,29 @@ test('Altın / Ziynet: yazarken ürün listesi açılır; ok tuşu ve Enter ile 
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('HURDA → BARKODLU: hurda düşer, yeni barkodlu ürün hurdanın maliyetiyle stoğa girer', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  const scrap0 = fb.db.state.scrapStocks.find((x) => x.name === '14 HURDASI' && x.period === fb.db.state.activePeriod);
+  await p.evaluate(() => document.querySelector('[data-go="operations"],[data-route="operations"]').click());
+  await p.click('#v5H2B'); await p.waitForSelector('#h2bScrap');
+  await p.selectOption('#h2bScrap', scrap0.id);
+  assert.equal(await p.inputValue('#h2bPurity'), '585', 'hurdanın milyemine en yakın ayar seçilmeli');
+  await p.fill('#h2bIn', '10'); await p.fill('#h2bGram', '9.5'); await p.fill('#h2bName', 'hurda bilezik');
+  assert.match(await p.innerText('#h2bInfo'), /Fire/);
+  await p.click('#h2bLabel'); // etiket basma
+  await p.click('#modalConfirm');
+  await p.waitForTimeout(4000);
+  const st = fb.db.state;
+  const rec = st.stocks.find((x) => /HURDA B[İI]LEZ[İI]K/.test(x.name));
+  assert.ok(rec, 'barkodlu ürün oluşmalı');
+  assert.equal(rec.status, 'Stokta'); assert.equal(rec.purity, '585'); assert.equal(Number(rec.grossWeight), 9.5);
+  assert.ok(/^\d{13}$/.test(rec.barcode), 'barkod EAN-13 olmalı');
+  const scrap1 = st.scrapStocks.find((x) => x.id === scrap0.id);
+  assert.ok(Math.abs(Number(scrap1.amount) - (Number(scrap0.amount) - 10)) < 1e-6, 'hurda 10 gr azalmalı');
+  const usedHas = Number(scrap0.hasWeight) - Number(scrap1.hasWeight);
+  assert.ok(Math.abs(Number(rec.costHas) - usedHas) < 1e-6, 'ürün maliyeti kullanılan hurdanın HAS maliyeti olmalı');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
