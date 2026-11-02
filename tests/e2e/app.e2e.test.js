@@ -1801,9 +1801,14 @@ test('satış fişindeki satırın fiyatı sonradan değiştirilir (Fiyat düğm
   await p.click('#saleAddUnified'); await p.waitForTimeout(500);
   await p.click('[data-line-price="0"]'); await p.waitForSelector('#slpTotal');
   await p.fill('#slpTotal', '6500'); await p.click('#modalConfirm'); await p.waitForTimeout(400);
-  const body = await p.innerText('.sale-product-card');
-  assert.match(body, /6\.500,00/, 'yeni tutar fişte görünmeli'); assert.doesNotMatch(body, /7\.000,00/);
+  assert.equal(await p.inputValue('[data-lp-total="0"]'), '6500.00', 'yeni tutar fişte görünmeli');
   assert.match(await p.innerText('.sale-summary'), /6\.500,00/, 'toplam da değişmeli');
+  // Satırdaki kutuya doğrudan yazıp Enter: ödenecek tutar ve birim fiyat
+  await p.fill('[data-lp-total="0"]', '6000'); await p.press('[data-lp-total="0"]', 'Enter'); await p.waitForTimeout(300);
+  assert.match(await p.innerText('.sale-summary'), /6\.000,00/, 'kutudan yazılan tutar toplamı değiştirmeli');
+  const amt = Number(await p.$eval('[data-lp-total="0"]', (e) => e.value)) / Number(await p.$eval('[data-lp-unit="0"]', (e) => e.value));
+  await p.fill('[data-lp-unit="0"]', '2000'); await p.press('[data-lp-unit="0"]', 'Enter'); await p.waitForTimeout(300);
+  assert.ok(Math.abs(Number(await p.inputValue('[data-lp-total="0"]')) - 2000 * amt) < 0.02, 'birim fiyat × miktar = tutar');
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
