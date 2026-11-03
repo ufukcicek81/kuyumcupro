@@ -1583,11 +1583,11 @@ test('cari nakit tahsilat karşılığı HAS: satış kuruyla, ödemede alış k
   await p.waitForSelector('#cmType');
   await p.selectOption('#cmType', 'NT'); await p.selectOption('#cmUnit', 'TL'); await p.fill('#cmAmount', '93000');
   await p.check('#cmCounterEnabled'); await p.selectOption('#cmCounterUnit', 'HAS'); await p.waitForTimeout(200);
-  const rate = Number(await p.inputValue('#cmCounterRate'));
+  const rate = Number(await p.$eval('#cmCounterRate', (e) => e.value));
   assert.ok(rate > 0);
   // Ödeme (BORÇ) seçilince karşılık kuru alış kuruna döner ve satıştan küçük olur
   await p.selectOption('#cmType', 'NO'); await p.waitForTimeout(200);
-  const rateOut = Number(await p.inputValue('#cmCounterRate'));
+  const rateOut = Number(await p.$eval('#cmCounterRate', (e) => e.value));
   assert.ok(rate > rateOut, `tahsilatta satış kuru (${rate}) ödemedeki alış kurundan (${rateOut}) büyük olmalı`);
   assert.deepEqual(p.errors, []);
   await p.context().close();
@@ -1999,6 +1999,30 @@ test('Döviz Alış: SAR listede çıkar, kur gelir ve SAR kasasına işlenir', 
   await p.waitForTimeout(4000);
   const sar1 = (fb.db.state.cashAccounts || []).filter((x) => x.currency === 'SAR').reduce((n, x) => n + Number(x.balance || 0), 0);
   assert.ok(Math.abs(sar1 - sar0 - 100) < 1e-6, 'SAR kasası 100 artmalı');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
+test('cari işlem: tutar yazarken binlik noktalar kendiliğinden konur, kayıt doğru tutarla yapılır', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  await p.evaluate(() => document.querySelector('[data-route="customers"],[data-go="customers"]').click());
+  await p.waitForTimeout(400);
+  await p.evaluate(() => document.querySelector('[data-cari-move]').click());
+  await p.waitForSelector('#cmType');
+  await p.selectOption('#cmType', 'NT'); await p.selectOption('#cmUnit', 'TL');
+  await p.click('#cmAmount'); await p.keyboard.press('Control+A'); await p.keyboard.type('1250000');
+  const shown = () => p.$eval('#cmAmount', (e) => Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').get.call(e));
+  assert.equal(await shown(), '1.250.000', 'yazarken binlik nokta konmalı');
+  await p.keyboard.type(',5');
+  assert.equal(await shown(), '1.250.000,5');
+  assert.equal(await p.$eval('#cmAmount', (e) => e.value), '1250000.5', 'program düz sayıyı okumalı');
+  await p.keyboard.press('Backspace'); await p.keyboard.press('Backspace');
+  await p.keyboard.press('Backspace'); await p.keyboard.press('Backspace');
+  assert.equal(await shown(), '12.500');
+  await p.keyboard.type('.75'); // nokta tuşu ondalık virgül olur
+  assert.equal(await shown(), '12.500,75');
+  assert.equal(await p.$eval('#cmAmount', (e) => e.value), '12500.75');
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });

@@ -5841,7 +5841,7 @@ function stockSummaryView(){
   function bindDecimalCommaV648(){
     if(document.documentElement.dataset.decimalCommaBound==='1')return;document.documentElement.dataset.decimalCommaBound='1';
     document.addEventListener('keydown',e=>{
-      const el=e.target;if(!(el instanceof HTMLInputElement))return;
+      const el=e.target;if(!(el instanceof HTMLInputElement)||el.__trNum)return;/* binlik noktalı tutar kutuları virgülü kendisi işler */
       const decimal=el.inputMode==='decimal'||el.type==='number';if(!decimal)return;
       if(e.key===','){
         e.preventDefault();
@@ -7676,6 +7676,32 @@ function stockSummaryView(){
     return `<div class="cari-live-balance"><div class="cari-live-balance-head"><strong>CARİ BAKİYESİ</strong><span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>${esc(c.name)} · ${esc(c.type||'Cari')}</span><button type="button" class="btn btn-outline btn-sm" id="cmOpenHistory">İŞLEM GEÇMİŞİ</button></span></div><div class="cari-live-balance-values">${items.join('')}</div></div>`;
   }
 
+  /* Tutar kutusu: yazarken binlik noktalar kendiliğinden konur (1.250.000,50).
+     Kod tarafı .value ile her zaman düz sayı okur/yazar ("1250000.5"), böylece mevcut hesaplar değişmez. */
+  function trNumberInputV7(el,dec=3){
+    if(!el||el.__trNum)return;el.__trNum=true;
+    const desc=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value'),raw=()=>desc.get.call(el),setRaw=v=>desc.set.call(el,v);
+    const group=i=>i.replace(/^0+(?=\d)/,'').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+    const fmtNum=n=>{if(!isFinite(n))return '';return n.toLocaleString('tr-TR',{maximumFractionDigits:dec,useGrouping:true});};
+    const smart=t=>{t=String(t).trim();if(!t)return NaN;if(t.includes(','))return parseTrNumber(t);const parts=t.split('.');if(parts.length===2&&parts[1].length!==3)return Number(t);return Number(t.replace(/\./g,''));};
+    Object.defineProperty(el,'value',{configurable:true,
+      get(){const t=raw().replace(/\./g,'').replace(',','.');return t==='-'?'':t;},
+      set(v){const t=String(v??'');if(t===''){setRaw('');return;}const n=Number(t);setRaw(isFinite(n)?fmtNum(n):t);}});
+    setRaw(fmtNum(Number(String(raw()).replace(',','.'))||0));
+    el.addEventListener('input',e=>{
+      let t=raw(),pos=el.selectionStart??t.length;
+      if(e.data&&e.data.length>1){const n=smart(t);setRaw(isFinite(n)?fmtNum(n):'');return;}
+      if(e.data==='.'){/* tek nokta tuşu ondalık virgül sayılır */const before=t.slice(0,pos-1),after=t.slice(pos);t=t.includes(',')?before+after:before+','+after;}
+      const keep=t.slice(0,pos).replace(/[^\d,]/g,'').length;
+      const neg=/^\s*-/.test(t);let clean=t.replace(/[^\d,]/g,'');const ci=clean.indexOf(',');
+      let ip=ci<0?clean:clean.slice(0,ci),dp=ci<0?'':clean.slice(ci+1).replace(/,/g,'').slice(0,dec);
+      const out=(neg?'-':'')+(group(ip)||(ci>=0?'0':''))+(ci>=0?','+dp:'');
+      setRaw(out);
+      let c=0,i=0;for(;i<out.length&&c<keep;i++){if(/[\d,]/.test(out[i]))c++;}
+      try{el.setSelectionRange(i,i);}catch(_){}
+    });
+    el.addEventListener('focus',()=>{try{el.select();}catch(_){}});
+  }
   function openCariMove(id,editMoveId=''){
     const c=state.customers.find(x=>x.id===id); if(!c)return;
     const editingMove=editMoveId?(state.customerMoves||[]).find(x=>x.id===editMoveId&&x.customerId===id):null;
@@ -7684,14 +7710,14 @@ function stockSummaryView(){
       <div class="labelled span-2"><label>İşlem Tipi</label><select id="cmType" class="select">${opts}</select></div>
       <div class="labelled"><label>Tarih</label><input id="cmDate" class="input" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
       <div class="labelled" id="cmUnitWrap"><label id="cmUnitLabel">Birim</label><select id="cmUnit" class="select"><option>HAS</option><option>TL</option><option>GR</option><option>ADET</option><option>CT</option><option>USD</option><option>EUR</option><option>GBP</option><option>CHF</option></select></div>
-      <div class="labelled span-2" id="cmAmountWrap"><label id="cmAmountLabel">Miktar / Tutar</label><input id="cmAmount" type="number" step="0.001" class="input" value="0"></div>
-      <div class="labelled span-2" id="cmSourceRateWrap" style="display:none"><label>Kur / B.Fiyat</label><input id="cmSourceRate" type="number" step="0.000001" class="input" value="1"></div>
+      <div class="labelled span-2" id="cmAmountWrap"><label id="cmAmountLabel">Miktar / Tutar</label><input id="cmAmount" type="text" inputmode="decimal" autocomplete="off" class="input" value="0"></div>
+      <div class="labelled span-2" id="cmSourceRateWrap" style="display:none"><label>Kur / B.Fiyat</label><input id="cmSourceRate" type="text" inputmode="decimal" autocomplete="off" class="input" value="1"></div>
       <div class="labelled span-2" id="cmSideWrap"><label id="cmSideLabel">Hareket Etkisi</label><select id="cmSide" class="select"><option value="debit">BORÇ</option><option value="credit">ALACAK</option></select></div>
       <div class="span-4" id="cmCounterWrap" style="display:none"><div class="form-grid">
         <div class="labelled span-4"><label style="display:flex;align-items:center;gap:8px"><input id="cmCounterEnabled" type="checkbox"> Karşılığı cari hesaba farklı birimle işle</label></div>
         <div class="labelled span-2"><label>Karşılığı</label><select id="cmCounterUnit" class="select"><option>HAS</option><option>TL</option><option>USD</option><option>EUR</option><option>GBP</option><option>CHF</option></select></div>
-        <div class="labelled"><label>Karşı Tutar</label><input id="cmCounterAmount" class="input" type="number" step="0.001" readonly></div>
-        <div class="labelled"><label>Karşı Kur</label><input id="cmCounterRate" class="input" type="number" step="0.000001"></div>
+        <div class="labelled"><label>Karşı Tutar</label><input id="cmCounterAmount" class="input" type="text" inputmode="decimal" readonly></div>
+        <div class="labelled"><label>Karşı Kur</label><input id="cmCounterRate" class="input" type="text" inputmode="decimal" autocomplete="off"></div>
       </div></div>
       <div class="span-4" id="cmGoldWrap" style="display:none"><div class="form-grid">
         <div class="labelled span-2"><label>Mal Tanımı</label><select id="cmGoldCard" class="select"></select></div>
@@ -7820,6 +7846,7 @@ function stockSummaryView(){
       const pm=editingMove?.pairId?(state.customerMoves||[]).find(x=>x.id===editingMove.pairId):null;if(pm){const sel=document.getElementById('cmMahsupCari');if(sel)sel.value=pm.customerId;}}
     document.querySelector('#modalRoot .modal')?.classList.add('cari-move-modal');
     document.querySelector('#modalRoot .modal-body > .form-grid')?.classList.add('cari-move-grid');
+    [['cmAmount',3],['cmSourceRate',6],['cmCounterAmount',3],['cmCounterRate',6]].forEach(([id,d])=>trNumberInputV7(document.getElementById(id),d));
     const typeEl=document.getElementById('cmType'),unitEl=document.getElementById('cmUnit'),unitLabel=document.getElementById('cmUnitLabel'),sideEl=document.getElementById('cmSide'),amountEl=document.getElementById('cmAmount'),amountLabel=document.getElementById('cmAmountLabel'),hint=document.getElementById('cmHint'),finWrap=document.getElementById('cmFinanceWrap'),finEl=document.getElementById('cmFinanceAccount'),sourceRateWrap=document.getElementById('cmSourceRateWrap'),sourceRateEl=document.getElementById('cmSourceRate'),counterWrap=document.getElementById('cmCounterWrap'),counterEnabledEl=document.getElementById('cmCounterEnabled'),counterUnitEl=document.getElementById('cmCounterUnit'),counterAmountEl=document.getElementById('cmCounterAmount'),counterRateEl=document.getElementById('cmCounterRate'),goldWrap=document.getElementById('cmGoldWrap'),goldCard=document.getElementById('cmGoldCard'),goldAmount=document.getElementById('cmGoldAmount'),goldAmountLabel=document.getElementById('cmGoldAmountLabel'),goldCount=document.getElementById('cmGoldCount'),goldCountWrap=document.getElementById('cmGoldCountWrap'),goldZGram=document.getElementById('cmGoldZGram'),goldZGramWrap=document.getElementById('cmGoldZGramWrap'),goldMilyem=document.getElementById('cmGoldMilyem'),goldWorkMode=document.getElementById('cmGoldWorkMode'),goldWorkValue=document.getElementById('cmGoldWorkValue'),goldMaterialHas=document.getElementById('cmGoldMaterialHas'),goldWorkTotal=document.getElementById('cmGoldWorkTotal'),goldCounterHas=document.getElementById('cmGoldCounterHas'),returnWrap=document.getElementById('cmReturnWrap'),returnStock=document.getElementById('cmReturnStock'),returnCount=document.getElementById('cmReturnCount'),returnCountWrap=document.getElementById('cmReturnCountWrap'),returnGram=document.getElementById('cmReturnGram'),returnZGram=document.getElementById('cmReturnZGram'),returnZGramWrap=document.getElementById('cmReturnZGramWrap'),returnMilyem=document.getElementById('cmReturnMilyem'),returnHas=document.getElementById('cmReturnHas'),returnAvailable=document.getElementById('cmReturnAvailable'),ziynetWrap=document.getElementById('cmZiynetWrap'),ziynetStock=document.getElementById('cmZiynetStock'),ziynetCount=document.getElementById('cmZiynetCount'),ziynetHasUnit=document.getElementById('cmZiynetHasUnit'),ziynetTotalHas=document.getElementById('cmZiynetTotalHas'),ziynetAvailable=document.getElementById('cmZiynetAvailable'),scrapWrap=document.getElementById('cmScrapWrap'),scrapEl=document.getElementById('cmScrapStock'),scrapGram=document.getElementById('cmScrapGram'),scrapMilyem=document.getElementById('cmScrapMilyem'),scrapHas=document.getElementById('cmScrapHas'),scrapAvailable=document.getElementById('cmScrapAvailable');
     const goldRows=()=> registeredStockCardsForEntryV679();
     const fillGold=()=>{
