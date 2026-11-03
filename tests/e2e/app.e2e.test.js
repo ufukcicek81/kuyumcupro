@@ -1193,7 +1193,7 @@ test('satış fişi: takasta alınan ziynet kalem kalem, müşteriye ödenen hes
   await p.fill('#saleEntryPayable', '6700'); await p.click('#saleAddUnified'); await p.waitForTimeout(400);
   await p.click('[data-pay="Altın / Ziynet"]');
   await p.waitForSelector('#tiSearch'); await p.fill('#tiSearch', 'CEYREK'); await p.press('#tiSearch', 'Enter');
-  await p.fill('#tiQty', '1'); await p.press('#tiQty', 'Enter'); await p.fill('#tiPrice', '10400'); await p.press('#tiPrice', 'Enter'); await p.waitForTimeout(200);
+  await p.fill('#tiQty', '1'); await p.press('#tiQty', 'Enter'); await p.fill('#tiPrice', '10400'); await p.press('#tiPrice', 'Enter'); await p.press('#tiTotal', 'Enter'); await p.waitForTimeout(200);
   await p.click('#modalConfirm'); await p.waitForTimeout(300);
   await p.click('[data-pay="Ödeme"]'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
   await p.selectOption('#salePerson', { index: 1 });
@@ -1378,7 +1378,7 @@ test('satış ekranından alış: eski stokla benzer isimli yeni kart listede ç
   const opts = await p.$$eval('#tiSuggest [data-ti-sug] b', (os) => os.map((o) => o.textContent));
   assert.ok(opts.includes('REŞAT ÇEYREK BİLEKLİK') && opts.includes('RESAT CEYREK BİLEKLİK'), 'yeni kart eski stok satırıyla birlikte listede olmalı: ' + opts.join(', '));
   await p.fill('#tiSearch', 'REŞAT ÇEYREK BİLEKLİK'); await p.press('#tiSearch', 'Enter');
-  await p.fill('#tiQty', '2'); await p.press('#tiQty', 'Enter'); await p.fill('#tiPrice', '10000'); await p.press('#tiPrice', 'Enter'); await p.waitForTimeout(200);
+  await p.fill('#tiQty', '2'); await p.press('#tiQty', 'Enter'); await p.fill('#tiPrice', '10000'); await p.press('#tiPrice', 'Enter'); await p.press('#tiTotal', 'Enter'); await p.waitForTimeout(200);
   await p.click('#modalConfirm'); await p.waitForTimeout(300);
   await p.click('[data-pay="Ödeme"]'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
   await p.click('#finalizeSale'); await p.waitForTimeout(500);
@@ -1862,7 +1862,7 @@ test('yeni hurda stok kartı Hurda Alış/Satış ve takas listesinde çıkar; a
 });
 
 
-test('satış ekranı Altın / Ziynet: klavyeyle art arda kalem girilir (ürün Enter, miktar Enter, fiyat Enter), pencere kapanmaz', async () => {
+test('satış ekranı Altın / Ziynet: klavyeyle art arda kalem girilir (ürün Enter, miktar Enter, fiyat Enter, toplam Enter), pencere kapanmaz', async () => {
   const p = await newDevice(browser, appUrl, createFakeFirebase());
   await p.click('[data-go="sales"]'); await p.waitForSelector('#saleProductSearch');
   await p.click('[data-pay="Altın / Ziynet"]'); await p.waitForSelector('#tiSearch');
@@ -1872,7 +1872,10 @@ test('satış ekranı Altın / Ziynet: klavyeyle art arda kalem girilir (ürün 
     assert.equal(await p.evaluate(() => document.activeElement?.id), 'tiQty');
     await p.keyboard.press('Control+A'); await p.keyboard.type(n); await p.keyboard.press('Enter');
     assert.equal(await p.evaluate(() => document.activeElement?.id), 'tiPrice');
-    await p.keyboard.press('Control+A'); await p.keyboard.type(price); await p.keyboard.press('Enter'); await p.waitForTimeout(200);
+    await p.keyboard.press('Control+A'); await p.keyboard.type(price); await p.keyboard.press('Enter');
+    assert.equal(await p.evaluate(() => document.activeElement?.id), 'tiTotal', 'fiyattan sonra Enter toplam tutara geçmeli');
+    assert.match(await p.innerText('#tiList'), name === 'ceyrek' ? /Henüz kalem yok/ : /CEYREK/, 'fiyatta Enter kalemi eklememeli');
+    await p.keyboard.press('Enter'); await p.waitForTimeout(200);
     assert.ok(await p.$('#tiSearch'), 'pencere açık kalmalı');
     await p.waitForFunction(() => document.activeElement?.id === 'tiSearch', null, { timeout: 2000 }); // sonraki ürün için imleç ürün kutusuna dönmeli
   }
