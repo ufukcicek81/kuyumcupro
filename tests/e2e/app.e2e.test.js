@@ -1978,3 +1978,23 @@ test('HURDA → BARKODLU: hurda düşer, yeni barkodlu ürün hurdanın maliyeti
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('Döviz Alış: SAR listede çıkar, kur gelir ve SAR kasasına işlenir', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  const sar0 = (fb.db.state.cashAccounts || []).filter((x) => x.currency === 'SAR').reduce((n, x) => n + Number(x.balance || 0), 0);
+  await p.click('[data-home-trade="Döviz Alış"]');
+  const opts = await p.$$eval('#stFx option', (os) => os.map((o) => o.value));
+  assert.ok(opts.includes('SAR'), 'SAR listede olmalı: ' + opts.join(','));
+  await p.selectOption('#stFx', 'SAR');
+  assert.ok(Number(await p.inputValue('#stPrice')) > 1, 'SAR kuru gelmeli');
+  assert.ok((await p.$$eval('#stFxAccount option', (os) => os.map((o) => o.textContent))).some((t) => /SAR/.test(t)), 'SAR kasası seçilebilmeli');
+  await p.fill('#stQty', '100'); await p.fill('#stTotal', '1300');
+  await p.click('#modalConfirm');
+  await p.click('text=ONAYLA VE İŞLEMİ TAMAMLA');
+  await p.waitForTimeout(4000);
+  const sar1 = (fb.db.state.cashAccounts || []).filter((x) => x.currency === 'SAR').reduce((n, x) => n + Number(x.balance || 0), 0);
+  assert.ok(Math.abs(sar1 - sar0 - 100) < 1e-6, 'SAR kasası 100 artmalı');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
