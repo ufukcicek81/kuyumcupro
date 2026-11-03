@@ -3764,12 +3764,12 @@ function stockSummaryView(){
   function kasaCountItemsV7(){
     const period=state.activePeriod,n=v=>Number(v||0),items=[];
     goldStockOrderV7('open',(state.openStocks||[]).filter(x=>x.period===period).slice().sort((a,b)=>(Number(a.pusulaCode)||1e9)-(Number(b.pusulaCode)||1e9)||String(a.name).localeCompare(String(b.name),'tr')),x=>x.id)
-      .forEach(o=>{const q=n(o.amount);items.push({key:'o:'+o.id,group:'AÇIK STOK',name:o.name,unit:String(o.unit||'GR').toUpperCase(),sys:q,hasPer:q?n(o.hasWeight)/q:n(o.purity)/1000});});
+      .forEach(o=>{const q=n(o.amount);/* sayıma yalnız adetli (ziynet / gram altın) ve stoğu olanlar girer; bilezik, 14 K gibi gramlı barkodsuz stoklar ve sıfır stoklar girmez */if(String(o.unit||'GR').toUpperCase()!=='ADET'||Math.abs(q)<0.005)return;items.push({key:'o:'+o.id,group:'AÇIK STOK',name:o.name,unit:String(o.unit||'GR').toUpperCase(),sys:q,hasPer:q?n(o.hasWeight)/q:n(o.purity)/1000});});
     // Barkodlu ürünler (14K, 8K vb.) günlük kasa sayımına girmez; her gün tüm dükkan sayılmıyor.
     goldStockOrderV7('scrap',(state.scrapStocks||[]).filter(x=>x.period===period),x=>x.id)
-      .forEach(h=>{const q=n(h.amount);items.push({key:'s:'+h.id,group:'HURDA',name:h.name,unit:'GR',sys:q,hasPer:q?n(h.hasWeight)/q:n(h.milyem)/1000});});
+      .forEach(h=>{const q=n(h.amount);if(Math.abs(q)<0.005)return;items.push({key:'s:'+h.id,group:'HURDA',name:h.name,unit:'GR',sys:q,hasPer:q?n(h.hasWeight)/q:n(h.milyem)/1000});});
     const cur={};(state.cashAccounts||[]).forEach(a=>{const c=String(a.currency||'TL').toUpperCase();cur[c]=(cur[c]||0)+n(a.balance);});
-    Object.keys(cur).sort((a,b)=>(a==='TL'?-1:b==='TL'?1:a.localeCompare(b))).forEach(c=>{if(c==='HAS'&&!cur[c])return;items.push({key:'c:'+c,group:'KASA',name:'Kasa '+c,unit:c,sys:cur[c],hasPer:0,cash:true});});
+    Object.keys(cur).sort((a,b)=>(a==='TL'?-1:b==='TL'?1:a.localeCompare(b))).forEach(c=>{if(c!=='TL'&&Math.abs(cur[c])<0.005)return;items.push({key:'c:'+c,group:'KASA',name:'Kasa '+c,unit:c,sys:cur[c],hasPer:0,cash:true});});
     return items;
   }
   function kasaCountTolV7(it){return it.unit==='ADET'?0.5:0.005;}

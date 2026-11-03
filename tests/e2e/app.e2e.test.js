@@ -467,6 +467,10 @@ test('KASA SAYIMI: sayılan miktar sistemle karşılaştırılır; fazla AL, eks
   const num = (t) => Number(String(t).replace(/\./g, '').replace(',', '.'));
   const rowSys = async (sel) => num(await p.locator(sel).locator('td').nth(2).innerText());
   assert.equal(await p.locator('tr[data-kc-row^="b:"], tr[data-kc-row="sp"]').count(), 0, 'barkodlu ürünler kasa sayımına girmemeli');
+  const kcNames = await p.$$eval('tr[data-kc-row^="o:"] td:first-child', (tds) => tds.map((t) => t.textContent.trim()));
+  assert.ok(kcNames.length && !kcNames.some((t) => /B[İI]LEZ[İI]K$|^14 K|^8 K|^22 K/.test(t)), 'gramlı barkodsuz stoklar sayıma girmemeli: ' + kcNames.join(', '));
+  const kcSys = await p.$$eval('tr[data-kc-row^="o:"], tr[data-kc-row^="s:"]', (trs) => trs.map((tr) => tr.querySelectorAll('td')[2].textContent.trim()));
+  assert.ok(!kcSys.some((t) => /^0(,0+)?$/.test(t)), 'sıfır stoklu satır sayıma girmemeli: ' + kcSys.join(' | '));
   const openRow = p.locator('tr[data-kc-row^="o:"]').first();
   const openName = (await openRow.locator('td').first().innerText()).trim();
   const openSys = await rowSys('tr[data-kc-row^="o:"] >> nth=0');
