@@ -9164,15 +9164,15 @@ function stockSummaryView(){
     if(!v5Guard('canTransform'))return;
     const scraps=(state.scrapStocks||[]).filter(x=>x.period===state.activePeriod&&Number(x.amount||0)>0);
     if(!scraps.length)return toast('Stokta hurda yok','err');
-    const nextCode=()=>{const nums=(state.stocks||[]).map(x=>Number(String(x.code||'').replace(/\D/g,''))).filter(n=>n>0&&n<1e9);return String((nums.length?Math.max(...nums):0)+1);};
+    const kinds=barcodeProductKindsV649();
     const purities=(state.definitions?.purities||['333','585','750','916','995']);
     modal('Hurdadan Barkodlu Ürün',`<div class="form-grid">
       <div class="labelled span-2"><label>Kaynak Hurda</label><select id="h2bScrap" class="select">${scraps.map(h=>`<option value="${h.id}">${esc(h.name)} · ${qty(h.amount)} GR · ${qty(h.hasWeight||0)} HAS</option>`).join('')}</select></div>
       <div class="labelled"><label>Kullanılan Hurda GR</label><input id="h2bIn" class="input" type="number" step="0.001"></div>
       <div class="labelled"><label>Ek İşçilik HAS</label><input id="h2bWork" class="input" type="number" step="0.001" value="0"></div>
-      <div class="labelled span-2"><label>Ürün Adı</label><input id="h2bName" class="input" placeholder="Örn. 22 AYAR BİLEZİK"></div>
-      <div class="labelled"><label>Stok Kodu</label><input id="h2bCode" class="input" value="${esc(nextCode())}"></div>
-      <div class="labelled"><label>Barkod</label><input id="h2bBarcode" class="input" value="${generateBarcode()}"></div>
+      <div class="labelled span-2"><label>Ürün Cinsi</label><select id="h2bKind" class="select"><option value="">— Ürün cinsi seçin —</option>${kinds.map(k=>`<option value="${esc(k.prefix)}">${esc(k.label)} (${esc(k.prefix)}) — sıradaki ${esc(nextPusulaStockCodeV648(k.prefix))}</option>`).join('')}</select></div>
+      <div class="labelled span-2"><label>Barkod / Ürün Kodu</label><input id="h2bCode" class="input" placeholder="Ürün cinsi seçince otomatik gelir" readonly></div>
+      <div class="labelled span-2"><label>Ürün Adı</label><input id="h2bName" class="input" placeholder="Cins seçince otomatik gelir (değiştirilebilir)"></div>
       <div class="labelled"><label>Saflık / Milyem</label><select id="h2bPurity" class="select">${purities.map(x=>`<option value="${esc(x)}">${esc(x)}${PURITY_LABEL_V7[Number(x)]?' · '+PURITY_LABEL_V7[Number(x)]:''}</option>`).join('')}</select></div>
       <div class="labelled"><label>Ürün Gramı</label><input id="h2bGram" class="input" type="number" step="0.001"></div>
       <div class="labelled span-2"><label><input id="h2bLabel" type="checkbox" checked> Kaydedince etiket bas</label></div>
@@ -9180,11 +9180,13 @@ function stockSummaryView(){
     </div>`,()=>{
       const v=calc();if(!v)return toast('Gramları kontrol edin','err');
       const {h,gin,gram,purity,work,sourceHas,sourceCost,productHas,fire}=v;
-      const code=document.getElementById('h2bCode').value.trim(),name=document.getElementById('h2bName').value.trim().toUpperCase();
-      if(!name||!code)return toast('Ürün adı ve stok kodu zorunlu','err');
-      if(state.stocks.some(x=>x.code===code&&x.period===state.activePeriod))return toast('Bu stok kodu kullanımda','err');
+      const kind=kinds.find(x=>x.prefix===String(document.getElementById('h2bKind').value||'').trim().toLocaleUpperCase('tr-TR'));
+      if(!kind)return toast('Önce ürün cinsini seçin','err');
+      const code=nextPusulaStockCodeV648(kind.prefix),name=(document.getElementById('h2bName').value.trim()||kind.label).toLocaleUpperCase('tr-TR');
+      if((state.stocks||[]).some(s=>String(s.code||'').toLocaleUpperCase('tr-TR')===code||String(s.barcode||'').toLocaleUpperCase('tr-TR')===code))return toast('Bu barkod / ürün kodu zaten kullanılıyor. Ürün cinsini yeniden seçin.','err');
+      const cm=code.match(/(\d+)$/),shortCode=cm?String(Number(cm[1])):code;
       const doc=`H2B-${state.activePeriod}-${String(Date.now()).slice(-6)}`,cost=sourceCost+work,karat=PURITY_LABEL_V7[purity]||'';
-      const rec={id:uid('S'),stockCardId:'',pusulaCode:'',productType:'Altın',group:'',code,name,category:'',subCategory:'',supplier:'',producer:'İmalat (Hurda)',brand:'',model:'',collection:'',color:'',karat,purity:String(purity),grossWeight:gram,stoneWeight:0,netWeight:gram,hasWeight:productHas,qty:gram,count:1,purchaseHas:cost,costHas:cost,saleHas:0,workmanshipType:'',workmanshipValue:0,showcase:'',banko:'',location:'Mağaza',rfid:'',barcode:normalizeEan(document.getElementById('h2bBarcode').value),status:'Stokta',notes:`${doc} · ${h.name} hurdasından · ${qty(gin)} GR hurda · fire ${qty(fire)} HAS`,entryDate:now(),entryYear:state.activePeriod,partyId:'',period:state.activePeriod,saleTo:'',saleDate:'',sourceDocNo:doc};
+      const rec={id:uid('S'),stockCardId:'',pusulaCode:shortCode,productType:'Altın Mamul',group:kind.prefix,code,name,category:kind.label,subCategory:'',supplier:'',producer:'İmalat (Hurda)',brand:'',model:'',collection:'',color:'',karat,purity:String(purity),grossWeight:gram,stoneWeight:0,netWeight:gram,hasWeight:productHas,qty:gram,count:1,purchaseHas:cost,costHas:cost,saleHas:0,workmanshipType:'',workmanshipValue:0,showcase:'',banko:'',location:'Mağaza',rfid:'',barcode:code,status:'Stokta',notes:`${doc} · ${h.name} hurdasından · ${qty(gin)} GR hurda · fire ${qty(fire)} HAS`,entryDate:now(),entryYear:state.activePeriod,partyId:'',period:state.activePeriod,saleTo:'',saleDate:'',sourceDocNo:doc};
       h.amount=Math.max(0,Number(h.amount||0)-gin);h.hasWeight=Math.max(0,Number(h.hasWeight||0)-sourceHas);
       state.stocks.push(rec);
       addStockMove(rec,'HURDA → BARKODLU',h.name,rec.location,`${doc} · Hurda ${qty(gin)} GR (${qty(sourceHas)} HAS) → ${qty(gram)} GR (${qty(productHas)} HAS) · Fire ${qty(fire)} HAS · İşçilik ${qty(work)} HAS`);
@@ -9206,6 +9208,8 @@ function stockSummaryView(){
     }
     const sel=g('h2bScrap'),syncPurity=()=>{const h=state.scrapStocks.find(x=>x.id===sel.value),m=Number(h?.milyem||0);if(!m)return;const opts=[...g('h2bPurity').options].map(o=>o.value).filter(v=>v!=='925');const best=opts.reduce((a,v)=>Math.abs(Number(v)-m)<Math.abs(Number(a)-m)?v:a,opts[0]);if(best)g('h2bPurity').value=best;};/* hurdanın milyemine en yakın ayar seçilir (14 hurda 557 → 585) */
     sel.addEventListener('change',()=>{syncPurity();calc();});syncPurity();
+    let autoName='';
+    g('h2bKind').addEventListener('change',()=>{const k=kinds.find(x=>x.prefix===g('h2bKind').value);g('h2bCode').value=k?nextPusulaStockCodeV648(k.prefix):'';const n=g('h2bName');if(!n.value.trim()||n.value===autoName){autoName=k?k.label:'';n.value=autoName;}});
     ['h2bIn','h2bGram','h2bWork','h2bPurity'].forEach(id=>g(id).addEventListener('input',calc));g('h2bPurity').addEventListener('change',calc);
   }
   function openSpecialProductV5(){
