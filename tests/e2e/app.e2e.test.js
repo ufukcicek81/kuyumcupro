@@ -1193,7 +1193,7 @@ test('satış fişi: takasta alınan ziynet kalem kalem, müşteriye ödenen hes
   await p.fill('#saleEntryPayable', '6700'); await p.click('#saleAddUnified'); await p.waitForTimeout(400);
   await p.click('[data-pay="Altın / Ziynet"]');
   await p.waitForSelector('#tiSearch'); await p.fill('#tiSearch', 'CEYREK'); await p.press('#tiSearch', 'Enter');
-  await p.fill('#tiQty', '1'); await p.press('#tiQty', 'Enter'); await p.fill('#tiPrice', '10400'); await p.press('#tiPrice', 'Enter'); await p.waitForTimeout(200);
+  await p.fill('#tiQty', '1'); await p.press('#tiQty', 'Enter'); await p.fill('#tiPrice', '10400'); await p.press('#tiPrice', 'Enter'); await p.press('#tiTotal', 'Enter'); await p.waitForTimeout(200);
   await p.click('#modalConfirm'); await p.waitForTimeout(300);
   await p.click('[data-pay="Ödeme"]'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
   await p.selectOption('#salePerson', { index: 1 });
@@ -1378,7 +1378,7 @@ test('satış ekranından alış: eski stokla benzer isimli yeni kart listede ç
   const opts = await p.$$eval('#tiSuggest [data-ti-sug] b', (os) => os.map((o) => o.textContent));
   assert.ok(opts.includes('REŞAT ÇEYREK BİLEKLİK') && opts.includes('RESAT CEYREK BİLEKLİK'), 'yeni kart eski stok satırıyla birlikte listede olmalı: ' + opts.join(', '));
   await p.fill('#tiSearch', 'REŞAT ÇEYREK BİLEKLİK'); await p.press('#tiSearch', 'Enter');
-  await p.fill('#tiQty', '2'); await p.press('#tiQty', 'Enter'); await p.fill('#tiPrice', '10000'); await p.press('#tiPrice', 'Enter'); await p.waitForTimeout(200);
+  await p.fill('#tiQty', '2'); await p.press('#tiQty', 'Enter'); await p.fill('#tiPrice', '10000'); await p.press('#tiPrice', 'Enter'); await p.press('#tiTotal', 'Enter'); await p.waitForTimeout(200);
   await p.click('#modalConfirm'); await p.waitForTimeout(300);
   await p.click('[data-pay="Ödeme"]'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
   await p.click('#finalizeSale'); await p.waitForTimeout(500);
@@ -1583,11 +1583,11 @@ test('cari nakit tahsilat karşılığı HAS: satış kuruyla, ödemede alış k
   await p.waitForSelector('#cmType');
   await p.selectOption('#cmType', 'NT'); await p.selectOption('#cmUnit', 'TL'); await p.fill('#cmAmount', '93000');
   await p.check('#cmCounterEnabled'); await p.selectOption('#cmCounterUnit', 'HAS'); await p.waitForTimeout(200);
-  const rate = Number(await p.inputValue('#cmCounterRate'));
+  const rate = Number(await p.$eval('#cmCounterRate', (e) => e.value));
   assert.ok(rate > 0);
   // Ödeme (BORÇ) seçilince karşılık kuru alış kuruna döner ve satıştan küçük olur
   await p.selectOption('#cmType', 'NO'); await p.waitForTimeout(200);
-  const rateOut = Number(await p.inputValue('#cmCounterRate'));
+  const rateOut = Number(await p.$eval('#cmCounterRate', (e) => e.value));
   assert.ok(rate > rateOut, `tahsilatta satış kuru (${rate}) ödemedeki alış kurundan (${rateOut}) büyük olmalı`);
   assert.deepEqual(p.errors, []);
   await p.context().close();
@@ -1862,7 +1862,7 @@ test('yeni hurda stok kartı Hurda Alış/Satış ve takas listesinde çıkar; a
 });
 
 
-test('satış ekranı Altın / Ziynet: klavyeyle art arda kalem girilir (ürün Enter, miktar Enter, fiyat Enter), pencere kapanmaz', async () => {
+test('satış ekranı Altın / Ziynet: klavyeyle art arda kalem girilir (ürün Enter, miktar Enter, fiyat Enter, toplam Enter), pencere kapanmaz', async () => {
   const p = await newDevice(browser, appUrl, createFakeFirebase());
   await p.click('[data-go="sales"]'); await p.waitForSelector('#saleProductSearch');
   await p.click('[data-pay="Altın / Ziynet"]'); await p.waitForSelector('#tiSearch');
@@ -1872,7 +1872,10 @@ test('satış ekranı Altın / Ziynet: klavyeyle art arda kalem girilir (ürün 
     assert.equal(await p.evaluate(() => document.activeElement?.id), 'tiQty');
     await p.keyboard.press('Control+A'); await p.keyboard.type(n); await p.keyboard.press('Enter');
     assert.equal(await p.evaluate(() => document.activeElement?.id), 'tiPrice');
-    await p.keyboard.press('Control+A'); await p.keyboard.type(price); await p.keyboard.press('Enter'); await p.waitForTimeout(200);
+    await p.keyboard.press('Control+A'); await p.keyboard.type(price); await p.keyboard.press('Enter');
+    assert.equal(await p.evaluate(() => document.activeElement?.id), 'tiTotal', 'fiyattan sonra Enter toplam tutara geçmeli');
+    assert.match(await p.innerText('#tiList'), name === 'ceyrek' ? /Henüz kalem yok/ : /CEYREK/, 'fiyatta Enter kalemi eklememeli');
+    await p.keyboard.press('Enter'); await p.waitForTimeout(200);
     assert.ok(await p.$('#tiSearch'), 'pencere açık kalmalı');
     await p.waitForFunction(() => document.activeElement?.id === 'tiSearch', null, { timeout: 2000 }); // sonraki ürün için imleç ürün kutusuna dönmeli
   }
@@ -1999,6 +2002,30 @@ test('Döviz Alış: SAR listede çıkar, kur gelir ve SAR kasasına işlenir', 
   await p.waitForTimeout(4000);
   const sar1 = (fb.db.state.cashAccounts || []).filter((x) => x.currency === 'SAR').reduce((n, x) => n + Number(x.balance || 0), 0);
   assert.ok(Math.abs(sar1 - sar0 - 100) < 1e-6, 'SAR kasası 100 artmalı');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
+test('cari işlem: tutar yazarken binlik noktalar kendiliğinden konur, kayıt doğru tutarla yapılır', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  await p.evaluate(() => document.querySelector('[data-route="customers"],[data-go="customers"]').click());
+  await p.waitForTimeout(400);
+  await p.evaluate(() => document.querySelector('[data-cari-move]').click());
+  await p.waitForSelector('#cmType');
+  await p.selectOption('#cmType', 'NT'); await p.selectOption('#cmUnit', 'TL');
+  await p.click('#cmAmount'); await p.keyboard.press('Control+A'); await p.keyboard.type('1250000');
+  const shown = () => p.$eval('#cmAmount', (e) => Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').get.call(e));
+  assert.equal(await shown(), '1.250.000', 'yazarken binlik nokta konmalı');
+  await p.keyboard.type(',5');
+  assert.equal(await shown(), '1.250.000,5');
+  assert.equal(await p.$eval('#cmAmount', (e) => e.value), '1250000.5', 'program düz sayıyı okumalı');
+  await p.keyboard.press('Backspace'); await p.keyboard.press('Backspace');
+  await p.keyboard.press('Backspace'); await p.keyboard.press('Backspace');
+  assert.equal(await shown(), '12.500');
+  await p.keyboard.type('.75'); // nokta tuşu ondalık virgül olur
+  assert.equal(await shown(), '12.500,75');
+  assert.equal(await p.$eval('#cmAmount', (e) => e.value), '12500.75');
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
