@@ -2050,3 +2050,21 @@ test('satış: ATA ÇEYREK fiyatı Ata Lira fiyatıyla gelmez, adet başı HAS o
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('HURDA → BARKODLU: 24 hurdadan aynı gramda 24 ayar ürün yapılabilir (küçük ayar farkı engel olmaz)', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  const scrap = fb.db.state.scrapStocks.find((x) => x.name === '24 HURDASI' && x.period === fb.db.state.activePeriod);
+  await p.evaluate(() => document.querySelector('[data-go="operations"],[data-route="operations"]').click());
+  await p.click('#v5H2B'); await p.waitForSelector('#h2bScrap');
+  await p.selectOption('#h2bScrap', scrap.id); await p.selectOption('#h2bKind', 'KYU');
+  await p.selectOption('#h2bPurity', '995');
+  await p.fill('#h2bIn', '1'); await p.fill('#h2bGram', '1');
+  assert.match(await p.innerText('#h2bInfo'), /ayar farkı/);
+  await p.click('#h2bLabel');
+  await p.click('#modalConfirm'); await p.waitForTimeout(4000);
+  const rec = fb.db.state.stocks.find((x) => x.group === 'KYU' && /HURDA/.test(String(x.sourceDocNo || '') + String(x.notes || '')) && Number(x.grossWeight) === 1);
+  assert.ok(rec, 'ürün oluşmalı');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
