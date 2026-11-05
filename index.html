@@ -9222,6 +9222,7 @@ function stockSummaryView(){
       <div id="h2bInfo" class="notice span-4">Hurda ve ürün gramını girin.</div>
     </div>`,()=>{
       const v=calc();if(!v)return toast('Gramları kontrol edin','err');
+      if(v.fire<-Math.max(0.01,v.sourceHas*0.03)&&!confirm(`Ürün HAS'ı (${qty(v.productHas)}) kullanılan hurdadan (${qty(v.sourceHas)}) belirgin şekilde fazla. Yine de oluşturulsun mu?`))return;
       const {h,gin,gram,purity,work,sourceHas,sourceCost,productHas,fire}=v;
       const kind=kinds.find(k=>k.prefix===document.getElementById('h2bKind').value);if(!kind)return toast('Ürün grubunu seçin (KYU, YUZ…)','err');
       const code=document.getElementById('h2bCode').value.trim().toLocaleUpperCase('tr-TR'),name=(document.getElementById('h2bName').value.trim()||kind.label).toLocaleUpperCase('tr-TR');
@@ -9245,9 +9246,8 @@ function stockSummaryView(){
       if(!h||gin<=0||gram<=0||!purity){info.textContent='Hurda ve ürün gramını girin.';return null;}
       if(gin>Number(h.amount||0)+.0001){info.textContent=`Hurdada yalnız ${qty(h.amount)} GR var.`;return null;}
       const ratio=gin/Math.max(.000001,Number(h.amount||0)),sourceHas=Number(h.hasWeight||0)*ratio,sourceCost=gin*Number(h.unitCostHas||sourceHas/Math.max(.000001,gin)),productHas=calcHas(gram,purity),fire=sourceHas-productHas;
-      info.innerHTML=`Hurdadan çıkan: <b>${qty(gin)} GR · ${qty(sourceHas)} HAS</b> → Ürün: <b>${qty(gram)} GR · ${qty(productHas)} HAS</b> · Fire: <b style="color:${fire<0?'#c0262d':'inherit'}">${qty(fire)} HAS</b> · Ürün maliyeti: <b>${qty(sourceCost+work)} HAS</b>${fire<0?'<br><b style="color:#c0262d">Ürün HAS\'ı kullanılan hurdadan fazla — gramları kontrol edin.</b>':''}`;
-      if(fire<-0.0005)return null;
-      return {h,gin,gram,purity,work,sourceHas,sourceCost,productHas,fire};
+      info.innerHTML=`Hurdadan çıkan: <b>${qty(gin)} GR · ${qty(sourceHas)} HAS</b> → Ürün: <b>${qty(gram)} GR · ${qty(productHas)} HAS</b> · Fire: <b style="color:${fire<0?'#c0262d':'inherit'}">${qty(fire)} HAS</b> · Ürün maliyeti: <b>${qty(sourceCost+work)} HAS</b>${fire<-0.0005?`<br><b style="color:#9a5b00">Ürün HAS'ı hurdadan ${qty(-fire)} HAS fazla (ayar farkı) — fark kazanç olarak işlenir.</b>`:''}`;
+            return {h,gin,gram,purity,work,sourceHas,sourceCost,productHas,fire};
     }
     const sel=g('h2bScrap'),syncPurity=()=>{const h=state.scrapStocks.find(x=>x.id===sel.value),m=Number(h?.milyem||0);if(!m)return;const opts=[...g('h2bPurity').options].map(o=>o.value).filter(v=>v!=='925');const best=opts.reduce((a,v)=>Math.abs(Number(v)-m)<Math.abs(Number(a)-m)?v:a,opts[0]);if(best)g('h2bPurity').value=best;};/* hurdanın milyemine en yakın ayar seçilir (14 hurda 557 → 585) */
     sel.addEventListener('change',()=>{syncPurity();calc();});syncPurity();
