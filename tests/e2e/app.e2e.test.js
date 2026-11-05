@@ -2033,3 +2033,20 @@ test('cari işlem: tutar yazarken binlik noktalar kendiliğinden konur, kayıt d
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('satış: ATA ÇEYREK fiyatı Ata Lira fiyatıyla gelmez, adet başı HAS oranıyla hesaplanır', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  await p.click('[data-go="sales"]'); await p.waitForSelector('#saleProductSearch');
+  for (let i = 0; i < 3; i++) {
+    await p.fill('#saleProductSearch', 'ATA CEYREK'); await p.waitForTimeout(300); await p.press('#saleProductSearch', 'Enter');
+    if (await p.waitForSelector('#saleEntryPrice:not([disabled])', { timeout: 5000 }).catch(() => null)) break;
+  }
+  await p.waitForTimeout(300);
+  const price = Number(await p.inputValue('#saleEntryPrice'));
+  const st = fb.db.state, ata = st.prices.items.find((x) => x.code === 'ATA');
+  assert.ok(price > 0 && price < Number(ata.sell) * 0.4, `ATA ÇEYREK fiyatı (${price}) Ata Lira (${ata.sell}) fiyatı olmamalı`);
+  assert.ok(price > Number(ata.sell) * 0.2, `ATA ÇEYREK fiyatı çeyrek liraya yakın olmalı (${price})`);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});

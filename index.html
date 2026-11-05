@@ -2915,11 +2915,27 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     return {active:noSaleLines&&!hasCariCredit&&tradeIns.length>0,tradeIns,payouts,received,paid,difference:received-paid};
   }
 
+  /* Açık stok satış fiyatı. Ata/Reşat çeyrek-yarım gibi küçük ziynetler artık lira (ATA) fiyatıyla eşleşmez:
+     lira fiyatı, ürünün adet başı HAS'ının liranın adet başı HAS'ına oranıyla ölçeklenir. */
+  function ziynetKeyV7(v){return String(v||'').toLocaleUpperCase('tr-TR').replace(/Ç/g,'C').replace(/Ş/g,'S').replace(/İ/g,'I').replace(/Ğ/g,'G').replace(/Ö/g,'O').replace(/Ü/g,'U').replace(/[^A-Z0-9]+/g,' ').trim();}
   function openStockSaleDefaultPrice(o,amount){
-    const n=String(o.name||'').toUpperCase();
-    const item=state.prices.items.find(x=>String(x.name||'').toUpperCase()===n || (n.includes('ÇEYREK')&&x.code==='CEYREK') || (n.includes('YARIM')&&x.code==='YARIM') || (n.includes('ATA')&&x.code==='ATA') || (n.includes('REŞAT')&&x.code==='RESAT') || (n.includes('22 BİLEZİK')&&x.code==='22B') || (n.includes('22 AYAR 1 GRAM')&&x.code==='22G1') || (n.includes('24 AYAR 1 GRAM')&&x.code==='24G1'));
-    if(o.unit==='ADET' && item) return Number(item.sell||0)*amount;
-    if(item && o.unit==='GR') return Number(item.sell||0)*amount;
+    const n=ziynetKeyV7(o.name),items=state.prices.items||[],byCode=c=>items.find(x=>x.code===c);
+    const perHas=x=>{const q=Number(x?.amount||0);return q>0&&Number(x?.hasWeight)>0?Number(x.hasWeight)/q:Number(x?.displayAyar||x?.purity||0)/1000;};
+    let item=items.find(x=>ziynetKeyV7(x.name)===n);
+    if(!item){
+      const ata=/\bATA\b/.test(n),resat=/\bRESAT\b/.test(n),frac=/\bCEYREK\b/.test(n)?.25:/\bYARIM\b/.test(n)?.5:/\b2 5\b/.test(n)?2.5:/\bBESLI\b/.test(n)?5:/\bGREMISE\b/.test(n)?2.5:1;
+      if((ata||resat)&&frac!==1){
+        const ref=byCode(ata?'ATA':'RESAT')||byCode('ATA');
+        if(ref&&Number(ref.sell)>0){
+          const refOpen=(state.openStocks||[]).find(x=>x.period===state.activePeriod&&new RegExp('^'+(ata?'ATA':'RESAT')+'( LIRA)?$').test(ziynetKeyV7(x.name)));
+          const ratio=perHas(o)>0&&perHas(refOpen)>0?perHas(o)/perHas(refOpen):frac;
+          return Math.round(Number(ref.sell)*ratio)*amount;
+        }
+      }
+      const code=/\bCEYREK\b/.test(n)?'CEYREK':/\bYARIM\b/.test(n)?'YARIM':/\bGREMISE\b/.test(n)?'GREMISE':(ata&&frac===1)?'ATA':(resat&&frac===1)?'RESAT':/\b22 BILEZIK\b/.test(n)?'22B':/\b22 AYAR 1 GRAM\b/.test(n)?'22G1':/\b24 AYAR 1 GRAM\b/.test(n)?'24G1':'';
+      item=code?byCode(code):null;
+    }
+    if(item&&Number(item.sell)>0)return Number(item.sell||0)*amount;
     const gram=o.unit==='ADET'?Number(o.zGram||0)*amount:amount;
     return calcHas(gram,Number(o.purity||0))*Number(state.prices.has.sell||0);
   }
