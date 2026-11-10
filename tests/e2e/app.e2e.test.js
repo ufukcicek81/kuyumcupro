@@ -2077,6 +2077,8 @@ test('Altın / Ziynet listesi: silinmiş kartlardan kalan sıfır stoklu satırl
   const o = st.openStocks.find((x) => x.period === st.activePeriod && x.unit === 'ADET');
   st.openStocks.push({ ...o, id: 'OPEN-ESKI', name: 'ESKI SILINMIS ZIYNET', amount: 0, hasWeight: 0, stockCardId: 'SILINMIS-KART' });
   st.scrapStocks.push({ id: 'SCR-ESKI', period: st.activePeriod, name: 'ESKI SILINMIS HURDA', milyem: 585, amount: 0, hasWeight: 0 });
+  st.openStocks.push({ id: 'OPEN-KARTLI', period: st.activePeriod, name: 'KARTLI SIFIR ZIYNET', unit: 'ADET', purity: 916, amount: 0, hasWeight: 0, pusulaCode: '9991' });
+  st.stockCardsMaster.push({ id: 'CARD-KARTLI', name: 'KARTLI SIFIR ZIYNET', productDefinition: 'KARTLI SIFIR ZIYNET', productGroup: 'ZİYNET' });
   fb.db.state = st;
   await p.context().close();
   p = await newDevice(browser, appUrl, fb);
@@ -2087,6 +2089,9 @@ test('Altın / Ziynet listesi: silinmiş kartlardan kalan sıfır stoklu satırl
   assert.ok(!names.some((n) => /SILINMIS/.test(n)), 'silinmiş kart satırları listede olmamalı: ' + names.join(', '));
   await p.fill('#tiSearch', 'CEY'); await p.waitForSelector('#tiSuggest [data-ti-sug]');
   assert.ok((await p.$$eval('#tiSuggest [data-ti-sug] b', (os) => os.map((x) => x.textContent))).length > 0, 'stoğu olan ürünler görünmeli');
+  // Kartı duran ürün stoğu sıfır olsa da listede kalır (stoğa ürün alınabilsin).
+  await p.fill('#tiSearch', 'KARTLI SIFIR'); await p.waitForSelector('#tiSuggest [data-ti-sug]');
+  assert.ok((await p.$$eval('#tiSuggest [data-ti-sug] b', (os) => os.map((x) => x.textContent))).some((n) => /KARTLI SIFIR ZIYNET/.test(n)), 'kartı olan sıfır stoklu ürün görünmeli');
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
