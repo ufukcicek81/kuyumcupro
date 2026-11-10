@@ -6551,7 +6551,7 @@ function stockSummaryView(){
     // Mevcut hurda stokları: Pusula'daki Altın/Ziynet tahsilatına doğrudan girer.
     (state.scrapStocks||[]).filter(x=>x.period===state.activePeriod&&live(x)).forEach(h=>add({code:h.id,name:h.name,kind:'Hurda',unit:'GR',purity:Number(h.milyem||0),priceCode:(state.prices.items||[]).find(p=>normalizeInventoryName(p.name).includes(normalizeInventoryName(h.name).replace('HURDASI','HURDA')))?.code||''}));
     // Fiyat sistemindeki hurda kartları stokta henüz hareket görmemiş olsa da listede bulunsun.
-    (state.prices.items||[]).filter(x=>/HURDA/i.test(String(x.name||''))||/H$/i.test(String(x.code||''))).forEach(x=>add({code:x.code,name:x.name,kind:'Hurda',unit:'GR',purity:Number(x.buyMilyem||x.sellMilyem||0),priceCode:x.code}));
+    (state.prices.items||[]).filter(x=>(/HURDA/i.test(String(x.name||''))||/H$/i.test(String(x.code||'')))&&!out.some(i=>i.kind==='Hurda'&&normalizeInventoryName(i.name)===normalizeInventoryName(x.name))).forEach(x=>add({code:x.code,name:x.name,kind:'Hurda',unit:'GR',purity:Number(x.buyMilyem||x.sellMilyem||0),priceCode:x.code}));
     // Tanımlanan hurda stok kartları (adında/grubunda HURDA): stok hareketi olmasa da takasta seçilebilir.
     (state.stockCardsMaster||[]).filter(c=>!c.hideFromSale&&(/HURDA/i.test(String(c.productDefinition||c.name||''))||/HURDA/i.test(String(c.productGroup||c.group||'')))).forEach(c=>add({code:String(c.productCode||c.pusulaCode||c.code||c.id),name:String(c.productDefinition||c.name||''),kind:'Hurda',unit:'GR',purity:Number(c.fixedMilyem||c.purity||0)}));
     // Adetli açık stokların tamamı: çeyrek, yarım, ata, reşat, gram altın vb.
@@ -6563,7 +6563,9 @@ function stockSummaryView(){
     ziynetCardTradeItemsV7().forEach(c=>add({code:c.code,name:c.name,kind:'Ziynet',unit:'ADET',purity:c.purity,zGram:c.zGram,priceCode:'',stockCardId:c.stockCardId}));
     // Temel ziynetler stok miktarı sıfır olsa da tahsilat listesinde hazır olsun.
     const zgrams={CEYREK:1.75,YARIM:3.50,ZIYNET:7.00,ATA:7.216,RESAT:7.216};
-    (state.prices.items||[]).filter(x=>['CEYREK','YARIM','ZIYNET','ATA','RESAT','22G1','24G1'].includes(String(x.code||'').toUpperCase())).forEach(x=>add({code:x.code,name:x.name,kind:'Ziynet',unit:'ADET',purity:(String(x.code).toUpperCase()==='24G1'?995:916),zGram:zgrams[String(x.code).toUpperCase()]||1,priceCode:x.code}));
+    // Aynı adlı stok/kart satırı zaten listedeyse fiyat satırı ikinci kez eklenmez (24 Ayar 1 Gram iki kez görünmesin).
+    const haveName=n=>out.some(i=>normalizeInventoryName(i.name)===normalizeInventoryName(n));
+    (state.prices.items||[]).filter(x=>['CEYREK','YARIM','ZIYNET','ATA','RESAT','22G1','24G1'].includes(String(x.code||'').toUpperCase())&&!haveName(x.name)).forEach(x=>add({code:x.code,name:x.name,kind:'Ziynet',unit:'ADET',purity:(String(x.code).toUpperCase()==='24G1'?995:916),zGram:zgrams[String(x.code).toUpperCase()]||1,priceCode:x.code}));
     return out.sort((a,b)=>String(a.kind).localeCompare(String(b.kind),'tr')||String(a.name).localeCompare(String(b.name),'tr'));
   }
 

@@ -2095,3 +2095,16 @@ test('Altın / Ziynet listesi: silinmiş kartlardan kalan sıfır stoklu satırl
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('Altın / Ziynet listesi: aynı ürün (24 Ayar 1 Gram, Çeyrek) iki kez görünmez', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  await p.click('[data-go="sales"]'); await p.waitForSelector('#saleProductSearch');
+  await p.click('[data-pay="Altın / Ziynet"]'); await p.waitForSelector('#tiSearch');
+  for (const [q, name] of [['24 Ayar 1', /^24 AYAR 1 GRAM$/i], ['CEYREK', /^(Ç|C)EYREK$/i]]) {
+    await p.fill('#tiSearch', q); await p.waitForSelector('#tiSuggest [data-ti-sug]');
+    const names = await p.$$eval('#tiSuggest [data-ti-sug] b', (os) => os.map((x) => x.textContent.trim()));
+    assert.equal(names.filter((n) => name.test(n)).length, 1, `${q} tek satır olmalı: ${names.join(', ')}`);
+  }
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
