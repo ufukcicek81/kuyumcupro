@@ -6525,7 +6525,7 @@ function stockSummaryView(){
       out.push({...(base||{}),code:String(code),name:String(name),buyMilyem:Number(base?.buyMilyem||purity||0),sellMilyem:Number(base?.sellMilyem||purity||0),buy:base?.buy&&!asilScreenLoadedV7()?Number(base.buy):Math.round(hb*bm*100)/100,sell:base?.sell&&!asilScreenLoadedV7()?Number(base.sell):Math.round(hs*sm*100)/100});};
     (state.prices.items||[]).filter(x=>/H$/.test(String(x.code||''))||/HURDA/i.test(String(x.name||''))).forEach(x=>add(x.code,x.name,x.buyMilyem,x));
     (state.stockCardsMaster||[]).filter(c=>!c.hideFromSale&&(/HURDA/i.test(String(c.productDefinition||c.name||''))||/HURDA/i.test(String(c.productGroup||c.group||'')))).forEach(c=>add(c.productCode||c.pusulaCode||c.code||c.id,c.productDefinition||c.name,Number(c.fixedMilyem||c.purity||0)));
-    (state.scrapStocks||[]).filter(h=>h.period===state.activePeriod).forEach(h=>add('SCR:'+h.id,h.name,Number(h.milyem||0)));
+    (state.scrapStocks||[]).filter(h=>h.period===state.activePeriod&&Math.abs(Number(h.amount||0))>=0.005).forEach(h=>add('SCR:'+h.id,h.name,Number(h.milyem||0)));
     return out;
   }
   function ziynetCardTradeItemsV7(){
@@ -6546,14 +6546,16 @@ function stockSummaryView(){
       if(seen.has(key))return;seen.add(key);
       out.push({code:String(x.code||x.name),name:String(x.name),kind:x.kind||'Ziynet',unit:x.unit||'ADET',purity:Number(x.purity||0),zGram:Number(x.zGram||0),priceCode:String(x.priceCode||x.code||''),...(x.stockCardId?{stockCardId:x.stockCardId}:{})});
     };
+    // Silinmiş kartlardan kalan, stoğu sıfır satırlar listede gösterilmez (kartı duruyorsa gösterilir).
+    const cardIds=new Set((state.stockCardsMaster||[]).map(c=>c.id)),live=x=>Math.abs(Number(x.amount||0))>=0.005||(x.stockCardId&&cardIds.has(x.stockCardId));
     // Mevcut hurda stokları: Pusula'daki Altın/Ziynet tahsilatına doğrudan girer.
-    (state.scrapStocks||[]).filter(x=>x.period===state.activePeriod).forEach(h=>add({code:h.id,name:h.name,kind:'Hurda',unit:'GR',purity:Number(h.milyem||0),priceCode:(state.prices.items||[]).find(p=>normalizeInventoryName(p.name).includes(normalizeInventoryName(h.name).replace('HURDASI','HURDA')))?.code||''}));
+    (state.scrapStocks||[]).filter(x=>x.period===state.activePeriod&&live(x)).forEach(h=>add({code:h.id,name:h.name,kind:'Hurda',unit:'GR',purity:Number(h.milyem||0),priceCode:(state.prices.items||[]).find(p=>normalizeInventoryName(p.name).includes(normalizeInventoryName(h.name).replace('HURDASI','HURDA')))?.code||''}));
     // Fiyat sistemindeki hurda kartları stokta henüz hareket görmemiş olsa da listede bulunsun.
     (state.prices.items||[]).filter(x=>/HURDA/i.test(String(x.name||''))||/H$/i.test(String(x.code||''))).forEach(x=>add({code:x.code,name:x.name,kind:'Hurda',unit:'GR',purity:Number(x.buyMilyem||x.sellMilyem||0),priceCode:x.code}));
     // Tanımlanan hurda stok kartları (adında/grubunda HURDA): stok hareketi olmasa da takasta seçilebilir.
     (state.stockCardsMaster||[]).filter(c=>!c.hideFromSale&&(/HURDA/i.test(String(c.productDefinition||c.name||''))||/HURDA/i.test(String(c.productGroup||c.group||'')))).forEach(c=>add({code:String(c.productCode||c.pusulaCode||c.code||c.id),name:String(c.productDefinition||c.name||''),kind:'Hurda',unit:'GR',purity:Number(c.fixedMilyem||c.purity||0)}));
     // Adetli açık stokların tamamı: çeyrek, yarım, ata, reşat, gram altın vb.
-    (state.openStocks||[]).filter(o=>o.period===state.activePeriod&&String(o.unit||'').toUpperCase()==='ADET').forEach(o=>{
+    (state.openStocks||[]).filter(o=>o.period===state.activePeriod&&String(o.unit||'').toUpperCase()==='ADET'&&live(o)).forEach(o=>{
       const n=normalizeInventoryName(o.name),px=(state.prices.items||[]).find(x=>normalizeInventoryName(x.name)===n||n.includes(normalizeInventoryName(x.name))||normalizeInventoryName(x.name).includes(n));
       let zg=Number(o.zGram||0);if(!zg&&Number(o.amount||0)>0&&Number(o.hasWeight||0)>0&&Number(o.purity||0)>0)zg=(Number(o.hasWeight||0)/Number(o.amount||1))*1000/Number(o.purity||916);
       add({code:o.pusulaCode||o.productCode||o.id,name:o.name,kind:'Ziynet',unit:'ADET',purity:Number(o.purity||916),zGram:zg,priceCode:px?.code||'',stockCardId:o.stockCardId||''});

@@ -2068,3 +2068,25 @@ test('HURDA → BARKODLU: 24 hurdadan aynı gramda 24 ayar ürün yapılabilir (
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('Altın / Ziynet listesi: silinmiş kartlardan kalan sıfır stoklu satırlar görünmez', async () => {
+  const fb = createFakeFirebase();
+  let p = await newDevice(browser, appUrl, fb);
+  await p.waitForTimeout(2500);
+  const st = fb.db.state;
+  const o = st.openStocks.find((x) => x.period === st.activePeriod && x.unit === 'ADET');
+  st.openStocks.push({ ...o, id: 'OPEN-ESKI', name: 'ESKI SILINMIS ZIYNET', amount: 0, hasWeight: 0, stockCardId: 'SILINMIS-KART' });
+  st.scrapStocks.push({ id: 'SCR-ESKI', period: st.activePeriod, name: 'ESKI SILINMIS HURDA', milyem: 585, amount: 0, hasWeight: 0 });
+  fb.db.state = st;
+  await p.context().close();
+  p = await newDevice(browser, appUrl, fb);
+  await p.click('[data-go="sales"]'); await p.waitForSelector('#saleProductSearch');
+  await p.click('[data-pay="Altın / Ziynet"]'); await p.waitForSelector('#tiSearch');
+  await p.fill('#tiSearch', 'ESKI'); await p.waitForTimeout(300);
+  const names = await p.$$eval('#tiSuggest [data-ti-sug] b', (os) => os.map((x) => x.textContent));
+  assert.ok(!names.some((n) => /SILINMIS/.test(n)), 'silinmiş kart satırları listede olmamalı: ' + names.join(', '));
+  await p.fill('#tiSearch', 'CEY'); await p.waitForSelector('#tiSuggest [data-ti-sug]');
+  assert.ok((await p.$$eval('#tiSuggest [data-ti-sug] b', (os) => os.map((x) => x.textContent))).length > 0, 'stoğu olan ürünler görünmeli');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
