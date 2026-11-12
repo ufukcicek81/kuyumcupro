@@ -2109,3 +2109,17 @@ test('Altın / Ziynet listesi: aynı ürün (24 Ayar 1 Gram, Çeyrek) iki kez g�
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('bulut girişi: Şifremi unuttum, e-postaya şifre yenileme isteği gönderir', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  const sent = [];
+  p.on('request', (r) => { if (r.url().includes('accounts:sendOobCode')) sent.push(JSON.parse(r.postData() || '{}')); });
+  await p.click('[data-go="backup"]');
+  await p.click('#cloudAuthOpen');
+  await p.fill('#caApiKey', 'AIzaTEST'); await p.fill('#caEmail', 'magaza@test.com');
+  await p.click('#caReset');
+  await p.waitForFunction(() => document.getElementById('toast-root').innerText.includes('yenileme bağlantısı'), null, { timeout: 10000 });
+  assert.deepEqual(sent, [{ requestType: 'PASSWORD_RESET', email: 'magaza@test.com' }]);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
