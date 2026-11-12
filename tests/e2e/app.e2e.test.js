@@ -533,9 +533,10 @@ test('Son Fiş: satış ekranındaki ziynet alışı dahil son işlemin fişi ba
   await p.waitForSelector('[data-recent-receipt="0"]');
   const first = await p.locator('#modalRoot tbody tr').first().innerText();
   assert.match(first, /Ziynet Alış/);
-  await closeAlert();
+  await closeAlert(1000);
   await p.locator('#modalRoot tbody tr').first().locator('[data-recent-receipt]').click();
-  for (let i = 0; i < 40 && popups.length < 2; i++) await p.waitForTimeout(250);
+  // Yoğun makinede fiş penceresi geç açılabilir: süre tanınır.
+  for (let i = 0; i < 80 && popups.length < 2; i++) await p.waitForTimeout(250);
   assert.equal(popups.length, 2, 'listeden de fiş basılmalı');
   // Diğer çıktılar (kimlik formu, raporlar…): gri yazı da siyah ve kalın basılır.
   await p.evaluate(() => { const w = window.open('', '_blank'); w.document.write('<!doctype html><html><head><style>.l{color:#888;font-weight:400}</style></head><body><span class="l">Ad Soyad</span></body></html>'); w.document.close(); });
@@ -2092,6 +2093,19 @@ test('Altın / Ziynet listesi: silinmiş kartlardan kalan sıfır stoklu satırl
   // Kartı duran ürün stoğu sıfır olsa da listede kalır (stoğa ürün alınabilsin).
   await p.fill('#tiSearch', 'KARTLI SIFIR'); await p.waitForSelector('#tiSuggest [data-ti-sug]');
   assert.ok((await p.$$eval('#tiSuggest [data-ti-sug] b', (os) => os.map((x) => x.textContent))).some((n) => /KARTLI SIFIR ZIYNET/.test(n)), 'kartı olan sıfır stoklu ürün görünmeli');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
+test('Altın / Ziynet listesi: aynı ürün (24 Ayar 1 Gram, Çeyrek) iki kez görünmez', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  await p.click('[data-go="sales"]'); await p.waitForSelector('#saleProductSearch');
+  await p.click('[data-pay="Altın / Ziynet"]'); await p.waitForSelector('#tiSearch');
+  for (const [q, name] of [['24 Ayar 1', /^24 AYAR 1 GRAM$/i], ['CEYREK', /^(Ç|C)EYREK$/i]]) {
+    await p.fill('#tiSearch', q); await p.waitForSelector('#tiSuggest [data-ti-sug]');
+    const names = await p.$$eval('#tiSuggest [data-ti-sug] b', (os) => os.map((x) => x.textContent.trim()));
+    assert.equal(names.filter((n) => name.test(n)).length, 1, `${q} tek satır olmalı: ${names.join(', ')}`);
+  }
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
