@@ -5703,6 +5703,7 @@ function stockSummaryView(){
       <div class="labelled span-4"><label>Firebase Web API Anahtarı</label><input id="caApiKey" class="input" autocomplete="off" value="${esc(st.apiKey||CLOUD_WEB_API_KEY)}" placeholder="AIza..."></div>
       <div class="labelled span-2"><label>E-posta</label><input id="caEmail" class="input" type="email" autocomplete="username" value="${esc(st.email||'')}"></div>
       <div class="labelled span-2"><label>Şifre</label><input id="caPassword" class="input" type="password" autocomplete="current-password"></div>
+      <div class="span-4"><button class="btn btn-outline" type="button" id="caReset">Şifremi unuttum — yenileme bağlantısı gönder</button></div>
       <div class="span-4 muted">Durum: <b>${st.configured?'Giriş yapıldı · '+esc(st.email):'Giriş yapılmadı'}</b>${st.uid?` · UID: <code>${esc(st.uid)}</code>`:''}</div>
       ${st.configured?'<div class="span-4"><button class="btn btn-outline" type="button" id="caSignOut">Bu cihazda bulut oturumunu kapat</button></div>':''}
     </div>`,async()=>{
@@ -5714,6 +5715,13 @@ function stockSummaryView(){
         if(session&&state.cloudSync?.enabled){openCloudStreamV7().catch(()=>{});cloudPullV5(false).catch(()=>false);}
       }catch(e){toast('Bulut girişi başarısız: '+(e?.message||e),'err');if(btn)btn.disabled=false;}
     },'GİRİŞ YAP');
+    document.getElementById('caReset')?.addEventListener('click',async e=>{
+      const email=document.getElementById('caEmail').value.trim();if(!email)return toast('Önce e-posta adresini yazın','err');
+      e.target.disabled=true;
+      try{await AsilCloudAuth.sendPasswordReset(document.getElementById('caApiKey').value,email);toast(`Şifre yenileme bağlantısı ${email} adresine gönderildi. Gelen kutusu ve gereksiz klasörüne bakın.`);}
+      catch(err){toast('Gönderilemedi: '+(err?.message||err),'err');}
+      finally{e.target.disabled=false;}
+    });
     document.getElementById('caSignOut')?.addEventListener('click',()=>{if(!confirm('Bu cihazda bulut oturumu kapatılsın mı? Kurallar kilitliyse senkron durur.'))return;AsilCloudAuth.signOut();closeModal();toast('Bulut oturumu kapatıldı','warn');render();});
   }
   async function saveEncryptedBackupV7(){

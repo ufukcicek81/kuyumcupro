@@ -39,6 +39,17 @@
     var c={apiKey:apiKey,email:data.email||email,uid:data.localId,idToken:data.idToken,refreshToken:data.refreshToken,exp:Date.now()+Number(data.expiresIn||3600)*1000};
     write(c);return status();
   }
+  // Şifre unutulduysa Firebase, hesabın e-postasına şifre yenileme bağlantısı gönderir.
+  async function sendPasswordReset(apiKey,email){
+    apiKey=String(apiKey||'').trim();email=String(email||'').trim();
+    if(!apiKey||!email)throw new Error('Web API anahtarı ve e-posta gerekli');
+    var r=await nativeFetch('https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key='+encodeURIComponent(apiKey),{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestType:'PASSWORD_RESET',email:email})
+    });
+    var data=await r.json().catch(function(){return {}});
+    if(!r.ok)throw authError(data,'HTTP '+r.status);
+    return true;
+  }
   function signOut(){write(null)}
 
   async function refresh(c){
@@ -86,5 +97,5 @@
     };
   }
 
-  root.AsilCloudAuth={signIn:signIn,signOut:signOut,token:token,authUrl:authUrl,isConfigured:isConfigured,status:status};
+  root.AsilCloudAuth={signIn:signIn,signOut:signOut,sendPasswordReset:sendPasswordReset,token:token,authUrl:authUrl,isConfigured:isConfigured,status:status};
 })(typeof self!=='undefined'?self:this);
