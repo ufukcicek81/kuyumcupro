@@ -2123,3 +2123,24 @@ test('bulut girişi: Şifremi unuttum, e-postaya şifre yenileme isteği gönder
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('Altın / Ziynet listesi: hurdaların iç kayıt numarası (SCR-…) görünmez ve aramayı karıştırmaz', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  await p.click('[data-go="sales"]'); await p.waitForSelector('#saleProductSearch');
+  await p.click('[data-pay="Altın / Ziynet"]'); await p.waitForSelector('#tiSearch');
+  await p.fill('#tiSearch', 'HURDA'); await p.waitForSelector('#tiSuggest [data-ti-sug]');
+  const rows = await p.$$eval('#tiSuggest [data-ti-sug]', (os) => os.map((x) => x.textContent));
+  assert.ok(rows.length && rows.every((t) => !/SCR[-:]/.test(t)), 'iç numara görünmemeli: ' + rows.join(' | '));
+  const scrapIds = fb.db.state.scrapStocks.map((x) => String(x.id));
+  const digits = (scrapIds.join('').match(/\d{2}/) || ['17'])[0];
+  await p.fill('#tiSearch', digits); await p.waitForTimeout(300);
+  const hits = await p.$$eval('#tiSuggest [data-ti-sug] b', (os) => os.map((x) => x.textContent));
+  assert.ok(!hits.some((n) => /HURDA/i.test(n) && !n.includes(digits)), `"${digits}" araması iç numaradan hurda getirmemeli: ` + hits.join(', '));
+  // Hurda yine adıyla seçilir.
+  await p.fill('#tiSearch', '14 HURDASI'); await p.press('#tiSearch', 'Enter');
+  await p.waitForFunction(() => document.activeElement?.id === 'tiQty', null, { timeout: 2000 });
+  assert.match(await p.inputValue('#tiSearch'), /14 HURDASI/i);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
