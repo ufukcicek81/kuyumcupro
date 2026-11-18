@@ -2144,3 +2144,46 @@ test('Altın / Ziynet listesi: hurdaların iç kayıt numarası (SCR-…) görü
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('fatura: gelen havale fatura ekranına düşer; 100.000 TL → 98.000 altın (istisna) + 2.000 KDV dahil işçilik', async () => {
+  const fb = createFakeFirebase();
+  let p = await newDevice(browser, appUrl, fb);
+  await p.waitForTimeout(2500);
+  const st = fb.db.state;
+  const bank = st.bankAccounts[0];
+  st.financeMoves = st.financeMoves || [];
+  st.financeMoves.unshift({ id: 'FIN-HAVALE-TEST', period: st.activePeriod, date: new Date().toISOString(), direction: 'Giriş', type: 'Havale / EFT Tahsilat', accountKind: 'Banka', accountId: bank.id, accountName: bank.bank || bank.name, amount: 100000, accountAmount: 100000, accountCurrency: 'TL', tlAmount: 100000, customer: 'AHMET YILMAZ', description: 'altın bedeli' });
+  fb.db.state = st;
+  await p.context().close();
+  p = await newDevice(browser, appUrl, fb);
+  let sent = null;
+  await p.context().route('https://fatura.test/api', async (r) => { sent = JSON.parse(r.request().postData()); await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, status: 'Gönderildi', invoiceNo: 'TST2026000000009' }) }); });
+  await p.evaluate(() => document.querySelector('[data-go="invoices"],[data-route="invoices"]').click());
+  await p.click('[data-invoice-view="settings"]');
+  await p.fill('#invProxy', 'https://fatura.test/api'); await p.click('#saveInvoiceSettings');
+  await p.click('[data-invoice-view="havale"]');
+  await p.waitForSelector('[data-havale-invoice="FIN-HAVALE-TEST"]');
+  await p.click('[data-havale-invoice="FIN-HAVALE-TEST"]');
+  await p.waitForSelector('#hiGold');
+  assert.equal(await p.inputValue('#hiName'), 'AHMET YILMAZ');
+  await p.fill('#hiTckn', '12345678901');
+  await p.fill('#hiGold', '98000');
+  const info = await p.innerText('#hiInfo');
+  assert.match(info, /2\.000,00/); assert.match(info, /1\.666,67/); assert.match(info, /333,33/);
+  const lines = await p.innerText('#hiPreview .invoice-lines tbody');
+  assert.match(lines, /22 AYAR ALTIN[\s\S]*%0[\s\S]*98\.000,00/); assert.match(lines, /İŞÇİLİK[\s\S]*%20[\s\S]*333,33[\s\S]*1\.666,67/);
+  await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  // Havale listeden düşer, kayıtlarda görünür; gönderim istisna satırlarıyla gider.
+  await p.click('[data-invoice-view="havale"]');
+  assert.equal(await p.$('[data-havale-invoice="FIN-HAVALE-TEST"]'), null, 'faturalanan havale listeden düşmeli');
+  await p.click('[data-invoice-view="records"]');
+  await p.click('[data-invoice-send]'); await p.waitForTimeout(1500);
+  assert.ok(sent, 'entegratöre gönderilmeli');
+  assert.equal(sent.invoiceType, 'ISTISNA');
+  assert.equal(sent.receiver.tckn, '12345678901');
+  assert.deepEqual(sent.sale.lines.map((x) => [x.name, x.total, x.vatRate, x.vatAmount]), [['22 AYAR ALTIN', 98000, 0, 0], ['İŞÇİLİK', 1666.67, 20, 333.33]]);
+  assert.ok(sent.sale.lines[0].exemptionCode, 'altın satırında istisna kodu olmalı');
+  assert.match(await p.innerText('body'), /TST2026000000009/);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
