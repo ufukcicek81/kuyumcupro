@@ -1246,6 +1246,8 @@ test('fatura: altın ve işçilik ayrı satır, altın kodu 230, fatura tipi İS
   const lines = await p.innerText('.invoice-lines tbody');
   assert.match(lines, /24 Ayar[^\n]*%0[^\n]*230/, 'altın satırı KDV %0 ve 230 koduyla');
   assert.match(lines, /İŞÇİLİK[^\n]*%20/, 'işçilik ayrı satır, KDV %20');
+  // Alıcı bilgileri taslakta düzenlenir
+  await p.fill('#irName', 'ALİ VELİ'); await p.fill('#irTckn', '10000000146'); await p.fill('#irAddress', 'Cumhuriyet Cad. 5 / Merkez / Bursa'); await p.fill('#irEmail', 'ali@ornek.com');
   assert.match(draft, /230 · İstisna\s+Külçe altın, külçe gümüş ve kıymetli taşların teslimi/);
   // Ürün satırında kod 230 (Altın + İşçilik); 230 elle seçilse de işçilik ayrı satırda kalır.
   assert.equal(await p.$eval('[data-inv-code="0"]', (e) => e.value), '230');
@@ -1257,6 +1259,8 @@ test('fatura: altın ve işçilik ayrı satır, altın kodu 230, fatura tipi İS
   await p.click('[data-invoice-send]'); await p.waitForTimeout(800);
   assert.equal(sent.invoiceType, 'ISTISNA');
   assert.equal(sent.layout, 'SPLIT');
+  assert.deepEqual([sent.receiver.name, sent.receiver.tckn, sent.receiver.address, sent.receiver.email], ['ALİ VELİ', '10000000146', 'Cumhuriyet Cad. 5 / Merkez / Bursa', 'ali@ornek.com']);
+  assert.match(await p.innerText('table.table tbody'), /ALİ VELİ/);
   assert.equal(sent.sale.lines[0].exemptionCode, '230');
   assert.equal(sent.sale.lines[0].vatRate, 0);
   assert.match(sent.sale.lines[1].name, /^İŞÇİLİK/);
