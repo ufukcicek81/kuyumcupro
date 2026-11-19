@@ -1054,7 +1054,7 @@ test('fatura taslağı: altın bedeli, işçilik ve yalnız işçilikten KDV ayr
   await p.fill('[data-inv-gold="0"]', '10000');
   // Kaydetmeden önce işçilik / KDV / satırlar hemen güncellenir; odak kutuda kalır.
   await p.waitForFunction(() => /50\.000,00/.test(document.querySelector('#invDraftBox tbody tr')?.innerText || ''), null, { timeout: 3000 });
-  assert.match(await p.innerText('#invDraftBox .invoice-lines tbody'), /10\.000,00[\s\S]*İŞÇİLİK[\s\S]*10\.000,00[\s\S]*50\.000,00/);
+  assert.match(await p.innerText('#invDraftBox .invoice-lines tbody'), /%20[\s\S]*10\.000,00[\s\S]*60\.000,00[\s\S]*805/, 'özel matrah: tek satır 60.000 (altın + işçilik), KDV 10.000');
   assert.equal(await p.evaluate(() => document.activeElement?.dataset?.invGold), '0');
   await p.click('#modalConfirm'); await p.waitForTimeout(300);
   assert.match(await p.innerText('.content'), /SAT-\d{4}-0+1/);
@@ -1069,11 +1069,10 @@ test('fatura taslağı: altın bedeli, işçilik ve yalnız işçilikten KDV ayr
   assert.equal(sent.sale.products[0].goldValue, 10000);
   assert.equal(sent.sale.products[0].labourAmount, 50000);
   assert.equal(sent.sale.products[0].vatAmount, 10000);
-  // Varsayılan düzen: altın satırı (KDV %0, kod 230) + İŞÇİLİK satırı (KDV %20)
-  assert.equal(sent.invoiceType, 'ISTISNA');
-  assert.deepEqual([sent.sale.lines[0].total, sent.sale.lines[0].vatRate, sent.sale.lines[0].exemptionCode], [10000, 0, '230']);
-  assert.match(sent.sale.lines[1].name, /^İŞÇİLİK/);
-  assert.deepEqual([sent.sale.lines[1].total, sent.sale.lines[1].vatRate, sent.sale.lines[1].vatAmount], [50000, 20, 10000]);
+  // Varsayılan düzen: özel matrah — tek satır (altın + işçilik), KDV yalnız işçilikten, kod 805
+  assert.equal(sent.layout, 'OZELMATRAH');
+  assert.equal(sent.sale.lines.length, 1);
+  assert.deepEqual([sent.sale.lines[0].total, sent.sale.lines[0].vatRate, sent.sale.lines[0].vatAmount, sent.sale.lines[0].exemptionCode, sent.sale.lines[0].specialBase], [60000, 20, 10000, '805', 50000]);
   assert.deepEqual({ g: sent.totals.goldValue, l: sent.totals.labourAmount, v: sent.totals.vatAmount, t: sent.totals.total }, { g: 10000, l: 50000, v: 10000, t: 70000 });
   assert.match(await p.innerText('.content'), /TST2026000000001/);
   assert.deepEqual(p.errors, []);
@@ -1222,7 +1221,7 @@ test('satış fişi: takasta alınan ziynet kalem kalem, müşteriye ödenen hes
   await p.context().close();
 });
 
-test('fatura: altın ve işçilik ayrı satır, altın kodu 230, fatura tipi İSTİSNA; özel matrah düzeni seçilebilir', async () => {
+test('fatura: (seçilirse) altın ve işçilik ayrı satır, altın kodu 230, fatura tipi İSTİSNA; özel matrah düzenine dönülebilir', async () => {
   const p = await newDevice(browser, appUrl, createFakeFirebase());
   let sent = null;
   await p.context().route('https://fatura.test/api', async (r) => { sent = JSON.parse(r.request().postData()); await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, status: 'Gönderildi', invoiceNo: 'TST2' }) }); });
@@ -1240,8 +1239,11 @@ test('fatura: altın ve işçilik ayrı satır, altın kodu 230, fatura tipi İS
   await p.evaluate(() => document.querySelector('[data-go="invoices"],[data-route="invoices"]').click());
   await p.click('[data-invoice-view="settings"]');
   assert.match(await p.innerText('.content'), /KDV İstisna ve Özel Matrah Kodları/);
-  assert.equal(await p.inputValue('#invLayout'), 'SPLIT', 'varsayılan düzen altın + işçilik ayrı');
+  assert.equal(await p.inputValue('#invLayout'), 'OZELMATRAH', 'varsayılan düzen özel matrah (perakende)');
   assert.equal(await p.inputValue('#invGoldCode'), '230');
+  // Bu test eski "Altın + İşçilik ayrı satır" düzenini sınar.
+  await p.selectOption('#invLayout', 'SPLIT'); await p.click('#invCodeSave'); await p.waitForTimeout(300);
+  await p.click('[data-invoice-view="settings"]');
   await p.fill('#invVkn', '2530152458'); await p.fill('#invProxy', 'https://fatura.test/api'); await p.click('#saveInvoiceSettings');
   await p.click('[data-invoice-view="sales"]');
   await p.click('[data-invoice-draft]');
@@ -2165,7 +2167,7 @@ test('Altın / Ziynet listesi: hurdaların iç kayıt numarası (SCR-…) görü
   await p.context().close();
 });
 
-test('fatura: gelen havale fatura ekranına düşer; 100.000 TL → 98.000 altın (istisna) + 2.000 KDV dahil işçilik', async () => {
+test('fatura: gelen havale fatura ekranına düşer; 100.000 TL → özel matrah (98.000 altın + 2.000 KDV dahil işçilik), toptan → istisna', async () => {
   const fb = createFakeFirebase();
   let p = await newDevice(browser, appUrl, fb);
   await p.waitForTimeout(2500);
@@ -2190,8 +2192,16 @@ test('fatura: gelen havale fatura ekranına düşer; 100.000 TL → 98.000 altı
   await p.fill('#hiGold', '98000');
   const info = await p.innerText('#hiInfo');
   assert.match(info, /2\.000,00/); assert.match(info, /1\.666,67/); assert.match(info, /333,33/);
-  const lines = await p.innerText('#hiPreview .invoice-lines tbody');
-  assert.match(lines, /22 AYAR ALTIN[\s\S]*%0[\s\S]*98\.000,00/); assert.match(lines, /İŞÇİLİK[\s\S]*%20[\s\S]*333,33[\s\S]*1\.666,67/);
+  let lines = await p.innerText('#hiPreview .invoice-lines tbody');
+  assert.match(lines, /22 AYAR ALTIN[\s\S]*%20[\s\S]*333,33[\s\S]*99\.666,67[\s\S]*805/, 'tek satır: altın + işçilik, KDV yalnız işçilikten, 805');
+  assert.doesNotMatch(lines, /İŞÇİLİK/);
+  assert.match(await p.innerText('#hiPreview'), /ÖZEL MATRAH/);
+  // Toptan → istisna, işçiliksiz
+  await p.selectOption('#hiType', 'ISTISNA'); await p.waitForTimeout(200);
+  lines = await p.innerText('#hiPreview .invoice-lines tbody');
+  assert.match(lines, /22 AYAR ALTIN[\s\S]*%0[\s\S]*100\.000,00[\s\S]*230/);
+  assert.equal(await p.$eval('#hiGold', (e) => e.disabled), true);
+  await p.selectOption('#hiType', 'OZELMATRAH'); await p.waitForTimeout(200);
   await p.click('#modalConfirm'); await p.waitForTimeout(300);
   // Havale listeden düşer, kayıtlarda görünür; gönderim istisna satırlarıyla gider.
   await p.click('[data-invoice-view="havale"]');
@@ -2199,10 +2209,9 @@ test('fatura: gelen havale fatura ekranına düşer; 100.000 TL → 98.000 altı
   await p.click('[data-invoice-view="records"]');
   await p.click('[data-invoice-send]'); await p.waitForTimeout(1500);
   assert.ok(sent, 'entegratöre gönderilmeli');
-  assert.equal(sent.invoiceType, 'ISTISNA');
+  assert.equal(sent.invoiceType, 'OZELMATRAH');
   assert.equal(sent.receiver.tckn, '12345678950');
-  assert.deepEqual(sent.sale.lines.map((x) => [x.name, x.total, x.vatRate, x.vatAmount]), [['22 AYAR ALTIN', 98000, 0, 0], ['İŞÇİLİK', 1666.67, 20, 333.33]]);
-  assert.ok(sent.sale.lines[0].exemptionCode, 'altın satırında istisna kodu olmalı');
+  assert.deepEqual(sent.sale.lines.map((x) => [x.name, x.total, x.vatRate, x.vatAmount, x.exemptionCode, x.specialBase]), [['22 AYAR ALTIN', 99666.67, 20, 333.33, '805', 1666.67]]);
   assert.match(await p.innerText('body'), /TST2026000000009/);
   assert.deepEqual(p.errors, []);
   await p.context().close();
@@ -2252,7 +2261,8 @@ test('fatura: İşNet köprüsü — bağlantı testi, havale faturası gönderi
     assert.match(row, /Gönderildi/); assert.match(row, /YEK2026000000077/);
     const send = soap.find((x) => x.name === 'SendArchiveInvoice');
     assert.ok(send, 'e-Arşiv gönderilmeli');
-    assert.match(send.body, /<a:TaxExemptionReasonCode>230<\/a:TaxExemptionReasonCode>/);
+    assert.match(send.body, /<a:InvoiceType>OZELMATRAH<\/a:InvoiceType>/);
+    assert.match(send.body, /<a:SpecialBasisAmount>1666.67<\/a:SpecialBasisAmount><a:SpecialBasisReasonCode>805<\/a:SpecialBasisReasonCode>/);
     assert.match(send.body, /<a:TotalPayableAmount>100000.00<\/a:TotalPayableAmount>/);
     for (let i = 0; i < 60 && !(fb.db.state.invoiceRecords || []).some((r) => r.sentDocumentType); i++) await p.waitForTimeout(250);
     assert.equal((fb.db.state.invoiceRecords || []).find((r) => r.kind === 'havale')?.sentDocumentType, 'EARSIV');
@@ -2302,6 +2312,38 @@ test('fatura: gönderim öncesi kontrol — geçersiz TCKN durdurur, 7 günden e
   assert.equal(sent, 1);
   const row = await p.innerText('table.table tbody tr');
   assert.match(row, /Gönderildi/); assert.match(row, /e-Arşiv/);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
+test('fatura: perakende satış özel matrah (805) tek satır; "Toptan satış" düğmesi istisna (230, işçiliksiz) yapar', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  await p.click('[data-go="sales"]');
+  for (let i = 0; i < 3; i++) {
+    await p.fill('#saleProductSearch', '22'); await p.waitForTimeout(300); await p.press('#saleProductSearch', 'Enter');
+    if (await p.waitForSelector('#saleEntryPrice:not([disabled])', { timeout: 5000 }).catch(() => null)) break;
+  }
+  await p.waitForTimeout(300);
+  await p.fill('#saleEntryPayable', '70000'); await p.click('#saleAddUnified'); await p.waitForTimeout(400);
+  await p.click('[data-pay="Nakit"]'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.selectOption('#salePerson', { index: 1 });
+  await p.click('#finalizeSale'); await p.click('#modalConfirm'); await p.waitForTimeout(1500);
+  await p.evaluate(() => document.querySelector('[data-go="invoices"],[data-route="invoices"]').click());
+  await p.click('[data-invoice-view="sales"]');
+  await p.click('[data-invoice-draft]');
+  await p.waitForSelector('.invoice-lines');
+  assert.match(await p.innerText('.invoice-draft'), /Fatura Tipi\s+ÖZEL MATRAH/);
+  assert.equal(await p.$eval('[data-inv-code="0"]', (e) => e.value), '805');
+  assert.match(await p.$eval('[data-inv-code="0"]', (e) => e.selectedOptions[0].textContent), /805 · Özel matrah \(perakende\)/);
+  let lines = await p.innerText('.invoice-lines tbody');
+  assert.doesNotMatch(lines, /İŞÇİLİK/);
+  assert.match(lines, /%20[\s\S]*805/);
+  await p.click('#invAllExempt'); await p.waitForSelector('.invoice-lines');
+  assert.equal(await p.$eval('[data-inv-code="0"]', (e) => e.value), '230');
+  lines = await p.innerText('.invoice-lines tbody');
+  assert.match(lines, /%0[\s\S]*70\.000,00[\s\S]*230/, 'toptan: tutarın tamamı istisna');
+  assert.doesNotMatch(lines, /İŞÇİLİK/);
+  assert.match(await p.innerText('.invoice-draft'), /Fatura Tipi\s+İSTİSNA/);
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
