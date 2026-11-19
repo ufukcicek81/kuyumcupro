@@ -1051,7 +1051,12 @@ test('fatura taslağı: altın bedeli, işçilik ve yalnız işçilikten KDV ayr
   assert.ok(Math.abs(gold + labour + vat - 70000) < 0.02, `altın + işçilik + KDV = satış (${gold} + ${labour} + ${vat})`);
   assert.ok(Math.abs(vat - (70000 - gold) * 20 / 120) < 0.02, 'KDV yalnız işçilikten iç yüzdeyle ayrılmalı');
   // Altın bedeli elle düzeltilir, kaydedilir; kayıtlar sekmesinde görünür
-  await p.fill('[data-inv-gold="0"]', '10000'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.fill('[data-inv-gold="0"]', '10000');
+  // Kaydetmeden önce işçilik / KDV / satırlar hemen güncellenir; odak kutuda kalır.
+  await p.waitForFunction(() => /50\.000,00/.test(document.querySelector('#invDraftBox tbody tr')?.innerText || ''), null, { timeout: 3000 });
+  assert.match(await p.innerText('#invDraftBox .invoice-lines tbody'), /10\.000,00[\s\S]*İŞÇİLİK[\s\S]*10\.000,00[\s\S]*50\.000,00/);
+  assert.equal(await p.evaluate(() => document.activeElement?.dataset?.invGold), '0');
+  await p.click('#modalConfirm'); await p.waitForTimeout(300);
   assert.match(await p.innerText('.content'), /SAT-\d{4}-0+1/);
   assert.match(await p.innerText('.content'), /50\.000,00/, 'işçilik (60.000 − KDV 10.000) listede görünmeli');
   await p.click('[data-invoice-send]');
