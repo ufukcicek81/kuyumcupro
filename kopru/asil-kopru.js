@@ -329,8 +329,12 @@ function log(s) { console.log(new Date().toLocaleString('tr-TR') + '  ' + s); }
 
 if (require.main === module) {
   const cfg = loadConfig();
-  http.createServer((req, res) => { handle(cfg, req, res).catch(e => send(res, 500, { ok: false, message: String(e.message || e) })); })
-    .listen(cfg.port, '127.0.0.1', () => {
+  const server = http.createServer((req, res) => { handle(cfg, req, res).catch(e => send(res, 500, { ok: false, message: String(e.message || e) })); });
+  server.on('error', e => {
+    if (e.code === 'EADDRINUSE') { log(`Köprü zaten çalışıyor (port ${cfg.port} kullanımda). Bu kopya kapatılıyor.`); process.exit(3); }
+    log('HATA: ' + (e.message || e)); process.exit(1);
+  });
+  server.listen(cfg.port, '127.0.0.1', () => {
       log(`Asil Kuyumcu Köprü ${VERSION} çalışıyor → http://127.0.0.1:${cfg.port}`);
       log(`İşNet ortamı: ${cfg.mode === 'live' ? 'CANLI' : 'TEST'} (${cfg.baseUrl}), firma VKN: ${cfg.vkn || 'AYARLANMADI'}`);
       log('Bu pencereyi kapatmayın. Durdurmak için Ctrl+C.');

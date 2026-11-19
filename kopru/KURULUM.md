@@ -9,8 +9,12 @@ Program faturayı dükkan bilgisayarındaki bu küçük köprüye gönderir, kö
 2. Bu `kopru` klasörünü bilgisayara kopyalayın (ör. `C:\AsilKopru`).
 3. `BASLAT.bat` dosyasına çift tıklayın. Siyah pencerede
    `Asil Kuyumcu Köprü çalışıyor → http://127.0.0.1:8787` yazmalı. **Pencereyi kapatmayın.**
-   - Bilgisayar açılınca kendiliğinden başlasın isterseniz: `Win+R` → `shell:startup` → açılan klasöre
-     `BASLAT.bat` için bir kısayol koyun.
+4. **Otomatik başlatma (önerilen):** `OTOMATIK_BASLAT_KUR.bat` dosyasına bir kez çift tıklayın.
+   Köprü bundan sonra bilgisayar her açıldığında **pencere açmadan** arka planda kendiliğinden başlar
+   (şu anda da başlatılır). Kayıtları bu klasördeki `kopru.log` dosyasındadır.
+   - Kontrol: programda **Bağlantıyı Test Et** ya da tarayıcıda `http://127.0.0.1:8787`.
+   - Kaldırmak / durdurmak için: `OTOMATIK_BASLAT_KALDIR.bat`.
+   - Otomatik başlatma kuruluyken `BASLAT.bat` açılırsa "zaten çalışıyor" der ve kapanır.
 
 ## 2. Programda ayar
 
