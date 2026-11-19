@@ -2347,3 +2347,44 @@ test('fatura: perakende satış özel matrah (805) tek satır; "Toptan satış" 
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('satış geçmişi: "Maliyeti yeniden hesapla" geçmiş fişin barkodsuz satır maliyetini güncel birim maliyete göre düzeltir', async () => {
+  const fb = createFakeFirebase();
+  let p = await newDevice(browser, appUrl, fb);
+  await p.click('[data-go="sales"]');
+  for (let i = 0; i < 3; i++) {
+    await p.fill('#saleProductSearch', '22'); await p.waitForTimeout(300); await p.press('#saleProductSearch', 'Enter');
+    if (await p.waitForSelector('#saleEntryPrice:not([disabled])', { timeout: 5000 }).catch(() => null)) break;
+  }
+  await p.waitForTimeout(300);
+  await p.fill('#saleEntryPayable', '5000'); await p.click('#saleAddUnified'); await p.waitForTimeout(400);
+  await p.click('[data-pay="Nakit"]'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.selectOption('#salePerson', { index: 1 });
+  await p.click('#finalizeSale'); await p.click('#modalConfirm'); await p.waitForTimeout(2500);
+  const st = fb.db.state, sale = st.sales.find((s) => s.lines?.some((l) => l.openStockId));
+  assert.ok(sale, 'barkodsuz satış oluşmalı');
+  const line = sale.lines.find((l) => l.openStockId), o = st.openStocks.find((x) => x.id === line.openStockId);
+  const oldLine = Number(line.costHas), oldSale = Number(sale.costHas), amount = Number(line.qty ?? line.displayAmount);
+  // Birim maliyet sonradan düzeltildi (ör. YARIM 1,835 → 3,22)
+  o.inventoryUnitCostHas = Number(o.inventoryUnitCostHas || oldLine / amount) * 2;
+  fb.db.state = st;
+  await p.context().close();
+  p = await newDevice(browser, appUrl, fb);
+  await p.click('[data-go="sales"]');
+  await p.click('text=Satış Geçmişi');
+  await p.waitForSelector('#saleHistBody [data-sale-view]');
+  await p.click(`[data-sale-view="${sale.id}"]`);
+  await p.waitForSelector('#saleRecalcCost');
+  assert.match(await p.innerText('#saleRecalcCost'), /1 satır farklı/);
+  await p.click('#saleRecalcCost');
+  await p.waitForSelector('#recalcTable');
+  assert.match(await p.innerText('.modal'), /Kâr değişimi/);
+  await p.click('#modalConfirm'); await p.waitForTimeout(2500);
+  const s2 = fb.db.state.sales.find((s) => s.id === sale.id), l2 = s2.lines.find((l) => l.openStockId);
+  const want = amount * o.inventoryUnitCostHas;
+  assert.ok(Math.abs(l2.costHas - want) < 0.001, `satır maliyeti ${l2.costHas} ≈ ${want}`);
+  assert.ok(Math.abs(s2.costHas - (oldSale + (want - oldLine))) < 0.001, 'fiş maliyeti güncellenmeli');
+  assert.ok(Math.abs(s2.profitHas - (Number(sale.profitHas) - (want - oldLine))) < 0.001, 'kâr düşmeli');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
