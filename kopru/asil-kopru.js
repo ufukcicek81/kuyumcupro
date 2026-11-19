@@ -18,7 +18,7 @@ const ENDPOINTS = {
   live: 'https://einvoiceservice.isnet.net.tr'
 };
 const TEST_VKN = '4810173324';
-const VERSION = '1.0';
+const VERSION = '1.1';
 
 function loadConfig() {
   const file = process.env.ASIL_KOPRU_CONFIG || path.join(__dirname, 'asil-kopru.json');

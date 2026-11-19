@@ -10163,12 +10163,14 @@ function stockSummaryView(){
     return sendInvoiceRecordNowV7(r.id);
   }
   async function invoiceBridgeCallV7(url,body){const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await res.json().catch(()=>({}));if(!res.ok||d.ok===false)throw new Error(d.message||('HTTP '+res.status));return d;}
+  const INVOICE_BRIDGE_MIN_V7='1.1';
+  function invoiceBridgeOldV7(v){const a=String(v||'0').split('.').map(Number),b=INVOICE_BRIDGE_MIN_V7.split('.').map(Number);for(let i=0;i<Math.max(a.length,b.length);i++){if((a[i]||0)!==(b[i]||0))return (a[i]||0)<(b[i]||0);}return false;}
   async function testInvoiceBridgeV7(url){
     const box=document.getElementById('invBridgeInfo');if(!url)return toast('Önce köprü URL adresini yazın','err');
     if(box)box.innerHTML='Bağlantı deneniyor…';
     try{const res=await fetch(url,{method:'GET'});const d=await res.json().catch(()=>({}));if(!res.ok||d.ok===false)throw new Error(d.message||('HTTP '+res.status));
       let bal='';try{const b=await invoiceBridgeCallV7(url,{action:'balance'});bal=` · Kontör: <b>${esc(String(b.balance))}</b>`;}catch(e){bal=` · Kontör sorgulanamadı: ${esc(e.message)}`;}
-      const html=`<strong>Köprü çalışıyor.</strong> Ortam: <b>${d.mode==='live'?'CANLI':'TEST'}</b> · Firma VKN: <b>${esc(d.vkn||'—')}</b> · İşNet: <b>${d.isnet?'bağlı':'bağlanamadı'}</b>${d.error?' ('+esc(d.error)+')':''}${bal}`;
+      const html=`<strong>Köprü çalışıyor.</strong> Sürüm: <b>${esc(d.version||'?')}</b>${invoiceBridgeOldV7(d.version)?' <span class="negative">(ESKİ — C:\\kopru\\GUNCELLE.bat ile güncelleyin)</span>':''} · Ortam: <b>${d.mode==='live'?'CANLI':'TEST'}</b> · Firma VKN: <b>${esc(d.vkn||'—')}</b> · İşNet: <b>${d.isnet?'bağlı':'bağlanamadı'}</b>${d.error?' ('+esc(d.error)+')':''}${bal}`;
       if(box)box.innerHTML=html;toast(d.isnet?'Köprü ve İşNet bağlantısı tamam':'Köprü çalışıyor ama İşNet\'e bağlanamadı',d.isnet?'ok':'err');}
     catch(e){if(box)box.innerHTML=`<strong>Köprüye ulaşılamadı.</strong> Dükkân bilgisayarında köprü penceresinin açık olduğundan emin olun. (${esc(String(e.message||e))})`;toast('Köprüye ulaşılamadı','err');}
   }
