@@ -95,3 +95,15 @@ test('İşNet "kullanıcı bulunamadı" derse alıcı e-Arşiv sayılır; 111111
   await k.createInvoice(cfg, payload());
   assert.ok(!calls.some(c => c.name === 'GetTaxPayer'));
 });
+
+test('özel matrah satırı: SpecialBasisAmount + 805, fatura tipi OZELMATRAH; istisna ile karışık olamaz', () => {
+  const p = payload();
+  p.sale.lines = [{ kind: 'special', name: '22 AYAR BİLEZİK', quantity: 10, unit: 'GR', total: 49166.67, vatRate: 20, vatAmount: 833.33, exemptionCode: '805', exemptionReason: 'Altın ziynet', specialBase: 4166.67 }];
+  const b = k.buildInvoice(p, 'EARSIV', '');
+  assert.strictEqual(b.invoiceType, 'OZELMATRAH');
+  const d = b.invoice.InvoiceDetails.items[0];
+  assert.deepStrictEqual([d.SpecialBasisAmount, d.SpecialBasisReasonCode, d.VATRate, d.VATAmount, d.LineExtensionAmount, d.TaxExemptionReasonCode], ['4166.67', '805', '20', '833.33', '49166.67', undefined]);
+  assert.strictEqual(b.invoice.TotalPayableAmount, '50000.00');
+  p.sale.lines.push({ kind: 'gold', name: 'KÜLÇE', quantity: 1, unit: 'ADET', total: 1000, vatRate: 0, vatAmount: 0, exemptionCode: '230' });
+  assert.throws(() => k.buildInvoice(p, 'EARSIV', ''), /aynı faturada olamaz/);
+});

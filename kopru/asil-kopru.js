@@ -136,7 +136,7 @@ async function invoiceXml(cfg, ettn, documentType) {
     : await soapCall(cfg, 'invoice', 'SearchArchiveInvoice', base);
   checkResult(x);
   const b64 = tag(x, 'InvoiceXml').replace(/\s+/g, '');
-  if (!b64) throw new Error('Fatura XML bulunamadı');
+  if (!b64) throw new Error('Fatura XML henüz hazır değil; bir dakika sonra tekrar deneyin');
   return Buffer.from(b64, 'base64').toString('utf8');
 }
 
@@ -164,7 +164,9 @@ function productCode(l) {
   if (l.kind === 'labour' || /işçilik|iscilik/i.test(l.name || '')) return 'ISCILIK';
   const k = /(\d{1,2})\s*AYAR/i.exec(l.name || '');
   if (k) return 'ALTIN' + k[1];
-  return String(l.name || 'URUN').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 30) || 'URUN';
+  if (/GÜMÜŞ|GUMUS/i.test(l.name || '') && !/\s/.test((l.name || '').trim())) return 'GUMUS';
+  const tr = { Ç: 'C', Ğ: 'G', İ: 'I', I: 'I', Ö: 'O', Ş: 'S', Ü: 'U' };
+  return String(l.name || 'URUN').toLocaleUpperCase('tr-TR').replace(/[ÇĞİIÖŞÜ]/g, c => tr[c]).replace(/[^A-Z0-9]/g, '').slice(0, 30) || 'URUN';
 }
 
 function buildInvoice(p, documentType, inboxTag) {
@@ -177,7 +179,7 @@ function buildInvoice(p, documentType, inboxTag) {
 
   let net = 0, vat = 0;
   const vatByRate = new Map();
-  let exemptCode = '', exemptReason = '';
+  let exemptCode = '', exemptReason = '', specialCode = '';
   const details = lines.map(l => {
     const qty = Number(l.quantity) || 1;
     const lineNet = r2(l.total);
@@ -200,7 +202,12 @@ function buildInvoice(p, documentType, inboxTag) {
       VATAmount: lineVat.toFixed(2),
       VATRate: String(rate)
     };
-    if (rate === 0 && l.exemptionCode) {
+    if (l.specialBase != null && l.exemptionCode) {
+      // Özel matrah (KDVK 23/e, 805 altın / 808 gümüş): satır tutarı altın + işçilik, KDV yalnız işçilikten.
+      d.SpecialBasisAmount = r2(l.specialBase).toFixed(2);
+      d.SpecialBasisReasonCode = String(l.exemptionCode);
+      specialCode = specialCode || String(l.exemptionCode);
+    } else if (rate === 0 && l.exemptionCode) {
       d.TaxExemptionReasonCode = String(l.exemptionCode);
       d.TaxExemptionReason = l.exemptionReason || '';
       exemptCode = exemptCode || String(l.exemptionCode);
@@ -210,7 +217,8 @@ function buildInvoice(p, documentType, inboxTag) {
   });
   net = r2(net); vat = r2(vat);
   const totalTax = [...vatByRate.entries()].map(([rate, t]) => ({ TaxAmount: r2(t.vat).toFixed(2), TaxCode: '0015', TaxRate: String(rate) }));
-  const invoiceType = exemptCode ? 'ISTISNA' : (p.invoiceType && /^[A-Z]+$/.test(p.invoiceType) && p.invoiceType !== 'KARMA' ? p.invoiceType : 'SATIS');
+  if (specialCode && exemptCode) throw new Error('Özel matrah ve istisna satırları aynı faturada olamaz; ayrı fatura kesin');
+  const invoiceType = specialCode ? 'OZELMATRAH' : exemptCode ? 'ISTISNA' : 'SATIS';
   const notes = [p.sale && p.sale.note, p.sale && p.sale.docNo ? `Belge: ${p.sale.docNo}` : ''].filter(Boolean);
   const ettn = crypto.randomUUID().toUpperCase();
   const sourceCode = String((p.sale && (p.sale.id || p.sale.docNo)) || ettn).slice(0, 60);
@@ -249,7 +257,6 @@ function buildInvoice(p, documentType, inboxTag) {
 
 async function createInvoice(cfg, p) {
   if (!cfg.vkn) throw new Error('Köprüde firma VKN ayarlı değil (asil-kopru.json → vkn)');
-  if (p.layout === 'OZELMATRAH') throw new Error('Özel matrah fatura düzeni köprüde desteklenmiyor; fatura ayarlarında "Altın + İşçilik ayrı satır" düzenini seçin');
   const issuerVkn = String((p.issuer && p.issuer.vkn) || '').replace(/\D/g, '');
   if (cfg.mode === 'live' && issuerVkn && issuerVkn !== cfg.vkn) throw new Error(`Programdaki firma VKN (${issuerVkn}) köprüdeki VKN (${cfg.vkn}) ile aynı değil`);
   const rc = p.receiver || {};

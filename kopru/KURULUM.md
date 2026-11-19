@@ -56,5 +56,9 @@ başka firma adına fatura kesilmesin diye).
 
 - Alıcının VKN/TCKN'si İşNet'te e-Fatura mükellefi olarak kayıtlıysa **e-Fatura**, değilse **e-Arşiv** kesilir.
   TCKN yoksa `11111111111` kullanılır (e-Arşiv).
-- Altın satırı **KDV %0, 230 istisna kodu**, işçilik satırı **KDV %20** olarak gider; fatura tipi **İSTİSNA**.
+- **Perakende (varsayılan):** fatura tipi **ÖZEL MATRAH**. Her ürün tek satır (altın + işçilik); KDV yalnız
+  işçilikten (%20) hesaplanır. Kod: altında **805**, gümüşte **808** (KDVK 23/e).
+- **Toptan:** fatura tipi **İSTİSNA** (230). Tutarın tamamı KDV %0, işçiliksiz. Taslakta "Toptan satış — tümü
+  istisna" düğmesi ya da havale taslağında "Fatura Türü: Toptan" ile seçilir.
+- Aynı faturada özel matrah ve istisna satırı birlikte olamaz; program göndermeden önce uyarır.
 - Müşterinin e-postası yazılıysa e-Arşiv faturası müşteriye e-postayla gider, yoksa kâğıt (yazdırılır).
