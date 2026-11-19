@@ -1,5 +1,7 @@
 # e-Fatura / e-Arşiv Entegrasyonu (V6.20)
 
+> **İşNet (NetteFatura):** hazır köprü programı `kopru/` klasöründedir. Kurulum: [kopru/KURULUM.md](kopru/KURULUM.md).
+
 Program tarayıcı içinde çalıştığı için özel entegratör API kullanıcı adı, parola veya API anahtarı `index.html` içine yazılmamalıdır.
 
 ## Önerilen yapı
