@@ -10030,11 +10030,22 @@ function stockSummaryView(){
     r.receiver={name:g('irName').value.trim(),tckn:g('irTckn').value.replace(/\D/g,''),vkn:g('irVkn').value.replace(/\D/g,''),address:g('irAddress').value.trim(),phone:g('irPhone').value.trim(),email:g('irEmail').value.trim()};
     if(r.receiver.name)r.customerName=r.receiver.name;
   }
+  function invoiceReadGoldOverridesV7(r){
+    const o={},sale=state.sales.find(x=>x.id===r.saleId),base=sale?invoiceBreakdownV7(sale,null,r.lineTax).rows:[];
+    document.querySelectorAll('[data-inv-gold]').forEach(inp=>{const raw=String(inp.value).trim(),v=Number(raw.includes(',')?raw.replace(/\./g,'').replace(',','.'):raw),row=base[Number(inp.dataset.invGold)];if(raw!==''&&Number.isFinite(v)&&row&&Math.abs(v-row.autoGold)>=0.01)o[inp.dataset.invGold]=v;});
+    return o;
+  }
   function openInvoiceDraftV7(id){
     const r=state.invoiceRecords.find(x=>x.id===id);if(!r)return;if(r.kind==='havale')return openHavaleInvoiceV7(r);const editable=['Taslak','Hata'].includes(r.status);
-    modal(`Fatura ${editable?'Taslağı':'Kaydı'} — ${esc(r.saleDocNo)}`,(editable?invoiceReceiverFormV7(invoiceReceiverV7(r)):'')+invoiceDraftHtmlV7(r,editable)+`<div class="addon-actions" style="margin-top:10px"><button class="btn btn-outline" type="button" id="invPrintDraft">Yazdır</button>${editable?'<button class="btn btn-outline" type="button" id="invResetGold">Otomatik hesaba dön</button>':''}</div>`,editable?()=>{invoiceCollectReceiverV7(r);const o={};document.querySelectorAll('[data-inv-gold]').forEach(inp=>{const raw=String(inp.value).trim(),v=Number(raw.includes(',')?raw.replace(/\./g,'').replace(',','.'):raw);const sale=state.sales.find(x=>x.id===r.saleId),row=sale&&invoiceBreakdownV7(sale,null).rows[Number(inp.dataset.invGold)];if(Number.isFinite(v)&&row&&Math.abs(v-row.autoGold)>=0.01)o[inp.dataset.invGold]=v;});r.goldOverrides=o;const lt={},sale0=state.sales.find(x=>x.id===r.saleId),base=sale0?invoiceBreakdownV7(sale0,null,null).rows:[];document.querySelectorAll('[data-inv-code]').forEach(sel=>{const i=Number(sel.dataset.invCode);if(base[i]&&sel.value!==base[i].taxCodeKey)lt[i]=sel.value;});r.lineTax=lt;save();closeModal();render();toast('Fatura taslağı kaydedildi');}:null,'Taslağı Kaydet');
+    modal(`Fatura ${editable?'Taslağı':'Kaydı'} — ${esc(r.saleDocNo)}`,(editable?invoiceReceiverFormV7(invoiceReceiverV7(r)):'')+`<div id="invDraftBox">${invoiceDraftHtmlV7(r,editable)}</div>`+`<div class="addon-actions" style="margin-top:10px"><button class="btn btn-outline" type="button" id="invPrintDraft">Yazdır</button>${editable?'<button class="btn btn-outline" type="button" id="invResetGold">Otomatik hesaba dön</button>':''}</div>`,editable?()=>{invoiceCollectReceiverV7(r);r.goldOverrides=invoiceReadGoldOverridesV7(r);const lt={},sale0=state.sales.find(x=>x.id===r.saleId),base=sale0?invoiceBreakdownV7(sale0,null,null).rows:[];document.querySelectorAll('[data-inv-code]').forEach(sel=>{const i=Number(sel.dataset.invCode);if(base[i]&&sel.value!==base[i].taxCodeKey)lt[i]=sel.value;});r.lineTax=lt;save();closeModal();render();toast('Fatura taslağı kaydedildi');}:null,'Taslağı Kaydet');
     document.getElementById('invPrintDraft')?.addEventListener('click',()=>printInvoiceDraftV7(r.id));
-    document.querySelectorAll('[data-inv-code]').forEach(sel=>sel.addEventListener('change',()=>{invoiceCollectReceiverV7(r);r.lineTax=Object.assign({},r.lineTax||{},{[sel.dataset.invCode]:sel.value});save();openInvoiceDraftV7(r.id);}));
+    // Altın bedeli yazılırken işçilik, KDV ve fatura satırları hemen yeniden hesaplanır (kaydetmeden önce).
+    const box=document.getElementById('invDraftBox');let liveT=null;
+    box?.addEventListener('input',e=>{const inp=e.target.closest?.('[data-inv-gold]');if(!inp)return;clearTimeout(liveT);liveT=setTimeout(()=>{
+      const idx=inp.dataset.invGold,pos=inp.selectionStart,val=inp.value;box.innerHTML=invoiceDraftHtmlV7(Object.assign({},r,{goldOverrides:invoiceReadGoldOverridesV7(r)}),true);
+      const again=box.querySelector(`[data-inv-gold="${idx}"]`);if(again){again.value=val;again.focus();try{again.setSelectionRange(pos,pos);}catch(_){}}bindCodes();},300);});
+    function bindCodes(){document.querySelectorAll('[data-inv-code]').forEach(sel=>sel.addEventListener('change',()=>{invoiceCollectReceiverV7(r);r.goldOverrides=invoiceReadGoldOverridesV7(r);r.lineTax=Object.assign({},r.lineTax||{},{[sel.dataset.invCode]:sel.value});save();openInvoiceDraftV7(r.id);}));}
+    bindCodes();
     document.getElementById('invResetGold')?.addEventListener('click',()=>{invoiceCollectReceiverV7(r);r.goldOverrides={};r.lineTax={};save();openInvoiceDraftV7(r.id);});
   }
   function printInvoiceDraftV7(id){
