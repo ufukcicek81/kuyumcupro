@@ -2187,3 +2187,62 @@ test('fatura: gelen havale fatura ekranına düşer; 100.000 TL → 98.000 altı
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('fatura: İşNet köprüsü — bağlantı testi, havale faturası gönderimi ve XML indirme', async () => {
+  const http = require('http');
+  const kopru = require('../../kopru/asil-kopru.js');
+  const realFetch = global.fetch, soap = [];
+  global.fetch = async (url, opt) => {
+    const name = /\/(\w+)"$/.exec(opt.headers.SOAPAction)[1]; soap.push({ name, body: opt.body });
+    const ok = '<a:Result>Success</a:Result>';
+    const body = { HealthCheck: '<HealthCheckResult>true</HealthCheckResult>', GetCompanyBalance: ok + '<a:Balance>500</a:Balance>',
+      SendArchiveInvoice: ok + '<a:ArchiveInvoiceNumber>YEK2026000000077</a:ArchiveInvoiceNumber><a:Ettn>ettn-77</a:Ettn>',
+      GetDocumentViewerLink: ok + '<a:DocumentViewerLink>http://viewer.test/77</a:DocumentViewerLink>',
+      SearchArchiveInvoice: ok + '<a:InvoiceXml>' + Buffer.from('<Invoice>230</Invoice>').toString('base64') + '</a:InvoiceXml>' }[name] || ok;
+    return { ok: true, status: 200, text: async () => `<r>${body}</r>` };
+  };
+  const cfg = { mode: 'test', vkn: '4810173324', baseUrl: 'https://isnet.test', allowedOrigins: [] };
+  const bridge = http.createServer((q, s) => kopru.handle(cfg, q, s));
+  await new Promise((r) => bridge.listen(0, '127.0.0.1', r));
+  const bridgeUrl = `http://127.0.0.1:${bridge.address().port}`;
+  try {
+    const fb = createFakeFirebase();
+    let p = await newDevice(browser, appUrl, fb);
+    await p.waitForTimeout(2500);
+    const st = fb.db.state, bank = st.bankAccounts[0];
+    st.financeMoves.unshift({ id: 'FIN-KOPRU', period: st.activePeriod, date: new Date().toISOString(), direction: 'Giriş', type: 'Havale / EFT Tahsilat', accountKind: 'Banka', accountId: bank.id, accountName: bank.bank || bank.name, amount: 100000, accountAmount: 100000, accountCurrency: 'TL', tlAmount: 100000, customer: 'AYŞE KAYA', description: '' });
+    fb.db.state = st;
+    await p.context().close();
+    p = await newDevice(browser, appUrl, fb);
+    await p.evaluate(() => document.querySelector('[data-go="invoices"],[data-route="invoices"]').click());
+    await p.click('[data-invoice-view="settings"]');
+    await p.fill('#invProxy', bridgeUrl); await p.click('#saveInvoiceSettings');
+    await p.click('#invTestBridge');
+    await p.waitForFunction(() => /Kontör/.test(document.getElementById('invBridgeInfo')?.innerText || ''), null, { timeout: 5000 });
+    const info = await p.innerText('#invBridgeInfo');
+    assert.match(info, /Köprü çalışıyor/); assert.match(info, /TEST/); assert.match(info, /bağlı/); assert.match(info, /500/);
+    await p.click('[data-invoice-view="havale"]');
+    await p.click('[data-havale-invoice="FIN-KOPRU"]'); await p.waitForSelector('#hiGold');
+    await p.fill('#hiTckn', '11111111111'); await p.fill('#hiGold', '98000');
+    await p.click('#modalConfirm'); await p.waitForTimeout(300);
+    await p.click('[data-invoice-view="records"]');
+    await p.click('[data-invoice-send]');
+    await p.waitForSelector('[data-invoice-xml]', { timeout: 5000 });
+    const row = await p.innerText('table.table tbody tr');
+    assert.match(row, /Gönderildi/); assert.match(row, /YEK2026000000077/);
+    const send = soap.find((x) => x.name === 'SendArchiveInvoice');
+    assert.ok(send, 'e-Arşiv gönderilmeli');
+    assert.match(send.body, /<a:TaxExemptionReasonCode>230<\/a:TaxExemptionReasonCode>/);
+    assert.match(send.body, /<a:TotalPayableAmount>100000.00<\/a:TotalPayableAmount>/);
+    for (let i = 0; i < 60 && !(fb.db.state.invoiceRecords || []).some((r) => r.sentDocumentType); i++) await p.waitForTimeout(250);
+    assert.equal((fb.db.state.invoiceRecords || []).find((r) => r.kind === 'havale')?.sentDocumentType, 'EARSIV');
+    const dl = p.waitForEvent('download');
+    await p.click('[data-invoice-xml]');
+    const d = await dl;
+    assert.equal(d.suggestedFilename(), 'YEK2026000000077.xml');
+    assert.deepEqual(p.errors, []);
+    await p.context().close();
+  } finally {
+    global.fetch = realFetch; bridge.close();
+  }
+});
