@@ -1242,6 +1242,12 @@ test('fatura: altın ve işçilik ayrı satır, altın kodu 230, fatura tipi İS
   assert.match(lines, /24 Ayar[^\n]*%0[^\n]*230/, 'altın satırı KDV %0 ve 230 koduyla');
   assert.match(lines, /İŞÇİLİK[^\n]*%20/, 'işçilik ayrı satır, KDV %20');
   assert.match(draft, /230 · İstisna\s+Külçe altın, külçe gümüş ve kıymetli taşların teslimi/);
+  // Ürün satırında kod 230 (Altın + İşçilik); 230 elle seçilse de işçilik ayrı satırda kalır.
+  assert.equal(await p.$eval('[data-inv-code="0"]', (e) => e.value), '230');
+  assert.match(await p.$eval('[data-inv-code="0"]', (e) => e.selectedOptions[0].textContent), /230 · Altın \+ İşçilik/);
+  await p.selectOption('[data-inv-code="0"]', 'SATIS'); await p.waitForTimeout(200);
+  await p.selectOption('[data-inv-code="0"]', '230'); await p.waitForTimeout(200);
+  assert.match(await p.innerText('.invoice-lines tbody'), /İŞÇİLİK[^\n]*%20/, '230 seçilince işçilik kaybolmamalı');
   await p.click('#modalConfirm'); await p.waitForTimeout(300);
   await p.click('[data-invoice-send]'); await p.waitForTimeout(800);
   assert.equal(sent.invoiceType, 'ISTISNA');
