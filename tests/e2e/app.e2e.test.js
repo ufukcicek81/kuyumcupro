@@ -1038,7 +1038,7 @@ test('fatura taslağı: altın bedeli, işçilik ve yalnız işçilikten KDV ayr
   // e-Fatura: entegrasyon adresi, taslak
   await p.evaluate(() => document.querySelector('[data-go="invoices"],[data-route="invoices"]').click());
   await p.click('[data-invoice-view="settings"]');
-  await p.fill('#invProxy', 'https://fatura.test/api'); await p.click('#saveInvoiceSettings');
+  await p.fill('#invVkn', '2530152458'); await p.fill('#invProxy', 'https://fatura.test/api'); await p.click('#saveInvoiceSettings');
   await p.click('[data-invoice-view="sales"]');
   await p.click('[data-invoice-draft]');
   await p.waitForSelector('[data-inv-gold="0"]');
@@ -1054,7 +1054,12 @@ test('fatura taslağı: altın bedeli, işçilik ve yalnız işçilikten KDV ayr
   await p.fill('[data-inv-gold="0"]', '10000'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
   assert.match(await p.innerText('.content'), /SAT-\d{4}-0+1/);
   assert.match(await p.innerText('.content'), /50\.000,00/, 'işçilik (60.000 − KDV 10.000) listede görünmeli');
-  await p.click('[data-invoice-send]'); await p.waitForTimeout(800);
+  await p.click('[data-invoice-send]');
+  // Elle yazılan altın bedeli HAS fiyatından çok farklı → gönderim öncesi uyarı, onaylanınca gider.
+  await p.waitForSelector('#invPreWarnings');
+  assert.match(await p.innerText('#invPreWarnings'), /Altın bedeli[\s\S]*%10/);
+  assert.equal(sent, null);
+  await p.click('#modalConfirm'); await p.waitForTimeout(800);
   assert.ok(sent, 'entegratöre istek gitmeli');
   assert.equal(sent.sale.products[0].goldValue, 10000);
   assert.equal(sent.sale.products[0].labourAmount, 50000);
@@ -1232,7 +1237,7 @@ test('fatura: altın ve işçilik ayrı satır, altın kodu 230, fatura tipi İS
   assert.match(await p.innerText('.content'), /KDV İstisna ve Özel Matrah Kodları/);
   assert.equal(await p.inputValue('#invLayout'), 'SPLIT', 'varsayılan düzen altın + işçilik ayrı');
   assert.equal(await p.inputValue('#invGoldCode'), '230');
-  await p.fill('#invProxy', 'https://fatura.test/api'); await p.click('#saveInvoiceSettings');
+  await p.fill('#invVkn', '2530152458'); await p.fill('#invProxy', 'https://fatura.test/api'); await p.click('#saveInvoiceSettings');
   await p.click('[data-invoice-view="sales"]');
   await p.click('[data-invoice-draft]');
   await p.waitForSelector('.invoice-lines');
@@ -2166,13 +2171,13 @@ test('fatura: gelen havale fatura ekranına düşer; 100.000 TL → 98.000 altı
   await p.context().route('https://fatura.test/api', async (r) => { sent = JSON.parse(r.request().postData()); await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, status: 'Gönderildi', invoiceNo: 'TST2026000000009' }) }); });
   await p.evaluate(() => document.querySelector('[data-go="invoices"],[data-route="invoices"]').click());
   await p.click('[data-invoice-view="settings"]');
-  await p.fill('#invProxy', 'https://fatura.test/api'); await p.click('#saveInvoiceSettings');
+  await p.fill('#invVkn', '2530152458'); await p.fill('#invProxy', 'https://fatura.test/api'); await p.click('#saveInvoiceSettings');
   await p.click('[data-invoice-view="havale"]');
   await p.waitForSelector('[data-havale-invoice="FIN-HAVALE-TEST"]');
   await p.click('[data-havale-invoice="FIN-HAVALE-TEST"]');
   await p.waitForSelector('#hiGold');
   assert.equal(await p.inputValue('#hiName'), 'AHMET YILMAZ');
-  await p.fill('#hiTckn', '12345678901');
+  await p.fill('#hiTckn', '12345678950');
   await p.fill('#hiGold', '98000');
   const info = await p.innerText('#hiInfo');
   assert.match(info, /2\.000,00/); assert.match(info, /1\.666,67/); assert.match(info, /333,33/);
@@ -2186,7 +2191,7 @@ test('fatura: gelen havale fatura ekranına düşer; 100.000 TL → 98.000 altı
   await p.click('[data-invoice-send]'); await p.waitForTimeout(1500);
   assert.ok(sent, 'entegratöre gönderilmeli');
   assert.equal(sent.invoiceType, 'ISTISNA');
-  assert.equal(sent.receiver.tckn, '12345678901');
+  assert.equal(sent.receiver.tckn, '12345678950');
   assert.deepEqual(sent.sale.lines.map((x) => [x.name, x.total, x.vatRate, x.vatAmount]), [['22 AYAR ALTIN', 98000, 0, 0], ['İŞÇİLİK', 1666.67, 20, 333.33]]);
   assert.ok(sent.sale.lines[0].exemptionCode, 'altın satırında istisna kodu olmalı');
   assert.match(await p.innerText('body'), /TST2026000000009/);
@@ -2222,7 +2227,7 @@ test('fatura: İşNet köprüsü — bağlantı testi, havale faturası gönderi
     p = await newDevice(browser, appUrl, fb);
     await p.evaluate(() => document.querySelector('[data-go="invoices"],[data-route="invoices"]').click());
     await p.click('[data-invoice-view="settings"]');
-    await p.fill('#invProxy', bridgeUrl); await p.click('#saveInvoiceSettings');
+    await p.fill('#invVkn', '2530152458'); await p.fill('#invProxy', bridgeUrl); await p.click('#saveInvoiceSettings');
     await p.click('#invTestBridge');
     await p.waitForFunction(() => /Kontör/.test(document.getElementById('invBridgeInfo')?.innerText || ''), null, { timeout: 5000 });
     const info = await p.innerText('#invBridgeInfo');
@@ -2251,4 +2256,43 @@ test('fatura: İşNet köprüsü — bağlantı testi, havale faturası gönderi
   } finally {
     global.fetch = realFetch; bridge.close();
   }
+});
+
+test('fatura: gönderim öncesi kontrol — geçersiz TCKN durdurur, 7 günden eski satış uyarı ister', async () => {
+  const fb = createFakeFirebase();
+  let p = await newDevice(browser, appUrl, fb);
+  await p.waitForTimeout(2500);
+  const st = fb.db.state, bank = st.bankAccounts[0];
+  st.financeMoves.unshift({ id: 'FIN-ESKI', period: st.activePeriod, date: new Date(Date.now() - 10 * 864e5).toISOString(), direction: 'Giriş', type: 'Havale / EFT Tahsilat', accountKind: 'Banka', accountId: bank.id, accountName: bank.bank || bank.name, amount: 50000, accountAmount: 50000, accountCurrency: 'TL', tlAmount: 50000, customer: 'MEHMET DEMİR', description: '' });
+  fb.db.state = st;
+  await p.context().close();
+  p = await newDevice(browser, appUrl, fb);
+  let sent = 0;
+  await p.context().route('https://fatura.test/api', async (r) => { sent++; await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, status: 'Gönderildi', invoiceNo: 'TST9', documentType: 'EARSIV' }) }); });
+  await p.evaluate(() => document.querySelector('[data-go="invoices"],[data-route="invoices"]').click());
+  await p.click('[data-invoice-view="settings"]');
+  await p.fill('#invVkn', '2530152458'); await p.fill('#invProxy', 'https://fatura.test/api'); await p.click('#saveInvoiceSettings');
+  await p.click('[data-invoice-view="havale"]');
+  await p.click('[data-havale-invoice="FIN-ESKI"]'); await p.waitForSelector('#hiGold');
+  await p.fill('#hiTckn', '12345678901'); await p.fill('#hiGold', '49000');
+  await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.click('[data-invoice-view="records"]');
+  await p.click('[data-invoice-send]');
+  await p.waitForSelector('#invPreErrors');
+  assert.match(await p.innerText('#invPreErrors'), /TCKN geçersiz/);
+  assert.equal(sent, 0, 'hatalı fatura gönderilmemeli');
+  // Taslağı aç → TCKN düzelt → uyarı (10 gün önce) → yine de gönder
+  await p.click('#modalConfirm'); await p.waitForSelector('#hiTckn');
+  await p.fill('#hiTckn', '12345678950');
+  await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.click('[data-invoice-send]');
+  await p.waitForSelector('#invPreWarnings');
+  assert.match(await p.innerText('#invPreWarnings'), /10 gün önce[\s\S]*7 gün/);
+  assert.equal(sent, 0);
+  await p.click('#modalConfirm'); await p.waitForTimeout(1200);
+  assert.equal(sent, 1);
+  const row = await p.innerText('table.table tbody tr');
+  assert.match(row, /Gönderildi/); assert.match(row, /e-Arşiv/);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
 });
