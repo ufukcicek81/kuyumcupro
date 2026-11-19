@@ -1023,7 +1023,11 @@ test('telefon düzeni: logo görünür, ekranlar yana taşmaz, satış kartları
 test('fatura taslağı: altın bedeli, işçilik ve yalnız işçilikten KDV ayrılır; entegratöre ayrıntılı gider', async () => {
   const p = await newDevice(browser, appUrl, createFakeFirebase());
   let sent = null;
-  await p.context().route('https://fatura.test/api', async (r) => { sent = JSON.parse(r.request().postData()); await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, status: 'Gönderildi', invoiceNo: 'TST2026000000001' }) }); });
+  let calls = 0;
+  await p.context().route('https://fatura.test/api', async (r) => {
+    if (++calls === 1) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: false, message: 'ESKİ KÖPRÜ HATASI' }) });
+    sent = JSON.parse(r.request().postData()); await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, status: 'Gönderildi', invoiceNo: 'TST2026000000001' }) });
+  });
   // Satış: 22 ayar 0,25 gram, 70.000 TL nakit
   await p.click('[data-go="sales"]');
   for (let i = 0; i < 3; i++) {
@@ -1065,7 +1069,13 @@ test('fatura taslağı: altın bedeli, işçilik ve yalnız işçilikten KDV ayr
   assert.match(await p.innerText('#invPreWarnings'), /Altın bedeli[\s\S]*%10/);
   assert.equal(sent, null);
   await p.click('#modalConfirm'); await p.waitForTimeout(800);
+  // İlk deneme hata verir; hata yazısı görünür, tekrar gönderilince kaybolur.
+  assert.match(await p.innerText('table.table tbody'), /ESKİ KÖPRÜ HATASI/);
+  await p.click('#modalRoot .modal button, .critical-alert button').catch(() => {});
+  await p.evaluate(() => document.querySelectorAll('.critical-overlay,.critical-alert').forEach((e) => e.remove()));
+  await p.click('[data-invoice-send]'); await p.waitForSelector('#invPreWarnings'); await p.click('#modalConfirm'); await p.waitForTimeout(800);
   assert.ok(sent, 'entegratöre istek gitmeli');
+  assert.doesNotMatch(await p.innerText('table.table tbody'), /ESKİ KÖPRÜ HATASI/, 'başarılı gönderimde eski hata yazısı kalmamalı');
   assert.equal(sent.sale.products[0].goldValue, 10000);
   assert.equal(sent.sale.products[0].labourAmount, 50000);
   assert.equal(sent.sale.products[0].vatAmount, 10000);
