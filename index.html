@@ -2395,7 +2395,33 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
   }
   function viewSaleRecord(id){
     const s=state.sales.find(x=>x.id===id);if(!s)return toast('Satış bulunamadı','err');
-    modal(`Satış — ${s.docNo||s.id}`,saleDetailHtml(s),null,'Kapat');
+    const fix=saleCostRecalcPlanV7(s).length;
+    modal(`Satış — ${s.docNo||s.id}`,saleDetailHtml(s)+`<div class="addon-actions" style="margin-top:10px"><button class="btn btn-outline" type="button" id="saleRecalcCost">Maliyeti yeniden hesapla${fix?` (${fix} satır farklı)`:''}</button></div>`,null,'Kapat');
+    document.getElementById('saleRecalcCost')?.addEventListener('click',()=>openSaleCostRecalcV7(s.id));
+  }
+  /* Geçmiş satışın barkodsuz (ziynet / gram) satırlarının maliyetini stoktaki GÜNCEL birim maliyete göre yeniden hesaplar.
+     Örn. YARIM birim maliyeti yanlış (1,835) girilip sonra 3,22'ye düzeltildiyse, o gün yapılan satışın kârı düzelir.
+     Barkodlu ürünlerin maliyeti değişmez. Stok miktarı ve kasa etkilenmez. */
+  function saleCostRecalcPlanV7(s){
+    const out=[],r4=x=>Math.round(Number(x||0)*10000)/10000;
+    (s.lines||[]).forEach((l,i)=>{if(l.sourceType!=='open'&&!l.openStockId)return;const o=(state.openStocks||[]).find(x=>x.id===l.openStockId);if(!o)return;
+      const amount=Number(l.qty??l.displayAmount??0);if(!(amount>0))return;const unit=openUnitCostHas(o);if(!(unit>0))return;
+      const oldC=r4(l.costHas),newC=r4(amount*unit);if(Math.abs(newC-oldC)>=0.0005)out.push({i,name:l.name||l.code||'',amount,unit:l.unit||'',oldC,newC,unitCost:unit});});
+    return out;
+  }
+  function openSaleCostRecalcV7(id){
+    const s=state.sales.find(x=>x.id===id);if(!s)return;const plan=saleCostRecalcPlanV7(s);
+    if(!plan.length)return toast('Bu fişin maliyeti stoktaki güncel birim maliyetle zaten aynı','ok');
+    const rate=Number(s.hasBuyRateAtSale||historicalHasRate(s.date,'buy')||state.prices.has?.buy||1),delta=plan.reduce((n,x)=>n+x.newC-x.oldC,0);
+    modal(`Maliyeti yeniden hesapla — ${esc(s.docNo||s.id)}`,`<div class="notice">Barkodsuz ürünlerin maliyeti stok kartındaki <b>güncel birim maliyete</b> göre yeniden yazılır. Satış tutarı, stok ve kasa değişmez; yalnız bu fişin kâr hesabı düzelir.</div>
+      <div class="table-wrap"><table class="table" id="recalcTable"><thead><tr><th>Ürün</th><th class="num">Miktar</th><th class="num">Birim maliyet (güncel)</th><th class="num">Eski maliyet</th><th class="num">Yeni maliyet</th></tr></thead><tbody>${plan.map(x=>`<tr><td><strong>${esc(x.name)}</strong></td><td class="num">${qty(x.amount)} ${esc(x.unit)}</td><td class="num">${qty(x.unitCost)} HAS</td><td class="num">${qty(x.oldC)} HAS</td><td class="num"><strong>${qty(x.newC)} HAS</strong></td></tr>`).join('')}</tbody></table></div>
+      <div class="summary-row" style="margin-top:8px"><span>Kâr değişimi</span><strong class="${delta>0?'negative':'positive'}">${delta>0?'−':'+'}${qty(Math.abs(delta))} HAS (≈ ${money(Math.abs(delta)*rate)})</strong></div>`,()=>{
+      plan.forEach(x=>{const l=s.lines[x.i];l.costHas=x.newC;l.cost=x.newC*rate;l.belowCost=belowCostInfo(Number(l.saleHas||0),x.newC).isBelow;});
+      if(Number.isFinite(Number(s.costHas)))s.costHas=Number(s.costHas)+delta;
+      if(Number.isFinite(Number(s.cost)))s.cost=Number(s.cost)+delta*rate;
+      if(Number.isFinite(Number(s.profitHas)))s.profitHas=Number(s.profitHas)-delta;
+      s.costRecalculatedAt=now();s.costRecalculatedBy=session.name;
+      audit(`${s.docNo||s.id} maliyeti yeniden hesaplandı (${delta>0?'+':''}${qty(delta)} HAS maliyet)`,'Satış');save();closeModal();render();toast('Fişin maliyeti güncellendi; raporlar düzeldi');},'MALİYETİ GÜNCELLE');
   }
   /* İptal edilen / düzeltmesi yarım kalan satışı eski hâliyle yeniden kaydeder (aynı belge numarası ve tarih). */
   function saleDraftFromSnapshotV7(snap){return {customerId:snap.customerId||'CASH',customerType:state.customers.find(c=>c.id===snap.customerId)?.type||'Müşteri',masakIdentityId:snap.masakIdentityId||'',salesperson:snap.salesperson||'',saleCurrency:snap.saleCurrency||'TL',note:snap.note||'',lines:clone(snap.lines||[]),payments:clone(snap.payments||[]),returnItems:clone(snap.returnItems||[]),discount:Number(snap.discount||0),commission:Number(snap.commission||0),returns:Number(snap.returns||0),saleMode:'Otomatik',entrySelection:null,entryQuery:'',editingDocNo:snap.docNo||'',editingOriginalId:snap.id||'',editSnapshot:snap};}
@@ -10163,12 +10189,14 @@ function stockSummaryView(){
     return sendInvoiceRecordNowV7(r.id);
   }
   async function invoiceBridgeCallV7(url,body){const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await res.json().catch(()=>({}));if(!res.ok||d.ok===false)throw new Error(d.message||('HTTP '+res.status));return d;}
+  const INVOICE_BRIDGE_MIN_V7='1.1';
+  function invoiceBridgeOldV7(v){const a=String(v||'0').split('.').map(Number),b=INVOICE_BRIDGE_MIN_V7.split('.').map(Number);for(let i=0;i<Math.max(a.length,b.length);i++){if((a[i]||0)!==(b[i]||0))return (a[i]||0)<(b[i]||0);}return false;}
   async function testInvoiceBridgeV7(url){
     const box=document.getElementById('invBridgeInfo');if(!url)return toast('Önce köprü URL adresini yazın','err');
     if(box)box.innerHTML='Bağlantı deneniyor…';
     try{const res=await fetch(url,{method:'GET'});const d=await res.json().catch(()=>({}));if(!res.ok||d.ok===false)throw new Error(d.message||('HTTP '+res.status));
       let bal='';try{const b=await invoiceBridgeCallV7(url,{action:'balance'});bal=` · Kontör: <b>${esc(String(b.balance))}</b>`;}catch(e){bal=` · Kontör sorgulanamadı: ${esc(e.message)}`;}
-      const html=`<strong>Köprü çalışıyor.</strong> Ortam: <b>${d.mode==='live'?'CANLI':'TEST'}</b> · Firma VKN: <b>${esc(d.vkn||'—')}</b> · İşNet: <b>${d.isnet?'bağlı':'bağlanamadı'}</b>${d.error?' ('+esc(d.error)+')':''}${bal}`;
+      const html=`<strong>Köprü çalışıyor.</strong> Sürüm: <b>${esc(d.version||'?')}</b>${invoiceBridgeOldV7(d.version)?' <span class="negative">(ESKİ — C:\\kopru\\GUNCELLE.bat ile güncelleyin)</span>':''} · Ortam: <b>${d.mode==='live'?'CANLI':'TEST'}</b> · Firma VKN: <b>${esc(d.vkn||'—')}</b> · İşNet: <b>${d.isnet?'bağlı':'bağlanamadı'}</b>${d.error?' ('+esc(d.error)+')':''}${bal}`;
       if(box)box.innerHTML=html;toast(d.isnet?'Köprü ve İşNet bağlantısı tamam':'Köprü çalışıyor ama İşNet\'e bağlanamadı',d.isnet?'ok':'err');}
     catch(e){if(box)box.innerHTML=`<strong>Köprüye ulaşılamadı.</strong> Dükkân bilgisayarında köprü penceresinin açık olduğundan emin olun. (${esc(String(e.message||e))})`;toast('Köprüye ulaşılamadı','err');}
   }

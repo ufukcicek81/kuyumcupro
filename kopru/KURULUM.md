@@ -16,6 +16,11 @@ Program faturayı dükkan bilgisayarındaki bu küçük köprüye gönderir, kö
    - Kaldırmak / durdurmak için: `OTOMATIK_BASLAT_KALDIR.bat`.
    - Otomatik başlatma kuruluyken `BASLAT.bat` açılırsa "zaten çalışıyor" der ve kapanır.
 
+## Güncelleme
+
+`GUNCELLE.bat` dosyasına çift tıklayın: köprünün son sürümünü indirir, çalışan köprüyü yeni sürümle
+yeniden başlatır. `asil-kopru.json` (ayarlarınız) değiştirilmez. Sürüm, programda **Bağlantıyı Test Et**'te görünür.
+
 ## 2. Programda ayar
 
 e-Fatura / e-Arşiv → **Entegrasyon Ayarları**:
