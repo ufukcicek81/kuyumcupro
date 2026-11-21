@@ -1,0 +1,11 @@
+{
+  "name": "asil-kuyumcu-kopru",
+  "private": true,
+  "description": "Asil Kuyumcu Pro dükkan köprüsü (İşNet e-Fatura, WhatsApp)",
+  "main": "asil-kopru.js",
+  "dependencies": {
+    "@whiskeysockets/baileys": "7.0.0-rc14",
+    "pino": "^9.0.0",
+    "qrcode": "1.5.4"
+  }
+}

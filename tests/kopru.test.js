@@ -107,3 +107,45 @@ test('özel matrah satırı: SpecialBasisAmount + 805, fatura tipi OZELMATRAH; i
   p.sale.lines.push({ kind: 'gold', name: 'KÜLÇE', quantity: 1, unit: 'ADET', total: 1000, vatRate: 0, vatAmount: 0, exemptionCode: '230' });
   assert.throws(() => k.buildInvoice(p, 'EARSIV', ''), /aynı faturada olamaz/);
 });
+
+test('köprü yalnız Asil Kuyumcu adreslerine izin verir', () => {
+  const c = { allowedOrigins: ['https://ozel.example'] };
+  assert.ok(k.originAllowed('', c));
+  assert.ok(k.originAllowed('https://kuyumcupro.vercel.app', c));
+  assert.ok(k.originAllowed('https://kuyumcupro-git-x-ufuk.vercel.app', c));
+  assert.ok(k.originAllowed('http://127.0.0.1:5500', c));
+  assert.ok(k.originAllowed('https://ozel.example', c));
+  assert.ok(!k.originAllowed('https://kotu-site.com', c));
+  assert.ok(!k.originAllowed('https://kuyumcupro.kotu.com', c));
+});
+
+test('WhatsApp köprüsü: QR → bağlı → mesaj gönderir; WhatsApp olmayan numarayı reddeder', async () => {
+  const wa = k.wa; wa._reset();
+  const { EventEmitter } = require('events');
+  const sent = [];
+  let sock;
+  wa._setLib({
+    pino: () => ({}), QR: { toDataURL: async (s) => 'data:image/png;base64,' + Buffer.from(s).toString('base64') },
+    baileys: {
+      DisconnectReason: { loggedOut: 401 }, Browsers: { windows: (n) => [n, 'Windows', '1'] },
+      useMultiFileAuthState: async () => ({ state: {}, saveCreds: () => {} }),
+      default: () => { const ev = new EventEmitter(); sock = { ev, user: { id: '905551112233:5@s.whatsapp.net' }, onWhatsApp: async (j) => [{ exists: !j.startsWith('905000000000'), jid: j }], sendMessage: async (j, m) => { sent.push([j, m.text]); return { key: { id: 'MSG1' } }; }, logout: async () => {} }; return sock; }
+    }
+  });
+  wa.configure({ waMinIntervalMs: 1000, waDailyLimit: 5 });
+  await wa.start();
+  sock.ev.emit('connection.update', { qr: 'QRDATA' });
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(wa.info().status, 'qr');
+  assert.match(wa.info().qr, /^data:image\/png/);
+  await assert.rejects(wa.send('05321112233', 'x'), /bağlı değil/);
+  sock.ev.emit('connection.update', { connection: 'open' });
+  assert.equal(wa.info().status, 'bağlı');
+  assert.equal(wa.info().me, '905551112233');
+  const r = await wa.send('0532 111 22 33', 'Tamiriniz hazır');
+  assert.deepEqual([r.ok, r.to], [true, '905321112233']);
+  assert.deepEqual(sent[0], ['905321112233@s.whatsapp.net', 'Tamiriniz hazır']);
+  await assert.rejects(wa.send('05000000000', 'x'), /WhatsApp kullanmıyor/);
+  assert.equal(wa.info().sentToday, 1);
+  wa._reset();
+});

@@ -67,3 +67,24 @@ başka firma adına fatura kesilmesin diye).
   istisna" düğmesi ya da havale taslağında "Fatura Türü: Toptan" ile seçilir.
 - Aynı faturada özel matrah ve istisna satırı birlikte olamaz; program göndermeden önce uyarır.
 - Müşterinin e-postası yazılıysa e-Arşiv faturası müşteriye e-postayla gider, yoksa kâğıt (yazdırılır).
+
+## WhatsApp otomatik mesaj (isteğe bağlı, ücretsiz)
+
+Köprü, WhatsApp'a **bağlı cihaz** olarak bağlanır ve programdaki mesajları siz WhatsApp'ta
+Gönder'e basmadan iletir (tamir alındı / hazır, cari bakiye, satış fişi …).
+
+> Bu yol WhatsApp'ın resmî yolu değildir; numara kısıtlanabilir. Bildirimler için **ayrı bir hat**
+> kullanın, toplu / reklam mesajı göndermeyin. Köprü mesajları aralıklı gönderir ve günde en çok
+> 300 mesaja izin verir (`asil-kopru.json` → `"waDailyLimit"`).
+
+1. `C:\kopru\GUNCELLE.bat` ile köprüyü güncelleyin (sürüm 1.2 ve üstü).
+2. `C:\kopru\WHATSAPP_KUR.bat` dosyasına bir kez çift tıklayın (WhatsApp modülünü kurar, 1-2 dk).
+3. Programda **Tamir → WhatsApp Ayarları → Nasıl açılsın: Otomatik — dükkân köprüsü**.
+4. Çıkan QR kodu bildirim hattının telefonundan okutun: WhatsApp → Ayarlar → **Bağlı cihazlar** →
+   **Cihaz bağla**. "✓ WhatsApp bağlı" yazınca hazırdır. Bağlantı bilgisi `C:\kopru\wa-oturum`
+   klasöründe saklanır; bilgisayar yeniden açılınca kendiliğinden bağlanır.
+5. **Sormadan gönder** işaretlenirse tamir açılınca / hazır olunca mesaj kendiliğinden gider;
+   işaretlenmezse program "Mesaj gitsin mi?" diye sorar.
+
+Köprüye yalnız Asil Kuyumcu Pro sayfaları (kuyumcupro…vercel.app / workers.dev) erişebilir;
+başka bir adres kullanıyorsanız `asil-kopru.json` → `"allowedOrigins": ["https://adres"]` ekleyin.

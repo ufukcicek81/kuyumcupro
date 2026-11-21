@@ -2565,3 +2565,56 @@ test('WhatsApp: cari kartından bakiye mesajı ve satış fişinden alışveriş
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('WhatsApp otomatik (köprü): QR gösterilir, bağlanınca tamir mesajları köprüden gönderilir', async () => {
+  const http = require('http');
+  const kopru = require('../../kopru/asil-kopru.js');
+  const { EventEmitter } = require('events');
+  const sent = [];
+  let sock;
+  kopru.wa._reset();
+  kopru.wa._setLib({
+    pino: () => ({}), QR: { toDataURL: async () => 'data:image/png;base64,iVBORw0KGgo=' },
+    baileys: {
+      DisconnectReason: { loggedOut: 401 }, Browsers: { windows: (n) => [n, 'Windows', '1'] },
+      useMultiFileAuthState: async () => ({ state: {}, saveCreds: () => {} }),
+      default: () => { const ev = new EventEmitter(); sock = { ev, user: { id: '905550000001:1@s.whatsapp.net' }, onWhatsApp: async (j) => [{ exists: true, jid: j }], sendMessage: async (j, m) => { sent.push([j, m.text]); return { key: { id: 'X' } }; }, logout: async () => {} }; setTimeout(() => ev.emit('connection.update', { qr: 'QR' }), 20); return sock; }
+    }
+  });
+  kopru.wa.configure({ waMinIntervalMs: 1000 });
+  const cfg = { mode: 'test', vkn: '4810173324', baseUrl: 'https://isnet.test', allowedOrigins: [], whatsapp: true };
+  const bridge = http.createServer((q, s) => kopru.handle(cfg, q, s));
+  await new Promise((r) => bridge.listen(0, '127.0.0.1', r));
+  try {
+    const fb = createFakeFirebase();
+    let p = await newDevice(browser, appUrl, fb);
+    await p.waitForTimeout(1500);
+    const st = fb.db.state; st.invoiceSettings = { ...(st.invoiceSettings || {}), proxyUrl: `http://127.0.0.1:${bridge.address().port}` };
+    fb.db.state = st; await p.context().close();
+    p = await newDevice(browser, appUrl, fb);
+    await p.evaluate(() => document.querySelector('[data-route="repairs"],[data-go="repairs"]').click());
+    await p.click('#repairWaSettings'); await p.waitForSelector('#waMode');
+    await p.fill('#waTechPhone', '05321112233');
+    await p.selectOption('#waMode', 'bridge');
+    await p.waitForSelector('#waQrImg', { timeout: 8000 });
+    sock.ev.emit('connection.update', { connection: 'open' });
+    await p.waitForFunction(() => /WhatsApp bağlı/.test(document.getElementById('waBridgeStatus')?.innerText || ''), null, { timeout: 8000 });
+    await p.click('#modalConfirm'); await p.waitForTimeout(300);
+    await p.click('#newRepair'); await p.waitForSelector('#repCustomer');
+    await p.fill('#repCustomer', 'ALİ VELİ'); await p.fill('#repPhone', '0555 444 33 22'); await p.fill('#repItem', 'KOLYE'); await p.fill('#repRequest', 'Kilit değişecek');
+    await p.$eval('#repAutoPrint', (e) => { e.checked = false; }).catch(() => {});
+    await p.click('#modalConfirm');
+    await p.waitForSelector('[data-wa-send="1"]');
+    assert.match(await p.innerText('#modalRoot'), /Mesaj gitsin mi\?/);
+    assert.equal((await p.innerText('[data-wa-send="0"]')).trim(), 'Gönder');
+    await p.click('#modalConfirm'); // HEPSİNİ GÖNDER
+    for (let i = 0; i < 40 && sent.length < 2; i++) await p.waitForTimeout(250);
+    assert.equal(sent.length, 2);
+    assert.equal(sent[0][0], '905321112233@s.whatsapp.net');
+    assert.match(sent[0][1], /Yeni tamir: TMR-/);
+    assert.equal(sent[1][0], '905554443322@s.whatsapp.net');
+    assert.match(sent[1][1], /ALİ VELİ, KOLYE ürününüz tamir için teslim alınmıştır/);
+    assert.deepEqual(p.errors, []);
+    await p.context().close();
+  } finally { bridge.close(); kopru.wa._reset(); }
+});
