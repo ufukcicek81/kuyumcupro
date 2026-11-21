@@ -2493,3 +2493,37 @@ test('cari AG ziynet: kartta Z.Gram yanlışsa (ÇEYREK 7,009) uyarı çıkar ve
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('tamir WhatsApp: yeni tamirde tamirciye + müşteriye, Hazır olunca müşteriye hazır mesajı açılır', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  await p.evaluate(() => { window.__waLinks = []; const o = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function () { if (/wa\.me|whatsapp:/.test(this.href)) { window.__waLinks.push(this.href); return; } return o.call(this); }; });
+  await p.evaluate(() => document.querySelector('[data-route="repairs"],[data-go="repairs"]').click());
+  await p.click('#repairWaSettings'); await p.waitForSelector('#waTechPhone');
+  await p.fill('#waTechName', 'Usta Ali'); await p.fill('#waTechPhone', '0532 111 22 33'); await p.selectOption('#waMode', 'web');
+  await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.click('#newRepair'); await p.waitForSelector('#repCustomer');
+  await p.fill('#repCustomer', 'AYŞE KAYA'); await p.fill('#repPhone', '0555 444 33 22'); await p.fill('#repItem', 'YÜZÜK'); await p.fill('#repRequest', 'Taş takılacak');
+  await p.$eval('#repAutoPrint', (e) => { e.checked = false; }).catch(() => {});
+  await p.click('#modalConfirm');
+  await p.waitForSelector('[data-wa-send="1"]');
+  const texts = await p.$$eval('[data-wa-text]', (a) => a.map((e) => e.value));
+  assert.match(texts[0], /Yeni tamir: TMR-[\s\S]*AYŞE KAYA[\s\S]*Taş takılacak/);
+  assert.match(texts[1], /Sayın AYŞE KAYA, YÜZÜK ürününüz tamir için teslim alınmıştır/);
+  await p.click('[data-wa-send="0"]'); await p.click('[data-wa-send="1"]');
+  let links = await p.evaluate(() => window.__waLinks);
+  assert.match(links[0], /^https:\/\/wa\.me\/905321112233\?text=Yeni%20tamir/);
+  assert.match(links[1], /^https:\/\/wa\.me\/905554443322\?text=/);
+  await p.click('#modalCancel'); await p.waitForTimeout(300);
+  // Durum Hazır → müşteriye hazır mesajı
+  await p.selectOption('[data-repair-status]', 'Hazır');
+  await p.waitForSelector('[data-wa-send="0"]');
+  assert.match(await p.$eval('[data-wa-text="0"]', (e) => e.value), /tamiriniz \(YÜZÜK\) hazırdır/);
+  await p.click('[data-wa-send="0"]');
+  links = await p.evaluate(() => window.__waLinks);
+  assert.match(decodeURIComponent(links[2]), /hazırdır/);
+  for (let i = 0; i < 40 && !((fb.db.state.repairs || [])[0]?.waLog || []).length; i++) await p.waitForTimeout(250);
+  assert.ok(fb.db.state.repairs[0].waLog.length >= 3, 'gönderim kaydı tutulmalı');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
