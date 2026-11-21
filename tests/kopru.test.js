@@ -115,6 +115,8 @@ test('köprü yalnız Asil Kuyumcu adreslerine izin verir', () => {
   assert.ok(k.originAllowed('https://kuyumcupro-git-x-ufuk.vercel.app', c));
   assert.ok(k.originAllowed('http://127.0.0.1:5500', c));
   assert.ok(k.originAllowed('https://ozel.example', c));
+  assert.ok(k.originAllowed('https://ufukcicek81.github.io', c));
+  assert.ok(!k.originAllowed('https://baskasi.github.io', c));
   assert.ok(!k.originAllowed('https://kotu-site.com', c));
   assert.ok(!k.originAllowed('https://kuyumcupro.kotu.com', c));
 });

@@ -302,6 +302,7 @@ function originAllowed(origin, cfg) {
     const u = new URL(origin);
     if (u.hostname === '127.0.0.1' || u.hostname === 'localhost') return true;
     if (/kuyumcupro/i.test(u.hostname) && /\.(vercel\.app|workers\.dev|pages\.dev)$/i.test(u.hostname)) return true;
+    if (/^ufukcicek81\.github\.io$/i.test(u.hostname)) return true; // GitHub Pages (uygulama olarak yüklü sürüm)
   } catch (_) {}
   return false;
 }
