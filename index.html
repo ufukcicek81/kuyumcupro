@@ -7445,6 +7445,7 @@ function stockSummaryView(){
     // Ziynette milyem normalde ADET başına sabittir (çeyrek 1605). 1000 ve altı yazılırsa (ör. 916) ayar kabul edilir:
     // HAS = adet × Z.gram × ayar / 1000 (3 çeyrek × 1,75 × 916 = 4,809). Önceden 3 × 916 / 1000 = 2,748 çıkıyordu.
     const ayarMode=isZiynet&&milyem<=1000&&Number(card.zGram||0)>1;
+    if(ayarMode){const fm=Number(card.fixedMilyem||0),zg=Number(card.zGram||0);if(fm>1000&&Math.abs(zg*916-fm)/fm>0.15)return {ok:false,msg:`${card.productDefinition||card.name} kartında Z. Gram / Adet (${qty(zg)}) sabit milyemle (${fm}) uyuşmuyor. Kartı düzeltin ya da Ayar / Milyem kutusuna ${fm} yazın.`};}
     const materialHas=isZiynet?(ayarMode?amount*milyem/1000:count*milyem/1000):(amount*milyem/1000);
     const workmanshipHas=workMode==='Adet İşçilik'?workValue*(isZiynet?count:1):(amount*workValue);
     const totalHas=materialHas+workmanshipHas;
@@ -7833,6 +7834,7 @@ function stockSummaryView(){
         <div class="labelled"><label>Mal HAS</label><input id="cmGoldMaterialHas" class="input" readonly></div>
         <div class="labelled"><label>Toplam İşçilik</label><input id="cmGoldWorkTotal" class="input" readonly></div>
         <div class="labelled span-2"><label>Karşı Hesap</label><input id="cmGoldCounterHas" class="input" readonly></div>
+        <div class="notice span-4" id="cmGoldWarn" style="display:none;border-color:#c0392b"></div>
       </div></div>
       <div class="span-4" id="cmReturnWrap" style="display:none"><div class="form-grid">
         <div class="labelled span-2"><label>İade Edilecek Ürün</label><select id="cmReturnStock" class="select"></select></div>
@@ -7981,6 +7983,10 @@ function stockSummaryView(){
       goldWorkTotal.value=wh?qty(wh):'0';
       goldCounterHas.value=total?qty(total):'0';
       amountEl.value=total||0;
+      // Kart kontrolü: Z.Gram ile kartın sabit milyemi uyuşmuyorsa (ör. ÇEYREK kartında Z.Gram 7,009) uyar.
+      const wEl=document.getElementById('cmGoldWarn'),fm=Number(card.fixedMilyem||0),zg=Number(card.zGram||0);
+      const bad=isZiynet&&fm>1000&&zg>0&&Math.abs(zg*916-fm)/fm>0.15;
+      if(wEl){wEl.style.display=bad?'':'none';wEl.innerHTML=bad?`<strong>Dikkat:</strong> ${esc(card.productDefinition||card.name)} kartında <b>Z. Gram / Adet = ${qty(zg)}</b> görünüyor; sabit milyem ${fm} ise bir tanesi yaklaşık <b>${qty(fm/916)} gr</b> olmalı. Stoklar → Stok Kartları'ndan kartın Z. Gram değerini düzeltin.${m<=1000?` Şimdilik Ayar / Milyem kutusuna <b>${fm}</b> yazarsanız doğru hesaplanır (${qty(count*fm/1000)} HAS).`:''}`:'';}
     };
     const returnRows=()=> (state.openStocks||[]).filter(x=>x.period===state.activePeriod&&Number(x.amount||0)>0);
     const syncReturnCalc=(resetMilyem=false,resetQty=false)=>{

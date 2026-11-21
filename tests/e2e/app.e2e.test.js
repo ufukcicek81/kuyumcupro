@@ -2466,3 +2466,30 @@ test('stok dönüştür: 3 adet kaynak ziynet → 3 adet hedef; miktarlar ve mal
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('cari AG ziynet: kartta Z.Gram yanlışsa (ÇEYREK 7,009) uyarı çıkar ve 916 ile kaydetmez', async () => {
+  const fb = createFakeFirebase();
+  let p = await newDevice(browser, appUrl, fb);
+  await p.waitForTimeout(1500);
+  const st = fb.db.state, card = st.stockCardsMaster.find((c) => /EYREK/.test(c.name || '') && !/ATA|RESAT|BİLEK/.test(c.name || '') && c.ziynet && Number(c.zGram) > 1);
+  card.zGram = 7.009; card.fixedMilyem = 1605;
+  fb.db.state = st;
+  await p.context().close();
+  p = await newDevice(browser, appUrl, fb);
+  await p.evaluate(() => document.querySelector('[data-route="customers"],[data-go="customers"]').click());
+  await p.waitForTimeout(400);
+  await p.evaluate(() => document.querySelector('[data-cari-move]').click());
+  await p.waitForSelector('#cmType');
+  await p.selectOption('#cmType', 'AG'); await p.waitForTimeout(200);
+  await p.selectOption('#cmGoldCard', card.id); await p.waitForTimeout(150);
+  await p.fill('#cmGoldCount', '3');
+  await p.$eval('#cmGoldMilyem', (e) => { e.readOnly = false; e.value = '916'; e.dispatchEvent(new Event('input', { bubbles: true })); });
+  await p.waitForTimeout(200);
+  assert.equal(await p.isVisible('#cmGoldWarn'), true);
+  assert.match(await p.innerText('#cmGoldWarn'), /7,009[\s\S]*1605[\s\S]*4,815/);
+  await p.$eval('#cmGoldMilyem', (e) => { e.value = '1605'; e.dispatchEvent(new Event('input', { bubbles: true })); });
+  await p.waitForTimeout(200);
+  assert.match(await p.inputValue('#cmGoldMaterialHas'), /4,815/);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
