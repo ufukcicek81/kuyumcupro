@@ -2527,3 +2527,41 @@ test('tamir WhatsApp: yeni tamirde tamirciye + müşteriye, Hazır olunca müşt
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('WhatsApp: cari kartından bakiye mesajı ve satış fişinden alışveriş özeti WhatsApp ile açılır', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  await p.evaluate(() => { window.__waLinks = []; const o = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function () { if (/wa\.me|whatsapp:/.test(this.href)) { window.__waLinks.push(this.href); return; } return o.call(this); }; });
+  await p.evaluate(() => document.querySelector('[data-route="customers"],[data-go="customers"]').click());
+  await p.waitForSelector('[data-cari-wa]');
+  await p.evaluate(() => document.querySelector('[data-cari-wa]').click());
+  await p.waitForSelector('#waCPhone');
+  await p.fill('#waCPhone', '0533 222 11 00');
+  await p.selectOption('#waCPreset', '1');
+  assert.match(await p.inputValue('#waCText'), /güncel bakiyesi/);
+  await p.click('#modalConfirm');
+  let links = await p.evaluate(() => window.__waLinks);
+  assert.match(links[0], /^whatsapp:\/\/send\?phone=905332221100&text=Say%C4%B1n/);
+  // Satış fişi
+  await p.evaluate(() => document.querySelector('[data-route="sales"],[data-go="sales"]').click());
+  for (let i = 0; i < 3; i++) {
+    await p.fill('#saleProductSearch', '22'); await p.waitForTimeout(300); await p.press('#saleProductSearch', 'Enter');
+    if (await p.waitForSelector('#saleEntryPrice:not([disabled])', { timeout: 5000 }).catch(() => null)) break;
+  }
+  await p.waitForTimeout(300);
+  await p.fill('#saleEntryPayable', '5000'); await p.click('#saleAddUnified'); await p.waitForTimeout(400);
+  await p.click('[data-pay="Nakit"]'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.selectOption('#salePerson', { index: 1 });
+  await p.click('#finalizeSale'); await p.click('#modalConfirm'); await p.waitForTimeout(1500);
+  await p.click('text=Satış Geçmişi');
+  await p.waitForSelector('#saleHistBody [data-sale-view]');
+  await p.click('#saleHistBody [data-sale-view]');
+  await p.waitForSelector('#saleWa'); await p.click('#saleWa');
+  await p.waitForSelector('#waCText');
+  assert.match(await p.inputValue('#waCText'), /numaralı alışverişiniz:[\s\S]*Toplam: 5\.000,00/);
+  await p.fill('#waCPhone', '05332221100'); await p.click('#modalConfirm');
+  links = await p.evaluate(() => window.__waLinks);
+  assert.equal(links.length, 2);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
