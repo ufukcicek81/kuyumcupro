@@ -3262,7 +3262,7 @@ function stockSummaryView(){
     const posRows='';
     return `<div class="pusula-stock-summary">
       <div class="card">
-        <div class="section-head"><h3>ALTIN STOKLARI + KASA DURUMU</h3><div class="actions"><button class="btn btn-outline" id="resetStockSummaryOrder">Sıralamayı Sıfırla</button><button class="btn btn-outline" id="editOpeningCosts">Açılış Maliyet HAS</button><span class="real-data-badge badge">Satırları ↕ sürükleyerek sırala</span></div></div>
+        <div class="section-head"><h3>ALTIN STOKLARI + KASA DURUMU</h3><div class="actions"><button class="btn btn-outline" id="resetStockSummaryOrder">Sıralamayı Sıfırla</button><button class="btn btn-outline" id="editOpeningCosts">Açılış Maliyet HAS</button><button class="btn btn-outline" id="convertOpenStock">Stok Dönüştür</button><span class="real-data-badge badge">Satırları ↕ sürükleyerek sırala</span></div></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
           <span class="inline-kpi">Açık stok <b>${qty(openAmount)}</b></span>
           <span class="inline-kpi">Barkodlu <b>${qty(barAmount)} GR / ${barCount} adet</b></span>
@@ -3740,6 +3740,7 @@ function stockSummaryView(){
         else if(x.sourceType==='saleScreenPurchase'&&x.tradeType!=='Hurda Alış'&&goldTradeInOpenV7(x.item)===o)add(x.date,x.docNo,x.tradeType,x.customer,x.description,x.quantity,0);
         else if(!x.sourceType&&(x.tradeType==='Ziynet Alış'||x.tradeType==='Ziynet Satış')&&findOpenTradeStock({name:x.item,code:x.itemCode})===o)add(x.date,x.docNo,x.tradeType,x.customer,x.description,x.side==='Alış'?x.quantity:0,x.side==='Satış'?x.quantity:0);
       });
+      smoves.filter(m=>m.stockId===o.id&&m.type==='STOK DÖNÜŞÜM').forEach(m=>add(m.date,m.sourceDocNo,m.type,m.outQty?`→ ${m.to}`:`← ${m.from}`,m.description,m.inQty,m.outQty));
       smoves.filter(m=>m.stockId===o.id&&m.type==='HURDA → AÇIK STOK').forEach(m=>add(m.date,m.sourceDocNo,m.type,m.from,m.description,goldNumTrV7((/Çıktı ([\d.,]+)/.exec(m.description||'')||[])[1]),0));
     }else if(t==='s'){
       const h=(state.scrapStocks||[]).find(x=>x.id===id);if(!h)return null;
@@ -7012,6 +7013,7 @@ function stockSummaryView(){
     document.getElementById('labelSearch')?.addEventListener('input',e=>{const raw=String(e.target.value||'').trim(),q=raw.toLocaleLowerCase('tr-TR'),fold=normalizeSaleStockKey(raw);document.querySelectorAll('#barcodeLabelGrid .label-preview').forEach(el=>{const text=String(el.dataset.labelSearch||''),vals=[el.dataset.barcode,el.dataset.stockCode,el.dataset.pusulaCode,`${el.dataset.group||''}${el.dataset.pusulaCode||''}`].filter(Boolean),shortMatch=raw&&vals.some(v=>barcodeLookupMatches(v,raw)),prefixMatch=fold&&vals.some(v=>normalizeSaleStockKey(v).startsWith(fold));el.style.display=!q||text.includes(q)||shortMatch||prefixMatch?'':'none';});updateLabelSelectedCount();});
     updateLabelSelectedCount();
     document.getElementById('editOpeningCosts')?.addEventListener('click',openOpeningCostEditor);
+    document.getElementById('convertOpenStock')?.addEventListener('click',()=>openStockConvertV7());
     bindOpenStockOrderV662();
     bindStockCardOrderV662();
   }
@@ -7034,6 +7036,50 @@ function stockSummaryView(){
     state.stockCardsMaster=state.stockCardsMaster.filter(x=>x.id!==id);
     audit(`${name} stok kartı silindi`,'Tanımlamalar');
     save(); render(); toast('Stok kartı silindi');
+  }
+  /* Stok dönüştür: bir barkodsuz stoğu (ör. 3 ÇEYREK BİLEKLİK) başka bir stoğa (3 ÇEYREK) çevirir.
+     Cari / kasa hareketi yoktur. Kaynağın maliyeti ve fiziksel HAS'ı hedefe taşınır; hedefin birim maliyeti ağırlıklı ortalamayla güncellenir. */
+  function stockConvertDocNoV7(){const p=`SD-${state.activePeriod}-`,n=(state.stockMoves||[]).map(x=>String(x.sourceDocNo||'')).filter(x=>x.startsWith(p)).map(x=>Number(x.slice(p.length))||0);return p+String(Math.max(0,...n)+1).padStart(6,'0');}
+  function applyStockConvertV7(fromId,outQty,toId,inQty,note){
+    const list=(state.openStocks||[]).filter(x=>x.period===state.activePeriod),src=list.find(x=>x.id===fromId),tgt=list.find(x=>x.id===toId);
+    outQty=Number(outQty||0);inQty=Number(inQty||0);
+    if(!src||!tgt)return {ok:false,msg:'Kaynak ve hedef stoğu seçin'};
+    if(src.id===tgt.id)return {ok:false,msg:'Kaynak ve hedef aynı olamaz'};
+    if(!(outQty>0)||!(inQty>0))return {ok:false,msg:'Miktarları girin'};
+    const before=Number(src.amount||0);if(outQty>before+1e-6)return {ok:false,msg:`${src.name} stokta ${qty(before)} ${src.unit||''} var`};
+    const unit=openUnitCostHas(src),movedCost=unit*outQty,ratio=before>0?outQty/before:0,movedPhys=Number(src.hasWeight||0)*ratio,movedWork=Number(src.workmanshipTotalHas||0)*ratio;
+    src.amount=Math.max(0,before-outQty);src.hasWeight=Math.max(0,Number(src.hasWeight||0)-movedPhys);src.workmanshipTotalHas=Math.max(0,Number(src.workmanshipTotalHas||0)-movedWork);
+    if(String(src.unit).toUpperCase()==='ADET')src.count=src.amount;
+    if(src.amount<=1e-6){src.amount=0;src.count=0;src.hasWeight=0;src.workmanshipTotalHas=0;src.averageWorkmanship=0;}else{src.inventoryUnitCostHas=unit;src.averageWorkmanship=Number(src.workmanshipTotalHas||0)/src.amount;}
+    const tBefore=Number(tgt.amount||0),tCost=tBefore*openUnitCostHas(tgt);
+    tgt.amount=tBefore+inQty;tgt.hasWeight=Number(tgt.hasWeight||0)+movedPhys;tgt.workmanshipTotalHas=Number(tgt.workmanshipTotalHas||0)+movedWork;
+    if(String(tgt.unit).toUpperCase()==='ADET')tgt.count=tgt.amount;
+    tgt.inventoryUnitCostHas=(tCost+movedCost)/tgt.amount;tgt.averageWorkmanship=Number(tgt.workmanshipTotalHas||0)/tgt.amount;
+    const docNo=stockConvertDocNoV7(),date=now(),desc=`${src.name} ${qty(outQty)} ${src.unit||''} → ${tgt.name} ${qty(inQty)} ${tgt.unit||''} · maliyet ${qty(movedCost)} HAS${note?' · '+note:''}`;
+    state.stockMoves=state.stockMoves||[];
+    state.stockMoves.unshift({id:uid('SM'),period:state.activePeriod,date,stockId:tgt.id,code:tgt.productCode||tgt.name,type:'STOK DÖNÜŞÜM',from:src.name,to:tgt.name,description:desc,inQty,outQty:0,costHas:movedCost,sourceType:'stockConvert',sourceDocNo:docNo,user:session.name});
+    state.stockMoves.unshift({id:uid('SM'),period:state.activePeriod,date,stockId:src.id,code:src.productCode||src.name,type:'STOK DÖNÜŞÜM',from:src.name,to:tgt.name,description:desc,inQty:0,outQty,costHas:movedCost,sourceType:'stockConvert',sourceDocNo:docNo,user:session.name});
+    audit(`${docNo} stok dönüşümü: ${desc}`,'Stok');
+    return {ok:true,docNo,movedCost,desc};
+  }
+  function openStockConvertV7(){
+    const list=(state.openStocks||[]).filter(x=>x.period===state.activePeriod).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),'tr'));
+    const opt=(arr,sel)=>arr.map(o=>`<option value="${esc(o.id)}"${o.id===sel?' selected':''}>${esc(o.name)} — ${qty(o.amount)} ${esc(o.unit||'')}</option>`).join('');
+    const src=list.filter(o=>Number(o.amount||0)>0);if(!src.length)return toast('Dönüştürülecek stok yok','err');
+    modal('Stok Dönüştür',`<div class="notice">Örn. 3 adet <b>ÇEYREK BİLEKLİK</b> çözüldü → 3 adet <b>ÇEYREK</b>. Kaynak stoktan düşer, hedef stoğa girer; maliyet hedefe taşınır. Cari ve kasa etkilenmez.</div>
+      <div class="form-grid"><div class="labelled span-2"><label>Kaynak (çıkacak) stok</label><select id="scvFrom" class="select">${opt(src,'')}</select></div><div class="labelled"><label>Çıkan miktar</label><input id="scvOut" class="input" inputmode="decimal" placeholder="0"></div>
+      <div class="labelled span-2"><label>Hedef (girecek) stok</label><select id="scvTo" class="select">${opt(list,'')}</select></div><div class="labelled"><label>Giren miktar</label><input id="scvIn" class="input" inputmode="decimal" placeholder="0"></div>
+      <div class="labelled span-3"><label>Açıklama</label><input id="scvNote" class="input" placeholder="İsteğe bağlı"></div><div class="notice span-4" id="scvInfo"></div></div>`,()=>{
+      const r=applyStockConvertV7(g('scvFrom').value,num('scvOut'),g('scvTo').value,num('scvIn'),g('scvNote').value.trim());if(!r.ok)return toast(r.msg,'err');
+      save();closeModal();render();toast(`${r.docNo} stok dönüşümü kaydedildi`);},'DÖNÜŞTÜR');
+    const g=id=>document.getElementById(id),num=id=>{const v=String(g(id)?.value||'').trim();return Number(v.includes(',')?v.replace(/\./g,'').replace(',','.'):v)||0;};
+    let inTouched=false;
+    const info=()=>{const s=list.find(x=>x.id===g('scvFrom').value),t=list.find(x=>x.id===g('scvTo').value),q=num('scvOut'),qi=num('scvIn');if(!s||!t){g('scvInfo').innerHTML='';return;}
+      const cost=openUnitCostHas(s)*q,tq=Number(t.amount||0)+qi,tu=tq>0?(Number(t.amount||0)*openUnitCostHas(t)+cost)/tq:0;
+      g('scvInfo').innerHTML=s.id===t.id?'<span class="negative">Kaynak ve hedef aynı olamaz.</span>':`<b>${esc(s.name)}</b>: ${qty(s.amount)} → ${qty(Math.max(0,Number(s.amount||0)-q))} ${esc(s.unit||'')} · <b>${esc(t.name)}</b>: ${qty(t.amount)} → ${qty(tq)} ${esc(t.unit||'')}<br>Taşınan maliyet: <b>${qty(cost)} HAS</b> · ${esc(t.name)} yeni birim maliyet: <b>${qty(tu)} HAS</b> (önce ${qty(openUnitCostHas(t))})`;};
+    g('scvOut').addEventListener('input',()=>{if(!inTouched)g('scvIn').value=g('scvOut').value;info();});
+    g('scvIn').addEventListener('input',()=>{inTouched=true;info();});
+    ['scvFrom','scvTo'].forEach(id=>g(id).addEventListener('change',info));info();
   }
   function openOpeningCostEditor(){
     const rows=(state.openStocks||[]).filter(x=>x.period===state.activePeriod);
@@ -7396,7 +7442,10 @@ function stockSummaryView(){
     milyem=Number(milyem||card.fixedMilyem||card.purity||0);workValue=Number(workValue||0);
     const purity=Number(card.purity||card.karat||milyem||0);
     if(amount<=0||milyem<=0)return {ok:false,msg:isZiynet?'Adet ve sabit milyem girin':'Miktar ve milyem girin'};
-    const materialHas=isZiynet?(count*milyem/1000):(amount*milyem/1000);
+    // Ziynette milyem normalde ADET başına sabittir (çeyrek 1605). 1000 ve altı yazılırsa (ör. 916) ayar kabul edilir:
+    // HAS = adet × Z.gram × ayar / 1000 (3 çeyrek × 1,75 × 916 = 4,809). Önceden 3 × 916 / 1000 = 2,748 çıkıyordu.
+    const ayarMode=isZiynet&&milyem<=1000&&Number(card.zGram||0)>1;
+    const materialHas=isZiynet?(ayarMode?amount*milyem/1000:count*milyem/1000):(amount*milyem/1000);
     const workmanshipHas=workMode==='Adet İşçilik'?workValue*(isZiynet?count:1):(amount*workValue);
     const totalHas=materialHas+workmanshipHas;
     const stockUnit=isZiynet?'ADET':'GR',addAmount=isZiynet?count:amount;
@@ -7416,7 +7465,7 @@ function stockSummaryView(){
     o.inventoryUnitCostHas=o.amount>0?(beforeCost+totalHas)/o.amount:0;
     const docNo=nextCariDocNo('AG');
     const quantityText=isZiynet?`${qty(count)} ADET · ${qty(card.zGram)} GR/adet = ${qty(amount)} GR`:`${qty(amount)} GR`;
-    const calcText=isZiynet?`${qty(count)} × Sabit ${qty(milyem)} / 1000`:`${qty(amount)} × ${qty(milyem)} / 1000`;
+    const calcText=isZiynet?(ayarMode?`${qty(amount)} GR × Ayar ${qty(milyem)} / 1000`:`${qty(count)} × Sabit ${qty(milyem)} / 1000`):`${qty(amount)} × ${qty(milyem)} / 1000`;
     const move={id:uid('CM'),customerId:customer.id,period:state.activePeriod,date,code:'AG',type:'AG - ALTIN GİRİŞ',unit:'HAS',debit:0,credit:totalHas,description:`${o.name} · ${quantityText} · ${calcText} = ${qty(materialHas)} HAS · İşçilik ${qty(workmanshipHas)} HAS${description?' · '+description:''}`,user:session.name,userDescription:description||'',sourceType:'cariGold',sourceDocNo:docNo,sourceUnit:isZiynet?'ADET':'GR',sourceAmount:isZiynet?count:amount,sourceRate:milyem,counterEnabled:true,counterUnit:'HAS',counterAmount:totalHas,counterRate:1,goldImpact:{openStockId:o.id,unit:stockUnit,amount:addAmount,gram:amount,count:isZiynet?count:1,materialHas,workmanshipHas,totalHas,unitCostBefore:Number(o.inventoryUnitCostHas||0),cardId:card.id,ziynet:isZiynet}};
     applyCariBalance(customer,'HAS',0,totalHas);state.customerMoves.unshift(move);
     state.stockMoves.unshift({id:uid('SM'),period:state.activePeriod,date,stockId:o.id,code:o.productCode||o.name,type:'AG - ALTIN GİRİŞ',from:customer.name,to:'Açık Stok',description:move.description,sourceType:'cariGold',sourceId:move.id,sourceDocNo:docNo,user:session.name});
@@ -7927,7 +7976,7 @@ function stockSummaryView(){
       if(isZiynet)goldAmount.value=(count*Number(card.zGram||0)).toFixed(3);
       const g=Number(goldAmount.value||0),m=Number(goldMilyem.value||0),wv=Number(goldWorkValue.value||0);
       const wh=goldWorkMode.value==='Adet İşçilik'?wv*(isZiynet?count:1):g*wv;
-      const mh=isZiynet?(count*m/1000):(g*m/1000),total=mh+wh;
+      const mh=isZiynet?((m<=1000&&Number(card.zGram||0)>1)?g*m/1000:count*m/1000):(g*m/1000),total=mh+wh;
       goldMaterialHas.value=mh?qty(mh):'0';
       goldWorkTotal.value=wh?qty(wh):'0';
       goldCounterHas.value=total?qty(total):'0';
