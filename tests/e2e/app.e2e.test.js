@@ -2389,9 +2389,11 @@ test('satış geçmişi: "Maliyeti yeniden hesapla" geçmiş fişin barkodsuz sa
   await p.click('#saleRecalcCost');
   await p.waitForSelector('#recalcTable');
   assert.match(await p.innerText('.modal'), /Kâr değişimi/);
-  await p.click('#modalConfirm'); await p.waitForTimeout(2500);
-  const s2 = fb.db.state.sales.find((s) => s.id === sale.id), l2 = s2.lines.find((l) => l.openStockId);
+  await p.click('#modalConfirm');
   const want = amount * o.inventoryUnitCostHas;
+  const cur = () => fb.db.state.sales.find((s) => s.id === sale.id).lines.find((l) => l.openStockId).costHas;
+  for (let i = 0; i < 60 && Math.abs(cur() - want) >= 0.001; i++) await p.waitForTimeout(250); // buluta yazma gecikmesi
+  const s2 = fb.db.state.sales.find((s) => s.id === sale.id), l2 = s2.lines.find((l) => l.openStockId);
   assert.ok(Math.abs(l2.costHas - want) < 0.001, `satır maliyeti ${l2.costHas} ≈ ${want}`);
   assert.ok(Math.abs(s2.costHas - (oldSale + (want - oldLine))) < 0.001, 'fiş maliyeti güncellenmeli');
   assert.ok(Math.abs(s2.profitHas - (Number(sale.profitHas) - (want - oldLine))) < 0.001, 'kâr düşmeli');
