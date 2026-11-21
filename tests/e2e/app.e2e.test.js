@@ -2466,3 +2466,102 @@ test('stok dönüştür: 3 adet kaynak ziynet → 3 adet hedef; miktarlar ve mal
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('cari AG ziynet: kartta Z.Gram yanlışsa (ÇEYREK 7,009) uyarı çıkar ve 916 ile kaydetmez', async () => {
+  const fb = createFakeFirebase();
+  let p = await newDevice(browser, appUrl, fb);
+  await p.waitForTimeout(1500);
+  const st = fb.db.state, card = st.stockCardsMaster.find((c) => /EYREK/.test(c.name || '') && !/ATA|RESAT|BİLEK/.test(c.name || '') && c.ziynet && Number(c.zGram) > 1);
+  card.zGram = 7.009; card.fixedMilyem = 1605;
+  fb.db.state = st;
+  await p.context().close();
+  p = await newDevice(browser, appUrl, fb);
+  await p.evaluate(() => document.querySelector('[data-route="customers"],[data-go="customers"]').click());
+  await p.waitForTimeout(400);
+  await p.evaluate(() => document.querySelector('[data-cari-move]').click());
+  await p.waitForSelector('#cmType');
+  await p.selectOption('#cmType', 'AG'); await p.waitForTimeout(200);
+  await p.selectOption('#cmGoldCard', card.id); await p.waitForTimeout(150);
+  await p.fill('#cmGoldCount', '3');
+  await p.$eval('#cmGoldMilyem', (e) => { e.readOnly = false; e.value = '916'; e.dispatchEvent(new Event('input', { bubbles: true })); });
+  await p.waitForTimeout(200);
+  assert.equal(await p.isVisible('#cmGoldWarn'), true);
+  assert.match(await p.innerText('#cmGoldWarn'), /7,009[\s\S]*1605[\s\S]*4,815/);
+  await p.$eval('#cmGoldMilyem', (e) => { e.value = '1605'; e.dispatchEvent(new Event('input', { bubbles: true })); });
+  await p.waitForTimeout(200);
+  assert.match(await p.inputValue('#cmGoldMaterialHas'), /4,815/);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
+test('tamir WhatsApp: yeni tamirde tamirciye + müşteriye, Hazır olunca müşteriye hazır mesajı açılır', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  await p.evaluate(() => { window.__waLinks = []; const o = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function () { if (/wa\.me|whatsapp:/.test(this.href)) { window.__waLinks.push(this.href); return; } return o.call(this); }; });
+  await p.evaluate(() => document.querySelector('[data-route="repairs"],[data-go="repairs"]').click());
+  await p.click('#repairWaSettings'); await p.waitForSelector('#waTechPhone');
+  await p.fill('#waTechName', 'Usta Ali'); await p.fill('#waTechPhone', '0532 111 22 33'); await p.selectOption('#waMode', 'web');
+  await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.click('#newRepair'); await p.waitForSelector('#repCustomer');
+  await p.fill('#repCustomer', 'AYŞE KAYA'); await p.fill('#repPhone', '0555 444 33 22'); await p.fill('#repItem', 'YÜZÜK'); await p.fill('#repRequest', 'Taş takılacak');
+  await p.$eval('#repAutoPrint', (e) => { e.checked = false; }).catch(() => {});
+  await p.click('#modalConfirm');
+  await p.waitForSelector('[data-wa-send="1"]');
+  const texts = await p.$$eval('[data-wa-text]', (a) => a.map((e) => e.value));
+  assert.match(texts[0], /Yeni tamir: TMR-[\s\S]*AYŞE KAYA[\s\S]*Taş takılacak/);
+  assert.match(texts[1], /Sayın AYŞE KAYA, YÜZÜK ürününüz tamir için teslim alınmıştır/);
+  await p.click('[data-wa-send="0"]'); await p.click('[data-wa-send="1"]');
+  let links = await p.evaluate(() => window.__waLinks);
+  assert.match(links[0], /^https:\/\/wa\.me\/905321112233\?text=Yeni%20tamir/);
+  assert.match(links[1], /^https:\/\/wa\.me\/905554443322\?text=/);
+  await p.click('#modalCancel'); await p.waitForTimeout(300);
+  // Durum Hazır → müşteriye hazır mesajı
+  await p.selectOption('[data-repair-status]', 'Hazır');
+  await p.waitForSelector('[data-wa-send="0"]');
+  assert.match(await p.$eval('[data-wa-text="0"]', (e) => e.value), /tamiriniz \(YÜZÜK\) hazırdır/);
+  await p.click('[data-wa-send="0"]');
+  links = await p.evaluate(() => window.__waLinks);
+  assert.match(decodeURIComponent(links[2]), /hazırdır/);
+  for (let i = 0; i < 40 && !((fb.db.state.repairs || [])[0]?.waLog || []).length; i++) await p.waitForTimeout(250);
+  assert.ok(fb.db.state.repairs[0].waLog.length >= 3, 'gönderim kaydı tutulmalı');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
+test('WhatsApp: cari kartından bakiye mesajı ve satış fişinden alışveriş özeti WhatsApp ile açılır', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  await p.evaluate(() => { window.__waLinks = []; const o = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function () { if (/wa\.me|whatsapp:/.test(this.href)) { window.__waLinks.push(this.href); return; } return o.call(this); }; });
+  await p.evaluate(() => document.querySelector('[data-route="customers"],[data-go="customers"]').click());
+  await p.waitForSelector('[data-cari-wa]');
+  await p.evaluate(() => document.querySelector('[data-cari-wa]').click());
+  await p.waitForSelector('#waCPhone');
+  await p.fill('#waCPhone', '0533 222 11 00');
+  await p.selectOption('#waCPreset', '1');
+  assert.match(await p.inputValue('#waCText'), /güncel bakiyesi/);
+  await p.click('#modalConfirm');
+  let links = await p.evaluate(() => window.__waLinks);
+  assert.match(links[0], /^whatsapp:\/\/send\?phone=905332221100&text=Say%C4%B1n/);
+  // Satış fişi
+  await p.evaluate(() => document.querySelector('[data-route="sales"],[data-go="sales"]').click());
+  for (let i = 0; i < 3; i++) {
+    await p.fill('#saleProductSearch', '22'); await p.waitForTimeout(300); await p.press('#saleProductSearch', 'Enter');
+    if (await p.waitForSelector('#saleEntryPrice:not([disabled])', { timeout: 5000 }).catch(() => null)) break;
+  }
+  await p.waitForTimeout(300);
+  await p.fill('#saleEntryPayable', '5000'); await p.click('#saleAddUnified'); await p.waitForTimeout(400);
+  await p.click('[data-pay="Nakit"]'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.selectOption('#salePerson', { index: 1 });
+  await p.click('#finalizeSale'); await p.click('#modalConfirm'); await p.waitForTimeout(1500);
+  await p.click('text=Satış Geçmişi');
+  await p.waitForSelector('#saleHistBody [data-sale-view]');
+  await p.click('#saleHistBody [data-sale-view]');
+  await p.waitForSelector('#saleWa'); await p.click('#saleWa');
+  await p.waitForSelector('#waCText');
+  assert.match(await p.inputValue('#waCText'), /numaralı alışverişiniz:[\s\S]*Toplam: 5\.000,00/);
+  await p.fill('#waCPhone', '05332221100'); await p.click('#modalConfirm');
+  links = await p.evaluate(() => window.__waLinks);
+  assert.equal(links.length, 2);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
