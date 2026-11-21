@@ -19,7 +19,12 @@ const ENDPOINTS = {
 };
 const TEST_VKN = '4810173324';
 const VERSION = '1.2';
-const wa = require('./whatsapp');
+// WhatsApp modülü yoksa (eski güncelleme) köprü yine çalışsın; yalnız WhatsApp kapalı olur.
+let wa;
+try { wa = require('./whatsapp'); } catch (e) {
+  const off = async () => { throw new Error('Köprüde whatsapp.js eksik. C:\\kopru\\GUNCELLE.bat ile güncelleyin.'); };
+  wa = { configure() {}, start: off, send: off, logout: off, info: () => ({ status: 'kapalı' }), hasSession: () => false };
+}
 
 function loadConfig() {
   const file = process.env.ASIL_KOPRU_CONFIG || path.join(__dirname, 'asil-kopru.json');
@@ -297,14 +302,15 @@ function originAllowed(origin, cfg) {
     const u = new URL(origin);
     if (u.hostname === '127.0.0.1' || u.hostname === 'localhost') return true;
     if (/kuyumcupro/i.test(u.hostname) && /\.(vercel\.app|workers\.dev|pages\.dev)$/i.test(u.hostname)) return true;
+    if (/^ufukcicek81\.github\.io$/i.test(u.hostname)) return true; // GitHub Pages (uygulama olarak yüklü sürüm)
   } catch (_) {}
   return false;
 }
 function corsHeaders(req, cfg) {
   const origin = req.headers.origin || '';
-  const allowed = originAllowed(origin, cfg);
+  // Cevap her sayfaya okunabilir (hata mesajı görünsün); işlem yapan POST istekleri izinsiz adreste 403 ile reddedilir.
   return {
-    'Access-Control-Allow-Origin': allowed && origin ? origin : 'null',
+    'Access-Control-Allow-Origin': origin || '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Allow-Private-Network': 'true',
@@ -323,7 +329,8 @@ async function handle(cfg, req, res) {
   if (req.method === 'GET') {
     let isnet = false, err = '';
     try { isnet = await healthCheck(cfg); } catch (e) { err = String(e.message || e); }
-    return send(res, 200, { ok: true, service: 'Asil Kuyumcu Köprü', version: VERSION, mode: cfg.mode, vkn: cfg.vkn, isnet, error: err || undefined }, cors);
+    const oa = originAllowed(req.headers.origin || '', cfg);
+    return send(res, 200, { ok: true, service: 'Asil Kuyumcu Köprü', version: VERSION, mode: cfg.mode, vkn: cfg.vkn, isnet, error: err || undefined, originAllowed: oa, origin: oa ? undefined : req.headers.origin }, cors);
   }
   if (req.method !== 'POST') return send(res, 405, { ok: false, message: 'Yalnız POST' }, cors);
   if (!originAllowed(req.headers.origin || '', cfg)) return send(res, 403, { ok: false, message: 'Bu adres köprüyü kullanamaz: ' + req.headers.origin + ' (asil-kopru.json → allowedOrigins)' }, cors);

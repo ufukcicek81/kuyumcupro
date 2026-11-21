@@ -86,5 +86,5 @@ Gönder'e basmadan iletir (tamir alındı / hazır, cari bakiye, satış fişi �
 5. **Sormadan gönder** işaretlenirse tamir açılınca / hazır olunca mesaj kendiliğinden gider;
    işaretlenmezse program "Mesaj gitsin mi?" diye sorar.
 
-Köprüye yalnız Asil Kuyumcu Pro sayfaları (kuyumcupro…vercel.app / workers.dev) erişebilir;
+Köprüye yalnız Asil Kuyumcu Pro sayfaları (ufukcicek81.github.io, kuyumcupro…vercel.app / workers.dev) erişebilir;
 başka bir adres kullanıyorsanız `asil-kopru.json` → `"allowedOrigins": ["https://adres"]` ekleyin.
