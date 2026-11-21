@@ -18,7 +18,8 @@ const ENDPOINTS = {
   live: 'https://einvoiceservice.isnet.net.tr'
 };
 const TEST_VKN = '4810173324';
-const VERSION = '1.1';
+const VERSION = '1.2';
+const wa = require('./whatsapp');
 
 function loadConfig() {
   const file = process.env.ASIL_KOPRU_CONFIG || path.join(__dirname, 'asil-kopru.json');
@@ -32,7 +33,10 @@ function loadConfig() {
     vkn: String(process.env.ISNET_VKN || c.vkn || (mode === 'test' ? TEST_VKN : '')).replace(/\D/g, ''),
     baseUrl: String(process.env.ISNET_URL || c.serviceUrl || ENDPOINTS[mode]).replace(/\/+$/, ''),
     sendMail: c.sendMail !== false,
-    allowedOrigins: Array.isArray(c.allowedOrigins) ? c.allowedOrigins : []
+    allowedOrigins: Array.isArray(c.allowedOrigins) ? c.allowedOrigins : [],
+    whatsapp: c.whatsapp !== false,
+    waMinIntervalMs: Number(c.waMinIntervalMs || 4000),
+    waDailyLimit: Number(c.waDailyLimit || 300)
   };
 }
 
@@ -284,9 +288,21 @@ async function createInvoice(cfg, p) {
 }
 
 // ---------- HTTP sunucusu ----------
+// Köprüye yalnız Asil Kuyumcu Pro sayfaları erişebilir (başka bir site bu bilgisayardan fatura / WhatsApp gönderemesin).
+// Ek adres gerekirse asil-kopru.json → "allowedOrigins": ["https://ornek.com"].
+function originAllowed(origin, cfg) {
+  if (!origin) return true; // tarayıcı dışı yerel istek
+  if (cfg.allowedOrigins.includes(origin)) return true;
+  try {
+    const u = new URL(origin);
+    if (u.hostname === '127.0.0.1' || u.hostname === 'localhost') return true;
+    if (/kuyumcupro/i.test(u.hostname) && /\.(vercel\.app|workers\.dev|pages\.dev)$/i.test(u.hostname)) return true;
+  } catch (_) {}
+  return false;
+}
 function corsHeaders(req, cfg) {
   const origin = req.headers.origin || '';
-  const allowed = !cfg.allowedOrigins.length || cfg.allowedOrigins.includes(origin);
+  const allowed = originAllowed(origin, cfg);
   return {
     'Access-Control-Allow-Origin': allowed && origin ? origin : 'null',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -310,6 +326,7 @@ async function handle(cfg, req, res) {
     return send(res, 200, { ok: true, service: 'Asil Kuyumcu Köprü', version: VERSION, mode: cfg.mode, vkn: cfg.vkn, isnet, error: err || undefined }, cors);
   }
   if (req.method !== 'POST') return send(res, 405, { ok: false, message: 'Yalnız POST' }, cors);
+  if (!originAllowed(req.headers.origin || '', cfg)) return send(res, 403, { ok: false, message: 'Bu adres köprüyü kullanamaz: ' + req.headers.origin + ' (asil-kopru.json → allowedOrigins)' }, cors);
   let raw = '';
   for await (const chunk of req) { raw += chunk; if (raw.length > 2e6) return send(res, 413, { ok: false, message: 'İstek çok büyük' }, cors); }
   let p;
@@ -325,6 +342,18 @@ async function handle(cfg, req, res) {
     if (action === 'viewerLink') return send(res, 200, { ok: true, url: await viewerLink(cfg, p.ettn, p.documentType) }, cors);
     if (action === 'invoiceXml') return send(res, 200, { ok: true, xml: await invoiceXml(cfg, p.ettn, p.documentType) }, cors);
     if (action === 'health') return send(res, 200, { ok: true, isnet: await healthCheck(cfg), mode: cfg.mode, vkn: cfg.vkn }, cors);
+    if (action === 'waStatus') {
+      if (!cfg.whatsapp) return send(res, 200, { ok: false, message: 'WhatsApp köprüde kapalı (asil-kopru.json → "whatsapp": false)' }, cors);
+      let err = '';
+      try { await wa.start(); } catch (e) { err = String(e.message || e); }
+      return send(res, 200, { ok: !err, message: err || undefined, ...wa.info() }, cors);
+    }
+    if (action === 'waSend') {
+      if (!cfg.whatsapp) return send(res, 200, { ok: false, message: 'WhatsApp köprüde kapalı' }, cors);
+      const out = await wa.send(p.phone, p.text);
+      return send(res, 200, out, cors);
+    }
+    if (action === 'waLogout') return send(res, 200, await wa.logout(), cors);
     return send(res, 400, { ok: false, message: 'Bilinmeyen işlem: ' + action }, cors);
   } catch (e) {
     const msg = e.name === 'AbortError' ? 'İşNet zaman aşımı' : String(e.message || e);
@@ -345,7 +374,9 @@ if (require.main === module) {
       log(`Asil Kuyumcu Köprü ${VERSION} çalışıyor → http://127.0.0.1:${cfg.port}`);
       log(`İşNet ortamı: ${cfg.mode === 'live' ? 'CANLI' : 'TEST'} (${cfg.baseUrl}), firma VKN: ${cfg.vkn || 'AYARLANMADI'}`);
       log('Bu pencereyi kapatmayın. Durdurmak için Ctrl+C.');
+      wa.configure({ ...cfg, log });
+      if (cfg.whatsapp && wa.hasSession()) wa.start().catch(e => log('WhatsApp: ' + (e.message || e)));
     });
 }
 
-module.exports = { _soap: soapCall, invoiceXml, loadConfig, buildInvoice, createInvoice, balance, healthCheck, taxPayerInbox, viewerLink, toXml, listOf, handle };
+module.exports = { originAllowed, wa, _soap: soapCall, invoiceXml, loadConfig, buildInvoice, createInvoice, balance, healthCheck, taxPayerInbox, viewerLink, toXml, listOf, handle };

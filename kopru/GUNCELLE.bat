@@ -2,12 +2,16 @@
 title Asil Kuyumcu Kopru - Guncelle
 cd /d "%~dp0"
 echo Kopru programinin son surumu indiriliyor...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $b='https://raw.githubusercontent.com/ufukcicek81/kuyumcupro/main/kopru/'; foreach($f in 'asil-kopru.js','BASLAT.bat','ARKAPLAN.bat','OTOMATIK_BASLAT_KUR.bat','OTOMATIK_BASLAT_KALDIR.bat'){ Invoke-WebRequest -UseBasicParsing ($b+$f) -OutFile ($f+'.tmp') }; foreach($f in 'asil-kopru.js','BASLAT.bat','ARKAPLAN.bat','OTOMATIK_BASLAT_KUR.bat','OTOMATIK_BASLAT_KALDIR.bat'){ Move-Item ($f+'.tmp') $f -Force }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $b='https://raw.githubusercontent.com/ufukcicek81/kuyumcupro/main/kopru/'; foreach($f in 'asil-kopru.js','whatsapp.js','package.json','BASLAT.bat','ARKAPLAN.bat','OTOMATIK_BASLAT_KUR.bat','OTOMATIK_BASLAT_KALDIR.bat','WHATSAPP_KUR.bat'){ Invoke-WebRequest -UseBasicParsing ($b+$f) -OutFile ($f+'.tmp') }; foreach($f in 'asil-kopru.js','whatsapp.js','package.json','BASLAT.bat','ARKAPLAN.bat','OTOMATIK_BASLAT_KUR.bat','OTOMATIK_BASLAT_KALDIR.bat','WHATSAPP_KUR.bat'){ Move-Item ($f+'.tmp') $f -Force }"
 if errorlevel 1 (
   echo.
   echo  INDIRME BASARISIZ. Internet baglantisini kontrol edin.
   pause
   exit /b 1
+)
+if exist node_modules (
+  echo WhatsApp modulu guncelleniyor...
+  call npm install --omit=dev --no-audit --no-fund
 )
 echo Eski kopru durduruluyor...
 powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*asil-kopru.js*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
