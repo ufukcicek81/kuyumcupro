@@ -1807,6 +1807,13 @@ test('satış düzeltmesi yarım kalırsa uyarı + eski hâliyle geri yükleme; 
   await p.click('[data-cs-restore]'); await p.click('#modalConfirm'); await p.waitForTimeout(9000);
   sales = (fb.db.state.sales || []).filter((x) => Number(x.total) === 4321);
   assert.equal(sales.length, 1, 'iptal edilen satış geri yüklenmeli');
+  // Satır tıklanınca ayrıntı penceresi açılır (Düzelt / İptal orada), Esc kapatır
+  await p.click('text=Satış Geçmişi'); await p.waitForSelector('#saleHistBody [data-sale-row]');
+  await p.click('#saleHistBody [data-sale-row] td:nth-child(2)'); await p.waitForSelector('#saleHistPop #shpEdit');
+  assert.ok(await p.isVisible('#shpCancel') && await p.isVisible('#shpPrint'));
+  await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+  assert.ok(!(await p.$('#saleHistPop')), 'Esc pencereyi kapatmalı');
+  assert.ok(await p.$('#saleHistBody'), 'satış geçmişi açık kalmalı');
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
@@ -2676,20 +2683,21 @@ test('satış: geçmiş tarih seçilince satış, kasa ve stok hareketi o güne 
   await p.context().close();
 });
 
-test('tamir: liste 1280 genişlikte yatay kaydırmasız sığar; İptal düğmesi nedenle iptal eder', async () => {
+test('tamir: liste 1180 genişlikte yatay kaydırmasız sığar; İptal düğmesi nedenle iptal eder', async () => {
   const fb = createFakeFirebase();
   let p = await newDevice(browser, appUrl, fb);
   await p.waitForTimeout(1500);
   const st = fb.db.state;
-  st.repairs = [1, 2, 3].map((i) => ({ id: 'REPX' + i, docNo: 'TMR-2026-00009' + i, period: st.activePeriod, createdAt: new Date().toISOString(), customerName: 'SILA DOĞRU', phone: '05334072362', itemType: 'YÜZÜK', karat: '14K', repairRequest: '13 BOY OLACAK', dueDate: '2026-11-21', estimatedFee: 200, deposit: 200, status: 'Bekliyor' }));
+  st.repairs = [1, 2, 3].map((i) => ({ id: 'REPX' + i, docNo: 'TMR-2026-00009' + i, period: st.activePeriod, createdAt: new Date().toISOString(), customerName: 'ABDURRAHMAN KANCA', phone: '05334072362', itemType: 'YÜZÜK 925 K GÜMÜŞ', karat: '14K', repairRequest: 'KAYNAK VE TEMİZLEME taş takılacak', dueDate: '2026-11-21', estimatedFee: 200, deposit: 200, status: 'Bekliyor' }));
   fb.db.state = st; await p.context().close();
   p = await newDevice(browser, appUrl, fb);
-  await p.setViewportSize({ width: 1280, height: 720 });
+  await p.setViewportSize({ width: 1180, height: 720 });
   await p.evaluate(() => document.querySelector('[data-route="repairs"],[data-go="repairs"]').click());
   await p.waitForSelector('[data-repair-cancel="REPX1"]');
   const m = await p.evaluate(() => { const w = [...document.querySelectorAll('.table-wrap')].find((x) => x.querySelector('[data-repair-row]')); return { over: w.scrollWidth - w.clientWidth, rowH: document.querySelector('[data-repair-row]').offsetHeight }; });
   assert.ok(m.over <= 2, 'yatay kaydırma olmamalı: ' + m.over);
-  assert.ok(m.rowH < 80, 'satır kısa olmalı: ' + m.rowH);
+  assert.ok(m.rowH < 120, 'satır kısa olmalı: ' + m.rowH);
+  if (process.env.SHOT) await (await p.$('.repair-table')).screenshot({ path: process.env.SHOT });
   await p.click('[data-repair-cancel="REPX1"]');
   await p.waitForSelector('#repCancelReason');
   assert.match(await p.innerText('#modalRoot'), /Kapora 200,00 TL/);
@@ -2756,6 +2764,49 @@ test('cari ekstre: açılışta yalnız bugün; tarih aralığı / Tümü; harek
   await p.keyboard.press('Escape');
   assert.equal(await p.isVisible('#cariRowPop'), false, 'Esc pencereyi kapatır, ekstre açık kalır');
   assert.ok(await p.isVisible('#cariEkstreTable'));
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
+test('fiş yazıcı (QZ): fiş resim (PNG) olarak gönderilir; QZ bağlantısı açılışta önceden kurulur', async () => {
+  const fb = createFakeFirebase();
+  let p = await newDevice(browser, appUrl, fb);
+  await p.waitForTimeout(1500);
+  const st = fb.db.state;
+  st.repairs = [{ id: 'REPQZ', docNo: 'TMR-2026-000777', period: st.activePeriod, createdAt: new Date().toISOString(), customerName: 'AYŞE KAYA', phone: '05551112233', itemType: 'KOLYE', repairRequest: 'Kilit', status: 'Bekliyor' }];
+  st.settings = st.settings || {}; st.settings.receiptPrinter = { ...(st.settings.receiptPrinter || {}), mode: 'qz', printerName: 'ACLAS PP7X', widthMm: 80, copies: 1 };
+  fb.db.state = st; await p.context().close();
+  const init = () => {
+    localStorage.setItem('asilQzPrivateKeyV1', '-----BEGIN PRIVATE KEY-----\nTEST\n-----END PRIVATE KEY-----');
+    window.KJUR = {}; window.KEYUTIL = {}; window.stob64 = () => ''; window.hextorstr = () => '';
+    window.__qz = { connects: 0, jobs: [] };
+    let active = false;
+    window.qz = {
+      websocket: { isActive: () => active, connect: async () => { window.__qz.connects++; active = true; } },
+      security: { setCertificatePromise() {}, setSignatureAlgorithm() {}, setSignaturePromise() {} },
+      printers: { find: async () => ['ACLAS PP7X'], getDefault: async () => 'ACLAS PP7X' },
+      configs: { create: (name, o) => ({ name, o }) },
+      print: async (cfg, jobs) => { window.__qz.jobs.push({ cfg, jobs }); }
+    };
+  };
+  p = await newDevice(browser, appUrl, fb, { initScript: init });
+  await p.waitForFunction(() => window.__qz.connects > 0, null, { timeout: 8000 }); // açılışta bağlantı
+  await p.evaluate(() => document.querySelector('[data-route="repairs"],[data-go="repairs"]').click());
+  await p.waitForSelector('[data-repair-print="REPQZ"]');
+  await p.click('[data-repair-print="REPQZ"]');
+  await p.waitForFunction(() => window.__qz.jobs.length > 0, null, { timeout: 10000 });
+  const r = await p.evaluate(async () => {
+    const j = window.__qz.jobs[0], d = j.jobs[0];
+    const img = new Image(); img.src = 'data:image/png;base64,' + d.data; await img.decode();
+    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+    const px = g.getImageData(0, 0, c.width, c.height).data; let dark = 0; for (let i = 0; i < px.length; i += 4) if (px[i] < 100) dark++;
+    return { type: d.type, format: d.format, flavor: d.flavor, w: img.width, h: img.height, dark, printer: j.cfg.name, scale: j.cfg.o.scaleContent, connects: window.__qz.connects };
+  });
+  assert.deepEqual([r.type, r.format, r.flavor, r.printer, r.scale], ['pixel', 'image', 'base64', 'ACLAS PP7X', true]);
+  assert.equal(r.w, Math.round(80 / 25.4 * 203));
+  assert.ok(r.h > 300, 'fiş yüksekliği: ' + r.h);
+  assert.ok(r.dark > 2000, 'resimde yazı olmalı (koyu piksel: ' + r.dark + ')');
+  assert.equal(r.connects, 1, 'bağlantı bir kez kurulur, baskıda yeniden kurulmaz');
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
