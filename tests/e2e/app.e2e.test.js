@@ -2773,8 +2773,8 @@ test('fiş yazıcı (QZ): fiş resim olarak gider (ayarla ESC/POS ESC * komutu);
   let p = await newDevice(browser, appUrl, fb);
   await p.waitForTimeout(1500);
   const st = fb.db.state;
-  st.repairs = [{ id: 'REPQZ', docNo: 'TMR-2026-000777', period: st.activePeriod, createdAt: new Date().toISOString(), customerName: 'AYŞE KAYA', phone: '05551112233', itemType: 'KOLYE', repairRequest: 'Kilit', status: 'Bekliyor' }];
-  st.settings = st.settings || {}; st.settings.receiptPrinter = { ...(st.settings.receiptPrinter || {}), mode: 'qz', printerName: 'ACLAS PP7X', widthMm: 80, copies: 1 };
+  st.repairs = [{ id: 'REPQZ', docNo: 'TMR-2026-000777', period: st.activePeriod, createdAt: new Date().toISOString(), customerName: 'AYŞE KAYA', phone: '05551112233', itemType: 'KOLYE', karat: '925K', repairRequest: 'KAYNAK VE TEMİZLEME', dueDate: '2026-11-23', estimatedFee: 150, status: 'Teslim Alındı' }];
+  st.settings = st.settings || {}; st.settings.receiptPrinter = { ...(st.settings.receiptPrinter || {}), mode: 'qz', printerName: 'ACLAS PP7X', widthMm: 80, copies: 1, logoData: process.env.SHOT ? 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAA8CAIAAAC1nk4lAAAAIUlEQVR4nO3BgQAAAADDoPlTX+AIVQEAAAAAAAAAAADANypsAAHc33jIAAAAAElFTkSuQmCC' : '' };
   fb.db.state = st; await p.context().close();
   const init = () => {
     localStorage.setItem('asilQzPrivateKeyV1', '-----BEGIN PRIVATE KEY-----\nTEST\n-----END PRIVATE KEY-----');
@@ -2822,13 +2822,18 @@ test('fiş yazıcı (QZ): fiş resim olarak gider (ayarla ESC/POS ESC * komutu);
     let i = 5, dark = 0, bands = 0, n = 0, gsv = 0;
     for (let q = 0; q + 1 < b.length; q++) if (b[q] === 0x1D && b[q + 1] === 0x76) gsv++;
     while (b[i] === 0x1B && b[i + 1] === 0x2A && b[i + 2] === 33) { n = b[i + 3] | (b[i + 4] << 8); i += 5; for (let k = 0; k < n * 3; k++) { let v = b[i++]; while (v) { dark += v & 1; v >>= 1; } } i++; bands++; }
-    let cuts = 0, inits = 0; for (let q = 0; q + 2 < b.length; q++) { if (b[q] === 0x1D && b[q + 1] === 0x56 && b[q + 2] === 1) cuts++; if (b[q] === 0x1B && b[q + 1] === 0x40 && b[q + 2] === 0x1B) inits++; }
+    let cuts = 0, inits = 0; for (let q = 0; q + 2 < b.length; q++) { if (b[q] === 0x1D && b[q + 1] === 0x56 && b[q + 2] === 1) cuts++; if (b[q] === 0x1B && b[q + 1] === 0x40) inits++; }
     return { type: d.type, format: d.format, head: Array.from(b.slice(0, 5)), n, bands, dark, end: i, len: b.length, cuts, inits, afterFirst: Array.from(b.slice(i, i + 10)) };
   });
   assert.deepEqual([e.type, e.format, e.head, e.n], ['raw', 'command', [0x1B, 0x40, 0x1B, 0x33, 24], 576]);
   assert.ok(e.bands > 12 && e.dark > 2000, 'fiş içeriği: ' + JSON.stringify(e));
-  assert.deepEqual(e.afterFirst, [0x1B, 0x32, 0x1B, 0x64, 5, 0x1D, 0x56, 1, 0x1B, 0x40], 'kopya sonunda ilerlet + kes, sonra 2. kopya');
-  assert.deepEqual([e.cuts, e.inits, e.len], [2, 2, (e.end + 8) * 2], '2 kopya, her biri kesilir');
+  if (process.env.SHOT) { const png = await p.evaluate(() => { const d = window.__qz.jobs[1].jobs[0], b = Uint8Array.from(atob(d.data), (ch) => ch.charCodeAt(0)); let i = 5; const bands = [];
+    while (b[i] === 0x1B && b[i + 1] === 0x2A) { const n = b[i + 3] | (b[i + 4] << 8); i += 5; bands.push(b.slice(i, i + n * 3)); i += n * 3 + 1; }
+    const c = document.createElement('canvas'); c.width = 576; c.height = bands.length * 24; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.fillStyle = '#000';
+    bands.forEach((bd, k) => { for (let x = 0; x < 576; x++) for (let r = 0; r < 24; r++) if (bd[x * 3 + (r >> 3)] & (0x80 >> (r & 7))) g.fillRect(x, k * 24 + r, 1, 1); });
+    return c.toDataURL('image/png').split(',')[1]; }); require('fs').writeFileSync(process.env.SHOT, Buffer.from(png, 'base64')); }
+  assert.deepEqual(e.afterFirst, [0x1B, 0x32, 0x1B, 0x4A, 200, 0x1D, 0x56, 1, 0x1B, 0x33], 'kopya sonunda ~25 mm ilerlet + kes, 2. kopya sıfırlamadan başlar');
+  assert.deepEqual([e.cuts, e.inits, e.len], [2, 1, 2 + (e.end - 2 + 8) * 2], '2 kopya, her biri kesilir; ESC @ yalnız başta');
   assert.equal(r.connects, 1, 'bağlantı bir kez kurulur, baskıda yeniden kurulmaz');
   assert.deepEqual(p.errors, []);
   await p.context().close();
