@@ -10479,9 +10479,10 @@ function stockSummaryView(){
         out.push(0x0A);}
       push([0x1B,0x32,0x1B,0x4A,200]);/* ~25 mm boşluk: kesici yazma kafasının üstünde */if(cut)push([0x1D,0x56,0x01]);/* her kopyadan sonra kes */
     }
-    /* Ağ (IP) yazıcıları bağlantı kapanınca henüz basmadıkları son veriyi siliyor: son fişin altı eksik kalıyordu.
-       Sona yazıcının yok saydığı boş (NUL) dolgu eklenir; silinen kısım bu dolgu olur. */
-    for(var z=0;z<32768;z++)out.push(0);
+    /* Aclas işin son ~15 KB'ını bir sonraki işe kadar basmadan bekletiyor (son fişin altı bir sonraki fişin başında çıkıyordu).
+       Sona baskı yapmayan gerçek komutlar (ESC 2 = satır aralığı) dolgu olarak eklenir: tampon dolar, fişin tamamı basılır.
+       NUL dolgu işe yaramadı (yazıcı NUL'ları tampona almıyor). */
+    for(var z=0;z<12288;z++)out.push(0x1B,0x32);
     var str='';for(var i=0;i<out.length;i+=8192)str+=String.fromCharCode.apply(null,out.slice(i,i+8192));
     return btoa(str);
   }
