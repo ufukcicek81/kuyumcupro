@@ -8338,6 +8338,9 @@ function stockSummaryView(){
     return out;
   }
   function printCariHistoryDocV7(x){if(x._info==='sale')return printSaleReceiptV644(x._ref);if(x._info==='purchase')return printPurchaseReceiptV644(x._ref);if(x._info==='trade')return printTradeReceiptV644(x._ref);if(x._info==='finance')return printFinanceReceiptV644(x._ref);}
+  /* Ekstre tarih aralığı: açılışta yalnız bugün; kullanıcı aralığı seçer (oturum boyunca hatırlanır). */
+  let cariRangeV7={from:'',to:''};
+  function cariRangeOfV7(){const t=localDayV7();return {from:cariRangeV7.from||t,to:cariRangeV7.to||t,all:cariRangeV7.all};}
   function openCariDetail(id){
     const c=state.customers.find(x=>x.id===id); if(!c)return;
     const infoRows=cariHistoryRowsV7(c);
@@ -8356,7 +8359,9 @@ function stockSummaryView(){
       running[u]=Number(running[u]||0)+Number(x.debit||0)-Number(x.credit||0);
       return {...x,_balance:Number(running[u]||0),_balances:{...running}};
     });
-    const rows=[...enriched].reverse();
+    const rg=cariRangeOfV7(),dayOf=x=>localDayV7(new Date(x.date||0)),inRange=x=>rg.all||(dayOf(x)>=rg.from&&dayOf(x)<=rg.to);
+    const before=rg.all?[]:enriched.filter(x=>dayOf(x)<rg.from),carried=before.length?before[before.length-1]._balances||{}:{};
+    const rows=enriched.filter(inRange).reverse();
     const currentMap={TL:Number(cariDisplayTlBalance(c)||0),HAS:Number(c.hasBalance||0),...(c.otherBalances||{})};
     const fmtSigned=(v,u)=>{
       v=Number(v||0); const abs=qty(Math.abs(v)); if(Math.abs(v)<0.000001)return `0 ${esc(u)}`;
@@ -8367,9 +8372,12 @@ function stockSummaryView(){
     const summary=summaryUnits.map(u=>`<div class="cari-ekstre-balance"><small>${esc(u)} Son Bakiye</small><strong class="${Number(currentMap[u]||0)>0?'negative':Number(currentMap[u]||0)<0?'positive':''}">${fmtSigned(currentMap[u]||0,u)}</strong></div>`).join('');
     const bankUnit=bankAcc?String(bankAcc.acc.currency||'TL').toUpperCase():'',bankBal=bankAcc?Number(bankAcc.acc.balance||0):0,bankGap=bankAcc?bankBal-Number(running[bankUnit]||0):0;
     const gapNote=bankAcc?`<div class="notice" style="margin:8px 0">${Math.abs(bankGap)>=0.01?`<strong>Fark var:</strong> Banka hareketlerinin toplamı ${qty(Number(running[bankUnit]||0))} ${esc(bankUnit)}, banka hesabının bakiyesi ${qty(bankBal)} ${esc(bankUnit)}. Aradaki <b>${qty(bankGap)} ${esc(bankUnit)}</b> hareketi olmayan eski bakiyedir (ör. Pusula'dan bakiye olarak gelen). <button class="btn btn-outline" type="button" id="bankGapAsOpening" style="margin-left:6px">Farkı açılış hareketi yap</button> — bakiye değişmez, fark listede görünür ve düzeltilebilir olur.`:'Banka bakiyesi, listedeki banka hareketlerinin toplamıyla tutuyor.'} <span class="muted">“Cari kaydı” satırları bilgi içindir, banka bakiyesine eklenmez.</span> <button class="btn btn-outline" type="button" id="bankSetBalanceV7" style="margin-left:6px">Bakiyeyi gerçek tutara eşitle</button></div>`:'';
+    const rangeBar=`<div class="cari-print-bar" style="display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin-bottom:8px"><label class="labelled" style="flex:0 1 150px"><span>Başlangıç</span><input id="cariPrintFrom" type="date" class="input" value="${rg.all?'':esc(rg.from)}"></label><label class="labelled" style="flex:0 1 150px"><span>Bitiş</span><input id="cariPrintTo" type="date" class="input" value="${rg.all?'':esc(rg.to)}"></label><div style="display:flex;gap:4px;flex-wrap:wrap">${[['today','Bugün'],['yday','Dün'],['week','Bu Hafta'],['month','Bu Ay'],['all','Tümü']].map(([k,t])=>`<button class="btn btn-outline btn-sm" type="button" data-cari-range="${k}">${t}</button>`).join('')}</div><button class="btn btn-primary" type="button" id="cariPrintStatement" style="margin-left:auto">Ekstre Yazdır</button></div>
+      <div class="notice" style="margin:0 0 8px">${rg.all?'Tüm hareketler gösteriliyor.':`<b>${rg.from===rg.to?trDate(rg.from+'T12:00').split(' ')[0]:trDate(rg.from+'T12:00').split(' ')[0]+' – '+trDate(rg.to+'T12:00').split(' ')[0]}</b> hareketleri: ${rows.length} satır.`}${Object.keys(carried).length?` Devreden bakiye: ${Object.entries(carried).filter(([,v])=>Math.abs(Number(v||0))>.000001).map(([u,v])=>fmtSigned(v,u)).join(' · ')||'0'}`:''}</div>`;
+    const infoToggle=infoRows.length?`<label style="display:flex;gap:6px;align-items:center;margin:8px 0;font-size:14px"><input type="checkbox" id="cariShowInfo" ${cariShowInfoV7?'checked':''}> Bakiyeyi etkilemeyen peşin işlemleri de göster (${infoRows.length} işlem: satış, alış, alım-satım, kasa/banka)</label>`:'';
     const body=rows.length?`
-      <div class="cari-print-bar" style="display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin-bottom:8px"><label class="labelled" style="flex:1 1 130px"><span>Başlangıç</span><input id="cariPrintFrom" type="date" class="input"></label><label class="labelled" style="flex:1 1 130px"><span>Bitiş</span><input id="cariPrintTo" type="date" class="input"></label><button class="btn btn-primary" type="button" id="cariPrintStatement">Ekstre Yazdır</button></div>
-      <div class="cari-ekstre-summary">${summary}</div>${gapNote}${infoRows.length?`<label style="display:flex;gap:6px;align-items:center;margin:8px 0;font-size:14px"><input type="checkbox" id="cariShowInfo" ${cariShowInfoV7?'checked':''}> Bakiyeyi etkilemeyen peşin işlemleri de göster (${infoRows.length} işlem: satış, alış, alım-satım, kasa/banka)</label>`:''}
+      ${rangeBar}
+      <div class="cari-ekstre-summary">${summary}</div>${gapNote}${infoToggle}
       <div class="cari-ekstre-wrap">
         <table class="cari-ekstre-table" id="cariEkstreTable" tabindex="0">
           <thead><tr><th>Tarih</th><th>İşlem</th><th>Cins / Karşılık</th><th class="num">Borç</th><th class="num">Alacak</th><th class="num">Bakiye</th></tr></thead>
@@ -8389,9 +8397,8 @@ function stockSummaryView(){
           }).join('')}</tbody>
         </table>
       </div>
-      <div class="cari-ekstre-detail" id="cariEkstreDetail"></div>
-      <div class="notice" style="margin-top:12px"><strong>Kullanım:</strong> Bir hareketin üzerine tıklayın. Alt bölümde o işlemden sonraki <strong>Son Durum</strong> görünür. Yukarı/Aşağı ok tuşlarıyla hareketler arasında gezebilirsiniz.</div>
-    `:`${gapNote}<div class="empty-state"><strong>Hareket yok</strong></div>`;
+      <div class="notice" style="margin-top:8px"><strong>Kullanım:</strong> Bir harekete tıklayın: detay, <b>düzelt</b> ve <b>sil</b> açılan pencerede. Yukarı/Aşağı oklarla gezin, Enter ile açın.</div>
+    `:`${rangeBar}<div class="cari-ekstre-summary">${summary}</div>${gapNote}${infoToggle}<div class="empty-state"><strong>${enriched.length?'Bu tarih aralığında hareket yok':'Hareket yok'}</strong>${enriched.length&&!rg.all?'<br><small>Üstten tarih aralığı seçin ya da “Tümü”ne basın.</small>':''}</div>`;
     modal(`Ekstre — ${c.name}`,body,null,'Kapat');
     const modalEl=document.querySelector('#modalRoot .modal'); if(modalEl)modalEl.style.width='min(1080px,96vw)';
     document.getElementById('cariShowInfo')?.addEventListener('change',e=>{cariShowInfoV7=e.target.checked;openCariDetail(c.id);});
@@ -8419,12 +8426,27 @@ function stockSummaryView(){
       audit(`${bankAcc.acc.bank||bankAcc.acc.name||'Banka'}: ${qty(bankGap)} ${bankUnit} eski bakiye farkı açılış hareketi yapıldı (bakiye değişmedi)`,'Banka');
       save();toast('Fark açılış hareketi olarak eklendi');openCariDetail(c.id);
     });
+    const setRange=(from,to,all)=>{cariRangeV7={from:from||'',to:to||'',all:!!all};openCariDetail(c.id);};
+    ['cariPrintFrom','cariPrintTo'].forEach(i=>document.getElementById(i)?.addEventListener('change',()=>{let f=document.getElementById('cariPrintFrom').value,t=document.getElementById('cariPrintTo').value;if(!f&&!t)return setRange('','',true);f=f||t;t=t||f;if(f>t)[f,t]=[t,f];setRange(f,t,false);}));
+    document.querySelectorAll('[data-cari-range]').forEach(b=>b.addEventListener('click',()=>{const d=new Date(),day=x=>localDayV7(x),k=b.dataset.cariRange;
+      if(k==='today')return setRange(day(d),day(d));
+      if(k==='yday'){const y=new Date(d);y.setDate(d.getDate()-1);return setRange(day(y),day(y));}
+      if(k==='week'){const m=new Date(d);m.setDate(d.getDate()-((d.getDay()+6)%7));return setRange(day(m),day(d));}
+      if(k==='month')return setRange(day(new Date(d.getFullYear(),d.getMonth(),1)),day(d));
+      return setRange('','',true);}));
     if(!rows.length)return;
     let selected=0;
+    // Hareket detayı açılır pencerede (ekstrenin üstünde); düzelt / sil burada.
+    const pop=document.createElement('div');pop.id='cariRowPop';pop.style.cssText='position:fixed;inset:0;z-index:4000;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;padding:16px';
+    pop.innerHTML='<div class="card" style="width:min(640px,96vw);max-height:90vh;overflow:auto;position:relative"><button class="btn btn-outline btn-sm" type="button" id="cariRowPopX" style="position:absolute;top:8px;right:8px">×</button><div id="cariEkstreDetail" class="cari-ekstre-detail"></div></div>';
+    document.getElementById('modalRoot')?.appendChild(pop);
     const detail=document.getElementById('cariEkstreDetail');
-    const paint=(idx)=>{
+    const hidePop=()=>{pop.style.display='none';setTimeout(()=>document.getElementById('cariEkstreTable')?.focus(),0);};
+    pop.addEventListener('click',e=>{if(e.target===pop)hidePop();});const popEsc=e=>{if(!document.contains(pop)){document.removeEventListener('keydown',popEsc,true);return;}if(e.key==='Escape'&&pop.style.display!=='none'){e.preventDefault();e.stopPropagation();hidePop();}};document.addEventListener('keydown',popEsc,true);document.getElementById('cariRowPopX').addEventListener('click',hidePop);
+    const paint=(idx,open)=>{
       selected=Math.max(0,Math.min(rows.length-1,idx));
       document.querySelectorAll('.cari-ekstre-row').forEach((r,i)=>r.classList.toggle('selected',i===selected));
+      if(open){pop.style.display='flex';setTimeout(()=>document.getElementById('cariRowPopX')?.focus(),0);}
       const x=rows[selected];
       const src=x.sourceUnit?`${esc(x.sourceUnit)} ${qty(x.sourceAmount||0)}${Number(x.sourceRate||0)?` @ ${Number(x.sourceRate||0).toFixed(6)}`:''}`:'—';
       const ctr=x.counterEnabled?`${esc(x.counterUnit||x.unit)} ${qty(x.counterAmount||0)}${Number(x.counterRate||0)?` @ ${Number(x.counterRate||0).toFixed(6)}`:''}`:'—';
@@ -8446,14 +8468,16 @@ function stockSummaryView(){
       document.getElementById('selectedFinDelete')?.addEventListener('click',()=>deleteBankFinanceMoveV7(x._fin,c.id));
       document.querySelector(`.cari-ekstre-row[data-ekstre-index="${selected}"]`)?.scrollIntoView({block:'nearest'});
     };
-    document.querySelectorAll('.cari-ekstre-row').forEach(r=>r.addEventListener('click',()=>paint(Number(r.dataset.ekstreIndex||0))));
+    document.querySelectorAll('.cari-ekstre-row').forEach(r=>r.addEventListener('click',()=>paint(Number(r.dataset.ekstreIndex||0),true)));
     const tbl=document.getElementById('cariEkstreTable');
     tbl?.addEventListener('keydown',e=>{
       if(e.key==='ArrowDown'){e.preventDefault();paint(Math.min(rows.length-1,selected+1));}
       if(e.key==='ArrowUp'){e.preventDefault();paint(Math.max(0,selected-1));}
+      if(e.key==='Enter'){e.preventDefault();paint(selected,true);}
+      if(e.key==='Escape'&&pop.style.display!=='none'){e.preventDefault();e.stopPropagation();hidePop();}
       if(e.key==='Delete'){e.preventDefault();const x=rows[selected];if(x)deleteAnyCariMove(x.id);}
     });
-    paint(0);
+    paint(0,false);
     setTimeout(()=>tbl?.focus(),0);
   }
 
