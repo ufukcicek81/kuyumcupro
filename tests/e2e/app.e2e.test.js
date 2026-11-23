@@ -2768,7 +2768,7 @@ test('cari ekstre: açılışta yalnız bugün; tarih aralığı / Tümü; harek
   await p.context().close();
 });
 
-test('fiş yazıcı (QZ): fiş resim (PNG) olarak gönderilir; QZ bağlantısı açılışta önceden kurulur', async () => {
+test('fiş yazıcı (QZ): fiş ESC/POS komutuyla doğrudan gider (ayarla resim); QZ bağlantısı açılışta önceden kurulur', async () => {
   const fb = createFakeFirebase();
   let p = await newDevice(browser, appUrl, fb);
   await p.waitForTimeout(1500);
@@ -2795,17 +2795,39 @@ test('fiş yazıcı (QZ): fiş resim (PNG) olarak gönderilir; QZ bağlantısı 
   await p.waitForSelector('[data-repair-print="REPQZ"]');
   await p.click('[data-repair-print="REPQZ"]');
   await p.waitForFunction(() => window.__qz.jobs.length > 0, null, { timeout: 10000 });
+  // Varsayılan: ESC/POS raster komutu (yazıcıya doğrudan), 576 nokta genişlik, siyah/beyaz, ortalı
+  const e = await p.evaluate(() => {
+    const d = window.__qz.jobs[0].jobs[0], b = Uint8Array.from(atob(d.data), (ch) => ch.charCodeAt(0));
+    let i = 2, dark = 0, minX = 1e9, maxX = -1, bw = 0, rows = 0;
+    while (b[i] === 0x1D && b[i + 1] === 0x76) { bw = b[i + 4] | (b[i + 5] << 8); const h = b[i + 6] | (b[i + 7] << 8); i += 8;
+      for (let y = 0; y < h; y++) for (let x = 0; x < bw; x++) { const v = b[i++]; for (let k = 0; k < 8; k++) if (v & (0x80 >> k)) { dark++; const px = x * 8 + k; if (px < minX) minX = px; if (px > maxX) maxX = px; } }
+      rows += h; }
+    return { type: d.type, format: d.format, init: [b[0], b[1]], bw, rows, dark, left: minX, right: bw * 8 - 1 - maxX, tail: Array.from(b.slice(-4)) };
+  });
+  assert.deepEqual([e.type, e.format, e.init, e.bw], ['raw', 'command', [0x1B, 0x40], 72]);
+  assert.ok(e.rows > 300 && e.dark > 2000, 'fiş içeriği: ' + JSON.stringify(e));
+  assert.ok(Math.abs(e.left - e.right) < 25, 'ortalı: sol ' + e.left + ' sağ ' + e.right);
+  assert.deepEqual(e.tail, [0x1D, 0x56, 0x42, 0x00], 'sonda kesme komutu');
+  assert.match(await p.innerText('body'), /yazdırıldı · \d+,\d sn/);
+  // Ayarlardan "Resim" seçilirse PNG resim gönderilir
+  await p.click('#repairPrinterSettings'); await p.waitForSelector('#rpFormat');
+  await p.selectOption('#rpFormat', 'image'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.click('[data-repair-print="REPQZ"]');
+  await p.waitForFunction(() => window.__qz.jobs.length > 1, null, { timeout: 10000 });
   const r = await p.evaluate(async () => {
-    const j = window.__qz.jobs[0], d = j.jobs[0];
+    const j = window.__qz.jobs[1], d = j.jobs[0];
     const img = new Image(); img.src = 'data:image/png;base64,' + d.data; await img.decode();
     const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const g = c.getContext('2d'); g.drawImage(img, 0, 0);
-    const px = g.getImageData(0, 0, c.width, c.height).data; let dark = 0; for (let i = 0; i < px.length; i += 4) if (px[i] < 100) dark++;
-    return { type: d.type, format: d.format, flavor: d.flavor, w: img.width, h: img.height, dark, printer: j.cfg.name, scale: j.cfg.o.scaleContent, connects: window.__qz.connects };
+    const px = g.getImageData(0, 0, c.width, c.height).data; let dark = 0, grey = 0, minX = c.width, maxX = 0;
+    for (let i = 0; i < px.length; i += 4) { if (px[i] < 100) { dark++; const x = (i / 4) % c.width; if (x < minX) minX = x; if (x > maxX) maxX = x; } if (px[i] > 0 && px[i] < 255) grey++; }
+    return { left: minX, right: c.width - 1 - maxX, grey, type: d.type, format: d.format, flavor: d.flavor, w: img.width, h: img.height, dark, printer: j.cfg.name, scale: j.cfg.o.scaleContent, connects: window.__qz.connects };
   });
   assert.deepEqual([r.type, r.format, r.flavor, r.printer, r.scale], ['pixel', 'image', 'base64', 'ACLAS PP7X', true]);
   assert.equal(r.w, Math.round(80 / 25.4 * 203));
   assert.ok(r.h > 300, 'fiş yüksekliği: ' + r.h);
   assert.ok(r.dark > 2000, 'resimde yazı olmalı (koyu piksel: ' + r.dark + ')');
+  assert.equal(r.grey, 0, 'termal yazıcı için yalnız siyah/beyaz nokta');
+  assert.ok(Math.abs(r.left - r.right) < 25, 'fiş kâğıtta ortalı olmalı: sol ' + r.left + ' sağ ' + r.right);
   assert.equal(r.connects, 1, 'bağlantı bir kez kurulur, baskıda yeniden kurulmaz');
   assert.deepEqual(p.errors, []);
   await p.context().close();

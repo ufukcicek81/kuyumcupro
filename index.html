@@ -10454,31 +10454,61 @@ function stockSummaryView(){
   function receiptMonoV7(html){html=String(html||'');if(html.indexOf('receiptMonoV7')>=0)return html;return html.indexOf('</head>')>=0?html.replace('</head>',RECEIPT_MONO_CSS_V7+'</head>'):RECEIPT_MONO_CSS_V7+html;}
   /* Fişi tarayıcıda PNG resme çevirir (SVG foreignObject → canvas). QZ Tray resmi doğrudan basar; HTML gönderince
      QZ'nin içindeki web motoru (JavaFX) ilk fişte 30-60 sn açılıyordu, resimde bu bekleme yok. */
-  async function receiptHtmlToPngV7(html,widthMm,heightMm,dpi){
+  async function receiptHtmlToPngV7(html,widthMm,heightMm,dpi){return (await receiptCanvasV7(html,widthMm,heightMm,dpi)).toDataURL('image/png').split(',')[1];}
+  function receiptSendModeV7(p){return p.sendMode||(p.format==='html'?'html':'escpos');}
+  /* Siyah/beyaz fiş resmini ESC/POS raster komutuna çevirir (GS v 0). Windows yazıcı sürücüsü ve QZ'nin
+     sayfa çizimi atlanır; yazıcı komutu doğrudan alır, fiş hemen çıkar. Sonda kâğıt ilerletilip kesilir. */
+  function receiptEscposV7(canvas,copies){
+    var w=canvas.width,h=canvas.height,bw=Math.ceil(w/8),a=canvas.getContext('2d').getImageData(0,0,w,h).data,out=[];
+    var push=function(arr){for(var i=0;i<arr.length;i++)out.push(arr[i]);};
+    var last=h-1;for(;last>0;last--){var blank=true;for(var x=0;x<w;x++)if(a[(last*w+x)*4]<128){blank=false;break;}if(!blank)break;}
+    for(var c=0;c<Math.max(1,copies||1);c++){
+      push([0x1B,0x40]);
+      for(var y0=0;y0<=last;y0+=128){var rows=Math.min(128,last+1-y0);push([0x1D,0x76,0x30,0x00,bw&255,bw>>8,rows&255,rows>>8]);
+        for(var y=y0;y<y0+rows;y++)for(var bx=0;bx<bw;bx++){var b=0;for(var k=0;k<8;k++){var xx=bx*8+k;if(xx<w&&a[(y*w+xx)*4]<128)b|=0x80>>k;}out.push(b);}}
+      push([0x1B,0x64,0x04,0x1D,0x56,0x42,0x00]);
+    }
+    var str='';for(var i=0;i<out.length;i+=8192)str+=String.fromCharCode.apply(null,out.slice(i,i+8192));
+    return btoa(str);
+  }
+  async function receiptCanvasV7(html,widthMm,heightMm,dpi,forcePxW){
     dpi=dpi||203;var doc=new DOMParser().parseFromString(html,'text/html'),xs=new XMLSerializer();
     var styles=Array.from(doc.querySelectorAll('style')).map(function(st){return '<style>'+st.textContent.replace(/@page\s*\{[^}]*\}/g,'')+'</style>';}).join('');
     var body=Array.from(doc.body.childNodes).map(function(n){return xs.serializeToString(n);}).join('');
-    var cssW=widthMm*96/25.4,cssH=heightMm*96/25.4,pxW=Math.round(widthMm/25.4*dpi),pxH=Math.round(heightMm/25.4*dpi);
-    var svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+pxW+'" height="'+pxH+'" viewBox="0 0 '+cssW+' '+cssH+'"><foreignObject x="0" y="0" width="'+cssW+'" height="'+cssH+'"><div xmlns="http://www.w3.org/1999/xhtml" style="width:'+cssW+'px;background:#fff">'+styles+body+'</div></foreignObject></svg>';
+    if(forcePxW)widthMm=forcePxW*25.4/dpi;
+    var cssW=widthMm*96/25.4,cssH=heightMm*96/25.4,pxW=forcePxW||Math.round(widthMm/25.4*dpi),pxH=Math.round(heightMm/25.4*dpi);
+    var svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+pxW+'" height="'+pxH+'" viewBox="0 0 '+cssW+' '+cssH+'"><foreignObject x="0" y="0" width="'+cssW+'" height="'+cssH+'"><div xmlns="http://www.w3.org/1999/xhtml" style="width:'+cssW+'px;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif">'+styles+'<style>.receipt{margin:0 auto!important;font-family:Arial,Helvetica,sans-serif}</style>'+body+'</div></foreignObject></svg>';
     var img=new Image();img.decoding='sync';
     await new Promise(function(res,rej){img.onload=res;img.onerror=function(){rej(new Error('Fiş resme çevrilemedi'));};img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);});
     var c=document.createElement('canvas');c.width=pxW;c.height=pxH;var g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,pxW,pxH);g.drawImage(img,0,0,pxW,pxH);
-    return c.toDataURL('image/png').split(',')[1];
+    /* Termal yazıcı griyi noktalara bölüp yazıyı bozuyor: her noktayı tam siyah ya da tam beyaz yap */
+    var d=g.getImageData(0,0,pxW,pxH),a=d.data;for(var i=0;i<a.length;i+=4){var v=(a[i]*299+a[i+1]*587+a[i+2]*114)/1000<170?0:255;a[i]=a[i+1]=a[i+2]=v;a[i+3]=255;}g.putImageData(d,0,0);
+    return c;
   }
   async function printReceiptHtmlV644(html,label){
     var p=receiptPrinterV644(),copies=Math.max(1,Number(p.copies||1));
     var sized=await sizeReceiptV647(receiptMonoV7(html));html=sized.html;
     if(p.mode==='qz'){
       try{
-        var q=await qzConnect(),name=await findReceiptPrinterV644(q);
-        var htmlJobs=[{type:'pixel',format:'html',flavor:'plain',data:html}],jobs=htmlJobs,asImage=p.format!=='html';
+        var t0=Date.now(),q=await qzConnect(),name=await findReceiptPrinterV644(q),mode=receiptSendModeV7(p);
+        if(mode==='escpos'){
+          try{
+            var dots=Number(sized.width)>=80?576:384,cv=await receiptCanvasV7(html,sized.width,sized.height,203,dots),raw=[{type:'raw',format:'command',flavor:'base64',data:receiptEscposV7(cv,copies)}];
+            try{await q.print(q.configs.create(name),raw);}
+            catch(r1){var again0=await findReceiptPrinterV644(q,true);if(again0===name)throw r1;name=again0;await q.print(q.configs.create(name),raw);}
+            audit((label||'Fiş')+' yazdırıldı · '+name,'Fiş');
+            toast((label||'Fiş')+' yazdırıldı · '+((Date.now()-t0)/1000).toFixed(1).replace('.',',')+' sn');
+            return name;
+          }catch(eRaw){console.warn('ESC/POS olmadı, resimle deneniyor',eRaw);}
+        }
+        var htmlJobs=[{type:'pixel',format:'html',flavor:'plain',data:html}],jobs=htmlJobs,asImage=mode!=='html';
         if(asImage){try{jobs=[{type:'pixel',format:'image',flavor:'base64',data:await receiptHtmlToPngV7(html,sized.width,sized.height,203)}];}catch(eImg){console.warn(eImg);jobs=htmlJobs;asImage=false;}}
         var cfgFor=function(n,img){var o={units:'mm',size:{width:sized.width,height:sized.height},orientation:'portrait',margins:{top:0,right:0,bottom:0,left:0},copies:copies,colorType:'blackwhite',scaleContent:!!img};if(img){o.density=203;o.interpolation='nearest-neighbor';}return q.configs.create(n,o);};
         var send=async function(n){try{await q.print(cfgFor(n,asImage),jobs);}catch(eP){if(!asImage)throw eP;/* resim olmadıysa eski yöntem */asImage=false;jobs=htmlJobs;await q.print(cfgFor(n,false),jobs);}};
         try{await send(name);}
         catch(e1){/* kayıtlı yazıcı adı değişmişse listeyi bir kez tarayıp tekrar dene */var again=await findReceiptPrinterV644(q,true);if(again===name)throw e1;name=again;await send(name);}
         audit((label||'Fiş')+' yazdırıldı · '+name,'Fiş');
-        toast((label||'Fiş')+' yazdırıldı');
+        toast((label||'Fiş')+' yazdırıldı · '+((Date.now()-t0)/1000).toFixed(1).replace('.',',')+' sn');
         return name;
       }catch(e){
         console.error(e);
@@ -10488,7 +10518,7 @@ function stockSummaryView(){
     return await browserPrintReceiptV644(html);
   }
   /* Program açılırken QZ Tray bağlantısını önceden kur: ilk fişte bağlantı + yetki beklemesi olmasın. */
-  setTimeout(function(){try{var p=receiptPrinterV644();if(p.mode==='qz'&&typeof qzHasLocalSigningKey==='function'&&qzHasLocalSigningKey())qzConnect().then(function(q){if(!String(p.printerName||'').trim())return findReceiptPrinterV644(q);}).catch(function(){});}catch(_e){}},3000);
+  setTimeout(function(){try{var p=receiptPrinterV644();if(p.mode==='qz'&&typeof qzHasLocalSigningKey==='function'&&qzHasLocalSigningKey())qzConnect().then(function(q){var n=String(p.printerName||'').trim();if(!n)return findReceiptPrinterV644(q);return q.printers.find(n);}).catch(function(){});}catch(_e){}},3000);
   /* Satış fişinde ödeme/takas ayrıntısı: alınan altın-ziynet kalem kalem, tahsilat ve müşteriye ödeme hesabıyla. */
   function saleReceiptPaymentsV7(s){
     var pays=s.payments||[];if(!pays.length)return '';
@@ -10651,13 +10681,13 @@ function stockSummaryView(){
 
   function openReceiptPrinterSettingsV644(){
     var p=receiptPrinterV644();
-    var html='<div class="form-grid"><div class="labelled"><label>Baskı Modu</label><select id="rpMode" class="select"><option value="qz" '+(p.mode==='qz'?'selected':'')+'>QZ Tray — Doğrudan</option><option value="browser" '+(p.mode==='browser'?'selected':'')+'>Tarayıcı Yazdır</option></select></div><div class="labelled"><label>Gönderim Biçimi</label><select id="rpFormat" class="select"><option value="image" '+(p.format!=='html'?'selected':'')+'>Resim — hızlı (önerilen)</option><option value="html" '+(p.format==='html'?'selected':'')+'>HTML — eski yöntem</option></select></div><div class="labelled span-2"><label>Fiş Yazıcısı</label><select id="rpName" class="select"><option value="'+esc(p.printerName)+'">'+esc(p.printerName||'— Önce Yazıcıları Bul —')+'</option></select></div><div class="labelled"><label>Kağıt Genişliği</label><select id="rpWidth" class="select"><option value="80" '+(Number(p.widthMm)===80?'selected':'')+'>80 mm</option><option value="58" '+(Number(p.widthMm)===58?'selected':'')+'>58 mm</option></select></div><div class="labelled"><label>Kopya</label><input id="rpCopies" class="input" type="number" min="1" max="3" value="'+esc(p.copies)+'"></div><div class="labelled span-2"><label>&nbsp;</label><button class="btn btn-outline" type="button" id="rpFind">Yazıcıları Bul / Aclas Ara</button></div><div class="labelled span-2"><label>&nbsp;</label><button class="btn" type="button" id="rpTest">Test Fişi Yazdır</button></div><div class="notice span-4"><strong>Bu yazıcı barkod yazıcısından ayrıdır.</strong> Aclas yazıcısı Windows\'ta kuruluysa QZ Tray listesinde görünür. Program Aclas adını bulursa otomatik seçer.</div></div>';
+    var html='<div class="form-grid"><div class="labelled"><label>Baskı Modu</label><select id="rpMode" class="select"><option value="qz" '+(p.mode==='qz'?'selected':'')+'>QZ Tray — Doğrudan</option><option value="browser" '+(p.mode==='browser'?'selected':'')+'>Tarayıcı Yazdır</option></select></div><div class="labelled"><label>Gönderim Biçimi</label><select id="rpFormat" class="select"><option value="escpos" '+(receiptSendModeV7(p)==='escpos'?'selected':'')+'>Doğrudan (ESC/POS) — en hızlı</option><option value="image" '+(receiptSendModeV7(p)==='image'?'selected':'')+'>Resim — Windows sürücüsüyle</option><option value="html" '+(receiptSendModeV7(p)==='html'?'selected':'')+'>HTML — eski yöntem</option></select></div><div class="labelled span-2"><label>Fiş Yazıcısı</label><select id="rpName" class="select"><option value="'+esc(p.printerName)+'">'+esc(p.printerName||'— Önce Yazıcıları Bul —')+'</option></select></div><div class="labelled"><label>Kağıt Genişliği</label><select id="rpWidth" class="select"><option value="80" '+(Number(p.widthMm)===80?'selected':'')+'>80 mm</option><option value="58" '+(Number(p.widthMm)===58?'selected':'')+'>58 mm</option></select></div><div class="labelled"><label>Kopya</label><input id="rpCopies" class="input" type="number" min="1" max="3" value="'+esc(p.copies)+'"></div><div class="labelled span-2"><label>&nbsp;</label><button class="btn btn-outline" type="button" id="rpFind">Yazıcıları Bul / Aclas Ara</button></div><div class="labelled span-2"><label>&nbsp;</label><button class="btn" type="button" id="rpTest">Test Fişi Yazdır</button></div><div class="notice span-4"><strong>Bu yazıcı barkod yazıcısından ayrıdır.</strong> Aclas yazıcısı Windows\'ta kuruluysa QZ Tray listesinde görünür. Program Aclas adını bulursa otomatik seçer.</div></div>';
     var draftLogo=p.logoData||'',logoLoading=false;
     html+='<div class="form-grid" style="margin-top:12px"><div class="labelled span-2"><label>İrtibat Telefonu</label><input id="rpPhone" class="input" value="'+esc(p.contactPhone||'')+'"></div><div class="labelled span-2"><label>Adres</label><textarea id="rpAddress" class="textarea">'+esc(p.contactAddress||'')+'</textarea></div><div class="labelled span-4"><label>Asil Kuyumculuk Logosu (PNG / JPG)</label><input id="rpLogo" type="file" accept="image/png,image/jpeg"><div id="rpLogoStatus">'+(draftLogo?'Logo yüklü':'Logo seçilmedi')+'</div><button id="rpLogoRemove" class="btn btn-outline" type="button">Logoyu Kaldır</button></div></div>';
     modal('Fiş Yazıcısı Ayarları',html,function(){
       if(logoLoading){toast('Logo hazırlanıyor, lütfen bekleyin');return;}
       p.contactPhone=document.getElementById('rpPhone').value.trim();p.contactAddress=document.getElementById('rpAddress').value.trim();p.logoData=draftLogo;
-      p.mode=document.getElementById('rpMode').value;p.format=document.getElementById('rpFormat')?.value||'image';
+      p.mode=document.getElementById('rpMode').value;p.sendMode=document.getElementById('rpFormat')?.value||'escpos';p.format=p.sendMode==='html'?'html':'image';
       p.printerName=document.getElementById('rpName').value;
       p.widthMm=Number(document.getElementById('rpWidth').value||80);
       p.copies=Math.max(1,Number(document.getElementById('rpCopies').value||1));
