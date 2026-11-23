@@ -2672,3 +2672,49 @@ test('satış: geçmiş tarih seçilince satış, kasa ve stok hareketi o güne 
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('tamir: liste 1280 genişlikte yatay kaydırmasız sığar; İptal düğmesi nedenle iptal eder', async () => {
+  const fb = createFakeFirebase();
+  let p = await newDevice(browser, appUrl, fb);
+  await p.waitForTimeout(1500);
+  const st = fb.db.state;
+  st.repairs = [1, 2, 3].map((i) => ({ id: 'REPX' + i, docNo: 'TMR-2026-00009' + i, period: st.activePeriod, createdAt: new Date().toISOString(), customerName: 'SILA DOĞRU', phone: '05334072362', itemType: 'YÜZÜK', karat: '14K', repairRequest: '13 BOY OLACAK', dueDate: '2026-11-21', estimatedFee: 200, deposit: 200, status: 'Bekliyor' }));
+  fb.db.state = st; await p.context().close();
+  p = await newDevice(browser, appUrl, fb);
+  await p.setViewportSize({ width: 1280, height: 720 });
+  await p.evaluate(() => document.querySelector('[data-route="repairs"],[data-go="repairs"]').click());
+  await p.waitForSelector('[data-repair-cancel="REPX1"]');
+  const m = await p.evaluate(() => { const w = [...document.querySelectorAll('.table-wrap')].find((x) => x.querySelector('[data-repair-row]')); return { over: w.scrollWidth - w.clientWidth, rowH: document.querySelector('[data-repair-row]').offsetHeight }; });
+  assert.ok(m.over <= 2, 'yatay kaydırma olmamalı: ' + m.over);
+  assert.ok(m.rowH < 80, 'satır kısa olmalı: ' + m.rowH);
+  await p.click('[data-repair-cancel="REPX1"]');
+  await p.waitForSelector('#repCancelReason');
+  assert.match(await p.innerText('#modalRoot'), /Kapora 200,00 TL/);
+  await p.fill('#repCancelReason', 'Müşteri vazgeçti');
+  await p.click('#modalConfirm');
+  const rep = () => (fb.db.state.repairs || []).find((r) => r.id === 'REPX1');
+  for (let i = 0; i < 40 && rep()?.status !== 'İptal'; i++) await p.waitForTimeout(250);
+  assert.equal(rep().status, 'İptal');
+  assert.equal(rep().cancelReason, 'Müşteri vazgeçti');
+  assert.equal(await p.$('[data-repair-cancel="REPX1"]'), null, 'iptal edilen tamirde düğme kalkar');
+  assert.match(await p.innerText('[data-repair-row]:has([data-repair-status="REPX1"])'), /İptal: Müşteri vazgeçti/);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
+test('satış ekranı 1280×720 pencereye sığar: üst satır tek sıra, özet ve İşlem Özeti düğmesi görünür', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  await p.setViewportSize({ width: 1280, height: 720 });
+  await p.click('[data-go="sales"]'); await p.waitForTimeout(600);
+  const m = await p.evaluate(() => {
+    const r = (s) => document.querySelector(s).getBoundingClientRect();
+    const head = r('.sale-head-grid'), fin = r('#finalizeSale'), side = r('.compact-sale-side');
+    const tops = ['#saleCustomerSearch', '#saleDateV7', '#saleCurrency', '#saleProductSearch'].map((s) => Math.round(r(s).top));
+    return { headH: head.height, finBottom: fin.bottom, vh: innerHeight, sideScroll: document.querySelector('.compact-sale-side').scrollHeight - document.querySelector('.compact-sale-side').clientHeight, tops };
+  });
+  assert.ok(Math.max(...m.tops) - Math.min(...m.tops) < 4, 'cari, tarih, cins, stok kodu aynı satırda: ' + m.tops);
+  assert.ok(m.finBottom <= m.vh, `İşlem Özeti görünmeli (${m.finBottom} ≤ ${m.vh})`);
+  assert.ok(m.sideScroll <= 2, 'sağ panel kaydırma gerektirmemeli: ' + m.sideScroll);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
