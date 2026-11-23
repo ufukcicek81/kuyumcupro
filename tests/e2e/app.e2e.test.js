@@ -1947,6 +1947,20 @@ test('satış raporu: kart komisyonu düşülür, hurda kârı eklenir ve NET K�
   assert.match(t, /Kart Komisyonu\s*− 1\.400,00 TL/);
   const num = (label) => Number(t.match(new RegExp(label + '\\s*([\\d.,]+) TL'))[1].replace(/\./g, '').replace(',', '.'));
   assert.ok(Math.abs(num('Brüt Kâr') - 1400 - num('NET KÂR')) < 0.01, 'net = brüt − komisyon');
+  // Banka carisi ekstresi: kart tahsilatı brüt 70.000 + ayrı POS komisyonu 1.400 satırı (bakiye net)
+  await p.evaluate(() => document.querySelector('[data-route="customers"],[data-go="customers"]').click());
+  await p.waitForTimeout(500);
+  const banks = await p.$$eval('[data-cari-card][data-cari-type="Banka"]', (a) => a.map((e) => e.dataset.cariCard));
+  let ext = '';
+  for (const id of banks) {
+    await p.evaluate((x) => document.querySelector(`[data-cari-card="${x}"] [data-cari-detail]`).click(), id);
+    await p.waitForTimeout(500);
+    ext = await p.innerText('#modalRoot').catch(() => '');
+    if (/POS Komisyonu/.test(ext)) break;
+    await p.evaluate(() => document.getElementById('modalRoot')?.remove());
+  }
+  assert.match(ext, /Kredi Kartı Tahsilat\tTL\t70\.000\t/);
+  assert.match(ext, /POS Komisyonu %2\tTL\t—\t1\.400\t/);
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
@@ -2619,4 +2633,42 @@ test('WhatsApp otomatik (köprü): QR gösterilir, bağlanınca tamir mesajları
     assert.deepEqual(p.errors, []);
     await p.context().close();
   } finally { bridge.close(); kopru.wa._reset(); }
+});
+
+test('satış: geçmiş tarih seçilince satış, kasa ve stok hareketi o güne yazılır; ileri tarih seçilemez', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  const d = new Date(Date.now() - 3 * 864e5), day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  await p.click('[data-go="sales"]');
+  await p.waitForSelector('#saleDateV7');
+  await p.fill('#saleDateV7', day); await p.dispatchEvent('#saleDateV7', 'change'); await p.waitForTimeout(300);
+  assert.match(await p.innerText('.sale-head-grid'), /GEÇMİŞ TARİHLİ SATIŞ/);
+  for (let i = 0; i < 3; i++) {
+    await p.fill('#saleProductSearch', '22'); await p.waitForTimeout(300); await p.press('#saleProductSearch', 'Enter');
+    if (await p.waitForSelector('#saleEntryPrice:not([disabled])', { timeout: 5000 }).catch(() => null)) break;
+  }
+  await p.waitForTimeout(300);
+  await p.fill('#saleEntryPayable', '5000'); await p.click('#saleAddUnified'); await p.waitForTimeout(400);
+  await p.click('[data-pay="Nakit"]'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.selectOption('#salePerson', { index: 1 });
+  await p.click('#finalizeSale'); await p.click('#modalConfirm');
+  const sale = () => (fb.db.state.sales || []).find((s) => s.backdated);
+  for (let i = 0; i < 60 && !sale(); i++) await p.waitForTimeout(250);
+  const s = sale();
+  assert.ok(s, 'satış kaydedilmeli');
+  const loc = (iso) => { const x = new Date(iso); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+  assert.equal(loc(s.date), day);
+  const fin = (fb.db.state.financeMoves || []).filter((f) => f.sourceDocNo === s.docNo);
+  assert.ok(fin.length && fin.every((f) => loc(f.date) === day), 'kasa hareketi de o güne yazılmalı');
+  assert.ok(Math.abs(new Date(fb.db.state.meta.updatedAt).getTime() - Date.now()) < 120000, 'senkron saati gerçek zaman kalmalı');
+  // Bir sonraki satış yeniden bugün
+  await p.waitForSelector('#saleDateV7');
+  assert.doesNotMatch(await p.innerText('.sale-head-grid'), /GEÇMİŞ TARİHLİ SATIŞ/);
+  // İleri tarih reddedilir
+  const fut = new Date(Date.now() + 2 * 864e5), fday = `${fut.getFullYear()}-${String(fut.getMonth() + 1).padStart(2, '0')}-${String(fut.getDate()).padStart(2, '0')}`;
+  await p.$eval('#saleDateV7', (e, v) => { e.removeAttribute('max'); e.value = v; e.dispatchEvent(new Event('change', { bubbles: true })); }, fday);
+  await p.waitForTimeout(200);
+  assert.notEqual(await p.inputValue('#saleDateV7'), fday);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
 });
