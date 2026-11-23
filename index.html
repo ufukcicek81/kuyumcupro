@@ -3049,7 +3049,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
         <div class="sale-main-stack">
           <div class="card sale-main-card sale-product-card">
             <div class="section-head"><h3>Ürün</h3><span>${selected?'Ürün bulundu':'Stok kodunu yazıp Enter'}</span></div>
-            <div class="sale-entry-status">${selected?`<span class="badge ${isBarcode?'blue':'gold'}">${isBarcode?'BARKODLU':'AÇIK STOK'}</span><strong>${esc(entryName)}</strong><span>${isBarcode?esc(barcodeItem.barcode||barcodeItem.code):`Kod ${esc(openItem.pusulaCode||openItem.productCode||'')}`}</span>${!isBarcode?`<span>Stok: ${qty(openItem.amount)} ${esc(openItem.unit||'')}</span>`:''}`:'<span>Örn. Çeyrek için <b>5</b>, 22 bilezik için <b>34</b>, barkodlu ürün için sadece <b>1657</b> veya <b>ALY1657</b>.</span>'}</div>
+            <div class="sale-entry-status">${selected?`<span class="badge ${isBarcode?'blue':'gold'}">${isBarcode?'BARKODLU':'AÇIK STOK'}</span><strong>${esc(entryName)}</strong><span>${isBarcode?esc(barcodeItem.barcode||barcodeItem.code):`Kod ${esc(openItem.pusulaCode||openItem.productCode||'')}`}</span>${!isBarcode?`<span>Stok: ${qty(openItem.amount)} ${esc(openItem.unit||'')}</span>`:''}<button class="btn btn-outline btn-sm" type="button" id="saleEntryCancel" style="margin-left:auto;color:#c0262d;border-color:#c0262d" title="Seçili ürünü bırak, kutuları temizle (Esc)">✕ Vazgeç</button>`:'<span>Örn. Çeyrek için <b>5</b>, 22 bilezik için <b>34</b>, barkodlu ürün için sadece <b>1657</b> veya <b>ALY1657</b>.</span>'}</div>
             <div class="sale-unified-editor">
               <div class="labelled wide"><label>Ürün</label><input id="saleEntryName" class="input" value="${esc(entryName)}" readonly style="cursor:pointer" title="Başka ürün seçmek için tıklayın"></div>
               <div class="labelled"><label>Miktar</label><input id="saleEntryAmount" class="input" type="number" step="${openItem?.unit==='ADET'?'1':'0.001'}" value="${selected?entryAmount:''}" ${!selected||isBarcode?'readonly':''}></div>
@@ -6482,7 +6482,7 @@ function stockSummaryView(){
     entryNameEl?.addEventListener('mousedown',e=>{e.preventDefault();openProductPicker('');});
     entryNameEl?.addEventListener('keydown',e=>{if(e.key.length===1&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();openProductPicker(e.key);}else if(e.key==='Enter'||e.key==='ArrowDown'){e.preventDefault();openProductPicker('');}});
     search?.addEventListener('keydown',e=>{
-      if(e.key==='Escape'){e.preventDefault();e.target.value='';saleDraft.entryQuery='';document.getElementById('saleSearchResults')?.classList.remove('show');return;}
+      if(e.key==='Escape'){e.preventDefault();const had=!!saleDraft.entrySelection;e.target.value='';saleDraft.entryQuery='';saleDraft.entrySelection=null;document.getElementById('saleSearchResults')?.classList.remove('show');if(had){render();setTimeout(()=>focusAndSelect(document.getElementById('saleProductSearch')),30);}return;}
       if(e.key==='ArrowDown'){e.preventDefault();moveSaleSearchSelection(e.target,1);return;}
       if(e.key==='ArrowUp'){e.preventDefault();moveSaleSearchSelection(e.target,-1);return;}
       if(e.key!=='Enter')return;
@@ -6523,6 +6523,10 @@ function stockSummaryView(){
     salePriceInput?.addEventListener('click',selectWholeSalePrice);
     salePriceInput?.addEventListener('pointerup',e=>{e.preventDefault();selectWholeSalePrice();});
     salePriceInput?.addEventListener('input',calcEntryPayable);
+    /* Vazgeç: seçili ürünü ve arama kutusunu temizler (fişe eklenmiş satırlara dokunmaz). Ürün kutularında Esc de aynısını yapar. */
+    const cancelSaleEntry=()=>{saleDraft.entrySelection=null;saleDraft.entryQuery='';render();setTimeout(()=>focusAndSelect(document.getElementById('saleProductSearch')),30);};
+    document.getElementById('saleEntryCancel')?.addEventListener('click',cancelSaleEntry);
+    ['saleEntryName','saleEntryAmount','saleEntryPrice','saleEntryPayable','saleEntryNote'].forEach(id=>document.getElementById(id)?.addEventListener('keydown',e=>{if(e.key==='Escape'&&saleDraft.entrySelection){e.preventDefault();e.stopPropagation();cancelSaleEntry();}}));
     document.getElementById('saleAddUnified')?.addEventListener('click',()=>{
       const sel=saleDraft.entrySelection;if(!sel)return toast('Önce stok kodu veya barkod çağırın','err');
       let unitPriceNative=parseTrNumber(document.getElementById('saleEntryPrice')?.value);const payableNative=parseTrNumber(document.getElementById('saleEntryPayable')?.value),note=document.getElementById('saleEntryNote')?.value||'',saleCur=String(saleDraft.saleCurrency||'TL').toUpperCase(),fxRate=saleCurrencyRate(saleCur),unitPrice=unitPriceNative*fxRate;

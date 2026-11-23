@@ -1356,6 +1356,13 @@ test('yeni stok kartı: kod otomatik sıradaki numara; stoksuz kart satış aram
   await p.dispatchEvent('#saleSearchResults [data-sale-suggestion-type]:not([data-sale-suggestion-type="card"])', 'pointerdown');
   await p.waitForTimeout(500);
   assert.notEqual(await p.inputValue('#saleEntryName'), '24 TEST KULCE 7 GRAM', 'başka ürün seçilebilmeli');
+  // Vazgeç: seçim ve arama temizlenir; başka sayfaya gidip dönünce de boş kalır
+  await p.dispatchEvent('#saleEntryCancel', 'click'); await p.waitForTimeout(300);
+  assert.deepEqual([await p.inputValue('#saleEntryName'), await p.inputValue('#saleProductSearch')], ['', '']);
+  assert.ok(!(await p.$('#saleEntryCancel')), 'boşken Vazgeç düğmesi görünmez');
+  await p.evaluate(() => document.querySelector('[data-route="stocks"],[data-go="stocks"]').click()); await p.waitForTimeout(200);
+  await p.evaluate(() => document.querySelector('[data-route="sales"],[data-go="sales"]').click()); await p.waitForSelector('#saleEntryName');
+  assert.equal(await p.inputValue('#saleEntryName'), '');
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
