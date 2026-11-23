@@ -3051,7 +3051,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
             <div class="section-head"><h3>Ürün</h3><span>${selected?'Ürün bulundu':'Stok kodunu yazıp Enter'}</span></div>
             <div class="sale-entry-status">${selected?`<span class="badge ${isBarcode?'blue':'gold'}">${isBarcode?'BARKODLU':'AÇIK STOK'}</span><strong>${esc(entryName)}</strong><span>${isBarcode?esc(barcodeItem.barcode||barcodeItem.code):`Kod ${esc(openItem.pusulaCode||openItem.productCode||'')}`}</span>${!isBarcode?`<span>Stok: ${qty(openItem.amount)} ${esc(openItem.unit||'')}</span>`:''}`:'<span>Örn. Çeyrek için <b>5</b>, 22 bilezik için <b>34</b>, barkodlu ürün için sadece <b>1657</b> veya <b>ALY1657</b>.</span>'}</div>
             <div class="sale-unified-editor">
-              <div class="labelled wide"><label>Ürün</label><input id="saleEntryName" class="input" value="${esc(entryName)}" readonly></div>
+              <div class="labelled wide"><label>Ürün</label><input id="saleEntryName" class="input" value="${esc(entryName)}" readonly style="cursor:pointer" title="Başka ürün seçmek için tıklayın"></div>
               <div class="labelled"><label>Miktar</label><input id="saleEntryAmount" class="input" type="number" step="${openItem?.unit==='ADET'?'1':'0.001'}" value="${selected?entryAmount:''}" ${!selected||isBarcode?'readonly':''}></div>
               <div class="labelled"><label>Birim</label><input id="saleEntryUnit" class="input" value="${esc(entryUnit)}" readonly></div>
               <div class="labelled"><label>Ayar</label><input id="saleEntryKarat" class="input" value="${esc(String(entryKarat||''))}" readonly></div>
@@ -6476,6 +6476,11 @@ function stockSummaryView(){
       renderSaleSearchDropdown(e.target);
     });
     search?.addEventListener('focus',e=>{if(e.target.value.trim())renderSaleSearchDropdown(e.target);});
+    /* Ürün kutusu salt okunur: tıklanınca (ya da yazılınca) stok aramasına geçip aynı aramanın listesini açar; başka ürün oradan seçilir. */
+    const entryNameEl=document.getElementById('saleEntryName');
+    const openProductPicker=(ch)=>{if(!search)return;if(ch){search.value=ch;saleDraft.entryQuery=ch;}search.dataset.lookupIndex='0';search.focus();try{search.select();}catch(_){}if(ch)try{search.setSelectionRange(ch.length,ch.length);}catch(_){}renderSaleSearchDropdown(search);};
+    entryNameEl?.addEventListener('mousedown',e=>{e.preventDefault();openProductPicker('');});
+    entryNameEl?.addEventListener('keydown',e=>{if(e.key.length===1&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();openProductPicker(e.key);}else if(e.key==='Enter'||e.key==='ArrowDown'){e.preventDefault();openProductPicker('');}});
     search?.addEventListener('keydown',e=>{
       if(e.key==='Escape'){e.preventDefault();e.target.value='';saleDraft.entryQuery='';document.getElementById('saleSearchResults')?.classList.remove('show');return;}
       if(e.key==='ArrowDown'){e.preventDefault();moveSaleSearchSelection(e.target,1);return;}

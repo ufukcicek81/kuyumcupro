@@ -1350,6 +1350,12 @@ test('yeni stok kartı: kod otomatik sıradaki numara; stoksuz kart satış aram
   await p.dispatchEvent('[data-sale-suggestion-type="card"]', 'pointerdown');
   await p.waitForTimeout(500);
   assert.equal(await p.inputValue('#saleEntryName'), '24 TEST KULCE 7 GRAM', 'kart seçilebilmeli');
+  // Ürün kutusuna tıklayınca aynı aramanın listesi açılır, başka ürün seçilebilir
+  await p.click('#saleEntryName'); await p.waitForSelector('#saleSearchResults.show');
+  assert.equal(await p.evaluate(() => document.activeElement.id), 'saleProductSearch');
+  await p.dispatchEvent('#saleSearchResults [data-sale-suggestion-type]:not([data-sale-suggestion-type="card"])', 'pointerdown');
+  await p.waitForTimeout(500);
+  assert.notEqual(await p.inputValue('#saleEntryName'), '24 TEST KULCE 7 GRAM', 'başka ürün seçilebilmeli');
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
