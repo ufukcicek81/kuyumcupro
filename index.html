@@ -2412,6 +2412,25 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     const pays=(s.payments||[]).map(p=>`<tr><td>${esc(p.type)}</td><td>${esc(p.detail||p.currency||'TL')}</td><td class="num">${money(Math.abs(Number(p.amount||0)))}</td></tr>`).join('');
     return `<div class="summary-row"><span>Belge</span><strong>${esc(s.docNo||s.id)}</strong></div><div class="summary-row"><span>Tarih</span><strong>${trDate(s.date)}</strong></div><div class="summary-row"><span>Cari</span><strong>${esc(c?.name||'Peşin Müşteri')}</strong></div><div class="summary-row"><span>Personel</span><strong>${esc(s.salesperson||'')}</strong></div>${s.note?`<div class="summary-row"><span>Satış Notu</span><strong>${esc(s.note)}</strong></div>`:''}<div class="table-wrap" style="margin-top:12px"><table class="table"><thead><tr><th>Kod</th><th>Ürün</th><th class="num">Gram/Adet</th><th class="num">Birim Fiyat</th><th class="num">Ödenecek</th><th class="num">Satış HAS</th></tr></thead><tbody>${lines||'<tr><td colspan="6">Ürün satırı yok.</td></tr>'}</tbody></table></div><div class="table-wrap" style="margin-top:12px"><table class="table"><thead><tr><th>Ödeme / Takas</th><th>Detay</th><th class="num">TL Karşılığı</th></tr></thead><tbody>${pays||'<tr><td colspan="3">Ödeme satırı yok.</td></tr>'}</tbody></table></div>${(s.returnItems||[]).length?`<div class="table-wrap" style="margin-top:12px"><table class="table"><thead><tr><th>İade Ürün</th><th>Kaynak</th><th class="num">Tutar</th></tr></thead><tbody>${(s.returnItems||[]).map(r=>`<tr><td>${esc(r.itemCode||'')} · ${esc(r.itemName||'')}</td><td>${r.kind==='barcode'?`Eski satış ${esc(r.originalSaleDoc||'')}`:'Barkodsuz stok'}</td><td class="num">-${money(r.amount||0)}</td></tr>`).join('')}</tbody></table></div>`:''}<div class="summary-row total"><span>Toplam</span><strong>${money(s.total||0)}</strong></div>`;
   }
+  /* Satış geçmişi: satıra tıklayınca ayrıntı geçmiş penceresinin üstünde açılır; fiş, WhatsApp, maliyet, düzelt, iptal burada. */
+  function openSaleHistPopV7(id){
+    const s=state.sales.find(x=>x.id===id);if(!s)return;const host=document.getElementById('modalRoot');if(!host)return viewSaleRecord(id);
+    document.getElementById('saleHistPop')?.remove();
+    const pop=document.createElement('div');pop.id='saleHistPop';pop.style.cssText='position:fixed;inset:0;z-index:4000;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;padding:16px';
+    const fix=saleCostRecalcPlanV7(s).length;
+    pop.innerHTML=`<div class="card" style="width:min(760px,96vw);max-height:90vh;overflow:auto;position:relative"><button class="btn btn-outline btn-sm" type="button" id="saleHistPopX" style="position:absolute;top:8px;right:8px">×</button><h3 style="margin:0 0 8px">Satış — ${esc(s.docNo||s.id)}</h3>${saleDetailHtml(s)}
+      <div class="addon-actions" style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-outline" type="button" id="shpPrint">🖨 Fiş Yazdır</button><button class="btn btn-outline" type="button" id="shpWa">💬 WhatsApp</button><button class="btn btn-outline" type="button" id="shpCost">Maliyeti yeniden hesapla${fix?` (${fix})`:''}</button><button class="btn btn-primary" type="button" id="shpEdit">Düzelt</button><button class="btn btn-danger" type="button" id="shpCancel">İptal</button></div></div>`;
+    host.appendChild(pop);
+    const close=()=>{pop.remove();document.removeEventListener('keydown',esc_,true);};
+    const esc_=e=>{if(!document.contains(pop))return document.removeEventListener('keydown',esc_,true);if(e.key==='Escape'){e.preventDefault();e.stopPropagation();close();}};
+    document.addEventListener('keydown',esc_,true);
+    pop.addEventListener('click',e=>{if(e.target===pop)close();});
+    const on=(i,f)=>document.getElementById(i)?.addEventListener('click',f);
+    on('saleHistPopX',close);on('shpPrint',()=>printSaleReceiptV644(s.id));
+    on('shpWa',()=>{close();openSaleWhatsAppV7(s.id);});on('shpCost',()=>{close();openSaleCostRecalcV7(s.id);});
+    on('shpEdit',()=>{close();reopenSaleForEdit(s.id);});on('shpCancel',()=>{close();cancelSaleFromHistory(s.id);});
+    setTimeout(()=>document.getElementById('saleHistPopX')?.focus(),0);
+  }
   function viewSaleRecord(id){
     const s=state.sales.find(x=>x.id===id);if(!s)return toast('Satış bulunamadı','err');
     const fix=saleCostRecalcPlanV7(s).length;
@@ -2570,8 +2589,8 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       $('saleHistSummary').innerHTML=`<span class="badge gold" style="font-size:14px">${filtered.length} satış · ${money(total)}</span>`+(fBuys.length?`<span class="badge red" style="font-size:14px">${fBuys.length} altın/ziynet alış · ${money(buyTotal)}</span>`:'')+Object.entries(sums).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class="badge" style="font-size:13px">${esc(k)}: ${money(v)}</span>`).join('');
       const rows=[...filtered.map(s=>({date:s.date,s})),...fBuys.map(b=>({date:b.date,b}))].sort((x,y)=>String(y.date).localeCompare(String(x.date)));lastRows=rows;
       const buyRow=b=>`<tr class="sale-hist-buy"><td><strong>${esc(b.docNo)}</strong> <span class="badge red">ALIŞ</span></td><td>${trDate(b.date)}</td><td>${esc(state.customers.find(c=>c.id===b.customerId)?.name||b.customer||'Peşin')}</td><td>${esc(b.user||'')}</td><td>${b.items.map(x=>`<span class="badge" style="margin:1px">${esc(x.item)} · ${qty(x.quantity)} ${esc(x.unit||'')}</span>`).join(' ')}</td><td class="num"><strong>−${money(b.total)}</strong></td><td><div style="display:flex;gap:6px;flex-wrap:nowrap"><button class="btn btn-primary" data-buy-edit="${esc(b.docNo)}">Düzelt</button><button class="btn btn-danger" data-buy-cancel="${esc(b.docNo)}">İptal</button></div></td></tr>`;
-      tb.innerHTML=rows.map(r=>r.b?buyRow(r.b):(s=>`<tr><td><strong>${esc(s.docNo||s.id)}</strong></td><td>${trDate(s.date)}</td><td>${esc(state.customers.find(c=>c.id===s.customerId)?.name||'Peşin')}</td><td>${esc(s.salesperson||'')}</td><td>${salePaymentPartsV7(s).map(badge).join(' ')||'—'}</td><td class="num"><strong>${money(s.total||0)}</strong></td><td><div style="display:flex;gap:6px;flex-wrap:nowrap"><button class="btn btn-outline" data-sale-view="${s.id}">Gör</button><button class="btn btn-primary" data-sale-edit="${s.id}">Düzelt</button><button class="btn btn-danger" data-sale-cancel="${s.id}">İptal</button></div></td></tr>`)(r.s)).join('')||'<tr><td colspan="7">Satış bulunamadı.</td></tr>';
-      tb.querySelectorAll('[data-sale-view]').forEach(b=>b.onclick=()=>viewSaleRecord(b.dataset.saleView));tb.querySelectorAll('[data-sale-edit]').forEach(b=>b.onclick=()=>reopenSaleForEdit(b.dataset.saleEdit));tb.querySelectorAll('[data-sale-cancel]').forEach(b=>b.onclick=()=>cancelSaleFromHistory(b.dataset.saleCancel));tb.querySelectorAll('[data-buy-cancel]').forEach(b=>b.onclick=()=>cancelSaleScreenPurchaseV7(b.dataset.buyCancel));tb.querySelectorAll('[data-buy-edit]').forEach(b=>b.onclick=()=>editSaleScreenPurchaseV7(b.dataset.buyEdit));
+      tb.innerHTML=rows.map(r=>r.b?buyRow(r.b):(s=>`<tr data-sale-row="${s.id}" style="cursor:pointer" title="Ayrıntı için tıklayın"><td><strong>${esc(s.docNo||s.id)}</strong></td><td>${trDate(s.date)}</td><td>${esc(state.customers.find(c=>c.id===s.customerId)?.name||'Peşin')}</td><td>${esc(s.salesperson||'')}</td><td>${salePaymentPartsV7(s).map(badge).join(' ')||'—'}</td><td class="num"><strong>${money(s.total||0)}</strong></td><td><div style="display:flex;gap:6px;flex-wrap:nowrap"><button class="btn btn-outline" data-sale-view="${s.id}">Gör</button><button class="btn btn-primary" data-sale-edit="${s.id}">Düzelt</button><button class="btn btn-danger" data-sale-cancel="${s.id}">İptal</button></div></td></tr>`)(r.s)).join('')||'<tr><td colspan="7">Satış bulunamadı.</td></tr>';
+      tb.querySelectorAll('[data-sale-view]').forEach(b=>b.onclick=()=>viewSaleRecord(b.dataset.saleView));tb.querySelectorAll('[data-sale-row]').forEach(tr=>tr.addEventListener('click',e=>{if(e.target.closest('button,a,input,select'))return;openSaleHistPopV7(tr.dataset.saleRow);}));tb.querySelectorAll('[data-sale-edit]').forEach(b=>b.onclick=()=>reopenSaleForEdit(b.dataset.saleEdit));tb.querySelectorAll('[data-sale-cancel]').forEach(b=>b.onclick=()=>cancelSaleFromHistory(b.dataset.saleCancel));tb.querySelectorAll('[data-buy-cancel]').forEach(b=>b.onclick=()=>cancelSaleScreenPurchaseV7(b.dataset.buyCancel));tb.querySelectorAll('[data-buy-edit]').forEach(b=>b.onclick=()=>editSaleScreenPurchaseV7(b.dataset.buyEdit));
     };
     $('saleHistExcel')?.addEventListener('click',exportExcel);
     $('saleHistCancelled')?.addEventListener('click',openCancelledSalesV7);
@@ -10432,16 +10451,31 @@ function stockSummaryView(){
      kalın ve okunur boyutta; çizgiler siyah. Ölçüden önce eklenir ki fiş boyu doğru çıksın. */
   var RECEIPT_MONO_CSS_V7='<style id="receiptMonoV7">*{color:#000!important;opacity:1!important;text-shadow:none!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}html,body,.receipt{background:#fff!important}body,.receipt,.receipt *{font-weight:700!important}.receipt{font-size:12px!important}.receipt .rp span:first-child,.receipt .items th,.receipt .items td,.receipt .branch{font-size:11px!important}.receipt .note,.receipt .sign div{font-size:10px!important}.receipt .items th,.receipt .items td{border-bottom:1px dashed #000!important}.receipt .dash{border-top:1px dashed #000!important}img{filter:grayscale(1) contrast(1.6)}</style>';
   function receiptMonoV7(html){html=String(html||'');if(html.indexOf('receiptMonoV7')>=0)return html;return html.indexOf('</head>')>=0?html.replace('</head>',RECEIPT_MONO_CSS_V7+'</head>'):RECEIPT_MONO_CSS_V7+html;}
+  /* Fişi tarayıcıda PNG resme çevirir (SVG foreignObject → canvas). QZ Tray resmi doğrudan basar; HTML gönderince
+     QZ'nin içindeki web motoru (JavaFX) ilk fişte 30-60 sn açılıyordu, resimde bu bekleme yok. */
+  async function receiptHtmlToPngV7(html,widthMm,heightMm,dpi){
+    dpi=dpi||203;var doc=new DOMParser().parseFromString(html,'text/html'),xs=new XMLSerializer();
+    var styles=Array.from(doc.querySelectorAll('style')).map(function(st){return '<style>'+st.textContent.replace(/@page\s*\{[^}]*\}/g,'')+'</style>';}).join('');
+    var body=Array.from(doc.body.childNodes).map(function(n){return xs.serializeToString(n);}).join('');
+    var cssW=widthMm*96/25.4,cssH=heightMm*96/25.4,pxW=Math.round(widthMm/25.4*dpi),pxH=Math.round(heightMm/25.4*dpi);
+    var svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+pxW+'" height="'+pxH+'" viewBox="0 0 '+cssW+' '+cssH+'"><foreignObject x="0" y="0" width="'+cssW+'" height="'+cssH+'"><div xmlns="http://www.w3.org/1999/xhtml" style="width:'+cssW+'px;background:#fff">'+styles+body+'</div></foreignObject></svg>';
+    var img=new Image();img.decoding='sync';
+    await new Promise(function(res,rej){img.onload=res;img.onerror=function(){rej(new Error('Fiş resme çevrilemedi'));};img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);});
+    var c=document.createElement('canvas');c.width=pxW;c.height=pxH;var g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,pxW,pxH);g.drawImage(img,0,0,pxW,pxH);
+    return c.toDataURL('image/png').split(',')[1];
+  }
   async function printReceiptHtmlV644(html,label){
     var p=receiptPrinterV644(),copies=Math.max(1,Number(p.copies||1));
     var sized=await sizeReceiptV647(receiptMonoV7(html));html=sized.html;
     if(p.mode==='qz'){
       try{
         var q=await qzConnect(),name=await findReceiptPrinterV644(q);
-        var jobs=[{type:'pixel',format:'html',flavor:'plain',data:html}];
-        var cfgFor=function(n){return q.configs.create(n,{units:'mm',size:{width:sized.width,height:sized.height},orientation:'portrait',margins:{top:0,right:0,bottom:0,left:0},copies:copies,colorType:'blackwhite',scaleContent:false});};
-        try{await q.print(cfgFor(name),jobs);}
-        catch(e1){/* kayıtlı yazıcı adı değişmişse listeyi bir kez tarayıp tekrar dene */var again=await findReceiptPrinterV644(q,true);if(again===name)throw e1;name=again;await q.print(cfgFor(name),jobs);}
+        var htmlJobs=[{type:'pixel',format:'html',flavor:'plain',data:html}],jobs=htmlJobs,asImage=p.format!=='html';
+        if(asImage){try{jobs=[{type:'pixel',format:'image',flavor:'base64',data:await receiptHtmlToPngV7(html,sized.width,sized.height,203)}];}catch(eImg){console.warn(eImg);jobs=htmlJobs;asImage=false;}}
+        var cfgFor=function(n,img){var o={units:'mm',size:{width:sized.width,height:sized.height},orientation:'portrait',margins:{top:0,right:0,bottom:0,left:0},copies:copies,colorType:'blackwhite',scaleContent:!!img};if(img){o.density=203;o.interpolation='nearest-neighbor';}return q.configs.create(n,o);};
+        var send=async function(n){try{await q.print(cfgFor(n,asImage),jobs);}catch(eP){if(!asImage)throw eP;/* resim olmadıysa eski yöntem */asImage=false;jobs=htmlJobs;await q.print(cfgFor(n,false),jobs);}};
+        try{await send(name);}
+        catch(e1){/* kayıtlı yazıcı adı değişmişse listeyi bir kez tarayıp tekrar dene */var again=await findReceiptPrinterV644(q,true);if(again===name)throw e1;name=again;await send(name);}
         audit((label||'Fiş')+' yazdırıldı · '+name,'Fiş');
         toast((label||'Fiş')+' yazdırıldı');
         return name;
@@ -10452,6 +10486,8 @@ function stockSummaryView(){
     }
     return await browserPrintReceiptV644(html);
   }
+  /* Program açılırken QZ Tray bağlantısını önceden kur: ilk fişte bağlantı + yetki beklemesi olmasın. */
+  setTimeout(function(){try{var p=receiptPrinterV644();if(p.mode==='qz'&&typeof qzHasLocalSigningKey==='function'&&qzHasLocalSigningKey())qzConnect().then(function(q){if(!String(p.printerName||'').trim())return findReceiptPrinterV644(q);}).catch(function(){});}catch(_e){}},3000);
   /* Satış fişinde ödeme/takas ayrıntısı: alınan altın-ziynet kalem kalem, tahsilat ve müşteriye ödeme hesabıyla. */
   function saleReceiptPaymentsV7(s){
     var pays=s.payments||[];if(!pays.length)return '';
@@ -10614,13 +10650,13 @@ function stockSummaryView(){
 
   function openReceiptPrinterSettingsV644(){
     var p=receiptPrinterV644();
-    var html='<div class="form-grid"><div class="labelled"><label>Baskı Modu</label><select id="rpMode" class="select"><option value="qz" '+(p.mode==='qz'?'selected':'')+'>QZ Tray — Doğrudan</option><option value="browser" '+(p.mode==='browser'?'selected':'')+'>Tarayıcı Yazdır</option></select></div><div class="labelled span-2"><label>Fiş Yazıcısı</label><select id="rpName" class="select"><option value="'+esc(p.printerName)+'">'+esc(p.printerName||'— Önce Yazıcıları Bul —')+'</option></select></div><div class="labelled"><label>Kağıt Genişliği</label><select id="rpWidth" class="select"><option value="80" '+(Number(p.widthMm)===80?'selected':'')+'>80 mm</option><option value="58" '+(Number(p.widthMm)===58?'selected':'')+'>58 mm</option></select></div><div class="labelled"><label>Kopya</label><input id="rpCopies" class="input" type="number" min="1" max="3" value="'+esc(p.copies)+'"></div><div class="labelled span-2"><label>&nbsp;</label><button class="btn btn-outline" type="button" id="rpFind">Yazıcıları Bul / Aclas Ara</button></div><div class="labelled span-2"><label>&nbsp;</label><button class="btn" type="button" id="rpTest">Test Fişi Yazdır</button></div><div class="notice span-4"><strong>Bu yazıcı barkod yazıcısından ayrıdır.</strong> Aclas yazıcısı Windows\'ta kuruluysa QZ Tray listesinde görünür. Program Aclas adını bulursa otomatik seçer.</div></div>';
+    var html='<div class="form-grid"><div class="labelled"><label>Baskı Modu</label><select id="rpMode" class="select"><option value="qz" '+(p.mode==='qz'?'selected':'')+'>QZ Tray — Doğrudan</option><option value="browser" '+(p.mode==='browser'?'selected':'')+'>Tarayıcı Yazdır</option></select></div><div class="labelled"><label>Gönderim Biçimi</label><select id="rpFormat" class="select"><option value="image" '+(p.format!=='html'?'selected':'')+'>Resim — hızlı (önerilen)</option><option value="html" '+(p.format==='html'?'selected':'')+'>HTML — eski yöntem</option></select></div><div class="labelled span-2"><label>Fiş Yazıcısı</label><select id="rpName" class="select"><option value="'+esc(p.printerName)+'">'+esc(p.printerName||'— Önce Yazıcıları Bul —')+'</option></select></div><div class="labelled"><label>Kağıt Genişliği</label><select id="rpWidth" class="select"><option value="80" '+(Number(p.widthMm)===80?'selected':'')+'>80 mm</option><option value="58" '+(Number(p.widthMm)===58?'selected':'')+'>58 mm</option></select></div><div class="labelled"><label>Kopya</label><input id="rpCopies" class="input" type="number" min="1" max="3" value="'+esc(p.copies)+'"></div><div class="labelled span-2"><label>&nbsp;</label><button class="btn btn-outline" type="button" id="rpFind">Yazıcıları Bul / Aclas Ara</button></div><div class="labelled span-2"><label>&nbsp;</label><button class="btn" type="button" id="rpTest">Test Fişi Yazdır</button></div><div class="notice span-4"><strong>Bu yazıcı barkod yazıcısından ayrıdır.</strong> Aclas yazıcısı Windows\'ta kuruluysa QZ Tray listesinde görünür. Program Aclas adını bulursa otomatik seçer.</div></div>';
     var draftLogo=p.logoData||'',logoLoading=false;
     html+='<div class="form-grid" style="margin-top:12px"><div class="labelled span-2"><label>İrtibat Telefonu</label><input id="rpPhone" class="input" value="'+esc(p.contactPhone||'')+'"></div><div class="labelled span-2"><label>Adres</label><textarea id="rpAddress" class="textarea">'+esc(p.contactAddress||'')+'</textarea></div><div class="labelled span-4"><label>Asil Kuyumculuk Logosu (PNG / JPG)</label><input id="rpLogo" type="file" accept="image/png,image/jpeg"><div id="rpLogoStatus">'+(draftLogo?'Logo yüklü':'Logo seçilmedi')+'</div><button id="rpLogoRemove" class="btn btn-outline" type="button">Logoyu Kaldır</button></div></div>';
     modal('Fiş Yazıcısı Ayarları',html,function(){
       if(logoLoading){toast('Logo hazırlanıyor, lütfen bekleyin');return;}
       p.contactPhone=document.getElementById('rpPhone').value.trim();p.contactAddress=document.getElementById('rpAddress').value.trim();p.logoData=draftLogo;
-      p.mode=document.getElementById('rpMode').value;
+      p.mode=document.getElementById('rpMode').value;p.format=document.getElementById('rpFormat')?.value||'image';
       p.printerName=document.getElementById('rpName').value;
       p.widthMm=Number(document.getElementById('rpWidth').value||80);
       p.copies=Math.max(1,Number(document.getElementById('rpCopies').value||1));
