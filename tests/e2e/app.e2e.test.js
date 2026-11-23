@@ -1102,6 +1102,8 @@ test('banka ekstresi: banka hareketleri görünür, düzeltilir ve silinir; baki
     await p.evaluate(() => document.querySelector('[data-route="customers"],[data-go="customers"]').click());
     await p.waitForTimeout(500);
     await p.evaluate((n) => [...document.querySelectorAll('[data-cari-card][data-cari-type="Banka"]')].find((e) => e.querySelector('h3').innerText.trim() === n).querySelector('[data-cari-detail]').click(), bankName);
+    await p.waitForSelector('[data-cari-range="all"]');
+    await p.click('[data-cari-range="all"]'); // ekstre örneği eski tarihli: tüm hareketler
     await p.waitForSelector('#cariEkstreTable');
   };
   const tlBalance = () => p.evaluate(() => [...document.querySelectorAll('.cari-ekstre-balance')].find((e) => /TL Son Bakiye/.test(e.innerText)).innerText);
@@ -1158,6 +1160,7 @@ test('cari geçmişi: peşin kapanan satış müşterinin ekstresinde görünür
   assert.match(table, /Peşin \/ kapalı/);
   await p.click('.cari-ekstre-row:has-text("4.321,00")');
   assert.ok(await p.$('#selectedInfoPrint'), 'fiş düğmesi olmalı');
+  await p.keyboard.press('Escape'); // detay penceresini kapat
   await p.uncheck('#cariShowInfo'); await p.waitForTimeout(300);
   assert.doesNotMatch(await p.innerText('#modalRoot'), /4\.321,00/, 'kutucuk kapatılınca peşin işlemler gizlenmeli');
   await p.click('#modalX');
@@ -2715,6 +2718,44 @@ test('satış ekranı 1280×720 pencereye sığar: üst satır tek sıra, özet 
   assert.ok(Math.max(...m.tops) - Math.min(...m.tops) < 4, 'cari, tarih, cins, stok kodu aynı satırda: ' + m.tops);
   assert.ok(m.finBottom <= m.vh, `İşlem Özeti görünmeli (${m.finBottom} ≤ ${m.vh})`);
   assert.ok(m.sideScroll <= 2, 'sağ panel kaydırma gerektirmemeli: ' + m.sideScroll);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
+test('cari ekstre: açılışta yalnız bugün; tarih aralığı / Tümü; harekete tıklayınca detay penceresi (düzelt/sil) açılır', async () => {
+  const fb = createFakeFirebase();
+  let p = await newDevice(browser, appUrl, fb);
+  await p.waitForTimeout(1500);
+  const st = fb.db.state, c = st.customers.find((x) => x.type === 'Müşteri' && x.id !== 'CASH');
+  const old = new Date(Date.now() - 20 * 864e5).toISOString(), today = new Date().toISOString();
+  st.customerMoves.push({ id: 'CM-ESKI-T', customerId: c.id, period: st.activePeriod, date: old, code: 'NT', type: 'ESKİ HAREKET TEST', unit: 'TL', debit: 0, credit: 1111, description: 'eski' });
+  st.customerMoves.push({ id: 'CM-BUGUN-T', customerId: c.id, period: st.activePeriod, date: today, code: 'NT', type: 'BUGÜN HAREKET TEST', unit: 'TL', debit: 0, credit: 2222, description: 'bugün' });
+  fb.db.state = st; await p.context().close();
+  p = await newDevice(browser, appUrl, fb);
+  await p.evaluate(() => document.querySelector('[data-route="customers"],[data-go="customers"]').click());
+  await p.waitForTimeout(500);
+  await p.evaluate((x) => document.querySelector(`[data-cari-card="${x}"] [data-cari-detail]`).click(), c.id);
+  await p.waitForSelector('#cariEkstreTable');
+  let t = await p.innerText('#cariEkstreTable');
+  assert.match(t, /BUGÜN HAREKET TEST/); assert.doesNotMatch(t, /ESKİ HAREKET TEST/, 'açılışta yalnız bugün');
+  assert.match(await p.innerText('#modalRoot'), /Devreden bakiye/);
+  await p.click('[data-cari-range="all"]'); await p.waitForSelector('#cariEkstreTable');
+  t = await p.innerText('#cariEkstreTable');
+  assert.match(t, /ESKİ HAREKET TEST/);
+  // Tarih aralığı: yalnız eski gün
+  const d = old.slice(0, 10), loc = new Date(old); const day = `${loc.getFullYear()}-${String(loc.getMonth() + 1).padStart(2, '0')}-${String(loc.getDate()).padStart(2, '0')}`;
+  await p.fill('#cariPrintFrom', day); await p.dispatchEvent('#cariPrintFrom', 'change'); await p.waitForSelector('#cariPrintTo');
+  await p.fill('#cariPrintTo', day); await p.dispatchEvent('#cariPrintTo', 'change'); await p.waitForSelector('#cariEkstreTable');
+  t = await p.innerText('#cariEkstreTable');
+  assert.match(t, /ESKİ HAREKET TEST/); assert.doesNotMatch(t, /BUGÜN HAREKET TEST/);
+  // Tıklayınca detay penceresi
+  assert.equal(await p.isVisible('#cariRowPop'), false);
+  await p.click('.cari-ekstre-row:has-text("ESKİ HAREKET TEST")');
+  assert.equal(await p.isVisible('#cariRowPop'), true);
+  assert.ok(await p.isVisible('#selectedCariEdit')); assert.ok(await p.isVisible('#selectedCariDelete'));
+  await p.keyboard.press('Escape');
+  assert.equal(await p.isVisible('#cariRowPop'), false, 'Esc pencereyi kapatır, ekstre açık kalır');
+  assert.ok(await p.isVisible('#cariEkstreTable'));
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
