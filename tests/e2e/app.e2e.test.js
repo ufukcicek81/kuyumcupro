@@ -2814,7 +2814,7 @@ test('fiş yazıcı (QZ): fiş resim olarak gider (ayarla ESC/POS ESC * komutu);
   // Ayarlardan "Doğrudan komut" seçilirse ESC * 33 sütun resmi gider (GS v 0 değil; Aclas desteklemiyor)
   await p.click('#repairPrinterSettings'); await p.waitForSelector('#rpFormat');
   assert.equal(await p.inputValue('#rpFormat'), 'image');
-  await p.selectOption('#rpFormat', 'escpos'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.selectOption('#rpFormat', 'escpos'); await p.fill('#rpCopies', '2'); assert.ok(await p.isChecked('#rpCut')); await p.click('#modalConfirm'); await p.waitForTimeout(300);
   await p.click('[data-repair-print="REPQZ"]');
   await p.waitForFunction(() => window.__qz.jobs.length > 1, null, { timeout: 10000 });
   const e = await p.evaluate(() => {
@@ -2822,11 +2822,13 @@ test('fiş yazıcı (QZ): fiş resim olarak gider (ayarla ESC/POS ESC * komutu);
     let i = 5, dark = 0, bands = 0, n = 0, gsv = 0;
     for (let q = 0; q + 1 < b.length; q++) if (b[q] === 0x1D && b[q + 1] === 0x76) gsv++;
     while (b[i] === 0x1B && b[i + 1] === 0x2A && b[i + 2] === 33) { n = b[i + 3] | (b[i + 4] << 8); i += 5; for (let k = 0; k < n * 3; k++) { let v = b[i++]; while (v) { dark += v & 1; v >>= 1; } } i++; bands++; }
-    return { type: d.type, format: d.format, head: Array.from(b.slice(0, 5)), n, bands, dark, end: i, len: b.length };
+    let cuts = 0, inits = 0; for (let q = 0; q + 2 < b.length; q++) { if (b[q] === 0x1D && b[q + 1] === 0x56 && b[q + 2] === 1) cuts++; if (b[q] === 0x1B && b[q + 1] === 0x40 && b[q + 2] === 0x1B) inits++; }
+    return { type: d.type, format: d.format, head: Array.from(b.slice(0, 5)), n, bands, dark, end: i, len: b.length, cuts, inits, afterFirst: Array.from(b.slice(i, i + 10)) };
   });
   assert.deepEqual([e.type, e.format, e.head, e.n], ['raw', 'command', [0x1B, 0x40, 0x1B, 0x33, 24], 576]);
   assert.ok(e.bands > 12 && e.dark > 2000, 'fiş içeriği: ' + JSON.stringify(e));
-  assert.equal(e.len - e.end, 5, 'sonda yalnız satır aralığı + kâğıt ilerletme');
+  assert.deepEqual(e.afterFirst, [0x1B, 0x32, 0x1B, 0x64, 5, 0x1D, 0x56, 1, 0x1B, 0x40], 'kopya sonunda ilerlet + kes, sonra 2. kopya');
+  assert.deepEqual([e.cuts, e.inits, e.len], [2, 2, (e.end + 8) * 2], '2 kopya, her biri kesilir');
   assert.equal(r.connects, 1, 'bağlantı bir kez kurulur, baskıda yeniden kurulmaz');
   assert.deepEqual(p.errors, []);
   await p.context().close();
