@@ -10465,12 +10465,14 @@ function stockSummaryView(){
     var push=function(arr){for(var i=0;i<arr.length;i++)out.push(arr[i]);};
     var dark=function(x,y){return y<h&&a[(y*w+x)*4]<128;};
     var last=h-1;for(;last>0;last--){var blank=true;for(var x=0;x<w;x++)if(dark(x,last)){blank=false;break;}if(!blank)break;}
+    /* ESC @ yalnız başta: kesmeden sonra gönderilince yazıcı henüz basmadığı son satırları siliyordu */
+    push([0x1B,0x40]);
     for(var c=0;c<Math.max(1,copies||1);c++){
-      push([0x1B,0x40,0x1B,0x33,24]);
+      push([0x1B,0x33,24]);
       for(var y0=0;y0<=last;y0+=24){push([0x1B,0x2A,33,w&255,w>>8]);
         for(var x2=0;x2<w;x2++)for(var k=0;k<3;k++){var b=0;for(var bit=0;bit<8;bit++)if(dark(x2,y0+k*8+bit))b|=0x80>>bit;out.push(b);}
         out.push(0x0A);}
-      push([0x1B,0x32,0x1B,0x64,0x05]);if(cut)push([0x1D,0x56,0x01]);/* her kopyadan sonra kes */
+      push([0x1B,0x32,0x1B,0x4A,200]);/* ~25 mm boşluk: kesici yazma kafasının üstünde */if(cut)push([0x1D,0x56,0x01]);/* her kopyadan sonra kes */
     }
     var str='';for(var i=0;i<out.length;i+=8192)str+=String.fromCharCode.apply(null,out.slice(i,i+8192));
     return btoa(str);
