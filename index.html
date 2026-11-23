@@ -10459,10 +10459,12 @@ function stockSummaryView(){
     var styles=Array.from(doc.querySelectorAll('style')).map(function(st){return '<style>'+st.textContent.replace(/@page\s*\{[^}]*\}/g,'')+'</style>';}).join('');
     var body=Array.from(doc.body.childNodes).map(function(n){return xs.serializeToString(n);}).join('');
     var cssW=widthMm*96/25.4,cssH=heightMm*96/25.4,pxW=Math.round(widthMm/25.4*dpi),pxH=Math.round(heightMm/25.4*dpi);
-    var svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+pxW+'" height="'+pxH+'" viewBox="0 0 '+cssW+' '+cssH+'"><foreignObject x="0" y="0" width="'+cssW+'" height="'+cssH+'"><div xmlns="http://www.w3.org/1999/xhtml" style="width:'+cssW+'px;background:#fff">'+styles+body+'</div></foreignObject></svg>';
+    var svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+pxW+'" height="'+pxH+'" viewBox="0 0 '+cssW+' '+cssH+'"><foreignObject x="0" y="0" width="'+cssW+'" height="'+cssH+'"><div xmlns="http://www.w3.org/1999/xhtml" style="width:'+cssW+'px;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif">'+styles+'<style>.receipt{margin:0 auto!important;font-family:Arial,Helvetica,sans-serif}</style>'+body+'</div></foreignObject></svg>';
     var img=new Image();img.decoding='sync';
     await new Promise(function(res,rej){img.onload=res;img.onerror=function(){rej(new Error('Fiş resme çevrilemedi'));};img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);});
     var c=document.createElement('canvas');c.width=pxW;c.height=pxH;var g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,pxW,pxH);g.drawImage(img,0,0,pxW,pxH);
+    /* Termal yazıcı griyi noktalara bölüp yazıyı bozuyor: her noktayı tam siyah ya da tam beyaz yap */
+    var d=g.getImageData(0,0,pxW,pxH),a=d.data;for(var i=0;i<a.length;i+=4){var v=(a[i]*299+a[i+1]*587+a[i+2]*114)/1000<170?0:255;a[i]=a[i+1]=a[i+2]=v;a[i+3]=255;}g.putImageData(d,0,0);
     return c.toDataURL('image/png').split(',')[1];
   }
   async function printReceiptHtmlV644(html,label){

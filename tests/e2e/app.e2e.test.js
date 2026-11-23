@@ -2799,13 +2799,17 @@ test('fiş yazıcı (QZ): fiş resim (PNG) olarak gönderilir; QZ bağlantısı 
     const j = window.__qz.jobs[0], d = j.jobs[0];
     const img = new Image(); img.src = 'data:image/png;base64,' + d.data; await img.decode();
     const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const g = c.getContext('2d'); g.drawImage(img, 0, 0);
-    const px = g.getImageData(0, 0, c.width, c.height).data; let dark = 0; for (let i = 0; i < px.length; i += 4) if (px[i] < 100) dark++;
-    return { type: d.type, format: d.format, flavor: d.flavor, w: img.width, h: img.height, dark, printer: j.cfg.name, scale: j.cfg.o.scaleContent, connects: window.__qz.connects };
+    const px = g.getImageData(0, 0, c.width, c.height).data; let dark = 0, grey = 0, minX = c.width, maxX = 0;
+    for (let i = 0; i < px.length; i += 4) { if (px[i] < 100) { dark++; const x = (i / 4) % c.width; if (x < minX) minX = x; if (x > maxX) maxX = x; } if (px[i] > 0 && px[i] < 255) grey++; }
+    return { left: minX, right: c.width - 1 - maxX, grey, type: d.type, format: d.format, flavor: d.flavor, w: img.width, h: img.height, dark, printer: j.cfg.name, scale: j.cfg.o.scaleContent, connects: window.__qz.connects };
   });
   assert.deepEqual([r.type, r.format, r.flavor, r.printer, r.scale], ['pixel', 'image', 'base64', 'ACLAS PP7X', true]);
   assert.equal(r.w, Math.round(80 / 25.4 * 203));
   assert.ok(r.h > 300, 'fiş yüksekliği: ' + r.h);
   assert.ok(r.dark > 2000, 'resimde yazı olmalı (koyu piksel: ' + r.dark + ')');
+  assert.equal(r.grey, 0, 'termal yazıcı için yalnız siyah/beyaz nokta');
+  assert.ok(Math.abs(r.left - r.right) < 25, 'fiş kâğıtta ortalı olmalı: sol ' + r.left + ' sağ ' + r.right);
+  if (process.env.SHOT) require('fs').writeFileSync(process.env.SHOT, Buffer.from(await p.evaluate(() => window.__qz.jobs[0].jobs[0].data), 'base64'));
   assert.equal(r.connects, 1, 'bağlantı bir kez kurulur, baskıda yeniden kurulmaz');
   assert.deepEqual(p.errors, []);
   await p.context().close();
