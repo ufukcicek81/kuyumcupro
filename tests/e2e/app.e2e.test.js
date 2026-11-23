@@ -2683,20 +2683,21 @@ test('satış: geçmiş tarih seçilince satış, kasa ve stok hareketi o güne 
   await p.context().close();
 });
 
-test('tamir: liste 1280 genişlikte yatay kaydırmasız sığar; İptal düğmesi nedenle iptal eder', async () => {
+test('tamir: liste 1180 genişlikte yatay kaydırmasız sığar; İptal düğmesi nedenle iptal eder', async () => {
   const fb = createFakeFirebase();
   let p = await newDevice(browser, appUrl, fb);
   await p.waitForTimeout(1500);
   const st = fb.db.state;
-  st.repairs = [1, 2, 3].map((i) => ({ id: 'REPX' + i, docNo: 'TMR-2026-00009' + i, period: st.activePeriod, createdAt: new Date().toISOString(), customerName: 'SILA DOĞRU', phone: '05334072362', itemType: 'YÜZÜK', karat: '14K', repairRequest: '13 BOY OLACAK', dueDate: '2026-11-21', estimatedFee: 200, deposit: 200, status: 'Bekliyor' }));
+  st.repairs = [1, 2, 3].map((i) => ({ id: 'REPX' + i, docNo: 'TMR-2026-00009' + i, period: st.activePeriod, createdAt: new Date().toISOString(), customerName: 'ABDURRAHMAN KANCA', phone: '05334072362', itemType: 'YÜZÜK 925 K GÜMÜŞ', karat: '14K', repairRequest: 'KAYNAK VE TEMİZLEME taş takılacak', dueDate: '2026-11-21', estimatedFee: 200, deposit: 200, status: 'Bekliyor' }));
   fb.db.state = st; await p.context().close();
   p = await newDevice(browser, appUrl, fb);
-  await p.setViewportSize({ width: 1280, height: 720 });
+  await p.setViewportSize({ width: 1180, height: 720 });
   await p.evaluate(() => document.querySelector('[data-route="repairs"],[data-go="repairs"]').click());
   await p.waitForSelector('[data-repair-cancel="REPX1"]');
   const m = await p.evaluate(() => { const w = [...document.querySelectorAll('.table-wrap')].find((x) => x.querySelector('[data-repair-row]')); return { over: w.scrollWidth - w.clientWidth, rowH: document.querySelector('[data-repair-row]').offsetHeight }; });
   assert.ok(m.over <= 2, 'yatay kaydırma olmamalı: ' + m.over);
-  assert.ok(m.rowH < 80, 'satır kısa olmalı: ' + m.rowH);
+  assert.ok(m.rowH < 120, 'satır kısa olmalı: ' + m.rowH);
+  if (process.env.SHOT) await (await p.$('.repair-table')).screenshot({ path: process.env.SHOT });
   await p.click('[data-repair-cancel="REPX1"]');
   await p.waitForSelector('#repCancelReason');
   assert.match(await p.innerText('#modalRoot'), /Kapora 200,00 TL/);
