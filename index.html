@@ -1250,7 +1250,10 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
 
   const money = (n, cur='TL') => new Intl.NumberFormat('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2}).format(Number(n||0)) + ' ' + cur;
   const qty = n => new Intl.NumberFormat('tr-TR', {minimumFractionDigits:0, maximumFractionDigits:3}).format(Number(n||0));
-  const now = () => new Date().toISOString();
+  // Geçmiş tarihli satışta kayıtlar seçilen güne yazılır (nowOverrideV7). Senkron / kayıt saati her zaman gerçek zamandır (realNow).
+  let nowOverrideV7 = null;
+  const realNow = () => new Date().toISOString();
+  const now = () => nowOverrideV7 || new Date().toISOString();
   const trDate = (iso=now()) => new Date(iso).toLocaleString('tr-TR', {dateStyle:'short', timeStyle:'short'});
   const dateWithCurrentClock = (dateStr='') => {
     if(!dateStr)return now();
@@ -1561,11 +1564,11 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       if(typeof systemCariSyncV7==='function') systemCariSyncV7();
       state.meta=state.meta||{};
       if(touchUpdated){
-        state.meta.updatedAt=now();
+        state.meta.updatedAt=realNow();
         state.audits=Array.isArray(state.audits)?state.audits:[];
         const routeName=typeof route!=='undefined'&&route?String(route):'sistem';
         const summary='Satış '+Number(state.sales?.length||0)+' · Alış '+Number(state.purchases?.length||0)+' · Cari '+Number(state.customerMoves?.length||0)+' · Finans '+Number(state.financeMoves?.length||0)+' · Stok '+Number(state.stockMoves?.length||0);
-        state.audits.unshift({id:uid('AUD'),date:now(),user:(typeof session!=='undefined'&&session?.name)||'Sistem',module:'Otomatik Kayıt',action:'Veri değişikliği kaydedildi · '+routeName+' · '+summary,kind:'OTOMATİK'});
+        state.audits.unshift({id:uid('AUD'),date:realNow(),user:(typeof session!=='undefined'&&session?.name)||'Sistem',module:'Otomatik Kayıt',action:'Veri değişikliği kaydedildi · '+routeName+' · '+summary,kind:'OTOMATİK'});
         state.audits=state.audits.slice(0,5000);
       }
       state.meta.appVersion=APP_VERSION;
@@ -2998,6 +3001,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
         </div>
         <div class="simple-operation-bar"><button class="simple-operation sale" id="simpleSaleFocus"><b>Satış</b><span>Müşteriye satış yap</span></button><button class="simple-operation buy" data-special-trade="Ziynet Alış"><b>Alış</b><span>Müşteriden altın / ziynet al</span></button><button class="simple-operation swap" data-pay="Altın / Ziynet"><b>Takas</b><span>Altını satışa mahsup et</span></button></div><div class="form-grid sale-head-grid">
           <div class="labelled span-2"><label>Cari Hesap</label><div style="display:flex;gap:6px;margin-bottom:6px"><input id="saleCustomerSearch" class="input" list="saleCustomerList" placeholder="Cari ara: ad, kod veya telefon yazın" autocomplete="off" style="flex:1;min-width:0"><button type="button" class="btn btn-outline" id="saleQuickCustomer" title="Hızlı yeni cari">+ Yeni Cari</button></div><small id="saleCustomerHint" style="display:none;color:#c0262d;font-weight:700;margin:-2px 0 6px"></small><datalist id="saleCustomerList">${saleCustomerCandidates('Tümü').filter(c=>c.id!=='CASH').map(c=>`<option value="${esc(c.name)}">${esc([c.code,c.phone,c.type].filter(Boolean).join(' · '))}</option>`).join('')}</datalist><select class="select" id="saleCustomerSelect">${saleCustomerCandidates('Tümü').map(c=>`<option value="${c.id}" ${c.id===currentCustomer?.id?'selected':''}>${esc(c.code?c.code+' · ':'')}${esc(c.name)}${c.type&&c.id!=='CASH'?' · '+esc(c.type):''}</option>`).join('')}</select><small class="sale-inline-help">Tüm cariler tek listede. Açık hesap doğrudan seçilen cariye işlenir.</small></div>
+          <div class="labelled"><label>Satış Tarihi</label><input type="date" class="input" id="saleDateV7" max="${localDayV7()}" value="${esc(saleDraft.saleDate||localDayV7())}" style="${saleDraft.saleDate&&saleDraft.saleDate!==localDayV7()?'border:2px solid #c0262d;color:#c0262d;font-weight:700':''}">${saleDraft.saleDate&&saleDraft.saleDate!==localDayV7()?'<small style="color:#c0262d;font-weight:700">GEÇMİŞ TARİHLİ SATIŞ</small>':''}</div>
           <div class="labelled"><label>Satış Cinsi</label><select class="select" id="saleCurrency">${paymentCurrencyOptions().map(x=>`<option ${saleCur===x?'selected':''}>${x}</option>`).join('')}</select></div>
           <div class="labelled"><label>Satan Eleman</label><select class="select" id="salePerson"><option value="">Seçiniz</option>${state.users.filter(u=>u.permissions?.canSell!==false).map(u=>`<option ${saleDraft.salesperson===u.name?'selected':''}>${esc(u.name)}</option>`).join('')}</select></div>
           <div class="labelled sale-search-wrap"><label>Stok Kodu / Barkod</label><input id="saleProductSearch" class="input" value="${esc(saleDraft.entryQuery||'')}" placeholder="22 yaz = eşleşen stokları listele · 1657 veya ALY1657" autocomplete="off"><small class="sale-inline-help">Yazdıkça eşleşen stoklar aşağıda sıralanır; tıklayarak veya ↑ ↓ + Enter ile seç.</small><div id="saleSearchResults" class="sale-search-results"></div></div>
@@ -5705,7 +5709,7 @@ function stockSummaryView(){
       cloudApplyingV5=true;
       state=data;
       ensureStateShape();ensureV5State();simplifyBankPosV55();ensureBankCariLinksV54();reconcileTransactionLedgerV5();
-      state.meta=state.meta||{};state.meta.updatedAt=now();state.meta.appVersion=APP_VERSION;
+      state.meta=state.meta||{};state.meta.updatedAt=realNow();state.meta.appVersion=APP_VERSION;
       state.audits=Array.isArray(state.audits)?state.audits:[];
       state.audits.unshift({id:uid('AUD'),date:now(),user:session?.name||'Sistem',module:'Yedek',action:`${info?.date?trDate(info.date):key} bulut yedeğinden tam sistem geri yüklendi · Stok kartı ${state.stockCardsMaster.length} · Barkodlu stok ${state.stocks.length}`,kind:'GERİ YÜKLEME'});
       await persistStateCriticalV681(state);
@@ -6417,6 +6421,7 @@ function stockSummaryView(){
     });
     const saleCurEl=document.getElementById('saleCurrency');saleCurEl?.addEventListener('change',e=>{saleDraft.saleCurrency=e.target.value;saleDraft.entrySelection=null;saleDraft.entryQuery='';render();setTimeout(()=>focusAndSelect(document.getElementById('saleProductSearch')),0);});
     const person=document.getElementById('salePerson'); person?.addEventListener('change',e=>saleDraft.salesperson=e.target.value);
+    document.getElementById('saleDateV7')?.addEventListener('change',e=>{const v=e.target.value;if(v&&v>localDayV7()){toast('İleri tarihli satış yapılamaz','err');e.target.value=localDayV7();return;}saleDraft.saleDate=v&&v!==localDayV7()?v:'';render();});
     document.getElementById('resetSale')?.addEventListener('click',()=>{
       if(saleDraft.editingDocNo){
         modal('Düzeltme Yarım Kaldı',`<div class="notice"><strong>${esc(saleDraft.editingDocNo)}</strong> düzeltme için açılmıştı ve eski kaydı geri alındı. Yeni fişe geçerseniz bu satış <b>silinmiş</b> kalır.</div>`,()=>{saleDraft=newSaleDraft();closeModal();render();toast('Satış silinmiş olarak kaldı; Satış Geçmişi → Silinenler bölümünden geri getirebilirsiniz','err');},'SATIŞI SİL VE YENİ FİŞ');
@@ -6853,7 +6858,19 @@ function stockSummaryView(){
     saleDraft=newSaleDraft();closeModal();toast(`${docNo} altın/ziynet alış tamamlandı`);save();render();
   }
 
+  /* Satış tarihi seçildiyse (geçmiş gün) bütün kayıtlar (satış, kasa/banka, cari, stok hareketi) o güne, şimdiki saatle yazılır. */
   function finalizeSale(){
+    const d=saleDraft&&saleDraft.saleDate;
+    if(!d||d===localDayV7()||d>localDayV7())return finalizeSaleCoreV7();
+    const [y,m,dd]=d.split('-').map(Number),t=new Date(),at=new Date(y,m-1,dd,t.getHours(),t.getMinutes(),t.getSeconds());
+    const before=new Set((state.sales||[]).map(x=>x.id));let out;
+    nowOverrideV7=at.toISOString();
+    try{out=finalizeSaleCoreV7();}finally{nowOverrideV7=null;}
+    const created=(state.sales||[]).find(x=>!before.has(x.id));
+    if(created){created.backdated=true;created.enteredAt=realNow();audit(`${created.docNo||created.id} geçmiş tarihli satış: ${trDate(created.date)} (giriş ${trDate(realNow())})`,'Satış');save();}
+    return out;
+  }
+  function finalizeSaleCoreV7(){
     const collection=cariCollectionStateV655(),standalone=standaloneTradeInState();if(standalone.active&&!collection.active)return finalizeStandaloneTradeInPurchase();
     const t=saleTotals(),hasBuyRateAtSale=Number(state.prices.has?.buy||1),hasSellRateAtSale=Number(state.prices.has?.sell||hasBuyRateAtSale),returnedCostHas=(saleDraft.returnItems||[]).reduce((a,r)=>a+Number(r.costHas||0),0),costHas=saleDraft.lines.reduce((a,l)=>a+Number(l.costHas||0),0)-returnedCostHas,cost=costHas*hasBuyRateAtSale,docNo=saleDraft.editingDocNo||nextDocNo('SAT',state.sales),id=saleDraft.editingOriginalId||uid('SAT'),customer=state.customers.find(c=>c.id===saleDraft.customerId);
     if(!customer)return toast('Cari hesap bulunamadı','err');
@@ -8259,8 +8276,12 @@ function stockSummaryView(){
   }
   function bankCariFinanceRowsV7(c){
     const a=bankCariAccountV7(c);if(!a)return [];
-    return (state.financeMoves||[]).filter(f=>f.accountKind===a.kind&&f.accountId===a.acc.id).map(f=>{const amt=Math.abs(Number(f.accountAmount??f.amount??0)),inn=f.direction==='Giriş',link=financeLinkInfoV7(f);
-      return {id:'FIN:'+f.id,_fin:f.id,_link:link?.label||'',date:f.date,type:f.type||f.direction,unit:String(f.accountCurrency||a.acc.currency||'TL').toUpperCase(),debit:inn?amt:0,credit:inn?0:amt,description:[f.customer,f.description].filter(Boolean).join(' · '),sourceDocNo:f.sourceDocNo||'',user:f.user||''};});
+    // Kart tahsilatı: POS fişiyle karşılaştırmak kolay olsun diye BRÜT tutar ve komisyon ayrı satır gösterilir (bakiye yine net).
+    return (state.financeMoves||[]).filter(f=>f.accountKind===a.kind&&f.accountId===a.acc.id).flatMap(f=>{const amt=Math.abs(Number(f.accountAmount??f.amount??0)),inn=f.direction==='Giriş',link=financeLinkInfoV7(f),unit=String(f.accountCurrency||a.acc.currency||'TL').toUpperCase();
+      const gross=Number(f.grossAmount||0),fee=Number(f.commissionAmount||0),split=inn&&fee>0.004&&gross>amt+0.004&&Math.abs(gross-fee-amt)<0.05;
+      const main={id:'FIN:'+f.id,_fin:f.id,_link:link?.label||'',date:f.date,type:f.type||f.direction,unit,debit:inn?(split?gross:amt):0,credit:inn?0:amt,description:[f.customer,split?`Brüt ${money(gross)} · Net ${money(amt)}`:'',f.description].filter(Boolean).join(' · '),sourceDocNo:f.sourceDocNo||'',user:f.user||''};
+      if(!split)return [main];
+      return [main,{id:'FINK:'+f.id,_fin:f.id,_fee:true,_link:link?.label||'',date:f.date,type:`POS Komisyonu${f.commissionRate?' %'+qty(f.commissionRate):''}`,unit,debit:0,credit:fee,description:`${f.sourceDocNo||''} kart tahsilatı komisyonu (${money(gross)} brüt)`,sourceDocNo:f.sourceDocNo||'',user:f.user||''}];});
   }
   function applyFinanceMoveV7(fm,sign){const a=accountByKey(`${fm.accountKind}:${fm.accountId}`);if(!a.account)return;const amt=Number(fm.accountAmount??fm.amount??0);a.account.balance=Number(a.account.balance||0)+sign*(fm.direction==='Giriş'?amt:-amt);}
   function afterBankFinanceChangeV7(fm,cariId){const c=state.customers.find(x=>x.id===cariId);if(c)syncLinkedFinanceCariBalance(c);(bankFeedMoves||[]).forEach(m=>{if(m.linkedFinanceMoveId===fm.id&&!state.financeMoves.some(f=>f.id===fm.id)){m.status='Bekliyor';m.linkedFinanceMoveId='';}});if(typeof saveBankFeed==='function')saveBankFeed();save();render();if(c)openCariDetail(c.id);}
@@ -8990,7 +9011,7 @@ function stockSummaryView(){
           if(ok){state.meta=state.meta||{};state.meta.lastPreCloudSnapshotV682=now();}
         }
       }
-      state.cloudSync.lastStatus='Gönderiliyor';state.meta.updatedAt=now();if(state.meta)delete state.meta.freshSeedV7;
+      state.cloudSync.lastStatus='Gönderiliyor';state.meta.updatedAt=realNow();if(state.meta)delete state.meta.freshSeedV7;
       const payload=cloudSafeStateV5();
       const headers={'Content-Type':'application/json'};if(etag&&!forceDangerous)headers['if-match']=etag;
       await cloudPendingSaveV7(payload);
