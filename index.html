@@ -1016,7 +1016,7 @@ body[data-screen="sales"] .topbar .mode-switch,body[data-screen="sales"] .topbar
 body[data-screen="sales"] .topbar .market-ticker{font-size:12px;gap:12px}
 body[data-screen="sales"] .content{padding:8px 12px!important;max-width:none!important}
 body[data-screen="sales"] .sale-head-card{padding:8px 10px!important}
-body[data-screen="sales"] .sale-head-grid{display:grid!important;grid-template-columns:minmax(220px,1fr) 100px minmax(300px,1.4fr)!important;gap:12px}
+body[data-screen="sales"] .sale-head-grid{display:grid!important;grid-template-columns:minmax(220px,1fr) 140px 100px minmax(300px,1.4fr)!important;gap:12px}
 body[data-screen="sales"] .sale-head-grid .labelled{grid-column:auto!important}
 body[data-screen="sales"] .sale-head-grid #saleProductSearch{font-weight:650}
 body[data-screen="sales"] .btn{font-size:14px;min-height:34px;padding:6px 9px;border-radius:5px}
@@ -1029,6 +1029,20 @@ body[data-screen="sales"] .section-head span{font-size:12px!important}
 body[data-screen="sales"] .compact-sale-workspace{display:grid!important;grid-template-columns:minmax(0,1fr) 250px!important;gap:8px!important;min-height:0}
 .compact-sale-main{display:flex;flex-direction:column;gap:8px;min-width:0;min-height:0}
 .compact-sale-side{display:flex;flex-direction:column;gap:8px;min-width:0;min-height:0;overflow:auto}
+/* Sağ panel sığsın: düğmeler ve özet sıkı */
+body[data-screen="sales"] .compact-sale-side{gap:5px}
+body[data-screen="sales"] .compact-sale-side>.labelled>label{display:none}
+body[data-screen="sales"] .compact-sale-side .sale-note-box{margin-top:4px!important;padding-top:4px!important}
+body[data-screen="sales"] .compact-sale-side .sale-note-box label{display:none}
+body[data-screen="sales"] .compact-sale-side .sale-note-box .input{min-height:30px;padding:3px 8px}
+body[data-screen="sales"] .compact-sale-side .btn{min-height:28px;padding:2px 6px;font-size:13px}
+body[data-screen="sales"] .compact-sale-side #finalizeSale{min-height:40px;font-size:15px}
+body[data-screen="sales"] .compact-sale-side .sale-head-actions,body[data-screen="sales"] .compact-sale-side .sale-quick-inline{gap:5px!important}
+body[data-screen="sales"] .compact-sale-side .sale-summary{padding:8px 10px!important}
+body[data-screen="sales"] .compact-sale-side .sale-summary .summary-row{padding:3px 0!important;font-size:14px}
+body[data-screen="sales"] .compact-sale-side .sale-summary .summary-row.total{padding:3px 0!important;font-size:18px!important}
+body[data-screen="sales"] .compact-sale-side .sale-summary .summary-row.total strong{font-size:24px!important}
+body[data-screen="sales"] .compact-sale-lines .empty,body[data-screen="sales"] .compact-sale-lines .empty-state{padding:14px!important;min-height:0!important}
 body[data-screen="sales"] .sale-head-actions{display:flex;flex-wrap:wrap;gap:5px}
 body[data-screen="sales"] .sale-head-actions .btn{flex:1;white-space:nowrap;font-size:12px}
 body[data-screen="sales"] .sale-quick-inline{display:block!important;margin:0!important}
@@ -3005,7 +3019,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
           <div class="labelled span-2"><label>Cari Hesap</label><div style="display:flex;gap:6px;margin-bottom:6px"><input id="saleCustomerSearch" class="input" list="saleCustomerList" placeholder="Cari ara: ad, kod veya telefon yazın" autocomplete="off" style="flex:1;min-width:0"><button type="button" class="btn btn-outline" id="saleQuickCustomer" title="Hızlı yeni cari">+ Yeni Cari</button></div><small id="saleCustomerHint" style="display:none;color:#c0262d;font-weight:700;margin:-2px 0 6px"></small><datalist id="saleCustomerList">${saleCustomerCandidates('Tümü').filter(c=>c.id!=='CASH').map(c=>`<option value="${esc(c.name)}">${esc([c.code,c.phone,c.type].filter(Boolean).join(' · '))}</option>`).join('')}</datalist><select class="select" id="saleCustomerSelect">${saleCustomerCandidates('Tümü').map(c=>`<option value="${c.id}" ${c.id===currentCustomer?.id?'selected':''}>${esc(c.code?c.code+' · ':'')}${esc(c.name)}${c.type&&c.id!=='CASH'?' · '+esc(c.type):''}</option>`).join('')}</select><small class="sale-inline-help">Tüm cariler tek listede. Açık hesap doğrudan seçilen cariye işlenir.</small></div>
           <div class="labelled"><label>Satış Tarihi</label><input type="date" class="input" id="saleDateV7" max="${localDayV7()}" value="${esc(saleDraft.saleDate||localDayV7())}" style="${saleDraft.saleDate&&saleDraft.saleDate!==localDayV7()?'border:2px solid #c0262d;color:#c0262d;font-weight:700':''}">${saleDraft.saleDate&&saleDraft.saleDate!==localDayV7()?'<small style="color:#c0262d;font-weight:700">GEÇMİŞ TARİHLİ SATIŞ</small>':''}</div>
           <div class="labelled"><label>Satış Cinsi</label><select class="select" id="saleCurrency">${paymentCurrencyOptions().map(x=>`<option ${saleCur===x?'selected':''}>${x}</option>`).join('')}</select></div>
-          <div class="labelled"><label>Satan Eleman</label><select class="select" id="salePerson"><option value="">Seçiniz</option>${state.users.filter(u=>u.permissions?.canSell!==false).map(u=>`<option ${saleDraft.salesperson===u.name?'selected':''}>${esc(u.name)}</option>`).join('')}</select></div>
+          <div class="labelled"><label>Satan Eleman</label><select class="select" id="salePerson"><option value="">— Satan eleman seçin —</option>${state.users.filter(u=>u.permissions?.canSell!==false).map(u=>`<option ${saleDraft.salesperson===u.name?'selected':''}>${esc(u.name)}</option>`).join('')}</select></div>
           <div class="labelled sale-search-wrap"><label>Stok Kodu / Barkod</label><input id="saleProductSearch" class="input" value="${esc(saleDraft.entryQuery||'')}" placeholder="22 yaz = eşleşen stokları listele · 1657 veya ALY1657" autocomplete="off"><small class="sale-inline-help">Yazdıkça eşleşen stoklar aşağıda sıralanır; tıklayarak veya ↑ ↓ + Enter ile seç.</small><div id="saleSearchResults" class="sale-search-results"></div></div>
         </div>
         <div class="sale-quick-inline"><span class="mini-label">Hızlı İşlem</span><div class="trade-actions sale-compact-actions"><button class="btn buy" data-special-trade="Ziynet Alış">Ziynet Alış</button><button class="btn sell" data-special-trade="Ziynet Satış">Ziynet Satış</button><button class="btn buy" data-special-trade="Hurda Alış">Hurda Alış</button><button class="btn sell" data-special-trade="Hurda Satış">Hurda Satış</button><button class="btn buy" data-special-trade="Döviz Alış">Döviz Alış</button><button class="btn sell" data-special-trade="Döviz Satış">Döviz Satış</button></div></div>
@@ -3047,7 +3061,7 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
           ${Number(saleDraft.returns||0)?`<div class="summary-row"><span>İade</span><strong class="negative">-${money(saleDraft.returns||0)}</strong></div>`:''}
           ${Number(saleDraft.commission||0)?`<div class="summary-row"><span>Komisyon</span><strong class="positive">+${money(saleDraft.commission||0)}</strong></div>`:''}
           ${standalone.active?`<div class="summary-row total"><span>Ödeme Farkı</span><strong class="${Math.abs(standalone.difference)<0.01?'positive':'negative'}">${money(Math.abs(standalone.difference))}</strong></div>`:`${saleCur!=='TL'?`<div class="summary-row"><span>Satış Cinsi</span><strong>${saleCur}</strong></div><div class="summary-row"><span>Net ${saleCur}</span><strong>${saleNativeLabel(saleNativeFromTl(t.net,saleCur),saleCur)}</strong></div>`:''}<div class="summary-row"><span>Net Tutar (TL)</span><strong>${money(t.net)}</strong></div><div class="summary-row"><span>Ödenen / Mahsup</span><strong>${money(t.settled)}</strong></div><div class="summary-row total"><span>${t.remain<0?'Müşteriye Ödenecek':'Kalan'}</span><strong class="${Math.abs(t.remain)<0.01?'positive':'negative'}">${saleCur==='TL'?money(Math.abs(t.remain)):saleNativeLabel(saleNativeFromTl(Math.abs(t.remain),saleCur),saleCur)}</strong></div>`}
-          <div class="sale-note-box"><label><span>Satış Notu</span><small>İsteğe bağlı</small></label><input class="input" id="saleGeneralNote" value="${esc(saleDraft.note||'')}" placeholder="Örn. özel fiyat, müşteri talebi, teslim notu..."></div>
+          <div class="sale-note-box"><label><span>Satış Notu</span><small>İsteğe bağlı</small></label><input class="input" id="saleGeneralNote" value="${esc(saleDraft.note||'')}" placeholder="Satış notu (isteğe bağlı)"></div>
           <button class="btn btn-primary" id="finalizeSale" style="width:100%;margin-top:12px" ${hasPrimaryAction?'':'disabled'}>${primaryLabel}</button>
         </aside>
       </div>

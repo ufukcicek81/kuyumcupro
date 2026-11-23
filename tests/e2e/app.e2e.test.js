@@ -2701,3 +2701,20 @@ test('tamir: liste 1280 genişlikte yatay kaydırmasız sığar; İptal düğmes
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
+
+test('satış ekranı 1280×720 pencereye sığar: üst satır tek sıra, özet ve İşlem Özeti düğmesi görünür', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  await p.setViewportSize({ width: 1280, height: 720 });
+  await p.click('[data-go="sales"]'); await p.waitForTimeout(600);
+  const m = await p.evaluate(() => {
+    const r = (s) => document.querySelector(s).getBoundingClientRect();
+    const head = r('.sale-head-grid'), fin = r('#finalizeSale'), side = r('.compact-sale-side');
+    const tops = ['#saleCustomerSearch', '#saleDateV7', '#saleCurrency', '#saleProductSearch'].map((s) => Math.round(r(s).top));
+    return { headH: head.height, finBottom: fin.bottom, vh: innerHeight, sideScroll: document.querySelector('.compact-sale-side').scrollHeight - document.querySelector('.compact-sale-side').clientHeight, tops };
+  });
+  assert.ok(Math.max(...m.tops) - Math.min(...m.tops) < 4, 'cari, tarih, cins, stok kodu aynı satırda: ' + m.tops);
+  assert.ok(m.finBottom <= m.vh, `İşlem Özeti görünmeli (${m.finBottom} ≤ ${m.vh})`);
+  assert.ok(m.sideScroll <= 2, 'sağ panel kaydırma gerektirmemeli: ' + m.sideScroll);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
