@@ -1350,6 +1350,12 @@ test('yeni stok kartı: kod otomatik sıradaki numara; stoksuz kart satış aram
   await p.dispatchEvent('[data-sale-suggestion-type="card"]', 'pointerdown');
   await p.waitForTimeout(500);
   assert.equal(await p.inputValue('#saleEntryName'), '24 TEST KULCE 7 GRAM', 'kart seçilebilmeli');
+  // Ürün kutusuna tıklayınca aynı aramanın listesi açılır, başka ürün seçilebilir
+  await p.dispatchEvent('#saleEntryName', 'mousedown'); await p.waitForSelector('#saleSearchResults.show');
+  assert.equal(await p.evaluate(() => document.activeElement.id), 'saleProductSearch');
+  await p.dispatchEvent('#saleSearchResults [data-sale-suggestion-type]:not([data-sale-suggestion-type="card"])', 'pointerdown');
+  await p.waitForTimeout(500);
+  assert.notEqual(await p.inputValue('#saleEntryName'), '24 TEST KULCE 7 GRAM', 'başka ürün seçilebilmeli');
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
@@ -2823,7 +2829,7 @@ test('fiş yazıcı (QZ): fiş resim olarak gider (ayarla ESC/POS ESC * komutu);
     for (let q = 0; q + 1 < b.length; q++) if (b[q] === 0x1D && b[q + 1] === 0x76) gsv++;
     while (b[i] === 0x1B && b[i + 1] === 0x2A && b[i + 2] === 33) { n = b[i + 3] | (b[i + 4] << 8); i += 5; for (let k = 0; k < n * 3; k++) { let v = b[i++]; while (v) { dark += v & 1; v >>= 1; } } i++; bands++; }
     let cuts = 0, inits = 0; for (let q = 0; q + 2 < b.length; q++) { if (b[q] === 0x1D && b[q + 1] === 0x56 && b[q + 2] === 1) cuts++; if (b[q] === 0x1B && b[q + 1] === 0x40) inits++; }
-    return { type: d.type, format: d.format, head: Array.from(b.slice(0, 5)), n, bands, dark, end: i, len: b.length, cuts, inits, afterFirst: Array.from(b.slice(i, i + 10)), padZero: b.slice(-32768).every((x) => x === 0), beforePad: Array.from(b.slice(-32771, -32768)) };
+    return { type: d.type, format: d.format, head: Array.from(b.slice(0, 5)), n, bands, dark, end: i, len: b.length, cuts, inits, afterFirst: Array.from(b.slice(i, i + 10)), padZero: b.slice(-24576).every((x, k) => x === (k % 2 ? 0x32 : 0x1B)), beforePad: Array.from(b.slice(-24579, -24576)) };
   });
   assert.deepEqual([e.type, e.format, e.head, e.n], ['raw', 'command', [0x1B, 0x40, 0x1B, 0x33, 24], 576]);
   assert.ok(e.bands > 12 && e.dark > 2000, 'fiş içeriği: ' + JSON.stringify(e));
@@ -2832,9 +2838,9 @@ test('fiş yazıcı (QZ): fiş resim olarak gider (ayarla ESC/POS ESC * komutu);
     const c = document.createElement('canvas'); c.width = 576; c.height = bands.length * 24; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.fillStyle = '#000';
     bands.forEach((bd, k) => { for (let x = 0; x < 576; x++) for (let r = 0; r < 24; r++) if (bd[x * 3 + (r >> 3)] & (0x80 >> (r & 7))) g.fillRect(x, k * 24 + r, 1, 1); });
     return c.toDataURL('image/png').split(',')[1]; }); require('fs').writeFileSync(process.env.SHOT, Buffer.from(png, 'base64')); }
-  assert.ok(e.padZero, 'sonda 32 KB boş dolgu'); assert.deepEqual(e.beforePad, [0x1D, 0x56, 1], 'dolgudan önce son kesme');
+  assert.ok(e.padZero, 'sonda 24 KB ESC 2 dolgu'); assert.deepEqual(e.beforePad, [0x1D, 0x56, 1], 'dolgudan önce son kesme');
   assert.deepEqual(e.afterFirst, [0x1B, 0x32, 0x1B, 0x4A, 200, 0x1D, 0x56, 1, 0x1B, 0x33], 'kopya sonunda ~25 mm ilerlet + kes, 2. kopya sıfırlamadan başlar');
-  assert.deepEqual([e.cuts, e.inits, e.len], [2, 1, 2 + (e.end - 2 + 8) * 2 + 32768], '2 kopya, her biri kesilir; ESC @ yalnız başta; sonda boş dolgu');
+  assert.deepEqual([e.cuts, e.inits, e.len], [2, 1, 2 + (e.end - 2 + 8) * 2 + 24576], '2 kopya, her biri kesilir; ESC @ yalnız başta; sonda dolgu');
   assert.equal(r.connects, 1, 'bağlantı bir kez kurulur, baskıda yeniden kurulmaz');
   assert.deepEqual(p.errors, []);
   await p.context().close();
