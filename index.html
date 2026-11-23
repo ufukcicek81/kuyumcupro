@@ -10455,18 +10455,22 @@ function stockSummaryView(){
   /* Fişi tarayıcıda PNG resme çevirir (SVG foreignObject → canvas). QZ Tray resmi doğrudan basar; HTML gönderince
      QZ'nin içindeki web motoru (JavaFX) ilk fişte 30-60 sn açılıyordu, resimde bu bekleme yok. */
   async function receiptHtmlToPngV7(html,widthMm,heightMm,dpi){return (await receiptCanvasV7(html,widthMm,heightMm,dpi)).toDataURL('image/png').split(',')[1];}
-  function receiptSendModeV7(p){return p.sendMode||(p.format==='html'?'html':'escpos');}
+  function receiptSendModeV7(p){return p.sendMode2||(p.format==='html'?'html':'image');}
   /* Siyah/beyaz fiş resmini ESC/POS raster komutuna çevirir (GS v 0). Windows yazıcı sürücüsü ve QZ'nin
      sayfa çizimi atlanır; yazıcı komutu doğrudan alır, fiş hemen çıkar. Sonda kâğıt ilerletilip kesilir. */
+  /* Siyah/beyaz fiş resmini ESC/POS "ESC * 33" (24 nokta sütun) komutuna çevirir: en eski, en yaygın resim komutu.
+     (GS v 0 raster komutunu Aclas desteklemiyor, kâğıda "command is not supported" basıyordu.) Kesme komutu yok. */
   function receiptEscposV7(canvas,copies){
-    var w=canvas.width,h=canvas.height,bw=Math.ceil(w/8),a=canvas.getContext('2d').getImageData(0,0,w,h).data,out=[];
+    var w=canvas.width,h=canvas.height,a=canvas.getContext('2d').getImageData(0,0,w,h).data,out=[];
     var push=function(arr){for(var i=0;i<arr.length;i++)out.push(arr[i]);};
-    var last=h-1;for(;last>0;last--){var blank=true;for(var x=0;x<w;x++)if(a[(last*w+x)*4]<128){blank=false;break;}if(!blank)break;}
+    var dark=function(x,y){return y<h&&a[(y*w+x)*4]<128;};
+    var last=h-1;for(;last>0;last--){var blank=true;for(var x=0;x<w;x++)if(dark(x,last)){blank=false;break;}if(!blank)break;}
     for(var c=0;c<Math.max(1,copies||1);c++){
-      push([0x1B,0x40]);
-      for(var y0=0;y0<=last;y0+=128){var rows=Math.min(128,last+1-y0);push([0x1D,0x76,0x30,0x00,bw&255,bw>>8,rows&255,rows>>8]);
-        for(var y=y0;y<y0+rows;y++)for(var bx=0;bx<bw;bx++){var b=0;for(var k=0;k<8;k++){var xx=bx*8+k;if(xx<w&&a[(y*w+xx)*4]<128)b|=0x80>>k;}out.push(b);}}
-      push([0x1B,0x64,0x04,0x1D,0x56,0x42,0x00]);
+      push([0x1B,0x40,0x1B,0x33,24]);
+      for(var y0=0;y0<=last;y0+=24){push([0x1B,0x2A,33,w&255,w>>8]);
+        for(var x2=0;x2<w;x2++)for(var k=0;k<3;k++){var b=0;for(var bit=0;bit<8;bit++)if(dark(x2,y0+k*8+bit))b|=0x80>>bit;out.push(b);}
+        out.push(0x0A);}
+      push([0x1B,0x32,0x1B,0x64,0x05]);
     }
     var str='';for(var i=0;i<out.length;i+=8192)str+=String.fromCharCode.apply(null,out.slice(i,i+8192));
     return btoa(str);
@@ -10681,13 +10685,13 @@ function stockSummaryView(){
 
   function openReceiptPrinterSettingsV644(){
     var p=receiptPrinterV644();
-    var html='<div class="form-grid"><div class="labelled"><label>Baskı Modu</label><select id="rpMode" class="select"><option value="qz" '+(p.mode==='qz'?'selected':'')+'>QZ Tray — Doğrudan</option><option value="browser" '+(p.mode==='browser'?'selected':'')+'>Tarayıcı Yazdır</option></select></div><div class="labelled"><label>Gönderim Biçimi</label><select id="rpFormat" class="select"><option value="escpos" '+(receiptSendModeV7(p)==='escpos'?'selected':'')+'>Doğrudan (ESC/POS) — en hızlı</option><option value="image" '+(receiptSendModeV7(p)==='image'?'selected':'')+'>Resim — Windows sürücüsüyle</option><option value="html" '+(receiptSendModeV7(p)==='html'?'selected':'')+'>HTML — eski yöntem</option></select></div><div class="labelled span-2"><label>Fiş Yazıcısı</label><select id="rpName" class="select"><option value="'+esc(p.printerName)+'">'+esc(p.printerName||'— Önce Yazıcıları Bul —')+'</option></select></div><div class="labelled"><label>Kağıt Genişliği</label><select id="rpWidth" class="select"><option value="80" '+(Number(p.widthMm)===80?'selected':'')+'>80 mm</option><option value="58" '+(Number(p.widthMm)===58?'selected':'')+'>58 mm</option></select></div><div class="labelled"><label>Kopya</label><input id="rpCopies" class="input" type="number" min="1" max="3" value="'+esc(p.copies)+'"></div><div class="labelled span-2"><label>&nbsp;</label><button class="btn btn-outline" type="button" id="rpFind">Yazıcıları Bul / Aclas Ara</button></div><div class="labelled span-2"><label>&nbsp;</label><button class="btn" type="button" id="rpTest">Test Fişi Yazdır</button></div><div class="notice span-4"><strong>Bu yazıcı barkod yazıcısından ayrıdır.</strong> Aclas yazıcısı Windows\'ta kuruluysa QZ Tray listesinde görünür. Program Aclas adını bulursa otomatik seçer.</div></div>';
+    var html='<div class="form-grid"><div class="labelled"><label>Baskı Modu</label><select id="rpMode" class="select"><option value="qz" '+(p.mode==='qz'?'selected':'')+'>QZ Tray — Doğrudan</option><option value="browser" '+(p.mode==='browser'?'selected':'')+'>Tarayıcı Yazdır</option></select></div><div class="labelled"><label>Gönderim Biçimi</label><select id="rpFormat" class="select"><option value="image" '+(receiptSendModeV7(p)==='image'?'selected':'')+'>Resim — Windows sürücüsüyle (önerilen)</option><option value="escpos" '+(receiptSendModeV7(p)==='escpos'?'selected':'')+'>Doğrudan komut (ESC/POS) — deneme</option><option value="html" '+(receiptSendModeV7(p)==='html'?'selected':'')+'>HTML — eski yöntem</option></select></div><div class="labelled span-2"><label>Fiş Yazıcısı</label><select id="rpName" class="select"><option value="'+esc(p.printerName)+'">'+esc(p.printerName||'— Önce Yazıcıları Bul —')+'</option></select></div><div class="labelled"><label>Kağıt Genişliği</label><select id="rpWidth" class="select"><option value="80" '+(Number(p.widthMm)===80?'selected':'')+'>80 mm</option><option value="58" '+(Number(p.widthMm)===58?'selected':'')+'>58 mm</option></select></div><div class="labelled"><label>Kopya</label><input id="rpCopies" class="input" type="number" min="1" max="3" value="'+esc(p.copies)+'"></div><div class="labelled span-2"><label>&nbsp;</label><button class="btn btn-outline" type="button" id="rpFind">Yazıcıları Bul / Aclas Ara</button></div><div class="labelled span-2"><label>&nbsp;</label><button class="btn" type="button" id="rpTest">Test Fişi Yazdır</button></div><div class="notice span-4"><strong>Bu yazıcı barkod yazıcısından ayrıdır.</strong> Aclas yazıcısı Windows\'ta kuruluysa QZ Tray listesinde görünür. Program Aclas adını bulursa otomatik seçer.</div></div>';
     var draftLogo=p.logoData||'',logoLoading=false;
     html+='<div class="form-grid" style="margin-top:12px"><div class="labelled span-2"><label>İrtibat Telefonu</label><input id="rpPhone" class="input" value="'+esc(p.contactPhone||'')+'"></div><div class="labelled span-2"><label>Adres</label><textarea id="rpAddress" class="textarea">'+esc(p.contactAddress||'')+'</textarea></div><div class="labelled span-4"><label>Asil Kuyumculuk Logosu (PNG / JPG)</label><input id="rpLogo" type="file" accept="image/png,image/jpeg"><div id="rpLogoStatus">'+(draftLogo?'Logo yüklü':'Logo seçilmedi')+'</div><button id="rpLogoRemove" class="btn btn-outline" type="button">Logoyu Kaldır</button></div></div>';
     modal('Fiş Yazıcısı Ayarları',html,function(){
       if(logoLoading){toast('Logo hazırlanıyor, lütfen bekleyin');return;}
       p.contactPhone=document.getElementById('rpPhone').value.trim();p.contactAddress=document.getElementById('rpAddress').value.trim();p.logoData=draftLogo;
-      p.mode=document.getElementById('rpMode').value;p.sendMode=document.getElementById('rpFormat')?.value||'escpos';p.format=p.sendMode==='html'?'html':'image';
+      p.mode=document.getElementById('rpMode').value;p.sendMode2=document.getElementById('rpFormat')?.value||'image';p.format=p.sendMode2==='html'?'html':'image';
       p.printerName=document.getElementById('rpName').value;
       p.widthMm=Number(document.getElementById('rpWidth').value||80);
       p.copies=Math.max(1,Number(document.getElementById('rpCopies').value||1));
@@ -10713,9 +10717,9 @@ function stockSummaryView(){
       }catch(e){toast('Yazıcı tarama: '+(e.message||e),'err');}
     });
     document.getElementById('rpTest')?.addEventListener('click',async function(){
-      var old={mode:p.mode,printerName:p.printerName,widthMm:p.widthMm,copies:p.copies};
+      var old={mode:p.mode,printerName:p.printerName,widthMm:p.widthMm,copies:p.copies,sendMode2:p.sendMode2,format:p.format};
       try{
-        p.mode=document.getElementById('rpMode').value;p.printerName=document.getElementById('rpName').value;p.widthMm=Number(document.getElementById('rpWidth').value||80);p.copies=1;
+        p.mode=document.getElementById('rpMode').value;p.printerName=document.getElementById('rpName').value;p.widthMm=Number(document.getElementById('rpWidth').value||80);p.copies=1;p.sendMode2=document.getElementById('rpFormat')?.value||'image';p.format=p.sendMode2==='html'?'html':'image';
         await printReceiptHtmlV644(receiptDocV644('TEST FİŞİ','TEST-'+Date.now(),now(),'','<div class="center"><b>ACLAS / FİŞ YAZICISI TESTİ</b><br>Asil Kuyumcu Pro · V'+APP_VERSION+'</div>','Test baskısı'),'Test fişi');
       }finally{Object.assign(p,old);}
     });
