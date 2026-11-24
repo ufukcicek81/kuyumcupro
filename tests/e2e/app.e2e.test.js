@@ -2792,6 +2792,38 @@ test('satış ekranı 1280×720 pencereye sığar: üst satır tek sıra, özet 
   await p.context().close();
 });
 
+test('cari Bakiye Eşitle: TL farkı kasaya, HAS farkı düzeltme hesabına işlenir', async () => {
+  const fb = createFakeFirebase();
+  let p = await newDevice(browser, appUrl, fb);
+  await p.waitForTimeout(1500);
+  const st = fb.db.state, c = st.customers.find((x) => x.type === 'Müşteri' && x.id !== 'CASH');
+  c.tlBalance = -979713.26; c.hasBalance = -384.123;
+  fb.db.state = st; await p.context().close();
+  p = await newDevice(browser, appUrl, fb);
+  const cash = (s) => (s.cashAccounts || []).reduce((n, x) => n + Number(x.balance || 0), 0);
+  const cash0 = cash(fb.db.state);
+  await p.evaluate(() => document.querySelector('[data-route="customers"],[data-go="customers"]').click());
+  await p.waitForTimeout(500);
+  await p.evaluate((x) => document.querySelector(`[data-cari-card="${x}"] [data-cari-detail]`).click(), c.id);
+  await p.waitForSelector('#cariSetBalanceV7'); await p.click('#cariSetBalanceV7');
+  await p.waitForSelector('[data-sb-amt="TL"]');
+  await p.fill('[data-sb-amt="TL"]', '986.313,26'); await p.selectOption('[data-sb-side="TL"]', 'Alacak');
+  await p.fill('[data-sb-amt="HAS"]', '400,96'); await p.selectOption('[data-sb-side="HAS"]', 'Alacak');
+  assert.match(await p.innerText('[data-sb-diff="TL"]'), /-6\.600 TL · kasaya \+6\.600/);
+  assert.match(await p.innerText('[data-sb-diff="HAS"]'), /kasa değişmez/);
+  await p.click('#modalConfirm'); await p.waitForTimeout(4000);
+  const s2 = fb.db.state, c2 = s2.customers.find((x) => x.id === c.id);
+  assert.ok(Math.abs(Number(c2.tlBalance) + 986313.26) < 0.01, 'TL bakiye Pusula ile aynı: ' + c2.tlBalance);
+  assert.ok(Math.abs(Number(c2.hasBalance) + 400.96) < 1e-6, 'HAS bakiye Pusula ile aynı: ' + c2.hasBalance);
+  const adj = s2.customers.find((x) => x.sysKeyV7 === 'duzeltme');
+  assert.ok(adj && Math.abs(Number(adj.hasBalance) - 16.837) < 1e-6 && !Number(adj.tlBalance || 0), 'HAS farkı düzeltme hesabında, TL değil');
+  assert.equal(s2.customerMoves.filter((m) => m.type === 'BAKİYE DÜZELTME' && m.customerId === c.id).length, 2);
+  assert.ok(Math.abs(cash(s2) - cash0 - 6600) < 0.01, 'TL farkı kasaya girmeli: ' + (cash(s2) - cash0));
+  assert.ok(s2.financeMoves.some((f) => f.type === 'Bakiye Eşitleme Tahsilat' && Number(f.accountAmount) === 6600), 'kasa hareketi yazılmalı');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
 test('cari ekstre: açılışta yalnız bugün; tarih aralığı / Tümü; harekete tıklayınca detay penceresi (düzelt/sil) açılır', async () => {
   const fb = createFakeFirebase();
   let p = await newDevice(browser, appUrl, fb);
