@@ -9070,6 +9070,7 @@ function stockSummaryView(){
     return {r,etag:r.headers.get('ETag')||''};
   }
   function scheduleCloudPushV5(){clearTimeout(cloudPushTimerV5);cloudPushTimerV5=setTimeout(()=>cloudPushV5(false),2200);}
+  function cloudPullDeferredV7(){cloudPullV5(false);}
   function cloudPushV5(manual=false,forceDangerous=false){return cloudLockV7(()=>cloudPushCoreV7(manual,forceDangerous,0));}
   async function cloudPushCoreV7(manual=false,forceDangerous=false,attempt=0){
     ensureV5State();if(!state.cloudSync.enabled&&!manual)return false;if(manual&&!v5Guard('canCloudSync'))return false;
@@ -9099,6 +9100,7 @@ function stockSummaryView(){
         remote=cloudNormV7(remote);
         await cloudResolvePendingV7(remote);
         if(!AsilCloudMerge.deepEqual(remote,cloudBaseV7)){
+          if(!manual&&cloudStateLockedV7()){cloudWhenUnlockedV7(scheduleCloudPushV5);state.cloudSync.lastStatus='Bekliyor (açık pencere)';return false;}
           const merged=AsilCloudMerge.mergeState(cloudBaseV7,cloudLocalV7(),remote,CLOUD_LOCAL_ONLY_KEYS_V7,CLOUD_NON_ADDITIVE_KEYS_V7,CLOUD_DELETE_WINS_KEYS_V7);
           // Birleştirilen bulut hâli yeni taban olur; yeniden denemede aynı fark tekrar eklenmez.
           if(merged){cloudApplyStateV7(merged);await cloudBaseSaveV7(remote);persistStateBackgroundV681(state);if(!manual)cloudRenderV7();}
@@ -9155,8 +9157,15 @@ function stockSummaryView(){
       return false;
     }
   }
+  /* Açık pencere varken bulut verisi cihaza uygulanmaz. Pencere açıldığında tuttuğu kayıtlar (ör. cari) eski veriye ait
+     kalıyordu: arka planda veri yenilenince KAYDET hareketi yeni veriye, bakiyeyi eski kopyaya yazıyor, bakiye kayboluyordu
+     (sonra hareket silinince bakiye kayıyordu). Pencere kapanınca bekleyen alma/gönderme yapılır. */
+  function cloudStateLockedV7(){return !!document.querySelector('#modalRoot, #cariSummaryRoot, #saleHistPop, #cariRowPop');}
+  const cloudAfterUnlockV7=new Set();
+  function cloudWhenUnlockedV7(fn){cloudAfterUnlockV7.add(fn);if(cloudWhenUnlockedV7.t)return;cloudWhenUnlockedV7.t=setInterval(()=>{if(cloudStateLockedV7())return;clearInterval(cloudWhenUnlockedV7.t);cloudWhenUnlockedV7.t=null;const fns=[...cloudAfterUnlockV7];cloudAfterUnlockV7.clear();fns.forEach(f=>{try{f();}catch(_){}});},800);}
   async function cloudPullV5(manual=false,force=false){
     ensureV5State();if(manual&&!v5Guard('canCloudSync'))return false;
+    if(!manual&&!force&&cloudStateLockedV7()){cloudWhenUnlockedV7(cloudPullDeferredV7);return false;}
     try{
       state.cloudSync.lastStatus='Alınıyor';
       const r=await fetch(CLOUD_STATE_URL+'?v='+Date.now(),{cache:'no-store'});
