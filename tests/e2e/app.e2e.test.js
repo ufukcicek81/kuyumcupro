@@ -1002,6 +1002,30 @@ test('bulut verisi sıkıştırılmış yazılır; diğer cihaz yalnız sürüm 
   await a.context().close(); await b.context().close();
 });
 
+test('başka cihazdan veri gelince yazılan kutudan imleç kaçmaz; ekran kutudan çıkınca güncellenir', async () => {
+  const fb = createFakeFirebase();
+  const a = await newDevice(browser, appUrl, fb);
+  const b = await newDevice(browser, appUrl, fb);
+  await a.waitForTimeout(2000);
+  await b.click('[data-go="sales"]'); await b.waitForSelector('#saleProductSearch');
+  await b.click('#saleProductSearch'); await b.keyboard.type('22');
+  const pulls = () => fb.log.filter((x) => x.method === 'GET' && x.path === '/kuyumcuProV5/state.json').length;
+  const before = pulls();
+  await a.click('[data-home-trade="Ziynet Alış"]');
+  await a.fill('#stQty', '1'); await a.fill('#stPrice', '5000');
+  await a.click('#modalConfirm');
+  await a.waitForTimeout(7000);
+  assert.ok(pulls() > before, 'B cihazı yeni veriyi indirmeli');
+  assert.equal(await b.evaluate(() => document.activeElement?.id), 'saleProductSearch', 'imleç kutuda kalmalı');
+  assert.equal(await b.inputValue('#saleProductSearch'), '22', 'yazılan silinmemeli');
+  // Kutudan çıkınca ekran yeni veriyle çizilir
+  await b.evaluate(() => document.activeElement.blur()); await b.waitForTimeout(2500);
+  await b.click('text=Ana Menü');
+  assert.match(await historyText(b, 'Ziynet Alış'), /ZA-\d{4}-0+1/, 'B cihazı A cihazının işlemini görmeli');
+  assert.deepEqual([...a.errors, ...b.errors], []);
+  await a.context().close(); await b.context().close();
+});
+
 test('telefon düzeni: logo görünür, ekranlar yana taşmaz, satış kartları üst üste binmez', async () => {
   const p = await newDevice(browser, appUrl, createFakeFirebase());
   await p.setViewportSize({ width: 390, height: 800 });
