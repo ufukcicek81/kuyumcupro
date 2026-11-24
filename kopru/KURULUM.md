@@ -86,5 +86,29 @@ Gönder'e basmadan iletir (tamir alındı / hazır, cari bakiye, satış fişi �
 5. **Sormadan gönder** işaretlenirse tamir açılınca / hazır olunca mesaj kendiliğinden gider;
    işaretlenmezse program "Mesaj gitsin mi?" diye sorar.
 
+**Tamir teslim onayı (köprü 1.3 ve üstü):** WhatsApp Ayarları'nda "Teslimde müşteriden ONAY iste" açıksa teslim
+mesajının sonuna "ONAY yazarak cevap verin" eklenir. Müşteri ONAY / EVET / TAMAM / ALDIM yazınca köprü cevabı
+`wa-gelen.json` dosyasına kaydeder; program tamir listesinde "✓ Müşteri onayladı" ve tarih-saatini gösterir
+(program kapalıyken gelen cevaplar da sonradan işlenir). Bunun için köprünün açık ve WhatsApp'ın bağlı olması yeterlidir.
+
 Köprüye yalnız Asil Kuyumcu Pro sayfaları (ufukcicek81.github.io, kuyumcupro…vercel.app / workers.dev) erişebilir;
 başka bir adres kullanıyorsanız `asil-kopru.json` → `"allowedOrigins": ["https://adres"]` ekleyin.
+
+## İş Bankası online ekstre (köprü 1.4 ve üstü)
+
+Program, banka carisinin ekstresindeki **🏦 Bankadan Getir** düğmesiyle İş Bankası hareketlerini alıp programdaki
+banka hareketleriyle karşılaştırır (eşleşenler ✓, "bankada var programda yok" ve "programda var bankada yok" ayrı).
+
+1. İş Bankası ticari internet şubesinde online ekstre için kullanıcı kodu ve şifre oluşturun.
+2. `C:\kopru\asil-kopru.json` dosyasını Not Defteri ile açın, şu iki satırı ekleyin (virgüllere dikkat):
+
+```json
+{ "mode": "test", "vkn": "4810173324", "port": 8787,
+  "isbankUid": "BANKANIN VERDİĞİ KULLANICI KODU",
+  "isbankPwd": "OLUŞTURDUĞUNUZ ŞİFRE" }
+```
+
+3. `BASLAT.bat` ile köprüyü yeniden başlatın (otomatik başlatma kuruluysa bilgisayarı yeniden açmak da olur).
+
+Kullanıcı kodu ve şifre **yalnız bu dosyada** durur; programa, buluta ya da başka bir yere gönderilmez.
+Banka en fazla 1 hafta geriye, 300 harekete ve dakikada 2 sorguya izin verir.

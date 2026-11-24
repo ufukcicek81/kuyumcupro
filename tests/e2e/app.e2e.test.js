@@ -1798,6 +1798,53 @@ test('kasa sayımı: kasa farkı sisteme işlenir, bakiye sayılan tutara gelir 
   await p.context().close();
 });
 
+test('İş Bankası online ekstre: köprüden gelen hareketler programdaki banka hareketleriyle eşleştirilir', async () => {
+  const http = require('http');
+  const kopru = require('../../kopru/asil-kopru.js');
+  kopru._isbankReset();
+  const realFetch = global.fetch;
+  const fb = createFakeFirebase();
+  let p = await newDevice(browser, appUrl, fb);
+  await p.waitForTimeout(1500);
+  const st = fb.db.state, acc = (st.bankAccounts || []).find((b) => /İŞ BANKASI/.test(String(b.bank || b.name)));
+  const day = (n) => { const d = new Date(Date.now() - n * 864e5); return d; };
+  const dmy = (d) => `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+  const fm = (id, d, dir, amt, type) => ({ id, period: st.activePeriod, date: d.toISOString(), direction: dir, type, accountKind: 'Banka', accountId: acc.id, accountName: acc.bank || acc.name, amount: amt, accountAmount: amt, accountCurrency: 'TL', tlAmount: amt, sourceDocNo: id });
+  st.financeMoves = [...(st.financeMoves || []), fm('FIN-T1', day(1), 'Giriş', 1500, 'Havale / EFT Tahsilat'), fm('FIN-T2', day(2), 'Çıkış', 250, 'Bankaya Ödeme'), fm('FIN-T3', day(3), 'Giriş', 999, 'Kredi Kartı Tahsilat')];
+  st.invoiceSettings = { ...(st.invoiceSettings || {}), proxyUrl: 'http://127.0.0.1:0' };
+  const cfg = { allowedOrigins: [], whatsapp: false, isbankUid: 'KOD1', isbankPwd: 'gizli' };
+  let sentBody = '';
+  global.fetch = async (url, opt) => {
+    if (!String(url).includes('posmatik2.isbank.com.tr')) return realFetch(url, opt);
+    sentBody = opt.body;
+    return { ok: true, status: 200, text: async () => `<?xml version="1.0" encoding="utf-8"?><HesapOzeti><Hareket><Tarih>${dmy(day(1))} 10:11:12</Tarih><Tutar>1.500,00</Tutar><Aciklama>EFT GELEN</Aciklama></Hareket><Hareket><Tarih>${dmy(day(2))} 09:00:00</Tarih><Tutar>-250,00</Tutar><Aciklama>HAVALE GİDEN</Aciklama></Hareket><Hareket><Tarih>${dmy(day(2))} 15:00:00</Tutar><Tutar>-42,10</Tutar><Aciklama>MASRAF</Aciklama></Hareket></HesapOzeti>`.replace('</Tutar><Tutar>-42,10', '</Tarih><Tutar>-42,10') };
+  };
+  const bridge = http.createServer((q, r) => kopru.handle(cfg, q, r));
+  await new Promise((r) => bridge.listen(0, '127.0.0.1', r));
+  try {
+    st.invoiceSettings.proxyUrl = `http://127.0.0.1:${bridge.address().port}`;
+    fb.db.state = st; await p.context().close();
+    p = await newDevice(browser, appUrl, fb);
+    await p.evaluate(() => document.querySelector('[data-route="customers"],[data-go="customers"]').click());
+    await p.waitForTimeout(500);
+    await p.evaluate(() => [...document.querySelectorAll('[data-cari-card][data-cari-type="Banka"]')].find((x) => /İŞ BANKASI/.test(x.innerText)).querySelector('[data-cari-detail]').click());
+    await p.waitForSelector('#bankOnlineV7'); await p.click('#bankOnlineV7');
+    await p.waitForSelector('#boGet'); await p.click('#boGet');
+    await p.waitForSelector('#boResult table', { timeout: 10000 });
+    const t = await p.innerText('#boResult');
+    assert.match(t, /Bankada var, programda yok\s*1/);
+    assert.match(t, /MASRAF[\s\S]*Programda yok/);
+    assert.match(t, /Programda var, bankada yok[\s\S]*FIN-T3/);
+    assert.match(t, /EFT GELEN[\s\S]*✓/);
+    const body = new URLSearchParams(sentBody);
+    assert.deepEqual([body.get('uid'), body.get('pwd')], ['KOD1', 'gizli']);
+    assert.match(body.get('BeginDate'), /^\d{2}\.\d{2}\.\d{4} 00:00:00$/);
+    assert.ok(!t.includes('gizli'), 'şifre ekranda görünmemeli');
+    assert.deepEqual(p.errors, []);
+    await p.context().close();
+  } finally { global.fetch = realFetch; bridge.close(); kopru._isbankReset(); }
+});
+
 test('banka bakiyesi gerçek tutara eşitlenir; kasa değişmez', async () => {
   const fb = createFakeFirebase();
   const p = await newDevice(browser, appUrl, fb);
@@ -2757,6 +2804,66 @@ test('WhatsApp otomatik (köprü): QR gösterilir, bağlanınca tamir mesajları
     assert.match(sent[0][1], /Yeni tamir: TMR-/);
     assert.equal(sent[1][0], '905554443322@s.whatsapp.net');
     assert.match(sent[1][1], /ALİ VELİ, KOLYE ürününüz tamir için teslim alınmıştır/);
+    assert.deepEqual(p.errors, []);
+    await p.context().close();
+  } finally { bridge.close(); kopru.wa._reset(); }
+});
+
+test('tamir teslim onayı: teslim mesajı ONAY ister; müşteri WhatsApp ile ONAY yazınca tamir kaydına işlenir', async () => {
+  const http = require('http');
+  const kopru = require('../../kopru/asil-kopru.js');
+  const { EventEmitter } = require('events');
+  const sent = [];
+  let sock;
+  kopru.wa._reset({ inbox: null, lid: null });
+  kopru.wa._setLib({
+    pino: () => ({}), QR: { toDataURL: async () => 'data:image/png;base64,iVBORw0KGgo=' },
+    baileys: {
+      DisconnectReason: { loggedOut: 401 }, Browsers: { windows: (n) => [n, 'Windows', '1'] },
+      useMultiFileAuthState: async () => ({ state: {}, saveCreds: () => {} }),
+      default: () => { const ev = new EventEmitter(); sock = { ev, user: { id: '905550000001:1@s.whatsapp.net' }, onWhatsApp: async (j) => [{ exists: true, jid: j }], sendMessage: async (j, m) => { sent.push([j, m.text]); return { key: { id: 'SENT' + sent.length } }; }, logout: async () => {} }; setTimeout(() => ev.emit('connection.update', { connection: 'open' }), 20); return sock; }
+    }
+  });
+  kopru.wa.configure({ waMinIntervalMs: 1000 });
+  const cfg = { mode: 'test', vkn: '4810173324', baseUrl: 'https://isnet.test', allowedOrigins: [], whatsapp: true };
+  const bridge = http.createServer((q, s) => kopru.handle(cfg, q, s));
+  await new Promise((r) => bridge.listen(0, '127.0.0.1', r));
+  try {
+    const fb = createFakeFirebase();
+    let p = await newDevice(browser, appUrl, fb);
+    await p.waitForTimeout(1500);
+    const st = fb.db.state;
+    st.invoiceSettings = { ...(st.invoiceSettings || {}), proxyUrl: `http://127.0.0.1:${bridge.address().port}` };
+    st.settings = st.settings || {}; st.settings.whatsapp = { mode: 'bridge', autoPrompt: true, autoSend: false, confirmDelivery: true };
+    st.repairs = [{ id: 'REPON', docNo: 'TMR-2026-000901', period: st.activePeriod, createdAt: new Date().toISOString(), customerName: 'AYŞE KAYA', phone: '0555 444 33 22', itemType: 'KOLYE', repairRequest: 'Kilit', status: 'Hazır' }];
+    fb.db.state = st; await p.context().close();
+    await kopru.wa.start(); await new Promise((r) => setTimeout(r, 100));
+    p = await newDevice(browser, appUrl, fb);
+    await p.evaluate(() => document.querySelector('[data-route="repairs"],[data-go="repairs"]').click());
+    await p.waitForSelector('[data-repair-deliver="REPON"]');
+    await p.click('[data-repair-deliver="REPON"]');
+    await p.waitForSelector('[data-wa-send="0"]');
+    assert.match(await p.inputValue('[data-wa-text="0"]'), /ONAY yazarak cevap verin/);
+    await p.click('[data-wa-send="0"]');
+    for (let i = 0; i < 40 && !sent.length; i++) await p.waitForTimeout(250);
+    assert.equal(sent[0][0], '905554443322@s.whatsapp.net');
+    await p.waitForTimeout(500); await p.click('#modalX').catch(() => {});
+    await p.waitForSelector('text=Onay bekleniyor');
+    // Başka numaradan gelen ONAY ve aynı numaradan ilgisiz mesaj işlenmez; müşterinin "Onay" cevabı işlenir
+    const now = Math.floor(Date.now() / 1000);
+    sock.ev.emit('messages.upsert', { type: 'notify', messages: [
+      { key: { id: 'IN1', remoteJid: '905320000000@s.whatsapp.net' }, message: { conversation: 'ONAY' }, messageTimestamp: now },
+      { key: { id: 'IN2', remoteJid: '905554443322@s.whatsapp.net' }, message: { conversation: 'Merhaba ne zaman hazır olur' }, messageTimestamp: now },
+      { key: { id: 'IN3', remoteJid: '905554443322@s.whatsapp.net' }, message: { conversation: 'Onay' }, messageTimestamp: now + 1 }
+    ] });
+    await p.evaluate(() => document.querySelector('[data-route="dashboard"]').click());
+    await p.evaluate(() => document.querySelector('[data-route="repairs"],[data-go="repairs"]').click());
+    await p.waitForSelector('text=Müşteri onayladı', { timeout: 8000 });
+    await p.waitForTimeout(3000);
+    const r = fb.db.state.repairs.find((x) => x.id === 'REPON');
+    assert.equal(r.deliveryConfirm.status, 'onaylandı');
+    assert.equal(r.deliveryConfirm.text, 'Onay');
+    assert.equal(r.deliveryConfirm.from, '905554443322');
     assert.deepEqual(p.errors, []);
     await p.context().close();
   } finally { bridge.close(); kopru.wa._reset(); }

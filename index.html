@@ -4165,6 +4165,58 @@ function stockSummaryView(){
     if(mode==='open')return (state.openStocks||[]).filter(x=>x.period===period).length;
     return (state.customers||[]).length;
   }
+  /* İş Bankası online ekstre: dükkân köprüsü bankadan hareketleri alır (kullanıcı kodu / şifre yalnız köprüde),
+     program aynı günlerdeki banka hareketleriyle tutara ve güne göre eşleştirir; eksik / fazla kayıtlar ayrı listelenir.
+     Bankanın XML alan adları önceden bilinmediğinden tarih / tutar / açıklama sütunları adından ve içeriğinden bulunur. */
+  function bankOnlineColsV7(recs){
+    const keys=[...new Set(recs.flatMap(r=>Object.keys(r)))],vals=k=>recs.map(r=>String(r[k]??'')).filter(Boolean);
+    const isDate=v=>/^\d{1,2}[./-]\d{1,2}[./-]\d{4}/.test(v)||/^\d{4}-\d{2}-\d{2}/.test(v),isNum=v=>/^[-+]?[\d.,]+$/.test(v.replace(/\s/g,''));
+    const pick=(re,test)=>keys.find(k=>re.test(k)&&vals(k).length&&vals(k).every(test))||null;
+    const date=pick(/tarih|date|islem.?zaman|zaman/i,isDate)||keys.find(k=>vals(k).length&&vals(k).every(isDate))||null;
+    const borc=pick(/^(borc|borç|debit|cikan|çıkan)/i,isNum),alacak=pick(/^(alacak|credit|giren)/i,isNum);
+    const amount=pick(/tutar|amount|miktar/i,isNum)||(!borc&&!alacak?keys.find(k=>!/bakiye|balance|no$|id$/i.test(k)&&vals(k).length&&vals(k).every(isNum))||null:null);
+    const sign=keys.find(k=>/^(ba|b\/a|yon|yön|borc.?alacak|islem.?tipi|hareket.?tipi|tip|type)$/i.test(k))||null;
+    const desc=keys.find(k=>/aciklama|açıklama|description|explanation|detay/i.test(k))||null;
+    return {keys,date,amount,borc,alacak,sign,desc};
+  }
+  function bankOnlineDayV7(v){const t=String(v||'').trim();let m=t.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);if(m)return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;m=t.match(/^(\d{4})-(\d{2})-(\d{2})/);return m?`${m[1]}-${m[2]}-${m[3]}`:'';}
+  function bankOnlineAmountV7(r,col){
+    if(col.amount){let a=parseTrNumber(r[col.amount]);if(col.sign&&a>0&&/^(b|borç|borc|ç|c|-|d)/i.test(String(r[col.sign]||'').trim()))a=-a;return a;}
+    return parseTrNumber(r[col.alacak]||0)-parseTrNumber(r[col.borc]||0);
+  }
+  function bankOnlineMatchV7(recs,col,moves){
+    const used=new Set(),dayDiff=(a,b)=>Math.abs((new Date(a+'T12:00')-new Date(b+'T12:00'))/864e5);
+    const bank=recs.map(r=>({r,day:bankOnlineDayV7(r[col.date]),amt:bankOnlineAmountV7(r,col),desc:col.desc?String(r[col.desc]||''):''}));
+    const prog=moves.map(f=>({f,day:localDayV7(new Date(f.date)),amt:(f.direction==='Giriş'?1:-1)*Math.abs(Number(f.accountAmount??f.amount??0))}));
+    const signKnown=bank.some(b=>b.amt<0);
+    [0,1].forEach(tol=>bank.forEach(b=>{if(b.m)return;const i=prog.findIndex((p,ix)=>!used.has(ix)&&dayDiff(p.day,b.day)<=tol&&Math.abs((signKnown?p.amt:Math.abs(p.amt))-(signKnown?b.amt:Math.abs(b.amt)))<0.01);if(i>=0){used.add(i);b.m=prog[i];}}));
+    return {bank,progOnly:prog.filter((p,ix)=>!used.has(ix))};
+  }
+  function openBankOnlineV7(cid){
+    const c=state.customers.find(x=>x.id===cid),a=c&&bankCariAccountV7(c);if(!a||a.kind!=='Banka')return;
+    const name=a.acc.bank||a.acc.name||'Banka',today=localDayV7(),wk=localDayV7(new Date(Date.now()-6*864e5));
+    modal(`Bankadan Getir — ${esc(name)}`,`<div class="notice">Hareketler <b>İş Bankası online ekstresinden</b> dükkân köprüsüyle alınır ve programdaki <b>${esc(name)}</b> hareketleriyle tutar ve güne göre eşleştirilir. Banka en fazla <b>1 hafta</b> geriye ve dakikada 2 sorguya izin verir. Kullanıcı kodu / şifre yalnız dükkân bilgisayarındaki köprüde durur.</div>
+      <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin:8px 0"><label class="labelled"><span>Başlangıç</span><input type="date" class="input" id="boFrom" value="${wk}" max="${today}"></label><label class="labelled"><span>Bitiş</span><input type="date" class="input" id="boTo" value="${today}" max="${today}"></label><button class="btn btn-primary" type="button" id="boGet">Bankadan Getir</button></div>
+      <div id="boResult"></div>`,null,'Kapat');
+    const box=document.getElementById('boResult');
+    document.getElementById('boGet').onclick=async()=>{
+      const from=document.getElementById('boFrom').value,to=document.getElementById('boTo').value;if(!from||!to||from>to)return toast('Tarih aralığını kontrol edin','err');
+      const btn=document.getElementById('boGet');btn.disabled=true;btn.textContent='Bankaya soruluyor…';box.innerHTML='';
+      try{
+        const d=await waBridgeCallV7({action:'isbankStatement',from:from+'T00:00:00',to:to+'T23:59:59'}),recs=d.records||[],col=bankOnlineColsV7(recs);
+        const moves=(state.financeMoves||[]).filter(f=>f.accountKind===a.kind&&f.accountId===a.acc.id&&localDayV7(new Date(f.date))>=from&&localDayV7(new Date(f.date))<=to);
+        const raw=`<details style="margin-top:8px"><summary>Bankadan gelen ham veri (alan adları: ${esc(col.keys.join(', ')||'—')})</summary><pre style="white-space:pre-wrap;font-size:11px;max-height:240px;overflow:auto">${esc(d.sample||'')}</pre></details>`;
+        if(!recs.length){box.innerHTML=`<div class="notice">Bu aralıkta bankadan hareket gelmedi.</div>${raw}`;return;}
+        if(!col.date||(!col.amount&&!col.borc&&!col.alacak)){box.innerHTML=`<div class="notice"><b>${recs.length} hareket geldi</b> ama tarih / tutar sütunları tanınamadı. Aşağıdaki ham verinin ekran görüntüsünü gönderin, eşleştirmeyi ona göre ayarlayalım.</div>${raw}`;return;}
+        const r=bankOnlineMatchV7(recs,col,moves),miss=r.bank.filter(b=>!b.m),sum=l=>l.reduce((n,x)=>n+x.amt,0);
+        const row=(b)=>`<tr${b.m?'':' style="background:rgba(192,38,45,.08)"'}><td>${esc(b.day.split('-').reverse().join('.'))}</td><td>${esc(b.desc)}</td><td class="num">${money(b.amt)}</td><td>${b.m?`✓ ${esc(b.m.f.type||'')} ${esc(b.m.f.sourceDocNo||'')}`:'<b style="color:#c0262d">Programda yok</b>'}</td></tr>`;
+        box.innerHTML=`<div class="grid grid-4" style="margin:8px 0">${metric('Bankada',String(r.bank.length),money(sum(r.bank)))}${metric('Eşleşen',String(r.bank.length-miss.length),'')}${metric('Bankada var, programda yok',String(miss.length),money(sum(miss)))}${metric('Programda var, bankada yok',String(r.progOnly.length),money(sum(r.progOnly)))}</div>
+          <div class="table-wrap"><table class="table"><thead><tr><th>Tarih</th><th>Banka açıklaması</th><th class="num">Tutar</th><th>Programda</th></tr></thead><tbody>${r.bank.map(row).join('')}</tbody></table></div>
+          ${r.progOnly.length?`<h3 style="margin-top:12px">Programda var, bankada yok</h3><div class="table-wrap"><table class="table"><thead><tr><th>Tarih</th><th>İşlem</th><th>Belge</th><th class="num">Tutar</th></tr></thead><tbody>${r.progOnly.map(p=>`<tr style="background:rgba(192,38,45,.08)"><td>${esc(p.day.split('-').reverse().join('.'))}</td><td>${esc(p.f.type||'')}${p.f.description?' · '+esc(p.f.description):''}</td><td>${esc(p.f.sourceDocNo||'')}</td><td class="num">${money(p.amt)}</td></tr>`).join('')}</tbody></table></div>`:''}${raw}`;
+      }catch(e){box.innerHTML=`<div class="notice" style="border:2px solid #c0262d"><b>Bankadan alınamadı:</b> ${esc(String(e.message||e))}</div>`;}
+      finally{btn.disabled=false;btn.textContent='Bankadan Getir';}
+    };
+  }
   function cariBalancesOfV7(c){
     const b={},tl=cariDisplayTlBalance(c);if(Number(tl||0))b.TL=Number(tl);if(Number(c.hasBalance||0))b.HAS=Number(c.hasBalance);
     Object.entries(c.otherBalances||{}).forEach(([u,v])=>{if(Number(v||0))b[String(u).toUpperCase()]=Number(v);});
@@ -8430,7 +8482,7 @@ function stockSummaryView(){
     const summary=summaryUnits.map(u=>`<div class="cari-ekstre-balance"><small>${esc(u)} Son Bakiye</small><strong class="${Number(currentMap[u]||0)>0?'negative':Number(currentMap[u]||0)<0?'positive':''}">${fmtSigned(currentMap[u]||0,u)}</strong></div>`).join('');
     const bankUnit=bankAcc?String(bankAcc.acc.currency||'TL').toUpperCase():'',bankBal=bankAcc?Number(bankAcc.acc.balance||0):0,bankGap=bankAcc?bankBal-Number(running[bankUnit]||0):0;
     const gapNote=bankAcc?`<div class="notice" style="margin:8px 0">${Math.abs(bankGap)>=0.01?`<strong>Fark var:</strong> Banka hareketlerinin toplamı ${qty(Number(running[bankUnit]||0))} ${esc(bankUnit)}, banka hesabının bakiyesi ${qty(bankBal)} ${esc(bankUnit)}. Aradaki <b>${qty(bankGap)} ${esc(bankUnit)}</b> hareketi olmayan eski bakiyedir (ör. Pusula'dan bakiye olarak gelen). <button class="btn btn-outline" type="button" id="bankGapAsOpening" style="margin-left:6px">Farkı açılış hareketi yap</button> — bakiye değişmez, fark listede görünür ve düzeltilebilir olur.`:'Banka bakiyesi, listedeki banka hareketlerinin toplamıyla tutuyor.'} <span class="muted">“Cari kaydı” satırları bilgi içindir, banka bakiyesine eklenmez.</span> <button class="btn btn-outline" type="button" id="bankSetBalanceV7" style="margin-left:6px">Bakiyeyi gerçek tutara eşitle</button></div>`:'';
-    const rangeBar=`<div class="cari-print-bar" style="display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin-bottom:8px"><label class="labelled" style="flex:0 1 150px"><span>Başlangıç</span><input id="cariPrintFrom" type="date" class="input" value="${rg.all?'':esc(rg.from)}"></label><label class="labelled" style="flex:0 1 150px"><span>Bitiş</span><input id="cariPrintTo" type="date" class="input" value="${rg.all?'':esc(rg.to)}"></label><div style="display:flex;gap:4px;flex-wrap:wrap">${[['today','Bugün'],['yday','Dün'],['week','Bu Hafta'],['month','Bu Ay'],['all','Tümü']].map(([k,t])=>`<button class="btn btn-outline btn-sm" type="button" data-cari-range="${k}">${t}</button>`).join('')}</div><button class="btn btn-primary" type="button" id="cariPrintStatement" style="margin-left:auto">Ekstre Yazdır</button></div>
+    const rangeBar=`<div class="cari-print-bar" style="display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin-bottom:8px"><label class="labelled" style="flex:0 1 150px"><span>Başlangıç</span><input id="cariPrintFrom" type="date" class="input" value="${rg.all?'':esc(rg.from)}"></label><label class="labelled" style="flex:0 1 150px"><span>Bitiş</span><input id="cariPrintTo" type="date" class="input" value="${rg.all?'':esc(rg.to)}"></label><div style="display:flex;gap:4px;flex-wrap:wrap">${[['today','Bugün'],['yday','Dün'],['week','Bu Hafta'],['month','Bu Ay'],['all','Tümü']].map(([k,t])=>`<button class="btn btn-outline btn-sm" type="button" data-cari-range="${k}">${t}</button>`).join('')}</div><button class="btn btn-primary" type="button" id="cariPrintStatement" style="margin-left:auto">Ekstre Yazdır</button>${bankAcc&&bankAcc.kind==='Banka'?`<button class="btn btn-outline" type="button" id="bankOnlineV7" title="Hareketleri bankanın online ekstresinden alıp programdakilerle karşılaştırır">🏦 Bankadan Getir</button>`:''}</div>
       <div class="notice" style="margin:0 0 8px">${rg.all?'Tüm hareketler gösteriliyor.':`<b>${rg.from===rg.to?trDate(rg.from+'T12:00').split(' ')[0]:trDate(rg.from+'T12:00').split(' ')[0]+' – '+trDate(rg.to+'T12:00').split(' ')[0]}</b> hareketleri: ${rows.length} satır.`}${Object.keys(carried).length?` Devreden bakiye: ${Object.entries(carried).filter(([,v])=>Math.abs(Number(v||0))>.000001).map(([u,v])=>fmtSigned(v,u)).join(' · ')||'0'}`:''}</div>`;
     const infoToggle=infoRows.length?`<label style="display:flex;gap:6px;align-items:center;margin:8px 0;font-size:14px"><input type="checkbox" id="cariShowInfo" ${cariShowInfoV7?'checked':''}> Bakiyeyi etkilemeyen peşin işlemleri de göster (${infoRows.length} işlem: satış, alış, alım-satım, kasa/banka)</label>`:'';
     const body=rows.length?`
@@ -8461,6 +8513,7 @@ function stockSummaryView(){
     const modalEl=document.querySelector('#modalRoot .modal'); if(modalEl)modalEl.style.width='min(1080px,96vw)';
     document.getElementById('cariShowInfo')?.addEventListener('change',e=>{cariShowInfoV7=e.target.checked;openCariDetail(c.id);});
     document.getElementById('cariPrintStatement')?.addEventListener('click',()=>printCariStatementV7(c.id,document.getElementById('cariPrintFrom').value,document.getElementById('cariPrintTo').value));
+    document.getElementById('bankOnlineV7')?.addEventListener('click',()=>openBankOnlineV7(c.id));
     // Banka bakiyesini bankadaki gerçek tutara getirir; fark yalnız banka hesabına "Banka Bakiye Düzeltme" olarak yazılır, kasaya dokunmaz.
     document.getElementById('bankSetBalanceV7')?.addEventListener('click',()=>{
       if(!v5Guard('canManageFinance'))return;
@@ -10828,47 +10881,80 @@ function stockSummaryView(){
     repairReady:'Sayın {musteri}, {fisNo} numaralı tamiriniz ({urun}) hazırdır. Mağazamızdan teslim alabilirsiniz.{ucret}\n{firma}',
     repairDelivered:'Sayın {musteri}, {urun} ürününüzü teslim aldığınız için teşekkür ederiz. İyi günlerde kullanın.\n{firma}'
   };
-  function waSettingsV7(){state.settings=state.settings||{};var w=state.settings.whatsapp=state.settings.whatsapp||{};w.mode=w.mode||'app';w.techName=w.techName||'';w.techPhone=w.techPhone||'';w.autoPrompt=w.autoPrompt!==false;w.autoSend=!!w.autoSend;w.templates=Object.assign({},WA_DEFAULTS_V7,w.templates||{});return w;}
+  function waSettingsV7(){state.settings=state.settings||{};var w=state.settings.whatsapp=state.settings.whatsapp||{};w.mode=w.mode||'app';w.techName=w.techName||'';w.techPhone=w.techPhone||'';w.autoPrompt=w.autoPrompt!==false;w.autoSend=!!w.autoSend;w.confirmDelivery=w.confirmDelivery!==false;w.templates=Object.assign({},WA_DEFAULTS_V7,w.templates||{});return w;}
   function waPhoneV7(p){var d=String(p||'').replace(/\D/g,'');if(!d)return '';if(d.indexOf('00')===0)d=d.slice(2);if(d.length===11&&d[0]==='0')d='9'+d;else if(d.length===10&&d[0]==='5')d='90'+d;return d.length>=11?d:'';}
   function waLinkV7(phone,text){var p=waPhoneV7(phone),t=encodeURIComponent(text||'');return waSettingsV7().mode==='web'?'https://wa.me/'+p+'?text='+t:'whatsapp://send?phone='+p+'&text='+t;}
   function waBridgeOnV7(){return waSettingsV7().mode==='bridge';}
   async function waBridgeCallV7(body){var url=String(state.invoiceSettings?.proxyUrl||'').trim();if(!url)throw new Error('Köprü adresi yok (Fatura → Entegrasyon Ayarları → http://127.0.0.1:8787)');return invoiceBridgeCallV7(url,body);}
   /* Mesajı ilet: köprü modunda doğrudan gönderir; diğer modlarda WhatsApp'ı hazır mesajla açar. */
-  async function waDeliverV7(phone,text){if(waBridgeOnV7()){await waBridgeCallV7({action:'waSend',phone:waPhoneV7(phone),text:text});return {sent:true};}waOpenV7(phone,text);return {sent:false};}
+  async function waDeliverV7(phone,text){if(waBridgeOnV7()){var res=await waBridgeCallV7({action:'waSend',phone:waPhoneV7(phone),text:text});return {sent:true,id:res&&res.id||''};}waOpenV7(phone,text);return {sent:false};}
   function waOpenV7(phone,text){var a=document.createElement('a');a.href=waLinkV7(phone,text);if(waSettingsV7().mode==='web'){a.target='_blank';a.rel='noopener';}document.body.appendChild(a);a.click();setTimeout(function(){a.remove();},300);}
   function repairWaVarsV7(x){var w=waSettingsV7(),fee=Number(x.estimatedFee||0),dep=Number(x.deposit||0);return {firma:state.settings?.companyName||'ASİL KUYUMCULUK',musteri:x.customerName||'',fisNo:x.docNo||'',urun:x.itemType||'',ayar:x.karat||'',islem:x.repairRequest||'',teslimTarihi:x.dueDate?trDate(x.dueDate).split(' ')[0]:'—',tutar:fee?money(fee):'',kapora:dep?money(dep):'',ucret:fee?' Ücret: '+money(Math.max(0,fee-dep))+(dep?' (kapora düşülmüş)':'')+'.':'',telefon:x.phone||'',tamirci:w.techName||''};}
   function waFillV7(tpl,vars){return String(tpl||'').replace(/\{(\w+)\}/g,function(m,k){return vars[k]!=null?String(vars[k]):m;}).replace(/[ \t]+\n/g,'\n').trim();}
   function repairWaEventForStatusV7(st){return st==='Hazır'?'ready':st==='Teslim Edildi'?'delivered':st==='Bekliyor'?'new':'';}
-  function repairWaAutoPromptV7(x,ev){var w=waSettingsV7();if(!w.autoPrompt||!ev)return;if(ev==='delivered'&&!String(w.templates.repairDelivered||'').trim())return;var h=openRepairWhatsAppV7(x,ev);
+  function repairConfirmOnV7(){var w=waSettingsV7();return w.mode==='bridge'&&w.confirmDelivery;}
+  var REPAIR_CONFIRM_NOTE_V7='\n\nÜrününüzü teslim aldığınızı onaylamak için lütfen bu mesaja ONAY yazarak cevap verin.';
+  function repairWaAutoPromptV7(x,ev){var w=waSettingsV7();if(!w.autoPrompt||!ev)return;if(ev==='delivered'&&!String(w.templates.repairDelivered||'').trim()&&!repairConfirmOnV7())return;var h=openRepairWhatsAppV7(x,ev);
     // Köprü + "sormadan gönder": pencere açılır ve mesajlar kendiliğinden gönderilir.
     if(w.mode==='bridge'&&w.autoSend&&h)h.msgs.forEach(function(m,i){if(waPhoneV7(m.phone))h.sendOne(i,document.querySelector('[data-wa-send="'+i+'"]'));});}
   function openRepairWhatsAppV7(x,ev){
     var w=waSettingsV7(),v=repairWaVarsV7(x),t=w.templates,msgs=[];
     if(ev==='new'||!ev){if(w.techPhone)msgs.push({key:'tech',to:(w.techName||'Tamirci'),phone:w.techPhone,text:waFillV7(t.repairNewTech,v)});msgs.push({key:'cust-new',to:x.customerName||'Müşteri',phone:x.phone,text:waFillV7(t.repairNewCustomer,v)});}
     if(ev==='ready'||!ev)msgs.push({key:'cust-ready',to:x.customerName||'Müşteri',phone:x.phone,text:waFillV7(t.repairReady,v)});
-    if(ev==='delivered'||!ev)msgs.push({key:'cust-delivered',to:x.customerName||'Müşteri',phone:x.phone,text:waFillV7(t.repairDelivered,v)});
+    if(ev==='delivered'||!ev)msgs.push({key:'cust-delivered',to:x.customerName||'Müşteri',phone:x.phone,text:waFillV7(String(t.repairDelivered||'').trim()?t.repairDelivered:WA_DEFAULTS_V7.repairDelivered,v)+(repairConfirmOnV7()?REPAIR_CONFIRM_NOTE_V7:'')});
     var title={new:'Tamir alındı',ready:'Tamir hazır',delivered:'Teslim edildi'}[ev]||'Mesajlar';
     var sent=function(k){return (x.waLog||[]).some(function(l){return l.key===k;});};
     var body='<div class="notice">'+(waBridgeOnV7()?'<b>Mesaj gitsin mi?</b> Gönder\'e basınca mesaj dükkân köprüsünden <b>otomatik</b> gider.':'Mesaj WhatsApp\'ta hazır açılır; orada <b>Gönder</b>\'e basın.')+' Metni burada değiştirebilirsiniz.'+(w.techPhone?'':' Tamirci numarası için <b>WhatsApp Ayarları</b>\'na girin.')+'</div>'+msgs.map(function(m,i){var ok=!!waPhoneV7(m.phone);return '<div class="card" style="margin-top:10px"><div class="section-head"><h3>'+esc(m.to)+' <small class="muted">'+esc(m.phone||'telefon yok')+'</small></h3>'+(sent(m.key)?'<span class="badge green">Gönderildi</span>':'')+'</div><textarea class="input" rows="5" data-wa-text="'+i+'" style="width:100%;min-height:110px">'+esc(m.text)+'</textarea><div class="addon-actions" style="margin-top:6px"><button class="btn btn-primary" type="button" data-wa-send="'+i+'" '+(ok?'':'disabled')+'>'+(waBridgeOnV7()?'Gönder':'WhatsApp\'ta Aç')+'</button>'+(ok?'':'<small class="negative">Geçerli telefon numarası yok</small>')+'</div></div>';}).join('');
     var sendable=msgs.filter(function(m){return waPhoneV7(m.phone);}).length;
     modal('WhatsApp — '+esc(x.docNo)+' · '+title,body,waBridgeOnV7()&&sendable>1?function(){document.querySelectorAll('[data-wa-send]:not([disabled])').forEach(function(b){if(!b.dataset.done)b.click();});}:null,'HEPSİNİ GÖNDER');
     var sendOne=async function(i,b){var m=msgs[i],txt=document.querySelector('[data-wa-text="'+i+'"]').value;if(b){b.disabled=true;b.textContent='Gönderiliyor…';}
-      try{var r=await waDeliverV7(m.phone,txt);x.waLog=x.waLog||[];x.waLog.push({at:now(),key:m.key,to:m.to,phone:waPhoneV7(m.phone),by:session.name,auto:!!r.sent});save();audit(x.docNo+' WhatsApp: '+m.to+(r.sent?' (otomatik)':''),'Tamir');
+      try{var r=await waDeliverV7(m.phone,txt);x.waLog=x.waLog||[];x.waLog.push({at:now(),key:m.key,to:m.to,phone:waPhoneV7(m.phone),by:session.name,auto:!!r.sent,id:r.id||''});
+        if(m.key==='cust-delivered'&&r.sent&&/ONAY/.test(txt)&&!(x.deliveryConfirm&&x.deliveryConfirm.status==='onaylandı')){x.deliveryConfirm={status:'bekliyor',sentAt:now(),realSentAt:realNow(),phone:waPhoneV7(m.phone),msgId:r.id||''};cloudWhenUnlockedV7(function(){if(route==='repairs')render();});}
+        save();audit(x.docNo+' WhatsApp: '+m.to+(r.sent?' (otomatik)':''),'Tamir');
         if(b){b.dataset.done='1';b.disabled=false;b.textContent=r.sent?'Tekrar Gönder':'Tekrar Aç';var h=b.closest('.card').querySelector('.section-head');if(h&&!h.querySelector('.badge'))h.insertAdjacentHTML('beforeend','<span class="badge green">Gönderildi</span>');}
         if(r.sent)toast('WhatsApp gönderildi: '+m.to);return true;}
       catch(e){if(b){b.disabled=false;b.textContent='Gönder';}toast('WhatsApp gönderilemedi: '+String(e.message||e),'err');return false;}};
     document.querySelectorAll('[data-wa-send]').forEach(function(b){b.addEventListener('click',function(){sendOne(Number(b.dataset.waSend),b);});});
     return {msgs:msgs,sendOne:sendOne};
   }
+  /* Teslim onayı: köprüye gelen WhatsApp cevapları okunur; onay bekleyen tamirin müşterisi (aynı numara ya da teslim
+     mesajını yanıtlayarak) ONAY / EVET / TAMAM / ALDIM yazarsa tamir kaydına tarih-saat ve cevap metniyle işlenir. */
+  function repairConfirmBadgeV7(x){var d=x.deliveryConfirm;if(!d)return '';
+    if(d.status==='onaylandı')return '<div style="margin-top:3px"><span class="badge green" title="'+esc('Müşteri cevabı: '+(d.text||''))+'">✓ Müşteri onayladı '+esc(trDate(d.at))+'</span></div>';
+    return '<div style="margin-top:3px"><span class="badge gold" title="Teslim mesajı '+esc(trDate(d.sentAt))+' gönderildi">⏳ Onay bekleniyor</span></div>';}
+  var REPAIR_CONFIRM_RE_V7=/^(ONAY|ONAYLIYORUM|ONAYLADIM|EVET|TAMAM|ALDIM|TESL[İI]M ALDIM|TESL[İI]M ALINDI|OK|1)\b/;
+  function repairConfirmApplyV7(items){
+    var pending=(state.repairs||[]).filter(function(x){return x.deliveryConfirm&&x.deliveryConfirm.status==='bekliyor';});if(!pending.length)return 0;
+    var tail=function(p){return String(p||'').replace(/\D/g,'').slice(-10);},n=0;
+    (items||[]).slice().sort(function(a,b){return a.ts-b.ts;}).forEach(function(it){
+      var txt=String(it.text||'').trim().toLocaleUpperCase('tr-TR').replace(/[.!,]+$/,'');if(!REPAIR_CONFIRM_RE_V7.test(txt))return;
+      var c=pending.filter(function(x){var d=x.deliveryConfirm;return d.status==='bekliyor'&&((it.quoted&&d.msgId&&it.quoted===d.msgId)||(it.from&&tail(it.from)===tail(d.phone)))&&it.ts>=new Date(d.realSentAt||d.sentAt).getTime()-60000;});
+      if(!c.length)return;c.sort(function(a,b){return String(b.deliveryConfirm.sentAt).localeCompare(String(a.deliveryConfirm.sentAt));});
+      var x=c[0];x.deliveryConfirm=Object.assign({},x.deliveryConfirm,{status:'onaylandı',at:new Date(it.ts).toISOString(),text:String(it.text||'').slice(0,200),from:it.from||'',inboxId:it.id||''});
+      audit(x.docNo+' teslimi müşteri tarafından WhatsApp ile onaylandı: "'+String(it.text||'').slice(0,60)+'"','Tamir');n++;});
+    return n;
+  }
+  async function repairConfirmPollV7(){
+    if(repairConfirmPollV7.busy||!session||!waBridgeOnV7())return;
+    if(!(state.repairs||[]).some(function(x){return x.deliveryConfirm&&x.deliveryConfirm.status==='bekliyor';}))return;
+    repairConfirmPollV7.busy=true;
+    try{var key='asil_wa_inbox_since_v7',since=0;try{since=Number(localStorage.getItem(key)||0);}catch(_){}
+      var oldest=Math.min.apply(null,state.repairs.filter(function(x){return x.deliveryConfirm&&x.deliveryConfirm.status==='bekliyor';}).map(function(x){return new Date(x.deliveryConfirm.realSentAt||x.deliveryConfirm.sentAt).getTime()-60000;}));
+      var d=await waBridgeCallV7({action:'waInbox',since:Math.min(since,oldest)||0}),items=(d&&d.items)||[];
+      if(items.length){try{localStorage.setItem(key,String(Math.max.apply(null,items.map(function(i){return Number(i.ts)||0;}))));}catch(_){}}
+      if(repairConfirmApplyV7(items)){save();toast('Müşteri tamir teslimini WhatsApp ile onayladı');var ae=document.activeElement;if(route==='repairs'&&!cloudStateLockedV7()&&!(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)))render();}
+    }catch(_){}finally{repairConfirmPollV7.busy=false;}
+  }
+  setInterval(repairConfirmPollV7,30000);
   var waPollV7=null;
   function openWhatsAppSettingsV7(){
     var w=waSettingsV7(),t=w.templates,ta=function(id,label,val){return '<div class="labelled span-4"><label>'+label+'</label><textarea id="'+id+'" class="input" rows="4" style="width:100%">'+esc(val)+'</textarea></div>';};
     modal('WhatsApp Ayarları','<div class="form-grid"><div class="labelled span-2"><label>Tamirci adı</label><input id="waTechName" class="input" value="'+esc(w.techName)+'"></div><div class="labelled span-2"><label>Tamirci telefonu</label><input id="waTechPhone" class="input" inputmode="tel" placeholder="05xx xxx xx xx" value="'+esc(w.techPhone)+'"></div>'
       +'<div class="labelled span-2"><label>Nasıl açılsın</label><select id="waMode" class="select"><option value="app" '+(w.mode==='app'?'selected':'')+'>WhatsApp / WhatsApp Business uygulaması (bilgisayarda kurulu)</option><option value="web" '+(w.mode==='web'?'selected':'')+'>WhatsApp Web (tarayıcı)</option><option value="bridge" '+(w.mode==='bridge'?'selected':'')+'>Otomatik — dükkân köprüsü (ayrı hat önerilir)</option></select></div><div class="labelled span-2" style="justify-content:end"><label><input type="checkbox" id="waAuto" '+(w.autoPrompt?'checked':'')+'> Tamir açılınca / durum değişince mesaj penceresi kendiliğinden açılsın</label></div>'
-      +'<div class="labelled span-4" id="waBridgeBox" style="display:'+(w.mode==='bridge'?'':'none')+'"><label><input type="checkbox" id="waAutoSend" '+(w.autoSend?'checked':'')+'> Sormadan gönder (tamir açılınca / hazır olunca mesaj kendiliğinden gider)</label><div class="notice" id="waBridgeStatus" style="margin-top:6px">Köprü durumu alınıyor…</div><div class="addon-actions" style="margin-top:6px"><button class="btn btn-outline" type="button" id="waBridgeRefresh">Durumu Yenile</button><button class="btn btn-outline" type="button" id="waBridgeLogout">Bağlantıyı Kes</button></div></div>'
+      +'<div class="labelled span-4" id="waBridgeBox" style="display:'+(w.mode==='bridge'?'':'none')+'"><label><input type="checkbox" id="waAutoSend" '+(w.autoSend?'checked':'')+'> Sormadan gönder (tamir açılınca / hazır olunca mesaj kendiliğinden gider)</label><label style="display:block;margin-top:4px"><input type="checkbox" id="waConfirmDel" '+(w.confirmDelivery?'checked':'')+'> Teslimde müşteriden <b>ONAY</b> iste (teslim mesajına "ONAY yazarak cevaplayın" eklenir; cevap tamir kaydına işlenir)</label><div class="notice" id="waBridgeStatus" style="margin-top:6px">Köprü durumu alınıyor…</div><div class="addon-actions" style="margin-top:6px"><button class="btn btn-outline" type="button" id="waBridgeRefresh">Durumu Yenile</button><button class="btn btn-outline" type="button" id="waBridgeLogout">Bağlantıyı Kes</button></div></div>'
       +ta('waTplTech','Tamirciye — yeni tamir',t.repairNewTech)+ta('waTplNew','Müşteriye — tamir alındı',t.repairNewCustomer)+ta('waTplReady','Müşteriye — tamir hazır',t.repairReady)+ta('waTplDel','Müşteriye — teslim edildi (boş bırakılırsa gönderilmez)',t.repairDelivered)
       +'<div class="notice span-4">Kullanılabilecek alanlar: {musteri} {fisNo} {urun} {ayar} {islem} {teslimTarihi} {tutar} {kapora} {ucret} {telefon} {tamirci} {firma}</div><div class="span-4"><button class="btn btn-outline" type="button" id="waReset">Varsayılan metinlere dön</button></div></div>',function(){
-      var g=function(i){return document.getElementById(i);};clearInterval(waPollV7);w.techName=g('waTechName').value.trim();w.techPhone=g('waTechPhone').value.trim();w.mode=g('waMode').value;w.autoPrompt=g('waAuto').checked;w.autoSend=!!g('waAutoSend')?.checked;
+      var g=function(i){return document.getElementById(i);};clearInterval(waPollV7);w.techName=g('waTechName').value.trim();w.techPhone=g('waTechPhone').value.trim();w.mode=g('waMode').value;w.autoPrompt=g('waAuto').checked;w.autoSend=!!g('waAutoSend')?.checked;if(g('waConfirmDel'))w.confirmDelivery=g('waConfirmDel').checked;
       if(w.techPhone&&!waPhoneV7(w.techPhone))return toast('Tamirci telefonu geçersiz','err');
       w.templates={repairNewTech:g('waTplTech').value,repairNewCustomer:g('waTplNew').value,repairReady:g('waTplReady').value,repairDelivered:g('waTplDel').value};save();closeModal();render();toast('WhatsApp ayarları kaydedildi');},'KAYDET');
     var refresh=async function(){var box=document.getElementById('waBridgeStatus');if(!box||document.getElementById('waMode').value!=='bridge'){clearInterval(waPollV7);return;}
@@ -10917,11 +11003,12 @@ function stockSummaryView(){
     var body=rows.map(function(x){
       var opts=repairStatusesV644().map(function(s){return '<option '+(s===x.status?'selected':'')+'>'+esc(s)+'</option>';}).join('');
       var cancelled=x.status==='İptal',done=x.status==='Teslim Edildi',due=x.dueDate?String(x.dueDate).split('-').reverse().join('.'):'—';
-      return '<tr data-repair-row'+(cancelled?' style="opacity:.55"':'')+' data-search="'+esc([x.docNo,x.customerName,x.phone,x.itemType,x.repairRequest,x.status].join(' ').toLocaleLowerCase('tr-TR'))+'"><td><strong>'+esc(x.docNo)+'</strong><br><small class="muted">'+trDate(x.createdAt||x.date)+'</small></td><td><strong>'+esc(x.customerName)+'</strong><br><small>'+esc(x.phone||'')+'</small></td><td class="rp-wrap">'+esc(x.itemType||'')+(x.karat?' <small>'+esc(x.karat)+'</small>':'')+'</td><td class="rp-wrap" style="min-width:110px">'+esc(x.repairRequest||'')+(cancelled&&x.cancelReason?'<br><small class="negative">İptal: '+esc(x.cancelReason)+'</small>':'')+'</td><td>'+esc(due)+'</td><td class="num">'+(Number(x.estimatedFee||0)?money(x.estimatedFee):'—')+(Number(x.deposit||0)?'<br><small>Kapora '+money(x.deposit)+'</small>':'')+'</td><td><select class="select" data-repair-status="'+x.id+'" style="min-width:120px">'+opts+'</select></td><td><div class="repair-acts" style="display:flex;gap:4px;flex-wrap:nowrap"><button class="btn btn-outline btn-sm" data-repair-print="'+x.id+'" title="Fiş yazdır">🖨</button><button class="btn btn-sm" data-repair-edit="'+x.id+'" title="Düzelt">✎</button><button class="btn btn-outline btn-sm" data-repair-wa="'+x.id+'" title="WhatsApp mesajı">💬'+((x.waLog||[]).length?'✓':'')+'</button>'+(!done&&!cancelled?'<button class="btn btn-success btn-sm" data-repair-deliver="'+x.id+'" title="Teslim et">Teslim</button><button class="btn btn-danger btn-sm" data-repair-cancel="'+x.id+'" title="Tamiri iptal et">İptal</button>':'')+'</div></td></tr>';
+      return '<tr data-repair-row'+(cancelled?' style="opacity:.55"':'')+' data-search="'+esc([x.docNo,x.customerName,x.phone,x.itemType,x.repairRequest,x.status].join(' ').toLocaleLowerCase('tr-TR'))+'"><td><strong>'+esc(x.docNo)+'</strong><br><small class="muted">'+trDate(x.createdAt||x.date)+'</small></td><td><strong>'+esc(x.customerName)+'</strong><br><small>'+esc(x.phone||'')+'</small></td><td class="rp-wrap">'+esc(x.itemType||'')+(x.karat?' <small>'+esc(x.karat)+'</small>':'')+'</td><td class="rp-wrap" style="min-width:110px">'+esc(x.repairRequest||'')+(cancelled&&x.cancelReason?'<br><small class="negative">İptal: '+esc(x.cancelReason)+'</small>':'')+'</td><td>'+esc(due)+'</td><td class="num">'+(Number(x.estimatedFee||0)?money(x.estimatedFee):'—')+(Number(x.deposit||0)?'<br><small>Kapora '+money(x.deposit)+'</small>':'')+'</td><td><select class="select" data-repair-status="'+x.id+'" style="min-width:120px">'+opts+'</select>'+repairConfirmBadgeV7(x)+'</td><td><div class="repair-acts" style="display:flex;gap:4px;flex-wrap:nowrap"><button class="btn btn-outline btn-sm" data-repair-print="'+x.id+'" title="Fiş yazdır">🖨</button><button class="btn btn-sm" data-repair-edit="'+x.id+'" title="Düzelt">✎</button><button class="btn btn-outline btn-sm" data-repair-wa="'+x.id+'" title="WhatsApp mesajı">💬'+((x.waLog||[]).length?'✓':'')+'</button>'+(!done&&!cancelled?'<button class="btn btn-success btn-sm" data-repair-deliver="'+x.id+'" title="Teslim et">Teslim</button><button class="btn btn-danger btn-sm" data-repair-cancel="'+x.id+'" title="Tamiri iptal et">İptal</button>':'')+'</div></td></tr>';
     }).join('');
     return '<div class="page-title"><div><h1>Tamir / Servis</h1><p>Takı ve saat tamirlerini fiş numarasıyla takip et; Aclas termal yazıcıdan müşteri fişi bas.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" id="repairWaSettings">WhatsApp Ayarları</button><button class="btn btn-outline" id="repairPrinterSettings">Fiş Yazıcısı</button><button class="btn btn-primary" id="newRepair">+ Yeni Tamir Fişi</button></div></div><div class="grid grid-4">'+metric('Açık Tamir',String(waiting),'Bekleyen / işlemde')+metric('Hazır',String(ready),'Teslime hazır')+metric('Teslim Edildi',String(done),'Bu dönem')+metric('Fiş Yazıcısı',p.printerName||'Seçilmedi',p.mode==='qz'?'QZ doğrudan baskı':'Tarayıcı baskısı')+'</div><div class="card" style="margin-top:16px"><div class="section-head"><h3>Tamir Kayıtları</h3><span>'+rows.length+' kayıt</span></div><div class="filter-panel" style="grid-template-columns:minmax(260px,1fr) auto"><input id="repairSearch" class="input" placeholder="Fiş no, müşteri, telefon, ürün veya işlem ara"><button class="btn btn-outline" id="repairSearchClear">Temizle</button></div><div class="table-wrap"><table class="table repair-table" style="width:100%"><thead><tr><th>Fiş / Tarih</th><th>Müşteri</th><th>Ürün</th><th>Yapılacak İşlem</th><th>Teslim</th><th class="num">Ücret / Kapora</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>'+(body||'<tr><td colspan="8">Henüz tamir kaydı yok.</td></tr>')+'</tbody></table></div></div>';
   }
   function bindRepairsV644(){
+    setTimeout(repairConfirmPollV7,300);
     document.getElementById('newRepair')?.addEventListener('click',function(){openRepairFormV644();});
     document.getElementById('repairPrinterSettings')?.addEventListener('click',openReceiptPrinterSettingsV644);
     document.getElementById('repairWaSettings')?.addEventListener('click',function(){openWhatsAppSettingsV7();});
