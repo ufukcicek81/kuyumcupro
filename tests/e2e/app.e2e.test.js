@@ -1019,9 +1019,24 @@ test('başka cihazdan veri gelince yazılan kutudan imleç kaçmaz; ekran kutuda
   assert.equal(await b.evaluate(() => document.activeElement?.id), 'saleProductSearch', 'imleç kutuda kalmalı');
   assert.equal(await b.inputValue('#saleProductSearch'), '22', 'yazılan silinmemeli');
   // Kutudan çıkınca ekran yeni veriyle çizilir
-  await b.evaluate(() => document.activeElement.blur()); await b.waitForTimeout(2500);
+  await b.evaluate(() => document.activeElement.blur()); await b.waitForTimeout(12000); // son dokunuştan 10 sn sonra yenilenir
   await b.click('text=Ana Menü');
   assert.match(await historyText(b, 'Ziynet Alış'), /ZA-\d{4}-0+1/, 'B cihazı A cihazının işlemini görmeli');
+  assert.deepEqual([...a.errors, ...b.errors], []);
+  await a.context().close(); await b.context().close();
+});
+
+test('başka cihazdan veri gelince yedek sayfası ve yeni dokunulan sayfa baştan çizilmez', async () => {
+  const fb = createFakeFirebase();
+  const a = await newDevice(browser, appUrl, fb);
+  const b = await newDevice(browser, appUrl, fb);
+  await a.waitForTimeout(2000);
+  await b.evaluate(() => document.querySelector('[data-route="backup"],[data-go="backup"]').click()); await b.waitForTimeout(500);
+  await b.evaluate(() => { const m = document.createElement('div'); m.id = 'listedBackupsMarker'; document.querySelector('#app main, #app').appendChild(m); });
+  await a.click('[data-home-trade="Ziynet Alış"]');
+  await a.fill('#stQty', '1'); await a.fill('#stPrice', '5000');
+  await a.click('#modalConfirm'); await a.waitForTimeout(14000);
+  assert.ok(await b.$('#listedBackupsMarker'), 'yedek sayfası kendiliğinden yenilenmemeli (listelenen yedekler kaybolmasın)');
   assert.deepEqual([...a.errors, ...b.errors], []);
   await a.context().close(); await b.context().close();
 });
