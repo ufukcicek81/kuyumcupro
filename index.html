@@ -9394,50 +9394,59 @@ function stockSummaryView(){
     if(!scraps.length)return toast('Stokta hurda yok','err');
     const kinds=barcodeProductKindsV649();
     const purities=(state.definitions?.purities||['333','585','750','916','995']);
-    modal('Hurdadan Barkodlu Ürün',`<div class="form-grid">
+    /* Hurdadan alınan temiz ürün bakım/cila sonrası olduğu gibi vitrine konur: eritme yok, fire yok.
+       Kullanılan hurda gramı = ürün gramı; ürünün HAS'ı ve maliyeti hurdadaki gerçek HAS'tır (550 milyem → 550).
+       Etiket ayarı (585 vb.) yalnız etikette/satışta görünür; satış HAS = gram × (ayar + işçilik). */
+    modal('Hurdadan Barkodlu Ürün (vitrine)',`<div class="form-grid">
       <div class="labelled span-2"><label>Kaynak Hurda</label><select id="h2bScrap" class="select">${scraps.map(h=>`<option value="${h.id}">${esc(h.name)} · ${qty(h.amount)} GR · ${qty(h.hasWeight||0)} HAS</option>`).join('')}</select></div>
-      <div class="labelled"><label>Kullanılan Hurda GR</label><input id="h2bIn" class="input" type="number" step="0.001"></div>
-      <div class="labelled"><label>Ek İşçilik HAS</label><input id="h2bWork" class="input" type="number" step="0.001" value="0"></div>
+      <div class="labelled"><label>Ürün Gramı</label><input id="h2bGram" class="input" type="number" step="0.001" placeholder="hurdadan düşer"></div>
+      <div class="labelled"><label>Bakım / Cila Masrafı HAS</label><input id="h2bWork" class="input" type="number" step="0.001" value="0"></div>
       <div class="labelled"><label>Ürün Grubu</label><select id="h2bKind" class="select"><option value="">— Seç —</option>${kinds.map(k=>`<option value="${esc(k.prefix)}">${esc(k.prefix)} · ${esc(k.label)}</option>`).join('')}</select></div>
       <div class="labelled"><label>Ürün Adı</label><input id="h2bName" class="input" placeholder="Boşsa grup adı"></div>
       <div class="labelled span-2"><label>Barkod / Stok Kodu</label><input id="h2bCode" class="input" placeholder="Grup seçince sıradaki numara gelir"></div>
-      <div class="labelled"><label>Saflık / Milyem</label><select id="h2bPurity" class="select">${purities.map(x=>`<option value="${esc(x)}">${esc(x)}${PURITY_LABEL_V7[Number(x)]?' · '+PURITY_LABEL_V7[Number(x)]:''}</option>`).join('')}</select></div>
-      <div class="labelled"><label>Ürün Gramı</label><input id="h2bGram" class="input" type="number" step="0.001"></div>
-      <div class="labelled span-2"><label><input id="h2bLabel" type="checkbox" checked> Kaydedince etiket bas</label></div>
-      <div id="h2bInfo" class="notice span-4">Hurda ve ürün gramını girin.</div>
+      <div class="labelled"><label>Etiket Ayarı</label><select id="h2bPurity" class="select">${purities.map(x=>`<option value="${esc(x)}">${esc(x)}${PURITY_LABEL_V7[Number(x)]?' · '+PURITY_LABEL_V7[Number(x)]:''}</option>`).join('')}</select></div>
+      <div class="labelled"><label>Satış İşçiliği (HAS / gr)</label><input id="h2bLabour" class="input" type="number" step="0.001" placeholder="ör. 0,100"></div>
+      <div class="labelled"><label>Satış HAS / Ürün</label><input id="h2bSale" class="input" type="number" step="0.001" placeholder="otomatik"></div>
+      <div class="labelled"><label>&nbsp;</label><label style="display:flex;gap:6px;align-items:center"><input id="h2bLabel" type="checkbox" checked> Kaydedince etiket bas</label></div>
+      <div id="h2bInfo" class="notice span-4">Hurdayı seçip ürün gramını girin.</div>
     </div>`,()=>{
-      const v=calc();if(!v)return toast('Gramları kontrol edin','err');
-      if(v.fire<-Math.max(0.01,v.sourceHas*0.03)&&!confirm(`Ürün HAS'ı (${qty(v.productHas)}) kullanılan hurdadan (${qty(v.sourceHas)}) belirgin şekilde fazla. Yine de oluşturulsun mu?`))return;
-      const {h,gin,gram,purity,work,sourceHas,sourceCost,productHas,fire}=v;
+      const v=calc();if(!v)return toast('Gramı kontrol edin','err');
+      const {h,gram,purity,work,sourceHas,sourceCost}=v,gin=gram,productHas=sourceHas;
+      const saleHas=Math.max(0,Number(document.getElementById('h2bSale')?.value||0));if(!(saleHas>0))return toast('Satış HAS / Ürün girin (ya da Satış İşçiliği yazın)','err');
       const kind=kinds.find(k=>k.prefix===document.getElementById('h2bKind').value);if(!kind)return toast('Ürün grubunu seçin (KYU, YUZ…)','err');
       const code=document.getElementById('h2bCode').value.trim().toLocaleUpperCase('tr-TR'),name=(document.getElementById('h2bName').value.trim()||kind.label).toLocaleUpperCase('tr-TR');
       if(!code)return toast('Barkod / stok kodu boş','err');
       if(state.stocks.some(x=>(x.code===code||x.barcode===code)&&x.period===state.activePeriod))return toast('Bu barkod kullanımda','err');
       const m=code.match(/(\d+)$/),shortCode=m?String(Number(m[1])):code;
+      const labour=Math.max(0,Number(document.getElementById('h2bLabour')?.value||0));
       const doc=`H2B-${state.activePeriod}-${String(Date.now()).slice(-6)}`,cost=sourceCost+work,karat=PURITY_LABEL_V7[purity]||'';
-      const rec={id:uid('S'),stockCardId:'',pusulaCode:shortCode,productType:'Altın Mamul',group:kind.prefix,code,name,category:kind.label,subCategory:'',supplier:'',producer:'İmalat (Hurda)',brand:'',model:'',collection:'',color:'',karat,purity:String(purity),grossWeight:gram,stoneWeight:0,netWeight:gram,hasWeight:productHas,qty:gram,count:1,purchaseHas:cost,costHas:cost,saleHas:0,workmanshipType:'',workmanshipValue:0,showcase:'',banko:'',location:'Mağaza',rfid:'',barcode:code,status:'Stokta',notes:`${doc} · ${h.name} hurdasından · ${qty(gin)} GR hurda · fire ${qty(fire)} HAS`,entryDate:now(),entryYear:state.activePeriod,partyId:'',period:state.activePeriod,saleTo:'',saleDate:'',sourceDocNo:doc};
+      const rec={id:uid('S'),stockCardId:'',pusulaCode:shortCode,productType:'Altın Mamul',group:kind.prefix,code,name,category:kind.label,subCategory:'',supplier:'',producer:'Hurdadan (vitrin)',brand:'',model:'',collection:'',color:'',karat,purity:String(purity),grossWeight:gram,stoneWeight:0,netWeight:gram,hasWeight:productHas,qty:gram,count:1,purchaseHas:cost,costHas:cost,saleHas,workmanshipType:labour?'HAS/GR':'',workmanshipValue:labour,showcase:'',banko:'',location:'Mağaza',rfid:'',barcode:code,status:'Stokta',notes:`${doc} · ${h.name} hurdasından · ${qty(gin)} GR (${qty(sourceHas)} HAS)${work?` · bakım ${qty(work)} HAS`:''}`,entryDate:now(),entryYear:state.activePeriod,partyId:'',period:state.activePeriod,saleTo:'',saleDate:'',sourceDocNo:doc};
       h.amount=Math.max(0,Number(h.amount||0)-gin);h.hasWeight=Math.max(0,Number(h.hasWeight||0)-sourceHas);
       state.stocks.push(rec);
-      addStockMove(rec,'HURDA → BARKODLU',h.name,rec.location,`${doc} · Hurda ${qty(gin)} GR (${qty(sourceHas)} HAS) → ${qty(gram)} GR (${qty(productHas)} HAS) · Fire ${qty(fire)} HAS · İşçilik ${qty(work)} HAS`);
-      if(typeof registerTransactionV5==='function')registerTransactionV5('HURDA→BARKODLU',doc,`${h.name} → ${rec.code} ${rec.name}`,{amountHas:productHas,costHas:cost,fireHas:fire});
-      audit(`${doc}: ${h.name} hurdasından ${rec.code} barkodlu ürün yapıldı`,'Dönüşüm');
+      addStockMove(rec,'HURDA → BARKODLU',h.name,rec.location,`${doc} · Hurda ${qty(gin)} GR (${qty(sourceHas)} HAS) → barkodlu ${qty(gram)} GR · Maliyet ${qty(cost)} HAS · Satış ${qty(saleHas)} HAS`);
+      if(typeof registerTransactionV5==='function')registerTransactionV5('HURDA→BARKODLU',doc,`${h.name} → ${rec.code} ${rec.name}`,{amountHas:productHas,costHas:cost,fireHas:0});
+      audit(`${doc}: ${h.name} hurdasından ${rec.code} barkodlu ürün vitrine kondu`,'Dönüşüm');
       const doLabel=document.getElementById('h2bLabel')?.checked;
       closeModal();save();render();toast(`${rec.code} barkodlu ürün oluşturuldu`);
       if(doLabel)printLabels([rec.id]);
     },'ÜRÜNÜ OLUŞTUR');
     const g=id=>document.getElementById(id),info=g('h2bInfo');
+    let saleTouched=false;
     function calc(){
-      const h=state.scrapStocks.find(x=>x.id===g('h2bScrap').value),gin=Number(g('h2bIn').value||0),gram=Number(g('h2bGram').value||0),purity=Number(g('h2bPurity').value||0),work=Math.max(0,Number(g('h2bWork').value||0));
-      if(!h||gin<=0||gram<=0||!purity){info.textContent='Hurda ve ürün gramını girin.';return null;}
-      if(gin>Number(h.amount||0)+.0001){info.textContent=`Hurdada yalnız ${qty(h.amount)} GR var.`;return null;}
-      const ratio=gin/Math.max(.000001,Number(h.amount||0)),sourceHas=Number(h.hasWeight||0)*ratio,sourceCost=gin*Number(h.unitCostHas||sourceHas/Math.max(.000001,gin)),productHas=calcHas(gram,purity),fire=sourceHas-productHas;
-      info.innerHTML=`Hurdadan çıkan: <b>${qty(gin)} GR · ${qty(sourceHas)} HAS</b> → Ürün: <b>${qty(gram)} GR · ${qty(productHas)} HAS</b> · Fire: <b style="color:${fire<0?'#c0262d':'inherit'}">${qty(fire)} HAS</b> · Ürün maliyeti: <b>${qty(sourceCost+work)} HAS</b>${fire<-0.0005?`<br><b style="color:#9a5b00">Ürün HAS'ı hurdadan ${qty(-fire)} HAS fazla (ayar farkı) — fark kazanç olarak işlenir.</b>`:''}`;
-            return {h,gin,gram,purity,work,sourceHas,sourceCost,productHas,fire};
+      const h=state.scrapStocks.find(x=>x.id===g('h2bScrap').value),gram=Number(g('h2bGram').value||0),purity=Number(g('h2bPurity').value||0),work=Math.max(0,Number(g('h2bWork').value||0)),labour=Math.max(0,Number(g('h2bLabour').value||0));
+      if(!h||gram<=0||!purity){info.textContent='Hurdayı seçip ürün gramını girin.';return null;}
+      if(gram>Number(h.amount||0)+.0001){info.textContent=`Hurdada yalnız ${qty(h.amount)} GR var.`;return null;}
+      const ratio=gram/Math.max(.000001,Number(h.amount||0)),sourceHas=Number(h.hasWeight||0)*ratio,sourceCost=gram*Number(h.unitCostHas||sourceHas/Math.max(.000001,gram)),cost=sourceCost+work;
+      if(!saleTouched&&labour>0)g('h2bSale').value=(gram*(purityFactor(purity)+labour)).toFixed(3);
+      const sale=Number(g('h2bSale').value||0);
+      info.innerHTML=`Hurdadan: <b>${qty(gram)} GR · ${qty(sourceHas)} HAS</b> (${qty(gram?sourceHas/gram*1000:0)} milyem) → Vitrine: <b>${qty(gram)} GR ${esc(PURITY_LABEL_V7[purity]||purity)}</b> · Maliyet: <b>${qty(cost)} HAS</b>${sale>0?` · Satış: <b>${qty(sale)} HAS</b> · Kâr: <b style="color:${sale-cost<0?'#c0262d':'#1d7a3a'}">${qty(sale-cost)} HAS</b>`:''}<br><small>Fire yok: ürün olduğu gibi vitrine konur, hurdadan aynı gram düşer.</small>`;
+      return {h,gram,purity,work,sourceHas,sourceCost};
     }
     const sel=g('h2bScrap'),syncPurity=()=>{const h=state.scrapStocks.find(x=>x.id===sel.value),m=Number(h?.milyem||0);if(!m)return;const opts=[...g('h2bPurity').options].map(o=>o.value).filter(v=>v!=='925');const best=opts.reduce((a,v)=>Math.abs(Number(v)-m)<Math.abs(Number(a)-m)?v:a,opts[0]);if(best)g('h2bPurity').value=best;};/* hurdanın milyemine en yakın ayar seçilir (14 hurda 557 → 585) */
     sel.addEventListener('change',()=>{syncPurity();calc();});syncPurity();
     g('h2bKind').addEventListener('change',()=>{const p=g('h2bKind').value;g('h2bCode').value=p?nextPusulaStockCodeV648(p):'';});
-    ['h2bIn','h2bGram','h2bWork','h2bPurity'].forEach(id=>g(id).addEventListener('input',calc));g('h2bPurity').addEventListener('change',calc);
+    g('h2bSale').addEventListener('input',()=>{saleTouched=!!g('h2bSale').value;calc();});
+    ['h2bGram','h2bWork','h2bPurity','h2bLabour'].forEach(id=>g(id).addEventListener('input',calc));g('h2bPurity').addEventListener('change',calc);
   }
   function openSpecialProductV5(){
     if(!v5Guard('canManageSpecial'))return;modal('Özel Ürün Kartı — Pırlanta / Saat / Gümüş / Çelik',`<div class="form-grid"><div class="labelled"><label>Ürün Türü</label><select id="spType" class="select"><option>Pırlanta</option><option>Saat</option><option>Gümüş</option><option>Çelik</option><option>Taş</option><option>Diğer</option></select></div><div class="labelled span-2"><label>Ürün Adı</label><input id="spName" class="input"></div><div class="labelled"><label>Ürün Kodu</label><input id="spCode" class="input"></div><div class="labelled"><label>Barkod</label><input id="spBarcode" class="input" placeholder="Boşsa otomatik"></div><div class="labelled"><label>Marka</label><input id="spBrand" class="input"></div><div class="labelled"><label>Model</label><input id="spModel" class="input"></div><div class="labelled"><label>Seri No</label><input id="spSerial" class="input"></div><div class="labelled"><label>RFID</label><input id="spRfid" class="input"></div><div class="labelled"><label>Gram</label><input id="spWeight" class="input" type="number" step="0.001" value="0"></div><div class="labelled"><label>Karat (ct)</label><input id="spCarat" class="input" type="number" step="0.001" value="0"></div><div class="labelled"><label>Renk</label><input id="spColor" class="input"></div><div class="labelled"><label>Berraklık</label><input id="spClarity" class="input"></div><div class="labelled span-2"><label>Sertifika No / Laboratuvar</label><input id="spCert" class="input"></div><div class="labelled"><label>Maliyet TL</label><input id="spCost" class="input" type="number" step="0.01"></div><div class="labelled"><label>Satış TL</label><input id="spSale" class="input" type="number" step="0.01"></div><div class="labelled span-2"><label>Fotoğraf</label><input id="spPhoto" class="input" type="file" accept="image/*"></div></div>`,async()=>{const name=document.getElementById('spName').value.trim();if(!name)return toast('Ürün adı girin','err');const type=document.getElementById('spType').value,prefix=type==='Pırlanta'?'PIR':type==='Saat'?'SAT':type==='Gümüş'?'GMS':'OZL',code=(document.getElementById('spCode').value.trim()||`${prefix}${String(Date.now()).slice(-6)}`).toUpperCase(),barcode=document.getElementById('spBarcode').value.trim()||generateBarcode(),file=document.getElementById('spPhoto').files?.[0];let photo='';if(file&&file.size<350000){photo=await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(String(fr.result||''));fr.onerror=()=>res('');fr.readAsDataURL(file);});}const costTl=Number(document.getElementById('spCost').value||0),saleTl=Number(document.getElementById('spSale').value||0),rec={id:uid('SP'),period:state.activePeriod,type,name,code,barcode,brand:document.getElementById('spBrand').value,model:document.getElementById('spModel').value,serial:document.getElementById('spSerial').value,rfid:document.getElementById('spRfid').value,weight:Number(document.getElementById('spWeight').value||0),carat:Number(document.getElementById('spCarat').value||0),color:document.getElementById('spColor').value,clarity:document.getElementById('spClarity').value,certificate:document.getElementById('spCert').value,costTl,saleTl,photo,status:'Stokta',date:now()};state.specialProducts.unshift(rec);const st={id:uid('S'),period:state.activePeriod,source:'Özel Ürün',stockMode:'Barkodlu',barcode,code,pusulaCode:code,group:type.toUpperCase(),category:type,name,type,productType:type,karat:rec.carat?`${rec.carat} ct`:'',purity:type==='Gümüş'?925:0,amount:rec.weight||1,qty:rec.weight||1,count:1,hasWeight:0,costHas:costTl/Math.max(1,Number(state.prices.has.buy||1)),saleHas:saleTl/Math.max(1,Number(state.prices.has.sell||1)),brand:rec.brand,model:rec.model,serial:rec.serial,rfid:rec.rfid,certificate:rec.certificate,photo,status:'Stokta',location:'Mağaza',entryDate:now()};state.stocks.push(st);rec.stockId=st.id;const doc=`SPC-${state.activePeriod}-${String(Date.now()).slice(-6)}`;state.stockMoves.unshift({id:uid('SM'),period:state.activePeriod,date:now(),stockId:st.id,code:st.code,type:'ÖZEL ÜRÜN GİRİŞ',from:'Tedarikçi',to:'Mağaza',description:`${doc} · ${type}`,sourceDocNo:doc,user:session.name});registerTransactionV5('ÖZEL ÜRÜN',doc,`${type} · ${name}`,{costTl,saleTl});audit(`${doc}: ${type} özel ürün kartı eklendi`,'Özel Ürün');closeModal();save();render();toast('Özel ürün stoğa eklendi');},'ÜRÜNÜ KAYDET');
