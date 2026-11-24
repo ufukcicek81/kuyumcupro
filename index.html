@@ -4165,41 +4165,6 @@ function stockSummaryView(){
     if(mode==='open')return (state.openStocks||[]).filter(x=>x.period===period).length;
     return (state.customers||[]).length;
   }
-  /* Cari bakiyesini başka programdaki (Pusula) rakama eşitler: her birim için hedef bakiye yazılır, fark carinin
-     ekstresine "BAKİYE DÜZELTME" olarak, karşılığı CARİ BAKİYE DÜZELTME hesabına yazılır. Kasa, banka, stok değişmez. */
-  function openCariSetBalanceV7(id){
-    const c=state.customers.find(x=>x.id===id);if(!c)return;if(!v5Guard('canManageFinance'))return;
-    const cur=u=>u==='TL'?Number(cariDisplayTlBalance(c)||0):u==='HAS'?Number(c.hasBalance||0):Number((c.otherBalances||{})[u]||0);
-    const units=['HAS','TL','USD','EUR','GBP','CHF',...Object.keys(c.otherBalances||{}).map(u=>String(u).toUpperCase())].filter((u,i,a)=>a.indexOf(u)===i);
-    const side=v=>v>0?'Borç':v<0?'Alacak':'';
-    /* Karşılık: kasa/banka (nakit tahsilat-ödeme gibi; raporlar bozulmaz) ya da düzeltme hesabı (kasa değişmez) */
-    const ctrOpts=u=>[...accountRowsForCurrency(u).map(r=>`<option value="${esc(r.key)}">${esc(r.name)}</option>`),`<option value="adj" ${u==='HAS'?'selected':''}>Düzeltme hesabı (kasa değişmez)</option>`].join('');
-    const rowsHtml=units.map(u=>{const v=cur(u);return `<tr><td><b>${esc(u)}</b></td><td class="num">${v?qty(Math.abs(v))+' <small>'+side(v)+'</small>':'0'}</td><td><input class="input" data-sb-amt="${esc(u)}" inputmode="decimal" autocomplete="off" placeholder="aynı" style="min-width:110px"></td><td><select class="select" data-sb-side="${esc(u)}"><option value="Alacak" ${v<0?'selected':''}>Alacak</option><option value="Borç" ${v>0?'selected':''}>Borç</option></select></td><td><select class="select" data-sb-ctr="${esc(u)}">${ctrOpts(u)}</select></td><td class="num" data-sb-diff="${esc(u)}"></td></tr>`;}).join('');
-    modal(`Bakiye Eşitle — ${esc(c.name)}`,`<div class="notice">Pusula'daki (ya da gerçek) bakiyeyi yazın. Boş bırakılan birim değişmez. Fark bu carinin ekstresine <b>BAKİYE DÜZELTME</b> olarak yazılır. <b>Karşılık</b> kasa/banka seçilirse fark nakit tahsilat/ödeme gibi o hesaba da işlenir (cari alacağı artarsa kasaya girer, azalırsa kasadan çıkar); <b>Düzeltme hesabı</b> seçilirse kasa değişmez. Yanlışsa ekstreden silinebilir.</div>
-      <div class="table-wrap"><table class="table"><thead><tr><th>Birim</th><th class="num">Bizim program</th><th>Olması gereken</th><th>Yön</th><th>Karşılık</th><th class="num">Fark / Etki</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
-      <div class="labelled" style="margin-top:8px"><label>Açıklama</label><input id="sbDesc" class="input" value="Pusula bakiyesine eşitleme"></div>`,()=>{
-      const plan=readPlan();if(!plan.length)return toast('Değişecek bakiye yok','err');
-      const date=now(),doc='BD-'+state.activePeriod+'-'+String(Date.now()).slice(-6),desc=document.getElementById('sbDesc').value.trim()||'Bakiye eşitleme',adj=cariAdjustmentAccountV7();
-      const move=(cc,u,debit,credit,d)=>state.customerMoves.unshift({id:uid('CM'),customerId:cc.id,period:state.activePeriod,date,code:'BD',type:'BAKİYE DÜZELTME',unit:u,debit,credit,description:d,user:session?.name||'',sourceType:'balanceAdjust',sourceDocNo:doc});
-      plan.forEach(({u,diff,from,to,ctr})=>{const debit=diff>0?diff:0,credit=diff<0?-diff:0;
-        applyCariBalance(c,u,debit,credit);move(c,u,debit,credit,`${desc} · ${qty(Math.abs(from))} ${side(from)} → ${qty(Math.abs(to))} ${side(to)} ${u}${ctr!=='adj'?' · karşılık '+(accountByKey(ctr).name||'kasa'):''}`);
-        if(ctr==='adj'){applyCariBalance(adj,u,credit,debit);move(adj,u,credit,debit,`${c.name}: ${desc} (${qty(diff)} ${u})`);return;}
-        /* Cari alacağı arttı (credit) → kasaya giriş; borcu arttı / alacağı azaldı (debit) → kasadan çıkış */
-        const amt=Math.abs(diff),inn=credit>0;adjustAccount(ctr,inn?amt:-amt);
-        addFinanceMove({direction:inn?'Giriş':'Çıkış',type:inn?'Bakiye Eşitleme Tahsilat':'Bakiye Eşitleme Ödeme',accountKey:ctr,accountAmount:amt,accountCurrency:u,tlAmount:u==='TL'?amt:amt*currencyTlRate(u,'buy'),customer:c.name,description:`${c.name} · ${desc}`,sourceDocNo:doc,sourceCategory:'Cari Düzeltme'});});
-      audit(`${doc}: ${c.name} bakiyesi eşitlendi · ${plan.map(p=>`${p.u} ${qty(p.diff)} (${p.ctr==='adj'?'düzeltme hesabı':accountByKey(p.ctr).name||p.ctr})`).join(' · ')}`,'Cari');
-      save();closeModal();toast(plan.some(p=>p.ctr!=='adj')?'Bakiye eşitlendi; karşılığı kasaya işlendi':'Bakiye eşitlendi; kasa değişmedi');openCariDetail(c.id);
-    },'EŞİTLE');
-    function readPlan(){
-      return units.map(u=>{const raw=document.querySelector(`[data-sb-amt="${u}"]`).value.trim();if(raw==='')return null;
-        const amt=Math.abs(parseTrNumber(raw));if(!Number.isFinite(amt))return null;
-        const to=document.querySelector(`[data-sb-side="${u}"]`).value==='Borç'?amt:-amt,from=cur(u),diff=Math.round((to-from)*1e6)/1e6;
-        return Math.abs(diff)<1e-6?null:{u,from,to,diff,ctr:document.querySelector(`[data-sb-ctr="${u}"]`)?.value||'adj'};}).filter(Boolean);
-    }
-    const show=()=>{units.forEach(u=>{const el=document.querySelector(`[data-sb-diff="${u}"]`);if(el)el.textContent='';});readPlan().forEach(p=>{document.querySelector(`[data-sb-diff="${p.u}"]`).textContent=(p.diff>0?'+':'')+qty(p.diff)+' '+p.u+(p.ctr==='adj'?' · kasa değişmez':` · ${p.diff<0?'kasaya +':'kasadan −'}${qty(Math.abs(p.diff))} ${p.u}`);});};
-    document.querySelectorAll('[data-sb-amt],[data-sb-side],[data-sb-ctr]').forEach(el=>{el.addEventListener('input',show);el.addEventListener('change',show);});
-    setTimeout(()=>document.querySelector('[data-sb-amt]')?.focus(),50);
-  }
   function cariBalancesOfV7(c){
     const b={},tl=cariDisplayTlBalance(c);if(Number(tl||0))b.TL=Number(tl);if(Number(c.hasBalance||0))b.HAS=Number(c.hasBalance);
     Object.entries(c.otherBalances||{}).forEach(([u,v])=>{if(Number(v||0))b[String(u).toUpperCase()]=Number(v);});
@@ -8465,7 +8430,7 @@ function stockSummaryView(){
     const summary=summaryUnits.map(u=>`<div class="cari-ekstre-balance"><small>${esc(u)} Son Bakiye</small><strong class="${Number(currentMap[u]||0)>0?'negative':Number(currentMap[u]||0)<0?'positive':''}">${fmtSigned(currentMap[u]||0,u)}</strong></div>`).join('');
     const bankUnit=bankAcc?String(bankAcc.acc.currency||'TL').toUpperCase():'',bankBal=bankAcc?Number(bankAcc.acc.balance||0):0,bankGap=bankAcc?bankBal-Number(running[bankUnit]||0):0;
     const gapNote=bankAcc?`<div class="notice" style="margin:8px 0">${Math.abs(bankGap)>=0.01?`<strong>Fark var:</strong> Banka hareketlerinin toplamı ${qty(Number(running[bankUnit]||0))} ${esc(bankUnit)}, banka hesabının bakiyesi ${qty(bankBal)} ${esc(bankUnit)}. Aradaki <b>${qty(bankGap)} ${esc(bankUnit)}</b> hareketi olmayan eski bakiyedir (ör. Pusula'dan bakiye olarak gelen). <button class="btn btn-outline" type="button" id="bankGapAsOpening" style="margin-left:6px">Farkı açılış hareketi yap</button> — bakiye değişmez, fark listede görünür ve düzeltilebilir olur.`:'Banka bakiyesi, listedeki banka hareketlerinin toplamıyla tutuyor.'} <span class="muted">“Cari kaydı” satırları bilgi içindir, banka bakiyesine eklenmez.</span> <button class="btn btn-outline" type="button" id="bankSetBalanceV7" style="margin-left:6px">Bakiyeyi gerçek tutara eşitle</button></div>`:'';
-    const rangeBar=`<div class="cari-print-bar" style="display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin-bottom:8px"><label class="labelled" style="flex:0 1 150px"><span>Başlangıç</span><input id="cariPrintFrom" type="date" class="input" value="${rg.all?'':esc(rg.from)}"></label><label class="labelled" style="flex:0 1 150px"><span>Bitiş</span><input id="cariPrintTo" type="date" class="input" value="${rg.all?'':esc(rg.to)}"></label><div style="display:flex;gap:4px;flex-wrap:wrap">${[['today','Bugün'],['yday','Dün'],['week','Bu Hafta'],['month','Bu Ay'],['all','Tümü']].map(([k,t])=>`<button class="btn btn-outline btn-sm" type="button" data-cari-range="${k}">${t}</button>`).join('')}</div><button class="btn btn-primary" type="button" id="cariPrintStatement" style="margin-left:auto">Ekstre Yazdır</button>${!bankAcc&&c.id!=='CASH'?`<button class="btn btn-outline" type="button" id="cariSetBalanceV7" title="Bakiyeyi Pusula'daki rakama eşitle (kasa değişmez)">Bakiye Eşitle</button>`:''}</div>
+    const rangeBar=`<div class="cari-print-bar" style="display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin-bottom:8px"><label class="labelled" style="flex:0 1 150px"><span>Başlangıç</span><input id="cariPrintFrom" type="date" class="input" value="${rg.all?'':esc(rg.from)}"></label><label class="labelled" style="flex:0 1 150px"><span>Bitiş</span><input id="cariPrintTo" type="date" class="input" value="${rg.all?'':esc(rg.to)}"></label><div style="display:flex;gap:4px;flex-wrap:wrap">${[['today','Bugün'],['yday','Dün'],['week','Bu Hafta'],['month','Bu Ay'],['all','Tümü']].map(([k,t])=>`<button class="btn btn-outline btn-sm" type="button" data-cari-range="${k}">${t}</button>`).join('')}</div><button class="btn btn-primary" type="button" id="cariPrintStatement" style="margin-left:auto">Ekstre Yazdır</button></div>
       <div class="notice" style="margin:0 0 8px">${rg.all?'Tüm hareketler gösteriliyor.':`<b>${rg.from===rg.to?trDate(rg.from+'T12:00').split(' ')[0]:trDate(rg.from+'T12:00').split(' ')[0]+' – '+trDate(rg.to+'T12:00').split(' ')[0]}</b> hareketleri: ${rows.length} satır.`}${Object.keys(carried).length?` Devreden bakiye: ${Object.entries(carried).filter(([,v])=>Math.abs(Number(v||0))>.000001).map(([u,v])=>fmtSigned(v,u)).join(' · ')||'0'}`:''}</div>`;
     const infoToggle=infoRows.length?`<label style="display:flex;gap:6px;align-items:center;margin:8px 0;font-size:14px"><input type="checkbox" id="cariShowInfo" ${cariShowInfoV7?'checked':''}> Bakiyeyi etkilemeyen peşin işlemleri de göster (${infoRows.length} işlem: satış, alış, alım-satım, kasa/banka)</label>`:'';
     const body=rows.length?`
@@ -8496,7 +8461,6 @@ function stockSummaryView(){
     const modalEl=document.querySelector('#modalRoot .modal'); if(modalEl)modalEl.style.width='min(1080px,96vw)';
     document.getElementById('cariShowInfo')?.addEventListener('change',e=>{cariShowInfoV7=e.target.checked;openCariDetail(c.id);});
     document.getElementById('cariPrintStatement')?.addEventListener('click',()=>printCariStatementV7(c.id,document.getElementById('cariPrintFrom').value,document.getElementById('cariPrintTo').value));
-    document.getElementById('cariSetBalanceV7')?.addEventListener('click',()=>openCariSetBalanceV7(c.id));
     // Banka bakiyesini bankadaki gerçek tutara getirir; fark yalnız banka hesabına "Banka Bakiye Düzeltme" olarak yazılır, kasaya dokunmaz.
     document.getElementById('bankSetBalanceV7')?.addEventListener('click',()=>{
       if(!v5Guard('canManageFinance'))return;
