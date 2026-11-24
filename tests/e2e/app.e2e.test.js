@@ -2150,6 +2150,15 @@ test('cari işlem: tutar yazarken binlik noktalar kendiliğinden konur, kayıt d
   await p.keyboard.type('.75'); // nokta tuşu ondalık virgül olur
   assert.equal(await shown(), '12.500,75');
   assert.equal(await p.$eval('#cmAmount', (e) => e.value), '12500.75');
+  // TL'de "102.032" yazılırsa (nokta tuşu virgül olur → 102,032) kutudan çıkınca 102.032 TL okunur; HAS karşılığı buna göre
+  await p.check('#cmCounterEnabled'); await p.selectOption('#cmCounterUnit', 'HAS');
+  await p.click('#cmAmount'); await p.keyboard.press('Control+A'); await p.keyboard.type('102.032');
+  assert.equal(await shown(), '102,032');
+  await p.click('#cmSourceRate'); await p.waitForTimeout(200);
+  assert.equal(await p.$eval('#cmAmount', (e) => e.value), '102032', '3 haneli kuruş TL\'de binlik sayılmalı');
+  assert.match(await p.innerText('#cmAmountRead'), /102\.032 TL/);
+  const rate = Number(await p.$eval('#cmCounterRate', (e) => e.value)), ctr = Number(await p.$eval('#cmCounterAmount', (e) => e.value));
+  assert.ok(Math.abs(ctr - 102032 / rate) < 0.002, `HAS karşılığı tutara göre: ${ctr} vs ${102032 / rate}`);
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
