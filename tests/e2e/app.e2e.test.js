@@ -1041,6 +1041,37 @@ test('başka cihazdan veri gelince yedek sayfası ve yeni dokunulan sayfa başta
   await a.context().close(); await b.context().close();
 });
 
+test('cari işlem penceresi açıkken başka cihazdan veri gelse de kaydedilen tutar bakiyeye işlenir (bakiye ile hareket ayrışmaz)', async () => {
+  const fb = createFakeFirebase();
+  const a = await newDevice(browser, appUrl, fb);
+  const b = await newDevice(browser, appUrl, fb);
+  await a.waitForTimeout(2000);
+  await a.evaluate(() => document.querySelector('[data-route="customers"],[data-go="customers"]').click()); await a.waitForTimeout(400);
+  const id = await a.evaluate(() => document.querySelector('[data-cari-move]').dataset.cariMove);
+  const sumOf = (s) => (s.customerMoves || []).filter((m) => m.customerId === id && String(m.unit || 'HAS').toUpperCase() === 'HAS').reduce((n, m) => n + Number(m.debit || 0) - Number(m.credit || 0), 0);
+  const balOf = (s) => Number((s.customers || []).find((c) => c.id === id)?.hasBalance || 0);
+  const gap0 = balOf(fb.db.state) - sumOf(fb.db.state);
+  // A pencereyi açar, tutarı yazar
+  await a.evaluate(() => document.querySelector('[data-cari-move]').click()); await a.waitForSelector('#cmType');
+  await a.selectOption('#cmType', 'NT'); await a.selectOption('#cmUnit', 'TL');
+  await a.click('#cmAmount'); await a.keyboard.press('Control+A'); await a.keyboard.type('102032');
+  await a.check('#cmCounterEnabled'); await a.selectOption('#cmCounterUnit', 'HAS'); await a.waitForTimeout(200);
+  await a.click('#cmCounterAmount'); await a.keyboard.press('Control+A'); await a.keyboard.type('16,837');
+  // Bu sırada B (ör. fiyat panosu) buluta yazar; A'ya yeni veri gelir
+  await b.click('#darkThemeBtn'); await b.waitForTimeout(500); await b.click('#lightThemeBtn');
+  await a.waitForTimeout(8000);
+  // A kaydeder
+  await a.evaluate(() => document.getElementById('modalConfirm').click()); await a.waitForSelector('#cariSummarySave');
+  await a.evaluate(() => document.getElementById('cariSummarySave').click()); await a.waitForTimeout(800);
+  if (await a.$('#modalX')) await a.click('#modalX').catch(() => {});
+  await a.waitForTimeout(10000);
+  const s = fb.db.state, nt = s.customerMoves.filter((m) => m.customerId === id && m.code === 'NT').length;
+  assert.equal(nt, 1, 'hareket buluta gitmeli');
+  assert.ok(Math.abs(balOf(s) - sumOf(s) - gap0) < 1e-6, `bakiye hareketle birlikte değişmeli: bakiye ${balOf(s)}, hareket toplamı ${sumOf(s)}`);
+  assert.deepEqual([...a.errors, ...b.errors], []);
+  await a.context().close(); await b.context().close();
+});
+
 test('telefon düzeni: logo görünür, ekranlar yana taşmaz, satış kartları üst üste binmez', async () => {
   const p = await newDevice(browser, appUrl, createFakeFirebase());
   await p.setViewportSize({ width: 390, height: 800 });
