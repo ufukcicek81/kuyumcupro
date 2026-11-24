@@ -1191,6 +1191,12 @@ img.brand-mark.brand-logo{width:96px;height:96px}
   .modal{max-height:calc(100dvh - 16px)!important}
   .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 }
+/* Bilgisayarda tablolar ekrana sığar: sabit en küçük genişlik kalkar, uzun yazılar satır içinde alta geçer;
+   sağa sola kaydırma çıkmaz. (Telefonda eski davranış: yana kaydırılabilir tablo.) */
+@media (min-width:900px){
+  .table{min-width:0!important;width:100%!important}
+  .table th,.table td{white-space:normal!important;overflow-wrap:break-word;word-break:normal}
+}
 </style>
 </head>
 <body>
@@ -5583,7 +5589,10 @@ function stockSummaryView(){
     return dailySalesReportRowsV658(from,to,'');
   }
   function v660SimpleTable(head,rows){
-    return `<div class="table-wrap"><table class="table" style="min-width:980px"><thead><tr>${head.map((h,i)=>`<th class="${i>=head.length-3?'num':''}">${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.length?rows.map(r=>`<tr>${r.map((v,i)=>`<td class="${i>=head.length-3?'num':''}">${v}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${head.length}">Kayıt bulunamadı.</td></tr>`}</tbody></table></div>`;
+    /* Yalnız sayı içeren sütunlar sağa yaslanır (önceden son 3 sütun hep sağa yaslanıyordu: işlem adı/açıklama da) */
+    const plain=v=>String(v==null?'':v).replace(/<[^>]*>/g,'').trim(),isNum=v=>/^[-+−]?[\d.,\s]+(?:\s?(?:TL|HAS|GR|ADET|USD|EUR|GBP|%))?$/i.test(v);
+    const numCol=head.map((_,i)=>{const vals=rows.map(r=>plain(r[i])).filter(Boolean);return vals.length>0&&vals.every(isNum);});
+    return `<div class="table-wrap"><table class="table"><thead><tr>${head.map((h,i)=>`<th class="${numCol[i]?'num':''}">${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.length?rows.map(r=>`<tr>${r.map((v,i)=>`<td class="${numCol[i]?'num':''}">${v}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${head.length}">Kayıt bulunamadı.</td></tr>`}</tbody></table></div>`;
   }
   /* Satış raporları HAS ya da TL olarak gösterilir (TL: satış = fiş tutarı, maliyet = maliyet HAS × satış günü HAS alış kuru). */
   let salesReportUnitV7=(()=>{try{return localStorage.getItem('asil_sales_report_unit_v7')==='TL'?'TL':'HAS';}catch(_){return 'HAS';}})();
@@ -5632,8 +5641,15 @@ function stockSummaryView(){
       return {title:'Bakiye Listesi',html:v660SimpleTable(['Kod','Hesap','Cins','Yön','Bakiye'],a.map(r=>[esc(r[0]),`<strong>${esc(r[1])}</strong>`,esc(r[2]),esc(r[3]),qty(r[4])])),csv:[['Kod','Hesap','Cins','Yön','Bakiye'],...a]};
     }
     if(type==='transaction'){
-      const a=[];(state.financeMoves||[]).filter(x=>v660DateIn(x.date,from,to)).forEach(x=>a.push([x.date,'Kasa/Banka',x.sourceDocNo||'',x.type||'',x.description||'']));(state.customerMoves||[]).filter(x=>v660DateIn(x.date,from,to)).forEach(x=>a.push([x.date,'Cari',x.sourceDocNo||'',x.type||'',x.description||'']));(state.tradeMoves||[]).filter(x=>v660DateIn(x.date,from,to)).forEach(x=>a.push([x.date,'Altın/Döviz',x.docNo||'',x.tradeType||'',x.item||'']));a.sort((x,y)=>String(y[0]).localeCompare(String(x[0])));
-      return {title:'İşlem Raporu',html:v660SimpleTable(['Tarih','Modül','Belge','İşlem','Açıklama'],a.map(r=>[trDate(r[0]),esc(r[1]),esc(r[2]),`<strong>${esc(r[3])}</strong>`,esc(r[4])])),csv:[['Tarih','Modül','Belge','İşlem','Açıklama'],...a.map(r=>[trDate(r[0]),...r.slice(1)])]};
+      /* Her satırda hesap, giriş/çıkış (borç/alacak) tutarı ve birimi: kasa farkı bu rapordan kalem kalem bulunabilsin */
+      const a=[],num=v=>Number(v||0),cname=id=>(state.customers||[]).find(c=>c.id===id)?.name||'';
+      (state.financeMoves||[]).filter(x=>v660DateIn(x.date,from,to)).forEach(x=>{const amt=num(x.accountAmount||x.amount),inn=x.direction==='Giriş';a.push([x.date,'Kasa/Banka',x.sourceDocNo||'',x.type||'',x.description||'',x.accountName||'',inn?amt:0,inn?0:amt,x.accountCurrency||'TL']);});
+      (state.customerMoves||[]).filter(x=>v660DateIn(x.date,from,to)).forEach(x=>a.push([x.date,'Cari',x.sourceDocNo||'',x.type||'',x.description||'',cname(x.customerId),num(x.credit),num(x.debit),x.unit||'TL']));
+      (state.tradeMoves||[]).filter(x=>v660DateIn(x.date,from,to)).forEach(x=>{const buy=x.side==='Alış';a.push([x.date,'Altın/Döviz',x.docNo||'',x.tradeType||'',`${x.item||''} · ${qty(num(x.quantity))} ${x.unit||''}`,x.customer||'',buy?num(x.quantity):0,buy?0:num(x.quantity),x.unit||'',num(x.totalTL)]);});
+      a.sort((x,y)=>String(y[0]).localeCompare(String(x[0])));
+      const head=['Tarih','Modül','Belge','İşlem','Açıklama','Hesap','Giriş / Alacak','Çıkış / Borç','Birim','TL Karşılığı'];
+      const f2=v=>v?qty(v):'';
+      return {title:'İşlem Raporu',html:v660SimpleTable(head,a.map(r=>[trDate(r[0]),esc(r[1]),esc(r[2]),`<strong>${esc(r[3])}</strong>`,esc(r[4]),esc(r[5]),f2(r[6]),f2(r[7]),esc(r[8]),r[9]!=null?money(r[9]):(String(r[8]).toUpperCase()==='TL'?money(r[6]||r[7]):'')])),csv:[head,...a.map(r=>[trDate(r[0]),r[1],r[2],r[3],r[4],r[5],r[6]||'',r[7]||'',r[8],r[9]!=null?r[9]:(String(r[8]).toUpperCase()==='TL'?(r[6]||r[7]):'')])]};
     }
     if(type==='daily_inout'||type==='cash_inout'||type==='cash'){
       const a=(state.financeMoves||[]).filter(x=>v660DateIn(x.date,from,to)&&(type==='daily_inout'||x.accountKind==='Kasa'));

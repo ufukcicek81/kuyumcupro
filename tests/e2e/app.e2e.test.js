@@ -1323,6 +1323,26 @@ test('fatura: (seçilirse) altın ve işçilik ayrı satır, altın kodu 230, fa
   await p.context().close();
 });
 
+test('İşlem Raporu: her satırda hesap, giriş/çıkış tutarı ve birim var; tablo ekrana sığar', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  await p.setViewportSize({ width: 1280, height: 720 });
+  await p.click('[data-home-trade="Döviz Alış"]');
+  await p.fill('#stQty', '100'); await p.fill('#stPrice', '40');
+  await p.click('#modalConfirm'); await p.click('text=ONAYLA VE İŞLEMİ TAMAMLA'); await p.waitForTimeout(500);
+  await p.evaluate(() => document.querySelector('[data-route="reports"],[data-go="reports"]').click());
+  await p.click('[data-pusula-report="transaction"]'); await p.waitForSelector('#prShow');
+  await p.click('#prShow'); await p.waitForSelector('#prResult table');
+  assert.match(await p.innerText('#prResult thead'), /Hesap[\s\S]*Giriş[\s\S]*Çıkış[\s\S]*Birim[\s\S]*TL Karşılığı/);
+  const t = await p.innerText('#prResult tbody');
+  assert.match(t, /Döviz Alış[\s\S]*100/, 'döviz miktarı görünmeli');
+  assert.match(t, /4\.000,00/, 'TL karşılığı / kasa çıkışı görünmeli');
+  const over = await p.evaluate(() => { const w = document.querySelector('#prResult .table-wrap'); return w.scrollWidth - w.clientWidth; });
+  assert.ok(over <= 2, 'tablo yana kaymamalı: ' + over);
+  if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT });
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
 test('raporlar bugünün tarihiyle açılır; hızlı aralık düğmeleri tarihi değiştirir', async () => {
   const p = await newDevice(browser, appUrl, createFakeFirebase());
   const today = await p.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
