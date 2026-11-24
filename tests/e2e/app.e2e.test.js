@@ -2045,13 +2045,16 @@ test('HURDA → BARKODLU: hurda düşer, yeni barkodlu ürün hurdanın maliyeti
   await p.fill('#h2bIn', '10'); await p.fill('#h2bGram', '9.5'); await p.fill('#h2bName', 'hurda bilezik');
   assert.match(await p.innerText('#h2bInfo'), /Fire/);
   await p.click('#h2bLabel'); // etiket basma
-  await p.click('#modalConfirm');
+  await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  assert.ok(await p.$('#h2bSale'), 'satış HAS girilmeden ürün oluşmamalı');
+  await p.fill('#h2bSale', '6.25');
+  await p.dispatchEvent('#modalConfirm', 'click');
   await p.waitForTimeout(4000);
   const st = fb.db.state;
   const rec = st.stocks.find((x) => /HURDA B[İI]LEZ[İI]K/.test(x.name));
   assert.ok(rec, 'barkodlu ürün oluşmalı');
   assert.equal(rec.status, 'Stokta'); assert.equal(rec.purity, '585'); assert.equal(Number(rec.grossWeight), 9.5);
-  assert.equal(rec.barcode, expected); assert.equal(rec.code, expected); assert.equal(rec.group, 'KYU');
+  assert.equal(rec.barcode, expected); assert.equal(rec.code, expected); assert.equal(rec.group, 'KYU'); assert.equal(Number(rec.saleHas), 6.25);
   const scrap1 = st.scrapStocks.find((x) => x.id === scrap0.id);
   assert.ok(Math.abs(Number(scrap1.amount) - (Number(scrap0.amount) - 10)) < 1e-6, 'hurda 10 gr azalmalı');
   const usedHas = Number(scrap0.hasWeight) - Number(scrap1.hasWeight);
@@ -2129,7 +2132,7 @@ test('HURDA → BARKODLU: 24 hurdadan aynı gramda 24 ayar ürün yapılabilir (
   await p.click('#v5H2B'); await p.waitForSelector('#h2bScrap');
   await p.selectOption('#h2bScrap', scrap.id); await p.selectOption('#h2bKind', 'KYU');
   await p.selectOption('#h2bPurity', '995');
-  await p.fill('#h2bIn', '1'); await p.fill('#h2bGram', '1');
+  await p.fill('#h2bIn', '1'); await p.fill('#h2bGram', '1'); await p.fill('#h2bSale', '1.1');
   assert.match(await p.innerText('#h2bInfo'), /ayar farkı/);
   await p.click('#h2bLabel');
   await p.click('#modalConfirm'); await p.waitForTimeout(4000);
