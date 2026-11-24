@@ -2834,7 +2834,9 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
       recalcGoldItemsFromHas();
       state.market.status='live'; state.market.lastUpdated=now(); state.market.lastError=''; state.market.source='Asil Kuyumcu / Cloudflare Worker';
       recordPriceSnapshot();
-      save(); updateMarketTickerDom();
+      /* Canlı fiyat her cihazda kendisi alınır: yalnız yerel kaydet, buluta gönderme. Önceden her 5 sn'de
+         buluta yazılıyordu; diğer cihazlar indirip ekranı yeniden çiziyor, yazılan kutudan imleç kayıyordu. */
+      save(false); updateMarketTickerDom();
       if(!state.prices.usd.buy||!state.prices.eur.buy) await fetchFallbackFx();
     }catch(e){
       state.market.status='offline'; state.market.lastError=String(e?.message||e); updateMarketTickerDom();
@@ -9018,7 +9020,18 @@ function stockSummaryView(){
     await persistStateCriticalV681(state);
   }
   // Giriş ekranındayken (oturum yok) yeniden çizim yazılmakta olan şifreyi siler; o durumda çizilmez.
-  function cloudRenderV7(){if(session)render();}
+  /* Başka cihazdan gelen veri ekranı yeniden çizer; kullanıcı bir kutuya yazıyor ya da pencere açıksa
+     çizim ertelenir (imleç kaybolmasın, yazılan silinmesin), kutudan çıkınca / pencere kapanınca yapılır. */
+  function cloudUserBusyV7(){const a=document.activeElement;return !!(a&&a!==document.body&&(/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)||a.isContentEditable))||!!document.querySelector('#modalRoot .modal, #modalRoot .modal-backdrop, #saleHistPop, #cariRowPop');}
+  function cloudRenderV7(){
+    if(!session)return;
+    if(cloudUserBusyV7()){
+      if(cloudRenderV7.waiting)return;cloudRenderV7.waiting=true;
+      const tick=()=>{if(!cloudUserBusyV7()){cloudRenderV7.waiting=false;render();}else cloudRenderV7.timer=setTimeout(tick,1500);};
+      cloudRenderV7.timer=setTimeout(tick,1500);return;
+    }
+    render();
+  }
   async function cloudGetWithEtagV7(){
     let r;
     try{r=await fetch(CLOUD_STATE_URL+'?v='+Date.now(),{cache:'no-store',headers:{'X-Firebase-ETag':'true'}});}
