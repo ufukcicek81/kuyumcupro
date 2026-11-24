@@ -86,5 +86,10 @@ Gönder'e basmadan iletir (tamir alındı / hazır, cari bakiye, satış fişi �
 5. **Sormadan gönder** işaretlenirse tamir açılınca / hazır olunca mesaj kendiliğinden gider;
    işaretlenmezse program "Mesaj gitsin mi?" diye sorar.
 
+**Tamir teslim onayı (köprü 1.3 ve üstü):** WhatsApp Ayarları'nda "Teslimde müşteriden ONAY iste" açıksa teslim
+mesajının sonuna "ONAY yazarak cevap verin" eklenir. Müşteri ONAY / EVET / TAMAM / ALDIM yazınca köprü cevabı
+`wa-gelen.json` dosyasına kaydeder; program tamir listesinde "✓ Müşteri onayladı" ve tarih-saatini gösterir
+(program kapalıyken gelen cevaplar da sonradan işlenir). Bunun için köprünün açık ve WhatsApp'ın bağlı olması yeterlidir.
+
 Köprüye yalnız Asil Kuyumcu Pro sayfaları (ufukcicek81.github.io, kuyumcupro…vercel.app / workers.dev) erişebilir;
 başka bir adres kullanıyorsanız `asil-kopru.json` → `"allowedOrigins": ["https://adres"]` ekleyin.

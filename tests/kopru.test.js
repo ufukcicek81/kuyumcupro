@@ -151,3 +151,16 @@ test('WhatsApp köprüsü: QR → bağlı → mesaj gönderir; WhatsApp olmayan 
   assert.equal(wa.info().sentToday, 1);
   wa._reset();
 });
+
+test('WhatsApp köprüsü: gelen mesajlar kaydedilir (gizli kimlikte gerçek numara), grup ve kendi mesajı alınmaz', () => {
+  const wa = k.wa; wa._reset({ inbox: null, lid: null });
+  wa._onIncoming({ key: { id: 'M1', remoteJid: '905321112233@s.whatsapp.net', fromMe: false }, message: { conversation: 'Onay' }, messageTimestamp: 1700000000 });
+  wa._onIncoming({ key: { id: 'M2', remoteJid: '123456789@lid', senderPn: '905554443322@s.whatsapp.net' }, message: { extendedTextMessage: { text: 'evet', contextInfo: { stanzaId: 'SENT9' } } }, messageTimestamp: 1700000010 });
+  wa._onIncoming({ key: { id: 'M3', remoteJid: '1203@g.us', participant: '905000000000@s.whatsapp.net' }, message: { conversation: 'grup' } });
+  wa._onIncoming({ key: { id: 'M4', remoteJid: '905321112233@s.whatsapp.net', fromMe: true }, message: { conversation: 'bizim' } });
+  wa._onIncoming({ key: { id: 'M1', remoteJid: '905321112233@s.whatsapp.net' }, message: { conversation: 'Onay' }, messageTimestamp: 1700000000 });
+  const all = wa.inbox(0);
+  assert.deepEqual(all.map((x) => [x.id, x.from, x.text, x.quoted]), [['M1', '905321112233', 'Onay', ''], ['M2', '905554443322', 'evet', 'SENT9']]);
+  assert.deepEqual(wa.inbox(1700000005000).map((x) => x.id), ['M2']);
+  wa._reset();
+});
