@@ -2042,23 +2042,26 @@ test('HURDA → BARKODLU: hurda düşer, yeni barkodlu ürün hurdanın maliyeti
   await p.selectOption('#h2bKind', 'KYU');
   const expected = 'KYU' + String(kyuMax + 1).padStart(7, '0');
   assert.equal(await p.inputValue('#h2bCode'), expected, 'grup seçince sistemdeki son KYU numarasının bir fazlası gelmeli');
-  await p.fill('#h2bIn', '10'); await p.fill('#h2bGram', '9.5'); await p.fill('#h2bName', 'hurda bilezik');
-  assert.match(await p.innerText('#h2bInfo'), /Fire/);
+  await p.fill('#h2bGram', '9.5'); await p.fill('#h2bName', 'hurda bilezik');
+  assert.match(await p.innerText('#h2bInfo'), /Fire yok/);
   await p.click('#h2bLabel'); // etiket basma
   await p.click('#modalConfirm'); await p.waitForTimeout(300);
   assert.ok(await p.$('#h2bSale'), 'satış HAS girilmeden ürün oluşmamalı');
-  await p.fill('#h2bSale', '6.25');
+  await p.fill('#h2bLabour', '0.1'); // satış HAS = 9,5 × (0,585 + 0,100)
+  assert.equal(await p.inputValue('#h2bSale'), (9.5 * (0.585 + 0.1)).toFixed(3));
+  assert.match(await p.innerText('#h2bInfo'), /Kâr/);
   await p.dispatchEvent('#modalConfirm', 'click');
   await p.waitForTimeout(4000);
   const st = fb.db.state;
   const rec = st.stocks.find((x) => /HURDA B[İI]LEZ[İI]K/.test(x.name));
   assert.ok(rec, 'barkodlu ürün oluşmalı');
   assert.equal(rec.status, 'Stokta'); assert.equal(rec.purity, '585'); assert.equal(Number(rec.grossWeight), 9.5);
-  assert.equal(rec.barcode, expected); assert.equal(rec.code, expected); assert.equal(rec.group, 'KYU'); assert.equal(Number(rec.saleHas), 6.25);
+  assert.equal(rec.barcode, expected); assert.equal(rec.code, expected); assert.equal(rec.group, 'KYU'); assert.equal(Number(rec.saleHas), Number((9.5 * (0.585 + 0.1)).toFixed(3)));
   const scrap1 = st.scrapStocks.find((x) => x.id === scrap0.id);
-  assert.ok(Math.abs(Number(scrap1.amount) - (Number(scrap0.amount) - 10)) < 1e-6, 'hurda 10 gr azalmalı');
+  assert.ok(Math.abs(Number(scrap1.amount) - (Number(scrap0.amount) - 9.5)) < 1e-6, 'hurdadan ürün gramı kadar düşmeli (fire yok)');
   const usedHas = Number(scrap0.hasWeight) - Number(scrap1.hasWeight);
   assert.ok(Math.abs(Number(rec.costHas) - usedHas) < 1e-6, 'ürün maliyeti kullanılan hurdanın HAS maliyeti olmalı');
+  assert.ok(Math.abs(Number(rec.hasWeight) - usedHas) < 1e-6, 'ürünün HAS\'ı hurdadaki gerçek HAS (ayar farkı kazancı yok)');
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
@@ -2132,8 +2135,7 @@ test('HURDA → BARKODLU: 24 hurdadan aynı gramda 24 ayar ürün yapılabilir (
   await p.click('#v5H2B'); await p.waitForSelector('#h2bScrap');
   await p.selectOption('#h2bScrap', scrap.id); await p.selectOption('#h2bKind', 'KYU');
   await p.selectOption('#h2bPurity', '995');
-  await p.fill('#h2bIn', '1'); await p.fill('#h2bGram', '1'); await p.fill('#h2bSale', '1.1');
-  assert.match(await p.innerText('#h2bInfo'), /ayar farkı/);
+  await p.fill('#h2bGram', '1'); await p.fill('#h2bSale', '1.1');
   await p.click('#h2bLabel');
   await p.click('#modalConfirm'); await p.waitForTimeout(4000);
   const rec = fb.db.state.stocks.find((x) => x.group === 'KYU' && /HURDA/.test(String(x.sourceDocNo || '') + String(x.notes || '')) && Number(x.grossWeight) === 1);
