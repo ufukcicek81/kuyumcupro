@@ -18,12 +18,12 @@ const ENDPOINTS = {
   live: 'https://einvoiceservice.isnet.net.tr'
 };
 const TEST_VKN = '4810173324';
-const VERSION = '1.2';
+const VERSION = '1.3';
 // WhatsApp modülü yoksa (eski güncelleme) köprü yine çalışsın; yalnız WhatsApp kapalı olur.
 let wa;
 try { wa = require('./whatsapp'); } catch (e) {
   const off = async () => { throw new Error('Köprüde whatsapp.js eksik. C:\\kopru\\GUNCELLE.bat ile güncelleyin.'); };
-  wa = { configure() {}, start: off, send: off, logout: off, info: () => ({ status: 'kapalı' }), hasSession: () => false };
+  wa = { configure() {}, start: off, send: off, logout: off, info: () => ({ status: 'kapalı' }), hasSession: () => false, inbox: () => [] };
 }
 
 function loadConfig() {
@@ -361,6 +361,8 @@ async function handle(cfg, req, res) {
       return send(res, 200, out, cors);
     }
     if (action === 'waLogout') return send(res, 200, await wa.logout(), cors);
+    // Gelen WhatsApp mesajları (ör. müşterinin teslim "ONAY" cevabı); since = son okunan mesajın zamanı (ms).
+    if (action === 'waInbox') return send(res, 200, { ok: true, items: cfg.whatsapp ? wa.inbox(p.since) : [] }, cors);
     return send(res, 400, { ok: false, message: 'Bilinmeyen işlem: ' + action }, cors);
   } catch (e) {
     const msg = e.name === 'AbortError' ? 'İşNet zaman aşımı' : String(e.message || e);

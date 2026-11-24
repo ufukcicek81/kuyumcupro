@@ -22,6 +22,45 @@ let daily = { day: '', count: 0 };
 let opts = { minIntervalMs: 4000, dailyLimit: 300, log: () => {} };
 let reconnectTimer = null;
 
+// Gelen mesajlar (müşterinin "ONAY" cevabı gibi) diske yazılır: program kapalıyken gelenler de sonra okunur.
+let inboxFile = path.join(__dirname, 'wa-gelen.json');
+let lidFile = path.join(__dirname, 'wa-lid.json');
+let inboxList = null;
+let lidMap = null;
+const digits = (j) => String(j || '').split('@')[0].split(':')[0].replace(/\D/g, '');
+function readJson(file, fallback) { if (!file) return fallback; try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) { return fallback; } }
+function writeJson(file, value) { if (!file) return; try { fs.writeFileSync(file, JSON.stringify(value)); } catch (_) {} }
+function loadInbox() { if (!inboxList) { inboxList = readJson(inboxFile, []); if (!Array.isArray(inboxList)) inboxList = []; } return inboxList; }
+function loadLid() { if (!lidMap) { lidMap = readJson(lidFile, {}); if (!lidMap || typeof lidMap !== 'object') lidMap = {}; } return lidMap; }
+function textOf(msg) {
+  msg = msg || {};
+  if (msg.ephemeralMessage) msg = msg.ephemeralMessage.message || {};
+  return String(msg.conversation || (msg.extendedTextMessage && msg.extendedTextMessage.text)
+    || (msg.buttonsResponseMessage && msg.buttonsResponseMessage.selectedDisplayText)
+    || (msg.templateButtonReplyMessage && msg.templateButtonReplyMessage.selectedDisplayText) || '').trim();
+}
+function onIncoming(m) {
+  if (!m || !m.key || m.key.fromMe) return;
+  const rj = String(m.key.remoteJid || '');
+  if (rj.endsWith('@g.us') || rj === 'status@broadcast' || rj.endsWith('@newsletter')) return;
+  const text = textOf(m.message);
+  if (!text) return;
+  // Yeni WhatsApp sürümleri numara yerine gizli kimlik (@lid) verebilir; gerçek numara ayrı alanda gelir.
+  const pnJid = [m.key.senderPn, m.key.remoteJidAlt, m.key.participantPn, rj].find((x) => x && String(x).endsWith('@s.whatsapp.net')) || '';
+  const lid = rj.endsWith('@lid') ? digits(rj) : '';
+  const from = digits(pnJid) || (lid && loadLid()[lid]) || '';
+  const msg = m.message && m.message.ephemeralMessage ? m.message.ephemeralMessage.message || {} : (m.message || {});
+  const ctx = (msg.extendedTextMessage && msg.extendedTextMessage.contextInfo) || {};
+  const list = loadInbox();
+  const id = String(m.key.id || '');
+  if (id && list.some((x) => x.id === id)) return;
+  list.push({ id, from, lid, text: text.slice(0, 500), ts: Number(m.messageTimestamp || 0) * 1000 || Date.now(), quoted: String(ctx.stanzaId || '') });
+  if (list.length > 1000) list.splice(0, list.length - 1000);
+  writeJson(inboxFile, list);
+  opts.log(`WhatsApp mesaj geldi: ${from || rj} · ${text.slice(0, 40)}`);
+}
+function inbox(since) { return loadInbox().filter((x) => x.ts > Number(since || 0)).slice(-200); }
+
 async function loadLib() {
   if (lib) return lib;
   try {
@@ -63,6 +102,7 @@ async function start() {
     });
     sock = s;
     s.ev.on('creds.update', saveCreds);
+    s.ev.on('messages.upsert', (u) => { try { ((u && u.messages) || []).forEach(onIncoming); } catch (_) {} });
     s.ev.on('connection.update', async (u) => {
       if (u.qr) {
         status = 'qr';
@@ -124,6 +164,7 @@ function send(phone, text) {
     const found = await sock.onWhatsApp(jid);
     const r = Array.isArray(found) ? found[0] : found;
     if (!r || !r.exists) throw new Error(`${num} numarası WhatsApp kullanmıyor`);
+    if (r.lid) { const map = loadLid(), l = digits(r.lid); if (l && map[l] !== num) { map[l] = num; writeJson(lidFile, map); } }
     const res = await sock.sendMessage(r.jid || jid, { text: msg });
     lastSendAt = Date.now(); daily.count++;
     opts.log(`WhatsApp gönderildi → ${num}`);
@@ -142,6 +183,6 @@ async function logout() {
 
 // Testler için: sahte kütüphane / soket.
 function _setLib(l) { lib = l; }
-function _reset() { sock = null; starting = null; status = 'kapalı'; qrDataUrl = ''; me = ''; lastError = ''; queue = Promise.resolve(); lastSendAt = 0; daily = { day: '', count: 0 }; }
+function _reset(files) { inboxList = null; lidMap = null; if (files !== undefined) { inboxFile = files && files.inbox; lidFile = files && files.lid; } sock = null; starting = null; status = 'kapalı'; qrDataUrl = ''; me = ''; lastError = ''; queue = Promise.resolve(); lastSendAt = 0; daily = { day: '', count: 0 }; }
 
-module.exports = { configure, start, info, send, logout, hasSession, normPhone, _setLib, _reset };
+module.exports = { configure, start, info, send, logout, hasSession, normPhone, inbox, _onIncoming: onIncoming, _setLib, _reset };
