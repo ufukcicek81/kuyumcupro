@@ -9049,15 +9049,19 @@ function stockSummaryView(){
   // Giriş ekranındayken (oturum yok) yeniden çizim yazılmakta olan şifreyi siler; o durumda çizilmez.
   /* Başka cihazdan gelen veri ekranı yeniden çizer; kullanıcı bir kutuya yazıyor ya da pencere açıksa
      çizim ertelenir (imleç kaybolmasın, yazılan silinmesin), kutudan çıkınca / pencere kapanınca yapılır. */
-  function cloudUserBusyV7(){const a=document.activeElement;return !!(a&&a!==document.body&&(/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)||a.isContentEditable))||!!document.querySelector('#modalRoot .modal, #modalRoot .modal-backdrop, #saleHistPop, #cariRowPop');}
+  /* Kullanıcı son 10 sn içinde tıkladı / kaydırdı / yazdıysa da meşgul sayılır: sayfa gözünün önünde baştan çizilip
+     listelenen yedekler, açılan bölümler, kaydırma yeri kaybolmasın. Yedek sayfası hiç kendiliğinden yenilenmez. */
+  let cloudLastInteractV7=0;
+  ['pointerdown','keydown','wheel','scroll','touchstart'].forEach(ev=>window.addEventListener(ev,()=>{cloudLastInteractV7=Date.now();},{capture:true,passive:true}));
+  function cloudUserBusyV7(){const a=document.activeElement;return route==='backup'||Date.now()-cloudLastInteractV7<10000||!!(a&&a!==document.body&&(/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)||a.isContentEditable))||!!document.querySelector('#modalRoot .modal, #modalRoot .modal-backdrop, #saleHistPop, #cariRowPop');}
   function cloudRenderV7(){
     if(!session)return;
     if(cloudUserBusyV7()){
       if(cloudRenderV7.waiting)return;cloudRenderV7.waiting=true;
-      const tick=()=>{if(!cloudUserBusyV7()){cloudRenderV7.waiting=false;render();}else cloudRenderV7.timer=setTimeout(tick,1500);};
+      const tick=()=>{if(!cloudUserBusyV7()){cloudRenderV7.waiting=false;const y=window.scrollY;render();window.scrollTo(0,y);}else cloudRenderV7.timer=setTimeout(tick,1500);};
       cloudRenderV7.timer=setTimeout(tick,1500);return;
     }
-    render();
+    const y=window.scrollY;render();window.scrollTo(0,y);
   }
   async function cloudGetWithEtagV7(){
     let r;
