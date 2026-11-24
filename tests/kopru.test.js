@@ -164,3 +164,33 @@ test('WhatsApp köprüsü: gelen mesajlar kaydedilir (gizli kimlikte gerçek num
   assert.deepEqual(wa.inbox(1700000005000).map((x) => x.id), ['M2']);
   wa._reset();
 });
+
+test('İş Bankası online ekstre: XML hareketleri (etiket ya da özellik biçimi) okunur', () => {
+  const a = k.parseXmlRecords('<?xml version="1.0"?><Ozet><Hesap No="1" Doviz="TL" Bakiye="5"/><Hareket><Tarih>01.11.2026 10:00:00</Tarih><Tutar>-1.250,50</Tutar><Aciklama>POS &amp; KOM</Aciklama></Hareket><Hareket><Tarih>02.11.2026</Tarih><Tutar>300,00</Tutar><Aciklama><![CDATA[EFT <x>]]></Aciklama></Hareket></Ozet>');
+  assert.equal(a.tag, 'Hareket');
+  assert.deepEqual(a.records[0], { Tarih: '01.11.2026 10:00:00', Tutar: '-1.250,50', Aciklama: 'POS & KOM' });
+  assert.equal(a.records[1].Aciklama, 'EFT <x>');
+  const b = k.parseXmlRecords('<r><h t="01.11.2026" tutar="10" a="x"/><h t="02.11.2026" tutar="20" a="y"/><h t="03.11.2026" tutar="30" a="z"/></r>');
+  assert.deepEqual([b.tag, b.records.length, b.records[2].tutar], ['h', 3, '30']);
+});
+
+test('İş Bankası online ekstre: POST ile uid/pwd/tarih gönderilir; şifresiz, sayfa dönerse ve sık sorguda açık hata', async () => {
+  k._isbankReset();
+  await assert.rejects(k.isbankStatement({}, {}), /isbankUid/);
+  const calls = [];
+  global.fetch = async (url, opt) => { calls.push([url, opt]); return { ok: true, status: 200, text: async () => '<?xml version="1.0"?><x><H><Tarih>24.11.2026</Tarih><Tutar>5</Tutar><Aciklama>a</Aciklama></H></x>' }; };
+  const cfg = { isbankUid: 'KOD1', isbankPwd: 'S3cr&t' };
+  const out = await k.isbankStatement(cfg, { from: '2026-11-20T00:00:00', to: '2026-11-24T23:59:59' });
+  assert.equal(calls[0][0], 'https://posmatik2.isbank.com.tr/AuthenticateSpecific.aspx');
+  assert.equal(calls[0][1].method, 'POST');
+  assert.equal(calls[0][1].headers['Content-Type'], 'application/x-www-form-urlencoded');
+  const body = new URLSearchParams(calls[0][1].body);
+  assert.deepEqual([body.get('uid'), body.get('pwd'), body.get('BeginDate'), body.get('EndDate')], ['KOD1', 'S3cr&t', '20.11.2026 00:00:00', '24.11.2026 23:59:59']);
+  assert.equal(out.records.length, 1);
+  assert.ok(!JSON.stringify(out).includes('S3cr&t'), 'şifre cevaba girmemeli');
+  await assert.rejects(k.isbankStatement(cfg, {}), /dakikada en fazla 2/);
+  k._isbankReset();
+  global.fetch = async () => ({ ok: true, status: 200, text: async () => '<!DOCTYPE html><html><body>Giriş</body></html>' });
+  await assert.rejects(k.isbankStatement(cfg, {}), /kullanıcı kodu \/ şifre/);
+  k._isbankReset();
+});

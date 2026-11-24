@@ -93,3 +93,22 @@ mesajının sonuna "ONAY yazarak cevap verin" eklenir. Müşteri ONAY / EVET / T
 
 Köprüye yalnız Asil Kuyumcu Pro sayfaları (ufukcicek81.github.io, kuyumcupro…vercel.app / workers.dev) erişebilir;
 başka bir adres kullanıyorsanız `asil-kopru.json` → `"allowedOrigins": ["https://adres"]` ekleyin.
+
+## İş Bankası online ekstre (köprü 1.4 ve üstü)
+
+Program, banka carisinin ekstresindeki **🏦 Bankadan Getir** düğmesiyle İş Bankası hareketlerini alıp programdaki
+banka hareketleriyle karşılaştırır (eşleşenler ✓, "bankada var programda yok" ve "programda var bankada yok" ayrı).
+
+1. İş Bankası ticari internet şubesinde online ekstre için kullanıcı kodu ve şifre oluşturun.
+2. `C:\kopru\asil-kopru.json` dosyasını Not Defteri ile açın, şu iki satırı ekleyin (virgüllere dikkat):
+
+```json
+{ "mode": "test", "vkn": "4810173324", "port": 8787,
+  "isbankUid": "BANKANIN VERDİĞİ KULLANICI KODU",
+  "isbankPwd": "OLUŞTURDUĞUNUZ ŞİFRE" }
+```
+
+3. `BASLAT.bat` ile köprüyü yeniden başlatın (otomatik başlatma kuruluysa bilgisayarı yeniden açmak da olur).
+
+Kullanıcı kodu ve şifre **yalnız bu dosyada** durur; programa, buluta ya da başka bir yere gönderilmez.
+Banka en fazla 1 hafta geriye, 300 harekete ve dakikada 2 sorguya izin verir.

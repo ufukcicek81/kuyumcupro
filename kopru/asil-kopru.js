@@ -18,7 +18,7 @@ const ENDPOINTS = {
   live: 'https://einvoiceservice.isnet.net.tr'
 };
 const TEST_VKN = '4810173324';
-const VERSION = '1.3';
+const VERSION = '1.4';
 // WhatsApp modülü yoksa (eski güncelleme) köprü yine çalışsın; yalnız WhatsApp kapalı olur.
 let wa;
 try { wa = require('./whatsapp'); } catch (e) {
@@ -41,8 +41,72 @@ function loadConfig() {
     allowedOrigins: Array.isArray(c.allowedOrigins) ? c.allowedOrigins : [],
     whatsapp: c.whatsapp !== false,
     waMinIntervalMs: Number(c.waMinIntervalMs || 4000),
-    waDailyLimit: Number(c.waDailyLimit || 300)
+    waDailyLimit: Number(c.waDailyLimit || 300),
+    // İş Bankası online hesap özeti: kullanıcı kodu ve şifre YALNIZ bu dosyada durur, programa/buluta gitmez.
+    isbankUid: String(c.isbankUid || ''),
+    isbankPwd: String(c.isbankPwd || ''),
+    isbankUrl: String(c.isbankUrl || '')
   };
+}
+
+// ---------- İş Bankası online hesap özeti (posmatik2 · AuthenticateSpecific.aspx) ----------
+// Doküman: HTTP POST, form alanları uid / pwd / BeginDate / EndDate (GG.AA.YYYY SS:DD:ss). Çıktı XML'dir ama
+// WSDL/XSD yoktur; alan adları sabit bilinmediği için hareketler XML'den genel olarak çıkarılır.
+// Kısıtlar: en fazla 1 hafta geriye (talep üzerine 31 gün), 300 hareket, 1 dk zaman aşımı, dakikada en fazla 2 sorgu.
+const ISBANK_URL = 'https://posmatik2.isbank.com.tr/AuthenticateSpecific.aspx';
+let isbankLast = 0;
+const pad2 = (n) => String(n).padStart(2, '0');
+function trDateTime(d) { d = new Date(d); return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`; }
+function xmlUnesc(s) {
+  return String(s).replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+    .replace(/&#x([0-9a-f]+);/gi, (m, h) => String.fromCharCode(parseInt(h, 16))).replace(/&#(\d+);/g, (m, n) => String.fromCharCode(+n)).replace(/&amp;/g, '&');
+}
+/* XML'i ağaca çevirir; en çok tekrar eden, en az 3 alanlı (özellik ya da alt etiket) öğeyi hareket satırı sayar. */
+function parseXmlRecords(xml) {
+  const root = { name: '#', attrs: {}, children: [], text: '' }, stack = [root];
+  const re = /<!--[\s\S]*?-->|<\?[\s\S]*?\?>|<!DOCTYPE[^>]*>|<!\[CDATA\[[\s\S]*?\]\]>|<\/([\w:.-]+)\s*>|<([\w:.-]+)((?:\s+[\w:.-]+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*(\/?)>|([^<]+)/g;
+  let m;
+  while ((m = re.exec(String(xml || '')))) {
+    const top = stack[stack.length - 1];
+    if (m[1]) { if (stack.length > 1) stack.pop(); }
+    else if (m[2]) {
+      const attrs = {};
+      String(m[3] || '').replace(/([\w:.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g, (x, k, a, b) => { attrs[k.replace(/^.*:/, '')] = xmlUnesc(a !== undefined ? a : b); return x; });
+      const node = { name: m[2].replace(/^.*:/, ''), attrs, children: [], text: '' };
+      top.children.push(node);
+      if (!m[4]) stack.push(node);
+    } else if (m[0].startsWith('<![CDATA[')) top.text += xmlUnesc(m[0]);
+    else if (m[5]) top.text += xmlUnesc(m[5]);
+  }
+  const flat = (n) => { const o = { ...n.attrs }; n.children.forEach((c) => { if (!c.children.length) o[c.name] = (c.text || '').trim(); }); return o; };
+  const groups = new Map();
+  const walk = (n) => n.children.forEach((c) => {
+    const fields = Object.keys(c.attrs).length + c.children.filter((k) => !k.children.length).length;
+    if (fields >= 3) { if (!groups.has(c.name)) groups.set(c.name, []); groups.get(c.name).push(flat(c)); }
+    walk(c);
+  });
+  walk(root);
+  let best = null;
+  for (const [k, v] of groups) if (!best || v.length > best[1].length || (v.length === best[1].length && Object.keys(v[0]).length > Object.keys(best[1][0]).length)) best = [k, v];
+  return best ? { tag: best[0], records: best[1] } : { tag: '', records: [] };
+}
+async function isbankStatement(cfg, p) {
+  if (!cfg.isbankUid || !cfg.isbankPwd) throw new Error('İş Bankası kullanıcı kodu / şifresi köprüde tanımlı değil. C:\\kopru\\asil-kopru.json dosyasına "isbankUid" ve "isbankPwd" yazın.');
+  const wait = isbankLast + 31000 - Date.now();
+  if (wait > 0) throw new Error(`Banka dakikada en fazla 2 sorguya izin veriyor; ${Math.ceil(wait / 1000)} sn sonra tekrar deneyin.`);
+  isbankLast = Date.now();
+  const to = p.to ? new Date(p.to) : new Date(), from = p.from ? new Date(p.from) : new Date(to.getTime() - 7 * 864e5);
+  const body = new URLSearchParams({ uid: cfg.isbankUid, pwd: cfg.isbankPwd, BeginDate: trDateTime(from), EndDate: trDateTime(to) }).toString();
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 70000);
+  let res;
+  try { res = await fetch(cfg.isbankUrl || ISBANK_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body, signal: ctl.signal }); }
+  catch (e) { throw new Error(e.name === 'AbortError' ? 'İş Bankası 1 dakikada cevap vermedi; tarih aralığını daraltın.' : 'İş Bankası\'na bağlanılamadı: ' + (e.message || e)); }
+  finally { clearTimeout(timer); }
+  const text = await res.text();
+  if (!res.ok) throw new Error(`İş Bankası HTTP ${res.status}`);
+  if (/<html[\s>]/i.test(text) && !/<\?xml/i.test(text)) throw new Error('İş Bankası XML yerine sayfa döndürdü: kullanıcı kodu / şifre hatalı ya da online ekstre tanımı açık değil.');
+  const parsed = parseXmlRecords(text);
+  return { ok: true, from: from.toISOString(), to: to.toISOString(), tag: parsed.tag, records: parsed.records.slice(0, 1000), sample: text.slice(0, 4000) };
 }
 
 // ---------- SOAP yardımcıları ----------
@@ -361,6 +425,7 @@ async function handle(cfg, req, res) {
       return send(res, 200, out, cors);
     }
     if (action === 'waLogout') return send(res, 200, await wa.logout(), cors);
+    if (action === 'isbankStatement') { const out = await isbankStatement(cfg, p); log(`İş Bankası hareketleri alındı: ${out.records.length}`); return send(res, 200, out, cors); }
     // Gelen WhatsApp mesajları (ör. müşterinin teslim "ONAY" cevabı); since = son okunan mesajın zamanı (ms).
     if (action === 'waInbox') return send(res, 200, { ok: true, items: cfg.whatsapp ? wa.inbox(p.since) : [] }, cors);
     return send(res, 400, { ok: false, message: 'Bilinmeyen işlem: ' + action }, cors);
@@ -388,4 +453,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { originAllowed, wa, _soap: soapCall, invoiceXml, loadConfig, buildInvoice, createInvoice, balance, healthCheck, taxPayerInbox, viewerLink, toXml, listOf, handle };
+module.exports = { _isbankReset: () => { isbankLast = 0; }, parseXmlRecords, isbankStatement, trDateTime, originAllowed, wa, _soap: soapCall, invoiceXml, loadConfig, buildInvoice, createInvoice, balance, healthCheck, taxPayerInbox, viewerLink, toXml, listOf, handle };
