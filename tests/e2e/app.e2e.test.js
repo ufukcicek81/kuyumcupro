@@ -2801,6 +2801,29 @@ test('satış ekranı 1280×720 pencereye sığar: üst satır tek sıra, özet 
   await p.context().close();
 });
 
+test('cari ekstre: kayıtlı bakiye hareketlerle tutmazsa uyarı çıkar, tek tuşla hareketlere göre düzelir', async () => {
+  const fb = createFakeFirebase();
+  let p = await newDevice(browser, appUrl, fb);
+  await p.waitForTimeout(1500);
+  const st = fb.db.state, c = st.customers.find((x) => x.type === 'Müşteri' && x.id !== 'CASH');
+  st.customerMoves.push({ id: 'CM-HAS-T1', customerId: c.id, period: st.activePeriod, date: new Date().toISOString(), code: 'AG', type: 'AG - ALTIN GİRİŞ', unit: 'HAS', debit: 0, credit: 16.837, description: 't' });
+  const calc = st.customerMoves.filter((m) => m.customerId === c.id && String(m.unit || 'HAS').toUpperCase() === 'HAS').reduce((n, m) => n + Number(m.debit || 0) - Number(m.credit || 0), 0);
+  c.hasBalance = calc + 33.674; // iki kez geri alınmış gibi
+  fb.db.state = st; await p.context().close();
+  p = await newDevice(browser, appUrl, fb);
+  await p.evaluate(() => document.querySelector('[data-route="customers"],[data-go="customers"]').click());
+  await p.waitForTimeout(500);
+  await p.evaluate((x) => document.querySelector(`[data-cari-card="${x}"] [data-cari-detail]`).click(), c.id);
+  await p.waitForSelector('#cariFixFromMovesV7');
+  assert.match(await p.innerText('#modalRoot'), /Bakiye hareketlerle tutmuyor[\s\S]*HAS/);
+  await p.click('#cariFixFromMovesV7'); await p.waitForTimeout(4000);
+  const c2 = fb.db.state.customers.find((x) => x.id === c.id);
+  assert.ok(Math.abs(Number(c2.hasBalance) - calc) < 1e-6, 'HAS bakiye hareketlere eşit olmalı: ' + c2.hasBalance + ' / ' + calc);
+  assert.ok(!(await p.$('#cariFixFromMovesV7')), 'düzelince uyarı kalkmalı');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
 test('cari ekstre: açılışta yalnız bugün; tarih aralığı / Tümü; harekete tıklayınca detay penceresi (düzelt/sil) açılır', async () => {
   const fb = createFakeFirebase();
   let p = await newDevice(browser, appUrl, fb);
