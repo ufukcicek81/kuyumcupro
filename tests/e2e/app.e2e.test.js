@@ -551,7 +551,7 @@ test('KAMERA İLE KİMLİK OKU: MRZ metni ayrıştırılır, alanlar doldurulur 
   const p = await newDevice(browser, appUrl, createFakeFirebase());
   // Testte gerçek OCR yok: Tesseract yerine bilinen MRZ metnini döndüren sahte kütüphane.
   const ocr = ['T.C. KIMLIK KARTI', 'I<TURA12B34567510000000146<<<<', '9001158M3105205TUR<<<<<<<<<<<0', 'YILMAZ<<AHMET<CAN<KLKLLL<<<<<<'].join('\n');
-  await p.context().route(/tesseract\.min\.js/, (r) => r.fulfill({ status: 200, contentType: 'text/javascript', body: `window.Tesseract={createWorker:async()=>({setParameters:async()=>{},recognize:async()=>({data:{text:${JSON.stringify(ocr)}}}),terminate:async()=>{}})};` }));
+  await p.context().route(/tesseract\.min\.js/, (r) => r.fulfill({ status: 200, contentType: 'text/javascript', body: `window.Tesseract={createWorker:async(l)=>{window.__ocrLangs=(window.__ocrLangs||[]).concat(l);if(l==='ocrb_int')throw new Error('indirilemedi');return ({setParameters:async()=>{},recognize:async()=>({data:{text:${JSON.stringify(ocr)}}}),terminate:async()=>{}});}};` }));
   await p.evaluate(() => document.querySelector('[data-go="compliance"]')?.click());
   await p.click('#startCameraKyc');
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
@@ -559,6 +559,7 @@ test('KAMERA İLE KİMLİK OKU: MRZ metni ayrıştırılır, alanlar doldurulur 
   await p.waitForSelector('#camKycSave');
   assert.equal(await p.inputValue('#ckName'), 'AHMET CAN YILMAZ');
   assert.equal(await p.inputValue('#ckTckn'), '10000000146');
+  assert.deepEqual(await p.evaluate(() => window.__ocrLangs), ['ocrb_int', 'eng'], 'önce kimlik yazı tipi modeli, indirilemezse genel model');
   assert.equal(await p.inputValue('#ckDoc'), 'A12B34567');
   assert.equal(await p.inputValue('#ckBirth'), '1990-01-15');
   assert.equal(await p.inputValue('#ckExpiry'), '2031-05-20');

@@ -4,6 +4,7 @@
 (function(root){
   'use strict';
   var AsilMrz=root.AsilMrz;
+  const OCRB_PATH_V7='https://cdn.jsdelivr.net/gh/shreeshrii/tessdata_ocrb@master';
   const TESSERACT_URL_V7='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
   function loadTesseractV7(){
     if(window.Tesseract)return Promise.resolve(window.Tesseract);
@@ -51,28 +52,35 @@
   async function readMrzFromPhotoV7(file,onStatus){
     onStatus('Yazı tanıma hazırlanıyor… (ilk seferde biraz sürer)');
     const T=await loadTesseractV7(),img=await loadImageFileV7(file);
-    const worker=await T.createWorker('eng',1,{logger:m=>{if(m.status==='recognizing text')onStatus('Okunuyor… %'+Math.round((m.progress||0)*100));}});
-    try{
-      await worker.setParameters({tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<',tessedit_pageseg_mode:'6'});
-      // Farklı kırpma / eşikleme / döndürme denemeleri; her alan kontrol haneleriyle doğrulandığı için
-      // denemelerden gelen alanlar birleştirilir (biri seri noyu, diğeri tarihleri okuyabilir).
-      const portrait=(img.naturalHeight||img.height)>(img.naturalWidth||img.width)*1.1;
-      const tries=[[0.55,{}],[0.4,{}],[0.55,{threshold:false}],[0,{}]];
-      if(portrait)tries.splice(1,0,[0.55,{rotate:90}],[0.55,{rotate:270}],[0.4,{rotate:90}],[0.4,{rotate:270}]);
-      tries.push([0.55,{rotate:180}],[0.4,{threshold:false,rotate:180}]);
-      // Ad soyadın kontrol hanesi yoktur: tek okumaya güvenmek yerine denemeler arasında oylama yapılır;
-      // diğer alanlarda da en çok tekrar eden değer seçilir (hepsi kontrol haneli / doğrulanmış adaylardır).
-      const parses=[],texts=[];
-      for(const [from,opt] of tries){
-        const {data}=await worker.recognize(mrzCanvasV7(img,from,opt));
-        texts.push(data.text||'');parses.push(AsilMrz.parse(data.text||''));
-        const acc=voteMrzV7(parses);
-        if(acc.complete&&acc.tckn&&acc.fullName&&!acc.nameUncertain&&acc.nameVotes>=2)break;
-      }
+    const logger=m=>{if(m.status==='recognizing text')onStatus('Okunuyor… %'+Math.round((m.progress||0)*100));};
+    const portrait=(img.naturalHeight||img.height)>(img.naturalWidth||img.width)*1.1;
+    const tries=[[0.55,{}],[0.4,{}],[0.55,{threshold:false}],[0,{}]];
+    if(portrait)tries.splice(1,0,[0.55,{rotate:90}],[0.55,{rotate:270}],[0.4,{rotate:90}],[0.4,{rotate:270}]);
+    tries.push([0.55,{rotate:180}],[0.4,{threshold:false,rotate:180}]);
+    // Önce kimlik arkasındaki OCR-B yazı tipi için eğitilmiş model (ocrb_int, ~1,4 MB) denenir: genel İngilizce model
+    // "<" dolgu işaretlerini K / C / L okuyor. Model indirilemezse genel modelle devam edilir.
+    // Ad soyadın kontrol hanesi yoktur: denemeler arasında oylama yapılır; diğer alanlar kontrol haneli adaylardır.
+    const parses=[],texts=[],models=[['ocrb_int',{langPath:OCRB_PATH_V7,gzip:false}],['eng',{}]];
+    for(const [lang,opt] of models){
+      let worker;
+      try{onStatus(lang==='eng'?'Genel yazı tanıma deneniyor…':'Kimlik yazı tipi yükleniyor…');worker=await Promise.race([T.createWorker(lang,1,{...opt,logger}),new Promise((_,rej)=>setTimeout(()=>rej(new Error('zaman aşımı')),45000))]);}
+      catch(_){continue;}
+      try{
+        await worker.setParameters({tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<',tessedit_pageseg_mode:'6'});
+        for(const [from,o] of tries){
+          const {data}=await worker.recognize(mrzCanvasV7(img,from,o));
+          texts.push('['+lang+'] '+(data.text||''));parses.push(AsilMrz.parse(data.text||''));
+          const acc=voteMrzV7(parses);
+          if(acc.complete&&acc.tckn&&acc.fullName&&!acc.nameUncertain&&acc.nameVotes>=2)break;
+        }
+      }finally{try{await worker.terminate();}catch{}}
       const acc=voteMrzV7(parses);
-      acc.ocrText=texts.join('\n---\n');
-      return acc;
-    }finally{try{await worker.terminate();}catch{}}
+      if(acc.complete&&acc.tckn&&acc.fullName&&!acc.nameUncertain&&acc.nameVotes>=2)break;
+    }
+    if(!parses.length)throw new Error('Yazı tanıma başlatılamadı; internet bağlantısını kontrol edin');
+    const acc=voteMrzV7(parses);
+    acc.ocrText=texts.join('\n---\n');
+    return acc;
   }
 
   root.AsilMrzCamera={read:readMrzFromPhotoV7,merge:mergeMrzV7,vote:voteMrzV7,load:loadTesseractV7};
