@@ -1861,7 +1861,7 @@ test('otomatik havale bildirimi: yeni gelen para uyarı verir, riskli açıklama
   const cfg = { allowedOrigins: [], whatsapp: false, isbankUid: 'KOD1', isbankPwd: 'gizli' };
   global.fetch = async (url, opt) => {
     if (!String(url).includes('posmatik2.isbank.com.tr')) return realFetch(url, opt);
-    return { ok: true, status: 200, text: async () => `<?xml version="1.0"?><R><H><Tarih>${dmy} 10:00:00</Tarih><Tutar>5.000,00</Tutar><Aciklama>AHMET YILMAZ BORÇ ÖDEMESİ</Aciklama></H><H><Tarih>${dmy} 10:05:00</Tarih><Tutar>7.250,00</Tutar><Aciklama>ALTIN ÖDEMESİ ELDEN TESLİM ALDIM 10000000146</Aciklama></H><H><Tarih>${dmy} 10:06:00</Tarih><Tutar>300,00</Tutar><Aciklama>FAST GELEN</Aciklama></H><H><Tarih>${dmy} 10:07:00</Tarih><Tutar>-80,00</Tutar><Aciklama>MASRAF</Aciklama></H></R>` };
+    return { ok: true, status: 200, text: async () => `<?xml version="1.0"?><R><H><Tarih>${dmy} 10:00:00</Tarih><Tutar>5.000,00</Tutar><Aciklama>AHMET YILMAZ BORÇ ÖDEMESİ</Aciklama></H><H><Tarih>${dmy} 10:05:00</Tarih><Tutar>7.250,00</Tutar><Aciklama>FAST GELEN AHMET YILMAZ ALTIN ÖDEMESİ ELDEN TESLİM ALDIM 10000000146</Aciklama></H><H><Tarih>${dmy} 10:06:00</Tarih><Tutar>300,00</Tutar><Aciklama>FAST GELEN</Aciklama></H><H><Tarih>${dmy} 10:07:00</Tarih><Tutar>-80,00</Tutar><Aciklama>MASRAF</Aciklama></H></R>` };
   };
   const bridge = http.createServer((q, r) => kopru.handle(cfg, q, r));
   await new Promise((r) => bridge.listen(0, '127.0.0.1', r));
@@ -1895,9 +1895,32 @@ test('otomatik havale bildirimi: yeni gelen para uyarı verir, riskli açıklama
     for (let i = 0; i < 40 && !(fb.db.state.invoiceRecords || []).some((r) => r.bankIncomingId === id); i++) await p.waitForTimeout(250);
     const rec = (fb.db.state.invoiceRecords || []).find((r) => r.bankIncomingId === id);
     assert.ok(rec && rec.amount === 7250 && rec.manual.receiver.tckn === '10000000146', 'fatura taslağı TC ile oluşmalı');
+    assert.equal(rec.manual.receiver.name, 'AHMET YILMAZ', 'gönderen adı açıklamadan alınmalı');
     assert.deepEqual(p.errors, []);
     await p.context().close();
   } finally { global.fetch = realFetch; bridge.close(); kopru._isbankReset(); }
+});
+
+test('satıştan açılan fatura taslağına bankadan gelen havalenin TC ve gönderen adı yazılır', async () => {
+  const fb = createFakeFirebase();
+  let p = await newDevice(browser, appUrl, fb);
+  await p.waitForTimeout(1500);
+  const st = fb.db.state, bank = st.bankAccounts[0], now = new Date().toISOString();
+  st.sales = [{ id: 'S-T9', docNo: 'SAT-T9', status: 'Tamamlandı', period: st.activePeriod, date: now, total: 7250, saleCurrency: 'TL', customerId: '', lines: [], items: [], payments: [] }, ...(st.sales || [])];
+  st.financeMoves = [{ id: 'FIN-T9', period: st.activePeriod, date: now, direction: 'Giriş', type: 'Havale / EFT Tahsilat', accountKind: 'Banka', accountId: bank.id, accountName: bank.bank || bank.name, amount: 7250, accountAmount: 7250, tlAmount: 7250, accountCurrency: 'TL', sourceDocNo: 'SAT-T9' }, ...(st.financeMoves || [])];
+  st.bankIncomingV7 = [{ id: 'BI-x', date: now, amount: 7250, description: 'FAST GELEN MEHMET DEMİR ALTIN ÖDEMESİ 10000000146', tckn: '10000000146', level: 'uygun', msg: '', accountId: bank.id, status: 'bekliyor' }];
+  fb.db.state = st; await p.context().close();
+  p = await newDevice(browser, appUrl, fb);
+  await p.evaluate(() => document.querySelector('[data-go="invoices"],[data-route="invoices"]').click());
+  await p.waitForTimeout(400);
+  await p.evaluate(() => document.querySelector('[data-invoice-view="pending"],[data-invoice-view="sales"]')?.click());
+  await p.waitForSelector('[data-invoice-draft="S-T9"]');
+  await p.evaluate(() => document.querySelector('[data-invoice-draft="S-T9"]').click());
+  await p.waitForSelector('#irName');
+  assert.equal(await p.inputValue('#irName'), 'MEHMET DEMİR');
+  assert.equal(await p.inputValue('#irTckn'), '10000000146');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
 });
 
 test('banka bakiyesi gerçek tutara eşitlenir; kasa değişmez', async () => {
