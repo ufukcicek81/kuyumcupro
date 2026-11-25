@@ -4219,6 +4219,7 @@ function stockSummaryView(){
         const raw=`<details style="margin-top:8px"><summary>Bankadan gelen ham veri (alan adları: ${esc(col.keys.join(', ')||'—')})</summary><pre style="white-space:pre-wrap;font-size:11px;max-height:240px;overflow:auto">${esc(d.sample||'')}</pre></details>`;
         if(!recs.length){box.innerHTML=`<div class="notice">Bu aralıkta bankadan hareket gelmedi.</div>${raw}`;return;}
         if(!col.date||(!col.amount&&!col.borc&&!col.alacak)){box.innerHTML=`<div class="notice"><b>${recs.length} hareket geldi</b> ama tarih / tutar sütunları tanınamadı. Aşağıdaki ham verinin ekran görüntüsünü gönderin, eşleştirmeyi ona göre ayarlayalım.</div>${raw}`;return;}
+        if(bankIncomingStoreV7(recs,col,recs.map(bankRecKeyV7),Object.assign({},bankWatchCfgV7(),{accountId:a.acc.id})))save();
         const r=bankOnlineMatchV7(recs,col,moves),miss=r.bank.filter(b=>!b.m),sum=l=>l.reduce((n,x)=>n+x.amt,0);
         const row=(b)=>`<tr${b.m?'':' style="background:rgba(192,38,45,.08)"'}><td>${esc(b.day.split('-').reverse().join('.'))}</td><td>${esc(b.desc)}${b.amt>0?' '+bankDescBadgeV7(bankDescCheckV7(b.desc)):''}</td><td class="num">${money(b.amt)}</td><td>${b.m?`✓ ${esc(b.m.f.type||'')} ${esc(b.m.f.sourceDocNo||'')}`:'<b style="color:#c0262d">Programda yok</b>'}</td></tr>`;
         box.innerHTML=`<div class="grid grid-4" style="margin:8px 0">${metric('Bankada',String(r.bank.length),money(sum(r.bank)))}${metric('Eşleşen',String(r.bank.length-miss.length),'')}${metric('Bankada var, programda yok',String(miss.length),money(sum(miss)))}${metric('Programda var, bankada yok',String(r.progOnly.length),money(sum(r.progOnly)))}</div>
@@ -4275,6 +4276,7 @@ function stockSummaryView(){
     bankWatchPollV7.busy=true;
     try{
       const d=await waBridgeCallV7({action:'isbankStatement',watch:true}),recs=(d&&d.records)||[],col=bankOnlineColsV7(recs);
+      bankWatchLogV7({ok:true,n:recs.length});
       if(recs.length&&(!col.date||(!col.amount&&!col.borc&&!col.alacak)))return;
       const key='asil_bank_seen_v7';let seen=null;try{seen=JSON.parse(localStorage.getItem(key)||'null');}catch(_){}
       const keys=recs.map(bankRecKeyV7),first=!Array.isArray(seen),set=new Set(seen||[]);
@@ -4286,7 +4288,14 @@ function stockSummaryView(){
       const add=fresh.map((r,i)=>{const desc=col.desc?String(r[col.desc]||''):'',chk=bankDescCheckV7(desc,w);return {id:'ba'+now+'_'+i,amt:bankOnlineAmountV7(r,col),desc,when:String(r[col.date]||''),bank:acc?(acc.bank||acc.name||''):'',level:chk.level,msg:chk.msg,at:new Date(now).toISOString()};});
       bankAlertsSaveV7(bankAlertsV7().concat(add));bankAlertRenderV7();bankWatchBeepV7();
       add.filter(a=>a.level==='risk').forEach(a=>audit(`Riskli havale açıklaması: ${money(a.amt)} "${String(a.desc).slice(0,80)}"`,'Banka'));
-    }catch(_){}finally{bankWatchPollV7.busy=false;}
+    }catch(e){bankWatchLogV7({ok:false,err:String(e&&e.message||e)});}finally{bankWatchPollV7.busy=false;}
+  }
+  function bankWatchLogV7(x){try{localStorage.setItem('asil_bank_watch_last_v7',JSON.stringify(Object.assign({at:new Date().toISOString()},x)));}catch(_){}}
+  function bankWatchStatusHtmlV7(){
+    const w=bankWatchCfgV7();let l=null;try{l=JSON.parse(localStorage.getItem('asil_bank_watch_last_v7')||'null');}catch(_){}
+    if(!w.on)return '<b style="color:#c0262d">Otomatik bildirim KAPALI.</b> Açmak için: Banka carisi → ekstre → 🏦 Bankadan Getir → 🔔 Otomatik havale bildirimi. Bankadan Getir ile sorgulanan havaleler de buraya düşer.';
+    const t=l?new Date(l.at).toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'}):'';
+    return '<b style="color:#16803c">Otomatik bildirim AÇIK</b> (her dakika, son 24 saat). '+(!l?'Bu cihazda henüz kontrol yapılmadı (köprünün çalıştığı dükkân bilgisayarında program açık olmalı).':l.ok?`Son kontrol ${esc(t)}: bankada ${l.n} hareket.`:`<span style="color:#c0262d">Son kontrol ${esc(t)} hata verdi: ${esc(l.err||'')}</span>`);
   }
   setInterval(bankWatchPollV7,60000);setTimeout(()=>{bankAlertRenderV7();bankWatchPollV7();},6000);
   function cariBalancesOfV7(c){
@@ -10486,9 +10495,9 @@ function stockSummaryView(){
     const list=havaleIncomingMovesV7(),bl=bankIncomingPendingV7();
     return `<div class="card"><div class="section-head"><h3>Gelen Havaleler</h3><span>${list.length} havale faturasız</span></div>
       <div class="form-grid" style="margin-bottom:10px"><div class="labelled"><label>Taslakta işçilik oranı (%)</label><input id="havaleLabourPct" class="input" inputmode="decimal" value="${invoiceLabourPctV7()}"></div><div class="labelled" style="justify-content:end"><button class="btn btn-outline" type="button" id="havaleLabourSave">Kaydet</button></div><div class="notice span-2">Bankaya giren havale/EFT'ler burada listelenir. Taslakta tutar, bu orana göre altın bedeli (istisna, KDV %0) ve KDV dahil işçilik olarak bölünür; taslakta elle değiştirebilirsiniz. Satışa bağlı havalede satışın fatura taslağı açılır.</div></div>
-      <div class="table-wrap"><table class="table"><thead><tr><th>Tarih</th><th>Banka</th><th>Gönderen / Açıklama</th><th>Belge</th><th class="num">Tutar</th><th>İşlem</th></tr></thead><tbody>${list.map(m=>`<tr><td>${trDate(m.date)}</td><td>${esc(m.accountName||'')}</td><td>${esc(m.customer||'')}${m.description?`<br><small>${esc(m.description)}</small>`:''}</td><td>${esc(m.sourceDocNo||'—')}</td><td class="num"><strong>${money(m.tlAmount??m.amount)}</strong></td><td><button class="btn btn-primary" data-havale-invoice="${esc(m.id)}">Fatura Taslağı</button></td></tr>`).join('')||'<tr><td colspan="6">Faturası kesilmemiş gelen havale yok.</td></tr>'}</tbody></table></div></div>
+      <div class="table-wrap"><table class="table"><thead><tr><th>Tarih</th><th>Banka</th><th>Gönderen / Açıklama</th><th>Belge</th><th class="num">Tutar</th><th>İşlem</th></tr></thead><tbody>${list.map(m=>`<tr><td>${trDate(m.date)}</td><td>${esc(m.accountName||'')}</td><td>${esc(m.customer||'')}${m.description?`<br><small>${esc(m.description)}</small>`:''}${(b=>b?`<br><small>🏦 ${esc(b.description||'')}</small> ${bankDescBadgeV7(b)}`:'')(bankIncomingForMoveV7(m))}</td><td>${esc(m.sourceDocNo||'—')}</td><td class="num"><strong>${money(m.tlAmount??m.amount)}</strong></td><td><button class="btn btn-primary" data-havale-invoice="${esc(m.id)}">Fatura Taslağı</button></td></tr>`).join('')||'<tr><td colspan="6">Faturası kesilmemiş gelen havale yok.</td></tr>'}</tbody></table></div></div>
       <div class="card" style="margin-top:12px"><div class="section-head"><h3>🏦 Bankadan Otomatik Gelen Havaleler</h3><span>${bl.length} havale · programa henüz girilmemiş</span></div>
-      <div class="notice" style="margin-bottom:8px">Otomatik havale bildirimi açıkken bankaya gelen paralar burada listelenir. Açıklamadaki TC kimlik numarası faturaya otomatik yazılır. Programa aynı gün aynı tutarla banka girişi yapılınca üstteki listeye geçer.</div>
+      <div class="notice" style="margin-bottom:8px">${bankWatchStatusHtmlV7()}<br>Bankaya gelen paralar burada listelenir. Açıklamadaki TC kimlik numarası faturaya otomatik yazılır. Programa aynı gün aynı tutarla banka girişi yapılınca üstteki listeye geçer.</div>
       <div class="table-wrap"><table class="table"><thead><tr><th>Tarih</th><th>Banka</th><th>Banka açıklaması</th><th>Kontrol</th><th class="num">Tutar</th><th>İşlem</th></tr></thead><tbody>${bl.map(b=>`<tr><td>${trDate(b.date)}</td><td>${esc(b.accountName||'')}</td><td>${esc(b.description||'')}${b.tckn?`<br><small>TC ${esc(b.tckn)}</small>`:''}</td><td>${bankDescBadgeV7(b)}<br><small>${esc(b.msg||'')}</small></td><td class="num"><strong>${money(b.amount)}</strong></td><td><div class="addon-actions"><button class="btn btn-primary" data-bank-incoming-invoice="${esc(b.id)}">Fatura Taslağı</button><button class="btn btn-outline btn-sm" data-bank-incoming-hide="${esc(b.id)}" title="Fatura gerekmiyor; listeden kaldır">Gizle</button></div></td></tr>`).join('')||'<tr><td colspan="6">Bankadan gelen faturasız havale yok.</td></tr>'}</tbody></table></div></div>`;
   }
   async function sendHavaleInvoiceV7(r,cfg,url){
