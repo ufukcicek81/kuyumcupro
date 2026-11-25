@@ -1926,6 +1926,56 @@ test('satıştan açılan fatura taslağına bankadan gelen havalenin TC si ve o
   await p.context().close();
 });
 
+test('gider pusulası: hurda alışından düzenlenir, numara sırayla gider, iptal numarayı boşaltmaz', async () => {
+  const fb = createFakeFirebase();
+  let p = await newDevice(browser, appUrl, fb);
+  await p.waitForTimeout(1500);
+  const st = fb.db.state, now = new Date().toISOString();
+  st.customers = [...(st.customers || []), { id: 'C-GP', name: 'AYŞE KARA', type: 'Müşteri', phone: '05550000000' }];
+  const tr = (id, doc, item, q, has, tl) => ({ id, docNo: doc, period: st.activePeriod, date: now, tradeType: 'Hurda Alış', side: 'Alış', item, quantity: q, unit: 'GR', unitPrice: tl / q, totalTL: tl, totalHas: has, customerId: 'C-GP', customer: 'AYŞE KARA', sourceType: 'saleScreenPurchase' });
+  st.tradeMoves = [tr('T-GP1', 'AZA-9001', '22 AYAR HURDA', 10, 9.16, 55000), tr('T-GP2', 'AZA-9001', '14 AYAR HURDA', 5, 2.92, 17500), tr('T-GP3', 'AZA-9002', '22 AYAR HURDA', 2, 1.83, 11000), ...(st.tradeMoves || [])];
+  fb.db.state = st; await p.context().close();
+  p = await newDevice(browser, appUrl, fb);
+  await p.evaluate(() => document.querySelector('[data-go="invoices"],[data-route="invoices"]').click());
+  await p.waitForTimeout(400);
+  await p.evaluate(() => document.querySelector('[data-invoice-view="gider"]').click());
+  await p.waitForSelector('[data-gp-new="AZA-9001"]');
+  await p.evaluate(() => document.querySelector('[data-gp-new="AZA-9001"]').click());
+  await p.waitForSelector('#gpName');
+  assert.equal(await p.inputValue('#gpName'), 'AYŞE KARA');
+  assert.match(await p.innerText('#gpTotals'), /72\.500,00/);
+  await p.click('#modalConfirm');
+  assert.ok(await p.$('#gpName'), 'TC ve adres olmadan kaydedilmemeli');
+  await p.evaluate(() => document.querySelector('.critical-alert-backdrop')?.remove());
+  await p.fill('#gpTc', '10000000146'); await p.fill('#gpAddress', 'CUMHURİYET MAH. DÜZCE');
+  await p.click('#modalConfirm');
+  await p.waitForTimeout(500);
+  await p.evaluate(() => document.querySelector('[data-gp-new="AZA-9002"]').click());
+  await p.waitForSelector('#gpName');
+  assert.equal(await p.inputValue('#gpTc'), '10000000146', 'TC cari kartına yazılmış olmalı');
+  await p.click('#modalConfirm');
+  for (let i = 0; i < 40 && (fb.db.state.expenseVouchersV7 || []).length < 2; i++) await p.waitForTimeout(250);
+  const v = (fb.db.state.expenseVouchersV7 || []).slice().sort((a, b) => a.no.localeCompare(b.no));
+  const y = new Date().getFullYear();
+  assert.deepEqual(v.map((x) => x.no), [`GP${y}0000000001`, `GP${y}0000000002`]);
+  assert.equal(v[0].total, 72500); assert.equal(v[0].lines.length, 2); assert.equal(v[0].seller.address, 'CUMHURİYET MAH. DÜZCE');
+  await p.waitForSelector(`[data-gp-cancel="${v[0].id}"]`);
+  await p.evaluate((id) => document.querySelector(`[data-gp-cancel="${id}"]`).click(), v[0].id);
+  for (let i = 0; i < 40 && !(fb.db.state.expenseVouchersV7 || []).some((x) => x.status === 'İptal'); i++) await p.waitForTimeout(250);
+  const after = fb.db.state.expenseVouchersV7;
+  assert.equal(after.find((x) => x.id === v[0].id).status, 'İptal');
+  await p.waitForSelector('[data-gp-new="AZA-9001"]');
+  await p.evaluate(() => document.querySelector('[data-gp-new="AZA-9001"]').click());
+  await p.waitForSelector('#gpName');
+  await p.click('#modalConfirm');
+  for (let i = 0; i < 40 && (fb.db.state.expenseVouchersV7 || []).length < 3; i++) await p.waitForTimeout(250);
+  assert.ok(fb.db.state.expenseVouchersV7.some((x) => x.no === `GP${y}0000000003`), 'iptalden sonra yeni numara verilmeli, eski numara tekrar kullanılmamalı');
+  const t = await p.innerText('body');
+  assert.ok(!/e-Gönder/.test(t), 'e-Gider Pusulası kapalıyken gönder düğmesi görünmemeli');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
 test('banka bakiyesi gerçek tutara eşitlenir; kasa değişmez', async () => {
   const fb = createFakeFirebase();
   const p = await newDevice(browser, appUrl, fb);
