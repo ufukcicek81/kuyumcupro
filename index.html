@@ -2425,8 +2425,9 @@ window.PUSULA_INITIAL_STATE={"meta":{"version":4.3,"createdAt":"2026-09-17T09:00
     document.getElementById('saleHistPop')?.remove();
     const pop=document.createElement('div');pop.id='saleHistPop';pop.style.cssText='position:fixed;inset:0;z-index:4000;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;padding:16px';
     const fix=saleCostRecalcPlanV7(s).length;
-    pop.innerHTML=`<div class="card" style="width:min(760px,96vw);max-height:90vh;overflow:auto;position:relative"><button class="btn btn-outline btn-sm" type="button" id="saleHistPopX" style="position:absolute;top:8px;right:8px">×</button><h3 style="margin:0 0 8px">Satış — ${esc(s.docNo||s.id)}</h3>${saleDetailHtml(s)}
+    pop.innerHTML=`<div class="card" style="width:min(760px,96vw);max-height:90vh;overflow:auto;position:relative"><button class="btn btn-outline btn-sm" type="button" id="saleHistPopX" style="position:absolute;top:8px;right:8px">×</button><h3 style="margin:0 0 8px">Satış — ${esc(s.docNo||s.id)}</h3>${s.masakIdentityId||masakThresholdSalesV7().some(x=>x.s.id===s.id)?`<div style="margin:0 0 8px">${masakSaleBadgeV7(s)} <button class="btn btn-outline btn-sm" type="button" data-masak-link="${esc(s.id)}">${s.masakIdentityId?'Kimliği değiştir':'MASAK kimliği bağla'}</button></div>`:''}${saleDetailHtml(s)}
       <div class="addon-actions" style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-outline" type="button" id="shpPrint">🖨 Fiş Yazdır</button><button class="btn btn-outline" type="button" id="shpWa">💬 WhatsApp</button><button class="btn btn-outline" type="button" id="shpCost">Maliyeti yeniden hesapla${fix?` (${fix})`:''}</button><button class="btn btn-primary" type="button" id="shpEdit">Düzelt</button><button class="btn btn-danger" type="button" id="shpCancel">İptal</button></div></div>`;
+    pop.querySelector('[data-masak-link]')?.addEventListener('click',()=>{pop.remove();openMasakLinkV7(s.id);});
     host.appendChild(pop);
     const close=()=>{pop.remove();document.removeEventListener('keydown',esc_,true);};
     const esc_=e=>{if(!document.contains(pop))return document.removeEventListener('keydown',esc_,true);if(e.key==='Escape'){e.preventDefault();e.stopPropagation();close();}};
@@ -7121,7 +7122,7 @@ function stockSummaryView(){
       const cur=String(saleDraft.saleCurrency||'TL').toUpperCase(),native=t.remain/Math.max(.000001,saleCurrencyRate(cur));
       saleDraft.payments.push({type:'Açık Hesap',amount:t.remain,nativeAmount:native,currency:cur,detail:`Kalan ${qty(native)} ${cur} otomatik açık hesap`,automatic:true});
     }
-    state.sales.unshift({id,docNo,period:state.activePeriod,date:now(),transactionKind:collection.active?'Cari Tahsilat':'Satış',customerId:saleDraft.customerId,masakIdentityId:saleDraft.masakIdentityId||'',salesperson:saleDraft.salesperson,lines:clone(saleDraft.lines),payments:clone(saleDraft.payments),returnItems:clone(saleDraft.returnItems||[]),discount:Number(saleDraft.discount||0),commission:Number(saleDraft.commission||0),returns:Number(saleDraft.returns||0),total:t.net,cost,costHas,revenueHas:t.net/hasSellRateAtSale,profitHas:(t.net/hasSellRateAtSale)-costHas,hasBuyRateAtSale,hasSellRateAtSale,saleCurrency:String(saleDraft.saleCurrency||'TL'),note:String(saleDraft.note||'').trim(),status:'Tamamlandı'});
+    state.sales.unshift({id,docNo,period:state.activePeriod,date:now(),transactionKind:collection.active?'Cari Tahsilat':'Satış',customerId:saleDraft.customerId,masakIdentityId:saleDraft.masakIdentityId||'',...(saleDraft.masakIdentityId&&identityById(saleDraft.masakIdentityId)?{masakCheck:masakSnapshotV7(saleDraft.masakIdentityId,saleDraft.masakRiskAck===saleDraft.masakIdentityId?{riskSkipped:true}:{})}:{}),salesperson:saleDraft.salesperson,lines:clone(saleDraft.lines),payments:clone(saleDraft.payments),returnItems:clone(saleDraft.returnItems||[]),discount:Number(saleDraft.discount||0),commission:Number(saleDraft.commission||0),returns:Number(saleDraft.returns||0),total:t.net,cost,costHas,revenueHas:t.net/hasSellRateAtSale,profitHas:(t.net/hasSellRateAtSale)-costHas,hasBuyRateAtSale,hasSellRateAtSale,saleCurrency:String(saleDraft.saleCurrency||'TL'),note:String(saleDraft.note||'').trim(),status:'Tamamlandı'});
 
     saleDraft.lines.forEach(l=>{
       if(l.sourceType==='open'){
@@ -9938,6 +9939,7 @@ function stockSummaryView(){
         ${row('Pazarlama İzni',r.marketingConsent==='yes'?'İzin veriyor':r.marketingConsent==='no'?'İzin vermiyor':'Belirtilmedi')}
         ${row('Risk Sonucu',r.riskStatus||'TARANMADI')}
       </div>
+      ${masakIdentitySalesHtmlV7(r.id)}
       ${kvkkNoticeHtml()}
       <div class="addon-actions" style="margin-top:16px">
         <button type="button" class="btn btn-primary" id="kycDetailEdit">DÜZENLE / TAMAMLA</button>
@@ -10223,17 +10225,67 @@ function stockSummaryView(){
     setTimeout(poll,250);
   }
 
+  /* MASAK ↔ satış bağlantısı: eşik üstü satışta seçilen kimlik ve o anki risk sorgusu sonucu satışa yazılır (masakCheck).
+     Aynı carinin aynı gün yaptığı satışlar bağlantılı işlem sayılır ve eşik için toplanır.
+     Kimliği bağlanmamış eşik üstü satışlar MASAK sayfasında listelenir ve sonradan kimlik bağlanabilir. */
+  function masakSnapshotV7(id,extra){const r=identityById(id);if(!r)return null;return Object.assign({identityId:r.id,fullName:r.fullName||'',idNo:maskIdNo(r.personType==='Tüzel Kişi'?r.vkn:r.tckn),riskStatus:r.riskStatus||'TARANMADI',riskCheckedAt:r.riskCheckedAt||'',riskProvider:r.riskProvider||'',linkedAt:now(),linkedBy:session?.name||''},extra||{});}
+  function masakLinkedSameDayV7(customerId,day,exceptId){
+    if(!customerId||customerId==='CASH')return {sum:0,list:[]};
+    const list=(state.sales||[]).filter(s=>s.id!==exceptId&&s.customerId===customerId&&s.transactionKind!=='Cari Tahsilat'&&localDayV7(new Date(s.date))===day);
+    return {sum:list.reduce((n,s)=>n+Math.abs(Number(s.total||0)),0),list};
+  }
+  function masakRiskFreshV7(r){const days=Number(state.complianceSettings?.riskMaxAgeDays??30);if(!r||!r.riskCheckedAt||r.riskStatus==='TARANMADI'||r.riskStatus==='TARANIYOR')return false;return (Date.now()-new Date(r.riskCheckedAt).getTime())<=Math.max(0,days)*864e5+60e3;}
+  function masakThresholdSalesV7(){
+    const th=Number(state.complianceSettings?.identityThresholdTl||0);if(!th)return [];
+    return activeSales().filter(s=>s.transactionKind!=='Cari Tahsilat').map(s=>{const amt=Math.abs(Number(s.total||0)),ln=masakLinkedSameDayV7(s.customerId,localDayV7(new Date(s.date)),s.id);return {s,amt,linked:ln.sum,total:amt+ln.sum};})
+      .filter(x=>x.amt>=th||(x.linked>0&&x.total>=th)).sort((a,b)=>String(b.s.date).localeCompare(String(a.s.date)));
+  }
+  function masakSaleBadgeV7(s){
+    if(s.masakIdentityId){const m=s.masakCheck||{},r=identityById(s.masakIdentityId);const nm=m.fullName||r?.fullName||'Kimlik';const rs=m.riskStatus||r?.riskStatus||'TARANMADI';return `<span class="badge ${rs==='TEMİZ'?'green':rs==='EŞLEŞME'?'red':'gold'}">MASAK: ${esc(nm)} · ${esc(rs)}</span>`;}
+    return '<span class="badge red">⚠ MASAK kimliği bağlı değil</span>';
+  }
+  function openMasakLinkV7(saleId){
+    const s=state.sales.find(x=>x.id===saleId);if(!s)return;
+    const ready=identityRecords.filter(identityComplete).sort((a,b)=>String(a.fullName||'').localeCompare(String(b.fullName||''),'tr'));
+    modal(`MASAK Kimliği Bağla — ${esc(s.docNo||s.id)}`,`<div class="notice">Satış: <b>${money(Math.abs(Number(s.total||0)))}</b> · ${trDate(s.date)} · ${esc(state.customers.find(c=>c.id===s.customerId)?.name||'Peşin Müşteri')}</div>
+      <div class="labelled" style="margin-top:10px"><label>MASAK Müşterisi</label><select id="masakLinkSel" class="select"><option value="">Seçiniz…</option>${ready.map(r=>`<option value="${r.id}" ${r.id===s.masakIdentityId?'selected':''}>${esc(r.fullName)} · ${maskIdNo(r.personType==='Tüzel Kişi'?r.vkn:r.tckn)} · ${esc(r.riskStatus||'TARANMADI')}</option>`).join('')}</select></div>
+      <p class="muted" style="margin-top:8px">Kimlik listede yoksa önce Kimlik / MASAK sayfasından kaydedin. Bağlama işlem kaydına yazılır.</p>`,()=>{
+        const id=document.getElementById('masakLinkSel').value,r=identityById(id);if(!identityComplete(r))return toast('Tamamlanmış bir MASAK müşterisi seçin','err');
+        const prev=s.masakIdentityId;s.masakIdentityId=id;s.masakCheck=masakSnapshotV7(id,{linkedLater:true});
+        audit(`${s.docNo||s.id} satışına MASAK kimliği ${prev?'değiştirildi':'sonradan bağlandı'}: ${r.fullName} (${s.masakCheck.riskStatus})`,'Kimlik/MASAK');save();closeModal();render();toast('MASAK kimliği satışa bağlandı');
+      },'Bağla');
+  }
+  function masakThresholdCardV7(){
+    const rows=masakThresholdSalesV7(),missing=rows.filter(x=>!x.s.masakIdentityId).length;
+    return `<div class="card" style="margin-top:16px"><div class="section-head"><h3>Eşik Üstü Satışlar ve MASAK Sorguları</h3><span>${rows.length} satış${missing?` · <b class="negative">${missing} kimliksiz</b>`:''}</span></div>
+      <div class="notice" style="margin-bottom:8px">Eşiği aşan satışlar ile aynı carinin aynı gün yaptığı toplamı eşiği aşan (bağlantılı) satışlar listelenir. Satış anındaki kimlik ve risk sorgusu sonucu satışla birlikte saklanır.</div>
+      <div class="table-wrap"><table class="table"><thead><tr><th>Belge / Tarih</th><th>Cari</th><th class="num">Tutar</th><th>MASAK Kimliği / Sorgu</th><th>İşlem</th></tr></thead><tbody>${rows.map(x=>{const m=x.s.masakCheck;return `<tr${x.s.masakIdentityId?'':' style="background:rgba(192,38,45,.07)"'}><td><strong>${esc(x.s.docNo||x.s.id)}</strong><br><small>${trDate(x.s.date)}</small></td><td>${esc(state.customers.find(c=>c.id===x.s.customerId)?.name||'Peşin Müşteri')}</td><td class="num"><strong>${money(x.amt)}</strong>${x.linked?`<br><small>Aynı gün toplam ${money(x.total)}</small>`:''}</td><td>${masakSaleBadgeV7(x.s)}${m?.riskCheckedAt?`<br><small>Sorgu: ${trDate(m.riskCheckedAt)}${m.linkedLater?' · sonradan bağlandı':''}</small>`:m?`<br><small>${m.linkedLater?'Sonradan bağlandı · ':''}sorgu yapılmamış</small>`:''}</td><td><button class="btn ${x.s.masakIdentityId?'btn-outline':'btn-primary'} btn-sm" data-masak-link="${esc(x.s.id)}">${x.s.masakIdentityId?'Değiştir':'Kimlik Bağla'}</button></td></tr>`;}).join('')||'<tr><td colspan="5">Bu dönemde eşik üstü satış yok.</td></tr>'}</tbody></table></div></div>`;
+  }
+  function masakIdentitySalesHtmlV7(id){
+    const list=(state.sales||[]).filter(s=>s.masakIdentityId===id).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+    return `<h3 style="margin-top:14px">Bağlı Satışlar (${list.length})</h3><div class="table-wrap"><table class="table"><thead><tr><th>Belge</th><th>Tarih</th><th class="num">Tutar</th><th>O anki sorgu sonucu</th></tr></thead><tbody>${list.map(s=>`<tr><td>${esc(s.docNo||s.id)}</td><td>${trDate(s.date)}</td><td class="num">${money(Math.abs(Number(s.total||0)))}</td><td>${esc(s.masakCheck?.riskStatus||'—')}${s.masakCheck?.riskCheckedAt?` <small>(${trDate(s.masakCheck.riskCheckedAt)})</small>`:''}</td></tr>`).join('')||'<tr><td colspan="4">Bu kimliğe bağlı satış yok.</td></tr>'}</tbody></table></div>`;
+  }
   function complianceAmountForCurrentSale(){const t=saleTotals(),st=standaloneTradeInState();return Math.max(Math.abs(Number(t.net||0)),Math.abs(Number(st.received||0)));}
+  function complianceLinkedForCurrentSaleV7(){return masakLinkedSameDayV7(saleDraft.customerId,saleDraft.saleDate||localDayV7());}
   function saleIdentityGate(){
     ensureMilyemPlusAddons();
     if(state.complianceSettings.blockSaleWithoutIdentity===false)return true;
-    const threshold=Number(state.complianceSettings.identityThresholdTl||0),amount=complianceAmountForCurrentSale();
+    const threshold=Number(state.complianceSettings.identityThresholdTl||0),own=complianceAmountForCurrentSale(),ln=complianceLinkedForCurrentSaleV7(),amount=own+ln.sum;
     if(!threshold||amount<threshold)return true;
     const selected=identityById(saleDraft.masakIdentityId);
-    if(identityComplete(selected)){if(state.complianceSettings.blockSaleOnRiskMatch!==false&&selected.riskStatus==='EŞLEŞME'){criticalAlert(`RİSK EŞLEŞMESİ: ${selected.fullName}. Risk sonucu incelenmeden satış tamamlanamaz.`);return false;}return true;}
+    if(identityComplete(selected)){
+      if(state.complianceSettings.blockSaleOnRiskMatch!==false&&selected.riskStatus==='EŞLEŞME'){criticalAlert(`RİSK EŞLEŞMESİ: ${selected.fullName}. Risk sonucu incelenmeden satış tamamlanamaz.`);return false;}
+      // MASAK risk sorgusu yapılmamış ya da eskiyse uyarılır; "Şimdi Sorgula" sorguyu yapıp satışa döner.
+      if(!masakRiskFreshV7(selected)&&saleDraft.masakRiskAck!==selected.id){
+        const days=Number(state.complianceSettings?.riskMaxAgeDays??30);
+        modal('MASAK Sorgusu',`<div class="critical-alert"><div class="crit-icon">!</div><h2>MASAK SORGUSU ${selected.riskCheckedAt?'ESKİ':'YAPILMADI'}</h2><p><b>${esc(selected.fullName)}</b> için ${selected.riskCheckedAt?`son sorgu ${trDate(selected.riskCheckedAt)} (${days} günden eski)`:'hiç risk sorgusu yapılmamış'}. Sorgu sonucu bu satışla birlikte kaydedilir.</p></div>`,async()=>{closeModal();await screenIdentityRecord(selected.id);const r=identityById(selected.id);if(r&&r.riskStatus==='EŞLEŞME')return criticalAlert(`RİSK EŞLEŞMESİ: ${r.fullName}. Satış tamamlanamaz.`);if(r&&masakRiskFreshV7(r)){toast('MASAK sorgusu yapıldı: '+r.riskStatus);openSaleConfirm();}},'ŞİMDİ SORGULA');
+        const foot=document.querySelector('#modalRoot .modal-actions,#modalRoot .modal-footer');const skip=document.createElement('button');skip.type='button';skip.className='btn btn-outline';skip.id='masakRiskSkip';skip.textContent='Sorgulamadan devam et';skip.onclick=()=>{saleDraft.masakRiskAck=selected.id;audit(`${selected.fullName} için MASAK sorgusu yapılmadan satışa devam edildi`,'Kimlik/MASAK');closeModal();openSaleConfirm();};(foot||document.querySelector('#modalRoot .modal-body,#modalRoot'))?.appendChild(skip);
+        return false;
+      }
+      return true;}
     const ready=identityRecords.filter(identityComplete).sort((a,b)=>String(a.fullName||'').localeCompare(String(b.fullName||''),'tr'));
     const options=ready.map(r=>`<option value="${r.id}">${esc(r.fullName)} · ${maskIdNo(r.personType==='Tüzel Kişi'?r.vkn:r.tckn)} ${r.riskStatus?`· ${esc(r.riskStatus)}`:''}</option>`).join('');
-    modal('Kimlik Tespiti Gerekli',`<div class="critical-alert"><div class="crit-icon">!</div><h2>KİMLİK TESPİTİ GEREKLİ</h2><p>İşlem ${money(amount)} ve tanımlı eşik ${money(threshold)}. Cari hesaptan bağımsız bir MASAK müşterisi seçin veya yeni kimlik kaydı açın.</p></div><div class="form-grid" style="margin-top:14px"><div class="labelled span-4"><label>MASAK Müşterisi</label><select id="saleMasakIdentity" class="select"><option value="">Seçiniz...</option>${options}</select></div><div class="span-4"><button type="button" class="btn btn-outline" id="openNewKycFromSale">+ YENİ MASAK MÜŞTERİSİ OLUŞTUR</button></div></div>`,()=>{const id=document.getElementById('saleMasakIdentity')?.value||'';const picked=identityById(id);if(!identityComplete(picked))return toast('Tamamlanmış bir MASAK müşterisi seçin','err');if(state.complianceSettings.blockSaleOnRiskMatch!==false&&picked.riskStatus==='EŞLEŞME')return toast('Bu müşteride risk eşleşmesi var; satışa bağlanamaz','err');saleDraft.masakIdentityId=id;closeModal();toast('MASAK müşterisi satışa bağlandı. Satışı tekrar onaylayabilirsiniz.');},'MÜŞTERİYİ SATIŞA BAĞLA');
+    modal('Kimlik Tespiti Gerekli',`<div class="critical-alert"><div class="crit-icon">!</div><h2>KİMLİK TESPİTİ GEREKLİ</h2><p>İşlem ${money(amount)}${ln.sum?` (bu satış ${money(own)} + aynı gün aynı carinin ${ln.list.length} satışı ${money(ln.sum)} — bağlantılı işlem)`:''} ve tanımlı eşik ${money(threshold)}. Cari hesaptan bağımsız bir MASAK müşterisi seçin veya yeni kimlik kaydı açın.</p></div><div class="form-grid" style="margin-top:14px"><div class="labelled span-4"><label>MASAK Müşterisi</label><select id="saleMasakIdentity" class="select"><option value="">Seçiniz...</option>${options}</select></div><div class="span-4"><button type="button" class="btn btn-outline" id="openNewKycFromSale">+ YENİ MASAK MÜŞTERİSİ OLUŞTUR</button></div></div>`,()=>{const id=document.getElementById('saleMasakIdentity')?.value||'';const picked=identityById(id);if(!identityComplete(picked))return toast('Tamamlanmış bir MASAK müşterisi seçin','err');if(state.complianceSettings.blockSaleOnRiskMatch!==false&&picked.riskStatus==='EŞLEŞME')return toast('Bu müşteride risk eşleşmesi var; satışa bağlanamaz','err');saleDraft.masakIdentityId=id;closeModal();toast('MASAK müşterisi satışa bağlandı. Satışı tekrar onaylayabilirsiniz.');},'MÜŞTERİYİ SATIŞA BAĞLA');
     document.getElementById('openNewKycFromSale')?.addEventListener('click',()=>{closeModal();route='compliance';render();setTimeout(()=>openIdentityModal(),50);});
     return false;
   }
@@ -10258,6 +10310,7 @@ function stockSummaryView(){
         ${state.complianceSettings.masakOfficialLastError?`<div class="notice" style="margin-top:10px"><strong>Son güncelleme uyarısı:</strong> ${esc(state.complianceSettings.masakOfficialLastError)}</div>`:''}
         <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:700">Elle CSV yükleme / yedek yöntem</summary><div class="watchlist-box" style="margin-top:10px"><div class="labelled"><label>MASAK sitesinden indirdiğiniz CSV dosyaları</label><input id="masakCsvFiles" class="input" type="file" accept=".csv,text/csv,text/plain" multiple></div><button class="btn btn-outline" id="importMasakCsv">CSV'LERİ İÇE AKTAR</button><button class="btn btn-outline" id="clearMasakCsv">Listeyi Temizle</button></div></details>
       </div>
+      ${masakThresholdCardV7()}
       <div class="card" style="margin-top:16px"><div class="section-head"><h3>MASAK Müşteri Kayıtları</h3><span>${records.length} bağımsız müşteri</span></div><div class="toolbar"><input class="input search grow" id="kycSearch" placeholder="Ad soyad, telefon, TCKN/VKN veya belge no ara..."><select class="select" id="kycStatus"><option value="">Tüm durumlar</option><option value="ok">Tamam</option><option value="missing">Eksik</option><option value="risk">Risk / inceleme</option></select></div><div class="table-wrap"><table class="table" id="kycTable"><thead><tr><th>Müşteri</th><th>Kimlik / Vergi No</th><th>Belge / Kaynak</th><th>Görseller</th><th>Risk</th><th>Son Kontrol</th><th>İşlem</th></tr></thead><tbody>${records.map(r=>{const ok=identityComplete(r),no=r.personType==='Tüzel Kişi'?r.vkn:r.tckn,hay=[r.fullName,r.phone,no,r.documentNo].filter(Boolean).join(' ').toLocaleLowerCase('tr-TR'),status=(!ok?'missing':(['EŞLEŞME','İNCELEME'].includes(r.riskStatus)?'risk':'ok'));return `<tr data-kyc-row data-search="${esc(hay)}" data-status="${status}"><td><strong>${esc(r.fullName||'İsimsiz')}</strong><br><small>${esc(r.phone||'')} · ${esc(r.personType||'Gerçek Kişi')}</small></td><td>${maskIdNo(no)}</td><td>${esc(r.documentType||'—')} ${r.documentNo?`· ${esc(r.documentNo)}`:''}<div class="kyc-source">${r.nfcRead?'NFC çip aktarımı · ':''}${esc(r.nfcReader||'')}</div></td><td><span class="badge ${r.hasIdFront?'green':'gray'}">ÖN ${r.hasIdFront?'✓':'—'}</span> <span class="badge ${r.hasIdBack?'green':'gray'}">ARKA ${r.hasIdBack?'✓':'—'}</span> <span class="badge ${r.hasChipFace?'green':'gray'}">ÇİP FOTO ${r.hasChipFace?'✓':'—'}</span></td><td><span class="badge ${riskBadge(r)}">${esc(r.riskStatus||'TARANMADI')}</span>${r.riskStatus==='İNCELEME'?` <button class="btn btn-outline" style="padding:4px 8px;font-size:11px" data-kyc-riskdetail="${r.id}">Neden?</button>`:''}${r.riskCheckedAt?`<br><small>${trDate(r.riskCheckedAt)}</small>`:''}</td><td>${r.verifiedAt?trDate(r.verifiedAt):'—'}<br><span class="badge ${ok?'green':'red'}">${ok?'TAMAM':'EKSİK'}</span> <span class="badge ${r.kvkkAcknowledged?'green':'red'}">KVKK ${r.kvkkAcknowledged?'✓':'—'}</span> <span class="badge ${r.wetSignatureObtained?'green':'red'}">İMZA ${r.wetSignatureObtained?'✓':'—'}</span></td><td><div class="addon-actions"><button class="btn btn-primary" data-kyc-detail="${r.id}">Detay / Kontrol</button><button class="btn btn-success" data-kyc-print="${r.id}">Yazdır</button><button class="btn btn-outline" data-kyc-edit="${r.id}">Düzenle</button><button class="btn btn-outline" data-kyc-nfc="${r.id}">NFC Yenile</button><button class="btn btn-outline" data-kyc-risk="${r.id}">Risk Tara</button>${r.riskCheckedAt&&r.riskStatus!=='İNCELEME'?`<button class="btn btn-outline" data-kyc-riskdetail="${r.id}">Sonuç</button>`:''}</div></td></tr>`}).join('')||'<tr><td colspan="7">Henüz MASAK müşterisi kaydı yok.</td></tr>'}</tbody></table></div></div>`;
   }
 
@@ -10298,6 +10351,7 @@ function stockSummaryView(){
   }
 
   function bindComplianceV620(){
+    document.querySelectorAll('[data-masak-link]').forEach(b=>b.addEventListener('click',()=>openMasakLinkV7(b.dataset.masakLink)));
     document.getElementById('newIdentityRecord')?.addEventListener('click',()=>openIdentityModal());document.getElementById('startNfcNew')?.addEventListener('click',()=>startNfcPairing());document.getElementById('startCameraKyc')?.addEventListener('click',()=>openCameraKycV7());
     document.querySelectorAll('[data-kyc-detail]').forEach(b=>b.addEventListener('click',()=>identityDetail(b.dataset.kycDetail)));
     document.querySelectorAll('[data-kyc-print]').forEach(b=>b.addEventListener('click',()=>printIdentityForm(b.dataset.kycPrint)));
