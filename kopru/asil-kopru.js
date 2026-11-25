@@ -18,7 +18,7 @@ const ENDPOINTS = {
   live: 'https://einvoiceservice.isnet.net.tr'
 };
 const TEST_VKN = '4810173324';
-const VERSION = '1.4';
+const VERSION = '1.5';
 // WhatsApp modülü yoksa (eski güncelleme) köprü yine çalışsın; yalnız WhatsApp kapalı olur.
 let wa;
 try { wa = require('./whatsapp'); } catch (e) {
@@ -425,7 +425,10 @@ async function handle(cfg, req, res) {
       return send(res, 200, out, cors);
     }
     if (action === 'waLogout') return send(res, 200, await wa.logout(), cors);
-    if (action === 'isbankStatement') { const out = await isbankStatement(cfg, p); log(`İş Bankası hareketleri alındı: ${out.records.length}`); return send(res, 200, out, cors); }
+    if (action === 'isbankStatement') {
+      // Banka bilgileri her sorguda dosyadan yeniden okunur: asil-kopru.json değişince köprüyü yeniden başlatmak gerekmez.
+      const fresh = cfg.file ? loadConfig() : cfg;
+      const out = await isbankStatement({ ...cfg, isbankUid: fresh.isbankUid, isbankPwd: fresh.isbankPwd, isbankUrl: fresh.isbankUrl }, p); log(`İş Bankası hareketleri alındı: ${out.records.length}`); return send(res, 200, out, cors); }
     // Gelen WhatsApp mesajları (ör. müşterinin teslim "ONAY" cevabı); since = son okunan mesajın zamanı (ms).
     if (action === 'waInbox') return send(res, 200, { ok: true, items: cfg.whatsapp ? wa.inbox(p.since) : [] }, cors);
     return send(res, 400, { ok: false, message: 'Bilinmeyen işlem: ' + action }, cors);

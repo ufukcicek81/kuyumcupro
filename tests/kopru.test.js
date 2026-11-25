@@ -194,3 +194,25 @@ test('İş Bankası online ekstre: POST ile uid/pwd/tarih gönderilir; şifresiz
   await assert.rejects(k.isbankStatement(cfg, {}), /kullanıcı kodu \/ şifre/);
   k._isbankReset();
 });
+
+test('İş Bankası bilgileri her sorguda dosyadan yeniden okunur (köprüyü yeniden başlatmadan)', async () => {
+  const fs = require('fs'), os = require('os'), path = require('path'), http = require('http');
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'kopru-')), 'asil-kopru.json');
+  fs.writeFileSync(file, JSON.stringify({ mode: 'test' }));
+  process.env.ASIL_KOPRU_CONFIG = file;
+  const cfg = k.loadConfig();
+  const srv = http.createServer((q, r) => k.handle(cfg, q, r));
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+  const realFetch = global.fetch;
+  const call = () => new Promise((res, rej) => { const q = http.request({ host: '127.0.0.1', port: srv.address().port, method: 'POST', headers: { 'Content-Type': 'application/json' } }, (r) => { let b = ''; r.on('data', (c) => { b += c; }); r.on('end', () => res(JSON.parse(b))); }); q.on('error', rej); q.end(JSON.stringify({ action: 'isbankStatement' })); });
+  try {
+    k._isbankReset();
+    assert.match((await call()).message, /isbankUid/);
+    fs.writeFileSync(file, JSON.stringify({ mode: 'test', isbankUid: 'U', isbankPwd: 'P' }));
+    let sent = '';
+    global.fetch = async (u, o) => { sent = o.body; return { ok: true, status: 200, text: async () => '<x/>' }; };
+    const out = await call();
+    assert.equal(out.ok, true);
+    assert.match(sent, /uid=U&pwd=P/);
+  } finally { global.fetch = realFetch; srv.close(); delete process.env.ASIL_KOPRU_CONFIG; k._isbankReset(); }
+});
