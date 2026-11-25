@@ -194,3 +194,62 @@ test('İş Bankası online ekstre: POST ile uid/pwd/tarih gönderilir; şifresiz
   await assert.rejects(k.isbankStatement(cfg, {}), /kullanıcı kodu \/ şifre/);
   k._isbankReset();
 });
+
+test('İş Bankası bilgileri her sorguda dosyadan yeniden okunur (köprüyü yeniden başlatmadan)', async () => {
+  const fs = require('fs'), os = require('os'), path = require('path'), http = require('http');
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'kopru-')), 'asil-kopru.json');
+  fs.writeFileSync(file, JSON.stringify({ mode: 'test' }));
+  process.env.ASIL_KOPRU_CONFIG = file;
+  const cfg = k.loadConfig();
+  const srv = http.createServer((q, r) => k.handle(cfg, q, r));
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+  const realFetch = global.fetch;
+  const call = () => new Promise((res, rej) => { const q = http.request({ host: '127.0.0.1', port: srv.address().port, method: 'POST', headers: { 'Content-Type': 'application/json' } }, (r) => { let b = ''; r.on('data', (c) => { b += c; }); r.on('end', () => res(JSON.parse(b))); }); q.on('error', rej); q.end(JSON.stringify({ action: 'isbankStatement' })); });
+  try {
+    k._isbankReset();
+    assert.match((await call()).message, /isbankUid/);
+    fs.writeFileSync(file, JSON.stringify({ mode: 'test', isbankUid: 'U', isbankPwd: 'P' }));
+    let sent = '';
+    global.fetch = async (u, o) => { sent = o.body; return { ok: true, status: 200, text: async () => '<x/>' }; };
+    const out = await call();
+    assert.equal(out.ok, true);
+    assert.match(sent, /uid=U&pwd=P/);
+  } finally { global.fetch = realFetch; srv.close(); delete process.env.ASIL_KOPRU_CONFIG; k._isbankReset(); }
+});
+
+test('otomatik havale kontrolü: köprü sonucu 45 sn saklar; elle sorgu sırasını bekler', async () => {
+  const http = require('http');
+  const cfg = { allowedOrigins: [], whatsapp: false, isbankUid: 'U', isbankPwd: 'P' };
+  const srv = http.createServer((q, r) => k.handle(cfg, q, r));
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+  const realFetch = global.fetch;
+  const call = (body) => new Promise((res, rej) => { const q = http.request({ host: '127.0.0.1', port: srv.address().port, method: 'POST', headers: { 'Content-Type': 'application/json' } }, (r) => { let b = ''; r.on('data', (c) => { b += c; }); r.on('end', () => res(JSON.parse(b))); }); q.on('error', rej); q.end(JSON.stringify(body)); });
+  let n = 0;
+  try {
+    k._isbankReset();
+    global.fetch = async () => { n++; return { ok: true, status: 200, text: async () => '<x/>' }; };
+    const a = await call({ action: 'isbankStatement', watch: true });
+    const b = await call({ action: 'isbankStatement', watch: true });
+    assert.equal(a.ok, true); assert.equal(b.cached, true); assert.equal(n, 1, 'ikinci cihaz bankaya tekrar sormamalı');
+    assert.ok(Date.parse(a.to) - Date.parse(a.from) >= 864e5 - 1000, 'son 24 saat sorulmalı');
+    assert.match((await call({ action: 'isbankStatement' })).message, /dakikada en fazla 2/);
+  } finally { global.fetch = realFetch; srv.close(); k._isbankReset(); }
+});
+
+test('İş Bankası cevabı Türkçe Windows kodlamasıyla gelirse harfler doğru okunur', async () => {
+  k._isbankReset();
+  const realFetch = global.fetch;
+  const enc = (str) => Buffer.from([...str].map((ch) => ({ 'Ö': 0xD6, 'İ': 0xDD, 'Ş': 0xDE, 'ş': 0xFE, 'ı': 0xFD, 'ğ': 0xF0, 'Ğ': 0xD0, 'ü': 0xFC, 'ç': 0xE7 })[ch] ?? ch.charCodeAt(0)));
+  const xml = (decl) => `<?xml version="1.0"${decl}?><x><H><Tarih>24.11.2026</Tarih><Tutar>5</Tutar><Aciklama>ALTIN ÖDEMESİ ELDEN TESLİM ALDIM şığüç</Aciklama></H></x>`;
+  try {
+    for (const decl of ['', ' encoding="windows-1254"', ' encoding="ISO-8859-9"']) {
+      k._isbankReset();
+      global.fetch = async () => { const b = enc(xml(decl)); return { ok: true, status: 200, headers: { get: () => 'text/xml' }, arrayBuffer: async () => b.buffer.slice(b.byteOffset, b.byteOffset + b.length) }; };
+      const out = await k.isbankStatement({ isbankUid: 'U', isbankPwd: 'P' }, {});
+      assert.equal(out.records[0].Aciklama, 'ALTIN ÖDEMESİ ELDEN TESLİM ALDIM şığüç', 'kodlama: ' + (decl || 'yok'));
+    }
+    k._isbankReset();
+    global.fetch = async () => { const b = Buffer.from(xml(' encoding="utf-8"'), 'utf8'); return { ok: true, status: 200, headers: { get: () => '' }, arrayBuffer: async () => b.buffer.slice(b.byteOffset, b.byteOffset + b.length) }; };
+    assert.equal((await k.isbankStatement({ isbankUid: 'U', isbankPwd: 'P' }, {})).records[0].Aciklama, 'ALTIN ÖDEMESİ ELDEN TESLİM ALDIM şığüç', 'UTF-8 de doğru okunmalı');
+  } finally { global.fetch = realFetch; k._isbankReset(); }
+});

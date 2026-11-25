@@ -112,3 +112,14 @@ banka hareketleriyle karşılaştırır (eşleşenler ✓, "bankada var programd
 
 Kullanıcı kodu ve şifre **yalnız bu dosyada** durur; programa, buluta ya da başka bir yere gönderilmez.
 Banka en fazla 1 hafta geriye, 300 harekete ve dakikada 2 sorguya izin verir.
+
+### Otomatik havale bildirimi (köprü 1.7 ve üstü)
+
+**Bankadan Getir** penceresindeki **🔔 Otomatik havale bildirimi** bölümünden açılır. Köprünün çalıştığı dükkân
+bilgisayarında program açıkken her dakika bankaya sorulur; hesaba para gelince sağ altta uyarı çıkar ve ses verir.
+
+- Açıklama kontrolü: "borç, ödünç, emanet…" gibi riskli kelimeler **kırmızı** uyarı verir (müşteriyle görüşüp iade düşünün).
+  "Altın ödemesi / elden teslim aldım" gibi kabul edilen bir açıklama ya da TC kimlik numarası yoksa **turuncu** uyarı verir.
+  Kelime listeleri aynı bölümden değiştirilebilir.
+- Gelen havaleler **Fatura → Gelen Havaleler** sekmesine de düşer; açıklamadaki TC numarası fatura taslağına yazılır.
+- Birden çok cihaz açık olsa da köprü bankaya en fazla 45 saniyede bir sorar (banka sınırı dakikada 2 sorgu).

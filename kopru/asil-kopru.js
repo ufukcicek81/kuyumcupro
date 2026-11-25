@@ -18,7 +18,7 @@ const ENDPOINTS = {
   live: 'https://einvoiceservice.isnet.net.tr'
 };
 const TEST_VKN = '4810173324';
-const VERSION = '1.4';
+const VERSION = '1.7';
 // WhatsApp modülü yoksa (eski güncelleme) köprü yine çalışsın; yalnız WhatsApp kapalı olur.
 let wa;
 try { wa = require('./whatsapp'); } catch (e) {
@@ -54,7 +54,7 @@ function loadConfig() {
 // WSDL/XSD yoktur; alan adları sabit bilinmediği için hareketler XML'den genel olarak çıkarılır.
 // Kısıtlar: en fazla 1 hafta geriye (talep üzerine 31 gün), 300 hareket, 1 dk zaman aşımı, dakikada en fazla 2 sorgu.
 const ISBANK_URL = 'https://posmatik2.isbank.com.tr/AuthenticateSpecific.aspx';
-let isbankLast = 0;
+let isbankLast = 0, isbankWatchCache = null;
 const pad2 = (n) => String(n).padStart(2, '0');
 function trDateTime(d) { d = new Date(d); return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`; }
 function xmlUnesc(s) {
@@ -90,9 +90,26 @@ function parseXmlRecords(xml) {
   for (const [k, v] of groups) if (!best || v.length > best[1].length || (v.length === best[1].length && Object.keys(v[0]).length > Object.keys(best[1][0]).length)) best = [k, v];
   return best ? { tag: best[0], records: best[1] } : { tag: '', records: [] };
 }
+/* Banka cevabı çoğu zaman UTF-8 değil, Türkçe Windows kodlamasıyla (windows-1254 / ISO-8859-9) gelir:
+   UTF-8 sanılırsa Ö, İ, Ş, Ğ gibi harfler "�" olur. XML başlığındaki / HTTP başlığındaki kodlama kullanılır;
+   belirtilmemişse ve UTF-8 bozuk çıkıyorsa windows-1254 ile okunur. */
+async function isbankDecode(res) {
+  if (typeof res.arrayBuffer !== 'function') return res.text();
+  const buf = Buffer.from(await res.arrayBuffer());
+  const head = buf.subarray(0, 300).toString('latin1');
+  const ct = (res.headers && typeof res.headers.get === 'function' ? res.headers.get('content-type') : '') || '';
+  const declared = ((/encoding\s*=\s*["']([\w.-]+)["']/i.exec(head) || [])[1] || (/charset=([\w.-]+)/i.exec(ct) || [])[1] || '').toLowerCase();
+  const tryDecode = (enc) => { try { return new TextDecoder(enc).decode(buf); } catch (_) { return null; } };
+  if (declared && !/^utf-?8$/.test(declared)) { const t = tryDecode(declared); if (t != null) return t; }
+  const utf = buf.toString('utf8');
+  if (!utf.includes('\uFFFD')) return utf;
+  return tryDecode('windows-1254') || tryDecode('iso-8859-9') || utf;
+}
 async function isbankStatement(cfg, p) {
   if (!cfg.isbankUid || !cfg.isbankPwd) throw new Error('İş Bankası kullanıcı kodu / şifresi köprüde tanımlı değil. C:\\kopru\\asil-kopru.json dosyasına "isbankUid" ve "isbankPwd" yazın.');
-  const wait = isbankLast + 31000 - Date.now();
+  let wait = isbankLast + 31000 - Date.now();
+  // Elle sorgu (waitTurn): otomatik kontrol az önce sorduysa hata vermek yerine sırasını bekler.
+  if (wait > 0 && p.waitTurn) { await new Promise((r) => setTimeout(r, wait)); wait = isbankLast + 31000 - Date.now(); }
   if (wait > 0) throw new Error(`Banka dakikada en fazla 2 sorguya izin veriyor; ${Math.ceil(wait / 1000)} sn sonra tekrar deneyin.`);
   isbankLast = Date.now();
   const to = p.to ? new Date(p.to) : new Date(), from = p.from ? new Date(p.from) : new Date(to.getTime() - 7 * 864e5);
@@ -102,7 +119,7 @@ async function isbankStatement(cfg, p) {
   try { res = await fetch(cfg.isbankUrl || ISBANK_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body, signal: ctl.signal }); }
   catch (e) { throw new Error(e.name === 'AbortError' ? 'İş Bankası 1 dakikada cevap vermedi; tarih aralığını daraltın.' : 'İş Bankası\'na bağlanılamadı: ' + (e.message || e)); }
   finally { clearTimeout(timer); }
-  const text = await res.text();
+  const text = await isbankDecode(res);
   if (!res.ok) throw new Error(`İş Bankası HTTP ${res.status}`);
   if (/<html[\s>]/i.test(text) && !/<\?xml/i.test(text)) throw new Error('İş Bankası XML yerine sayfa döndürdü: kullanıcı kodu / şifre hatalı ya da online ekstre tanımı açık değil.');
   const parsed = parseXmlRecords(text);
@@ -425,7 +442,18 @@ async function handle(cfg, req, res) {
       return send(res, 200, out, cors);
     }
     if (action === 'waLogout') return send(res, 200, await wa.logout(), cors);
-    if (action === 'isbankStatement') { const out = await isbankStatement(cfg, p); log(`İş Bankası hareketleri alındı: ${out.records.length}`); return send(res, 200, out, cors); }
+    if (action === 'isbankStatement') {
+      // Banka bilgileri her sorguda dosyadan yeniden okunur: asil-kopru.json değişince köprüyü yeniden başlatmak gerekmez.
+      const fresh = cfg.file ? loadConfig() : cfg;
+      // Otomatik havale kontrolü (watch): son 24 saat sorulur; birden çok cihaz sorsa da bankaya en fazla 45 sn'de bir gidilir.
+      if (p.watch) {
+        if (isbankWatchCache && Date.now() - isbankWatchCache.at < 45000) return send(res, 200, { ...isbankWatchCache.out, cached: true }, cors);
+        const now = Date.now();
+        const w = await isbankStatement({ ...cfg, isbankUid: fresh.isbankUid, isbankPwd: fresh.isbankPwd, isbankUrl: fresh.isbankUrl }, { from: new Date(now - 864e5).toISOString(), to: new Date(now).toISOString() });
+        isbankWatchCache = { at: Date.now(), out: w };
+        return send(res, 200, w, cors);
+      }
+      const out = await isbankStatement({ ...cfg, isbankUid: fresh.isbankUid, isbankPwd: fresh.isbankPwd, isbankUrl: fresh.isbankUrl }, p); log(`İş Bankası hareketleri alındı: ${out.records.length}`); return send(res, 200, out, cors); }
     // Gelen WhatsApp mesajları (ör. müşterinin teslim "ONAY" cevabı); since = son okunan mesajın zamanı (ms).
     if (action === 'waInbox') return send(res, 200, { ok: true, items: cfg.whatsapp ? wa.inbox(p.since) : [] }, cors);
     return send(res, 400, { ok: false, message: 'Bilinmeyen işlem: ' + action }, cors);
@@ -453,4 +481,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { _isbankReset: () => { isbankLast = 0; }, parseXmlRecords, isbankStatement, trDateTime, originAllowed, wa, _soap: soapCall, invoiceXml, loadConfig, buildInvoice, createInvoice, balance, healthCheck, taxPayerInbox, viewerLink, toXml, listOf, handle };
+module.exports = { _isbankReset: () => { isbankLast = 0; isbankWatchCache = null; }, parseXmlRecords, isbankStatement, trDateTime, originAllowed, wa, _soap: soapCall, invoiceXml, loadConfig, buildInvoice, createInvoice, balance, healthCheck, taxPayerInbox, viewerLink, toXml, listOf, handle };

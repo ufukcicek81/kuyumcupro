@@ -1845,6 +1845,58 @@ test('İş Bankası online ekstre: köprüden gelen hareketler programdaki banka
   } finally { global.fetch = realFetch; bridge.close(); kopru._isbankReset(); }
 });
 
+test('otomatik havale bildirimi: yeni gelen para uyarı verir, riskli açıklama kırmızı işaretlenir', async () => {
+  const http = require('http');
+  const kopru = require('../../kopru/asil-kopru.js');
+  kopru._isbankReset();
+  const realFetch = global.fetch;
+  const fb = createFakeFirebase();
+  let p = await newDevice(browser, appUrl, fb);
+  await p.waitForTimeout(1000);
+  const st = fb.db.state, acc = (st.bankAccounts || []).find((b) => /İŞ BANKASI/.test(String(b.bank || b.name)));
+  const d = new Date(), dmy = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+  const cfg = { allowedOrigins: [], whatsapp: false, isbankUid: 'KOD1', isbankPwd: 'gizli' };
+  global.fetch = async (url, opt) => {
+    if (!String(url).includes('posmatik2.isbank.com.tr')) return realFetch(url, opt);
+    return { ok: true, status: 200, text: async () => `<?xml version="1.0"?><R><H><Tarih>${dmy} 10:00:00</Tarih><Tutar>5.000,00</Tutar><Aciklama>AHMET YILMAZ BORÇ ÖDEMESİ</Aciklama></H><H><Tarih>${dmy} 10:05:00</Tarih><Tutar>7.250,00</Tutar><Aciklama>ALTIN ÖDEMESİ ELDEN TESLİM ALDIM 10000000146</Aciklama></H><H><Tarih>${dmy} 10:06:00</Tarih><Tutar>300,00</Tutar><Aciklama>FAST GELEN</Aciklama></H><H><Tarih>${dmy} 10:07:00</Tarih><Tutar>-80,00</Tutar><Aciklama>MASRAF</Aciklama></H></R>` };
+  };
+  const bridge = http.createServer((q, r) => kopru.handle(cfg, q, r));
+  await new Promise((r) => bridge.listen(0, '127.0.0.1', r));
+  try {
+    st.invoiceSettings = { ...(st.invoiceSettings || {}), proxyUrl: `http://127.0.0.1:${bridge.address().port}` };
+    st.bankWatchV7 = { on: true, accountId: acc.id, needTc: true };
+    fb.db.state = st; await p.context().close();
+    p = await newDevice(browser, appUrl, fb);
+    await p.evaluate(() => localStorage.setItem('asil_bank_seen_v7', '[]'));
+    await p.waitForSelector('#bankAlertV7', { timeout: 15000 });
+    const t = await p.innerText('#bankAlertV7');
+    assert.match(t, /Hesabınıza havale geldi/);
+    assert.match(t, /BORÇ ÖDEMESİ[\s\S]*Riskli açıklama/);
+    assert.match(t, /ALTIN ÖDEMESİ[\s\S]*Açıklama uygun \(TC 10000000146\)/);
+    assert.match(t, /FAST GELEN[\s\S]*TC kimlik numarası yok/);
+    assert.ok(!/MASRAF/.test(t), 'çıkan para bildirilmemeli');
+    assert.equal((t.match(/Hesabınıza havale geldi/g) || []).length, 3);
+    await p.click('[data-bank-alert-all]');
+    assert.equal(await p.$('#bankAlertV7'), null);
+    for (let i = 0; i < 40 && !(fb.db.state.bankIncomingV7 || []).length; i++) await p.waitForTimeout(250);
+    const bi = fb.db.state.bankIncomingV7 || [];
+    assert.equal(bi.length, 3, 'gelen 3 havale buluta yazılmalı');
+    await p.evaluate(() => document.querySelector('[data-route="invoices"],[data-go="invoices"]').click());
+    await p.waitForTimeout(400);
+    await p.evaluate(() => document.querySelector('[data-invoice-view="havale"]').click());
+    await p.waitForSelector('[data-bank-incoming-invoice]');
+    const ht = await p.innerText('body');
+    assert.match(ht, /Bankadan Otomatik Gelen Havaleler[\s\S]*ALTIN ÖDEMESİ/);
+    const id = bi.find((x) => /ALTIN/.test(x.description)).id;
+    await p.evaluate((i) => document.querySelector(`[data-bank-incoming-invoice="${i}"]`).click(), id);
+    for (let i = 0; i < 40 && !(fb.db.state.invoiceRecords || []).some((r) => r.bankIncomingId === id); i++) await p.waitForTimeout(250);
+    const rec = (fb.db.state.invoiceRecords || []).find((r) => r.bankIncomingId === id);
+    assert.ok(rec && rec.amount === 7250 && rec.manual.receiver.tckn === '10000000146', 'fatura taslağı TC ile oluşmalı');
+    assert.deepEqual(p.errors, []);
+    await p.context().close();
+  } finally { global.fetch = realFetch; bridge.close(); kopru._isbankReset(); }
+});
+
 test('banka bakiyesi gerçek tutara eşitlenir; kasa değişmez', async () => {
   const fb = createFakeFirebase();
   const p = await newDevice(browser, appUrl, fb);
