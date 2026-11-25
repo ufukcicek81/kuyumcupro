@@ -9952,7 +9952,18 @@ function stockSummaryView(){
     document.getElementById('kycDetailSigned')?.addEventListener('click',()=>viewKycFile(id,'signed'));
   }
 
-  function printIdentityForm(id,override=null){
+  /* Her yazdırmada nereye basılacağı sorulur: fiş yazıcısı (Aclas) ya da A4 (tarayıcının yazıcı seçme penceresi).
+     Açık düzenleme penceresini kapatmamak için modal yerine ayrı bir küçük seçim kutusu kullanılır. */
+  function printIdentityForm(id,override=null,paper=''){
+    if(!paper){
+      document.getElementById('kycPrintPick')?.remove();
+      const def=(state.complianceSettings?.kycPaper||'roll')==='a4'?'a4':'roll',box=document.createElement('div');box.id='kycPrintPick';
+      box.style.cssText='position:fixed;inset:0;z-index:10050;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px';
+      box.innerHTML=`<div style="background:#fff;color:#111;border-radius:12px;padding:18px;max-width:420px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.35)"><h3 style="margin:0 0 6px">MASAK evrakı nereye yazdırılsın?</h3><p class="muted" style="margin:0 0 12px">A4 seçince yazıcı seçme penceresi açılır; istediğiniz yazıcıyı orada seçin.</p>
+        <div style="display:flex;flex-direction:column;gap:8px"><button type="button" class="btn ${def==='a4'?'btn-primary':'btn-outline'}" data-kyc-paper="a4" style="min-height:48px;font-size:16px">📄 A4 — yazıcıyı seç</button><button type="button" class="btn ${def==='roll'?'btn-primary':'btn-outline'}" data-kyc-paper="roll" style="min-height:48px;font-size:16px">🧾 Fiş yazıcısı (Aclas)</button><button type="button" class="btn btn-outline" data-kyc-paper="">Vazgeç</button></div></div>`;
+      box.addEventListener('click',e=>{const b=e.target.closest('[data-kyc-paper]');if(e.target!==box&&!b)return;box.remove();if(b&&b.dataset.kycPaper)printIdentityForm(id,override,b.dataset.kycPaper);});
+      document.body.appendChild(box);box.querySelector(`[data-kyc-paper="${def}"]`)?.focus();return;
+    }
     const r=override||identityById(id);if(!r)return;
     const no=r.personType==='Tüzel Kişi'?(r.vkn||''):(r.tckn||'');
     const company=kvkkControllerTitle();
@@ -9968,7 +9979,7 @@ function stockSummaryView(){
       ['NFC Okuma',r.nfcRead?'Evet':'Hayır'],['Risk Taraması',risk]
     ];
     // Fiş yazıcısı (varsayılan): boyu içeriğe göre ölçülen dar fiş; A4 sayfası rulo kâğıtta alttan kesiliyordu.
-    if((state.complianceSettings?.kycPaper||'roll')!=='a4'){
+    if(paper==='roll'){
       const pair=(a,b)=>receiptPairV644(a,b||'—',false);
       const body=fields.map(([a,b])=>pair(a,b)).join('')
         +`<div class="dash"></div><div class="title">6698 SAYILI KVKK KAPSAMINDA AYDINLATMA</div>`

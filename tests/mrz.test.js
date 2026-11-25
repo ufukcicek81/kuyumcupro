@@ -38,3 +38,18 @@ test('isimdeki tek harflik K/L dolgu gürültüsü de temizlenir',()=>{
   const d=M.parse([l1,l2,'YILMAZ<<AHMET<CAN<L<<<<<<<<<<<<'].join('\n'));
   assert.equal(d.fullName,'AHMET CAN YILMAZ');
 });
+test('seri no okunamazsa T.C. no başka satırdaki rakamlardan uydurulmaz',()=>{
+  // 2. satırın sonuna gürültü olarak geçerli bir T.C. no karışmış; 1. satır hiç okunamamış.
+  const d=M.parse(['XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',l2.slice(0,18)+'10000000214',l3].join('\n'));
+  assert.equal(d.tckn,'');
+});
+test('T.C. no 1. satırda seri numaranın hemen arkasından alınır',()=>{
+  const d=M.parse(['I<TUR'+doc+cd(doc)+tc+'10000000214',l2,l3].join('\n'));
+  assert.equal(d.tckn,tc);
+});
+test('kamera denemeleri arasında oylama: ad soyad en çok tekrar eden okumadan seçilir',()=>{
+  global.self=global;require('../js/asil-mrz-camera.js');
+  const V=global.AsilMrzCamera.vote,p=(n)=>({documentNumber:doc,birthYYMMDD:'900115',expiryYYMMDD:'310520',tckn:tc,fullName:n});
+  const r=V([p('AHMET CAN YILMAX'),p('AHMET CAN YILMAZ'),{fullName:''},p('AHMET CAN YILMAZ')]);
+  assert.equal(r.fullName,'AHMET CAN YILMAZ');assert.equal(r.nameVotes,2);assert.ok(r.complete);
+});
