@@ -454,6 +454,9 @@ async function handle(cfg, req, res) {
         return send(res, 200, w, cors);
       }
       const out = await isbankStatement({ ...cfg, isbankUid: fresh.isbankUid, isbankPwd: fresh.isbankPwd, isbankUrl: fresh.isbankUrl }, p); log(`İş Bankası hareketleri alındı: ${out.records.length}`); return send(res, 200, out, cors); }
+    // e-Gider Pusulası: GİB / entegratör tarafında henüz yürürlükte değil. Program gönderim verisini hazırlar;
+    // sistem açılınca entegratörün servis biçimine burada çevrilip gönderilecek.
+    if (action === 'createExpenseVoucher') return send(res, 501, { ok: false, message: 'e-Gider Pusulası henüz yürürlükte değil; entegratör servisi açılınca köprü güncellenecek. Pusulayı yazdırıp imzalatın.' }, cors);
     // Gelen WhatsApp mesajları (ör. müşterinin teslim "ONAY" cevabı); since = son okunan mesajın zamanı (ms).
     if (action === 'waInbox') return send(res, 200, { ok: true, items: cfg.whatsapp ? wa.inbox(p.since) : [] }, cors);
     return send(res, 400, { ok: false, message: 'Bilinmeyen işlem: ' + action }, cors);

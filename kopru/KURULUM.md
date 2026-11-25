@@ -123,3 +123,10 @@ bilgisayarında program açıkken her dakika bankaya sorulur; hesaba para gelinc
   Kelime listeleri aynı bölümden değiştirilebilir.
 - Gelen havaleler **Fatura → Gelen Havaleler** sekmesine de düşer; açıklamadaki TC numarası fatura taslağına yazılır.
 - Birden çok cihaz açık olsa da köprü bankaya en fazla 45 saniyede bir sorar (banka sınırı dakikada 2 sorgu).
+
+## Gider Pusulası / e-Gider Pusulası
+
+Fatura → **Gider Pusulası** sekmesinde pusulası kesilmemiş hurda / ziynet alışları listelenir. Pusula seri + sıra
+numarasıyla (GP2026…) düzenlenir, 2 nüsha (asıl / suret) A4 basılır ve satıcıya imzalatılır. İptal edilen pusula
+numarasıyla listede kalır. **e-Gider Pusulası** henüz yürürlükte değil: ayarlardaki kutu kapalı bekler; sistem açılınca
+köprünün `createExpenseVoucher` işlemi entegratöre göre tamamlanacak.
