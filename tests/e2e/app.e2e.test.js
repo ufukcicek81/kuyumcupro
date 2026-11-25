@@ -1101,6 +1101,42 @@ test('telefon düzeni: logo görünür, ekranlar yana taşmaz, satış kartları
   await p.context().close();
 });
 
+test('MASAK: eşik üstü satışta kimlik ve sorgu uyarısı; seçilen kimlik ve sorgu sonucu satışa bağlanır', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  await p.evaluate(() => document.querySelector('[data-go="compliance"]').click());
+  await p.fill('#masakThreshold', '50000'); await p.click('#saveMasakSettings'); await p.waitForTimeout(300);
+  await p.evaluate(() => localStorage.setItem('asil_kuyumcu_pro_kyc_v2', JSON.stringify([{ id: 'KYC-T1', createdAt: new Date().toISOString(), verified: true, personType: 'Gerçek Kişi', fullName: 'AHMET YILMAZ', tckn: '10000000146', documentNo: 'A12B34567', address: 'DÜZCE', wetSignatureObtained: true, kvkkAcknowledged: true, identityDeclarationConfirmed: true, riskStatus: 'TARANMADI' }])));
+  await p.reload(); await p.waitForTimeout(1500);
+  await p.click('[data-go="sales"]');
+  for (let i = 0; i < 3; i++) {
+    await p.fill('#saleProductSearch', '22'); await p.waitForTimeout(300); await p.press('#saleProductSearch', 'Enter');
+    if (await p.waitForSelector('#saleEntryPrice:not([disabled])', { timeout: 5000 }).catch(() => null)) break;
+  }
+  await p.waitForTimeout(300);
+  await p.fill('#saleEntryPayable', '70000'); await p.click('#saleAddUnified'); await p.waitForTimeout(400);
+  await p.click('[data-pay="Nakit"]'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.selectOption('#salePerson', { index: 1 });
+  await p.click('#finalizeSale');
+  await p.waitForSelector('#saleMasakIdentity');
+  await p.selectOption('#saleMasakIdentity', 'KYC-T1'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.click('#finalizeSale');
+  await p.waitForSelector('#masakRiskSkip');
+  assert.match(await p.innerText('#modalRoot'), /MASAK SORGUSU YAPILMADI[\s\S]*AHMET YILMAZ/);
+  await p.click('#masakRiskSkip'); await p.waitForTimeout(300);
+  await p.click('#modalConfirm'); await p.waitForTimeout(1500);
+  for (let i = 0; i < 40 && !(fb.db.state.sales || []).some((x) => x.masakIdentityId === 'KYC-T1'); i++) await p.waitForTimeout(250);
+  const sale = (fb.db.state.sales || []).find((x) => x.masakIdentityId === 'KYC-T1');
+  assert.ok(sale, 'satış MASAK kimliğine bağlanmalı');
+  assert.equal(sale.masakCheck.fullName, 'AHMET YILMAZ'); assert.equal(sale.masakCheck.riskStatus, 'TARANMADI'); assert.equal(sale.masakCheck.riskSkipped, true);
+  await p.evaluate(() => document.querySelector('[data-go="compliance"],[data-route="compliance"]').click());
+  await p.waitForTimeout(400);
+  const t = await p.innerText('body');
+  assert.match(t, /Eşik Üstü Satışlar ve MASAK Sorguları[\s\S]*MASAK: AHMET YILMAZ · TARANMADI/);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
 test('fatura taslağı: altın bedeli, işçilik ve yalnız işçilikten KDV ayrılır; entegratöre ayrıntılı gider', async () => {
   const p = await newDevice(browser, appUrl, createFakeFirebase());
   let sent = null;
