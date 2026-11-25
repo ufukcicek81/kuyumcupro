@@ -2023,6 +2023,44 @@ test('gider pusulası: hurda alışından düzenlenir, numara sırayla gider, ip
   await p.context().close();
 });
 
+test('Banka Hareketleri: İş Bankası online ekstresi listeye düşer, tekrar çekince mükerrer eklenmez', async () => {
+  const http = require('http');
+  const kopru = require('../../kopru/asil-kopru.js');
+  kopru._isbankReset();
+  const realFetch = global.fetch;
+  const fb = createFakeFirebase();
+  let p = await newDevice(browser, appUrl, fb);
+  await p.waitForTimeout(1000);
+  const st = fb.db.state;
+  const d = new Date(), dd = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  const H = (no, amt, desc, tur) => `<Hareket><Tarih>${dd}</Tarih><HareketSirano>${no}</HareketSirano><Miktar>${amt}</Miktar><Bakiye>1000.00</Bakiye><Aciklama>${desc}</Aciklama><IslemTuru>${tur}</IslemTuru><KarsiHesapVKN>0000000000</KarsiHesapVKN></Hareket>`;
+  const xml = `<?xml version="1.0" encoding="utf-8"?><XMLEXBAT><Tarih>${dd}</Tarih><Hesaplar><Hesap><Tanimlamalar><HesapNo>1</HesapNo><Bakiye>1000.00</Bakiye></Tanimlamalar><Hareketler>${H('S1', '21350.00', 'ALİ VELİ ALTIN ÖDEMESİ ELDEN TESLİM ALDIM 10000000146', 'FST')}${H('S2', '-500.00', 'HAVALE GİDEN', 'EFT')}${H('S3', '31023.45', '0000000000000/NET SATIŞ TUTARI DENEME KUYUM /000', 'CCP')}</Hareketler></Hesap></Hesaplar></XMLEXBAT>`;
+  global.fetch = async (url, opt) => String(url).includes('posmatik2.isbank.com.tr') ? { ok: true, status: 200, text: async () => xml } : realFetch(url, opt);
+  const bridge = http.createServer((q, r) => kopru.handle({ allowedOrigins: [], whatsapp: false, isbankUid: 'U', isbankPwd: 'P' }, q, r));
+  await new Promise((r) => bridge.listen(0, '127.0.0.1', r));
+  try {
+    st.invoiceSettings = { ...(st.invoiceSettings || {}), proxyUrl: `http://127.0.0.1:${bridge.address().port}` };
+    fb.db.state = st; await p.context().close();
+    p = await newDevice(browser, appUrl, fb);
+    await p.evaluate(() => document.querySelector('[data-go="banking"],[data-route="banking"]').click());
+    await p.waitForSelector('#bankFeedOnline');
+    const acc = st.bankAccounts.find((b) => /İŞ BANKASI/.test(String(b.bank || b.name)));
+    await p.selectOption('#bankFeedBank', acc.id);
+    await p.click('#bankFeedOnline');
+    await p.waitForSelector('[data-bankfeed-row]', { timeout: 10000 });
+    const t = await p.innerText('#bankFeedTable');
+    assert.equal((await p.$$('[data-bankfeed-row]')).length, 3);
+    assert.match(t, /ALİ VELİ ALTIN ÖDEMESİ[\s\S]*UYGUN/);
+    assert.match(t, /HAVALE GİDEN/); assert.match(t, /Çıkış/);
+    assert.ok(!/NET SATIŞ[^\n]*(UYGUN|EKSİK|RİSKLİ)/.test(t), 'POS aktarımına açıklama kontrolü konmamalı');
+    kopru._isbankReset();
+    await p.click('#bankFeedOnline'); await p.waitForTimeout(1500);
+    assert.equal((await p.$$('[data-bankfeed-row]')).length, 3, 'aynı hareketler tekrar eklenmemeli');
+    assert.deepEqual(p.errors, []);
+    await p.context().close();
+  } finally { global.fetch = realFetch; bridge.close(); kopru._isbankReset(); }
+});
+
 test('banka bakiyesi gerçek tutara eşitlenir; kasa değişmez', async () => {
   const fb = createFakeFirebase();
   const p = await newDevice(browser, appUrl, fb);
