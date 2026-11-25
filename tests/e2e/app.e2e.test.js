@@ -1840,6 +1840,9 @@ test('İş Bankası online ekstre: köprüden gelen hareketler programdaki banka
     assert.deepEqual([body.get('uid'), body.get('pwd')], ['KOD1', 'gizli']);
     assert.match(body.get('BeginDate'), /^\d{2}\.\d{2}\.\d{4} 00:00:00$/);
     assert.ok(!t.includes('gizli'), 'şifre ekranda görünmemeli');
+    for (let i = 0; i < 40 && !(fb.db.state.bankIncomingV7 || []).length; i++) await p.waitForTimeout(250);
+    const inc = fb.db.state.bankIncomingV7 || [];
+    assert.deepEqual(inc.map((x) => x.amount), [1500], 'Bankadan Getir ile gelen para fatura listesine kaydedilmeli');
     assert.deepEqual(p.errors, []);
     await p.context().close();
   } finally { global.fetch = realFetch; bridge.close(); kopru._isbankReset(); }
