@@ -4262,11 +4262,37 @@ function stockSummaryView(){
   /* Bankaya gelen paralar buluta da yazılır (state.bankIncomingV7): Fatura → Gelen Havaleler'de her cihazdan görünür, fatura kesilebilir. */
   function bankHashV7(s){let h=5381;for(let i=0;i<s.length;i++)h=((h*33)^s.charCodeAt(i))>>>0;return h.toString(36);}
   function bankWhenIsoV7(v){const t=String(v||'').trim(),m=t.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);if(m){const d=new Date(+m[3],+m[2]-1,+m[1],+(m[4]||12),+(m[5]||0),+(m[6]||0));return d.toISOString();}const d=new Date(t);return isNaN(d)?new Date().toISOString():d.toISOString();}
+  /* Gönderen adı: bankanın ayrı bir alanı varsa (Gonderen, KarsiUnvan, AdSoyad…) o, yoksa açıklamadan tahmin edilir. */
+  function bankSenderFieldV7(r){const k=Object.keys(r||{}).find(k=>/g[oö]nderen|kar[sş][iı].?(taraf|unvan|ad|isim)|unvan|ad.?soyad|^isim|sender|name|hesap.?sahibi|borclu|bor[cç]lu.?ad/i.test(k)&&String(r[k]||'').trim()&&!/^\d+$/.test(String(r[k]).trim()));return k?String(r[k]).trim():'';}
+  function bankSenderGuessV7(desc){
+    const cfg=bankWatchCfgV7(),skip=new Set(['FAST','EFT','HAVALE','GELEN','GIDEN','INTERNET','MOBIL','SUBE','ODEME','ODEMESI','ALTIN','BEDELI','BEDEL','ELDEN','TESLIM','ALDIM','ALINDI','TL','TRY','IBAN','HESABINA','HESAP','HESAPTAN','ACIKLAMA','REF','NO','TC','TCKN','KIMLIK','ISBANK','IS','BANKASI','BANKA','AS','A','S','ICIN','ALIMI','ALIM','ZIYNET','CEYREK','BILEZIK','KULCE','GRAM','TAKI','YARIM','TAM','ATA','PARASI','BORC','ODUNC','EMANET','KIRA','FAIZ','KREDI','YATIRIM','SENET','AVANS','BAGIS','HARCLIK','MUSTERI','PESIN','SATIS','FATURA']);
+    String(cfg.ok+','+cfg.risk).split(/[,\n;]/).forEach(x=>bankNormV7(x).split(' ').forEach(w=>w&&skip.add(w)));
+    const words=String(desc||'').replace(/TR\d[\d ]{10,}/gi,' ').split(/[^A-Za-zÇĞİÖŞÜçğıöşü]+/).filter(Boolean);
+    let run=[],best=[];words.forEach(w=>{if(w.length>1&&!skip.has(bankNormV7(w))){run.push(w);if(run.length>best.length)best=run.slice();}else run=[];});
+    return best.length>=2?best.slice(0,4).join(' ').toLocaleUpperCase('tr-TR'):'';
+  }
+  function bankSenderOfV7(b){return b?(b.sender||bankSenderGuessV7(b.description)):'';}
+  function invoiceBankForRecordV7(r){
+    const bi=state.bankIncomingV7||[];if(!bi.length||!r)return null;
+    if(r.bankIncomingId)return bi.find(b=>b.id===r.bankIncomingId)||null;
+    if(r.financeMoveId){const m=(state.financeMoves||[]).find(x=>x.id===r.financeMoveId);if(m)return bankIncomingForMoveV7(m);}
+    const sale=r.saleId&&state.sales.find(x=>x.id===r.saleId);if(!sale)return null;
+    const doc=String(sale.docNo||sale.id);
+    for(const m of (state.financeMoves||[]).filter(m=>m.direction==='Giriş'&&m.accountKind==='Banka'&&String(m.sourceDocNo||'')===doc)){const b=bankIncomingForMoveV7(m);if(b)return b;}
+    return null;
+  }
+  function invoiceReceiverBankFillV7(r,rc){
+    const b=invoiceBankForRecordV7(r);if(!b)return rc;
+    const name=bankSenderOfV7(b);
+    if(name&&(!String(rc.name||'').trim()||/^pe[sş][iİı]n m[uü][sş]ter[iİı]$/i.test(String(rc.name).trim())))rc.name=name;
+    if(b.tckn&&!String(rc.tckn||'').trim()&&!String(rc.vkn||'').trim())rc.tckn=b.tckn;
+    return rc;
+  }
   function bankIncomingStoreV7(recs,col,keys,w){
     const list=state.bankIncomingV7=Array.isArray(state.bankIncomingV7)?state.bankIncomingV7:[],have=new Set(list.map(x=>x.id)),acc=(state.bankAccounts||[]).find(x=>x.id===w.accountId);let n=0;
     recs.forEach((r,i)=>{const amt=bankOnlineAmountV7(r,col);if(!(amt>0))return;const id='BI-'+bankHashV7(keys[i]);if(have.has(id))return;
       const desc=col.desc?String(r[col.desc]||''):'',chk=bankDescCheckV7(desc,w);
-      list.unshift({id,date:bankWhenIsoV7(r[col.date]),amount:Math.round(amt*100)/100,description:desc,tckn:chk.tc||'',level:chk.level,msg:chk.msg,accountId:w.accountId,accountName:acc?(acc.bank||acc.name||''):'',status:'bekliyor',seenAt:new Date().toISOString()});have.add(id);n++;});
+      list.unshift({id,date:bankWhenIsoV7(r[col.date]),amount:Math.round(amt*100)/100,description:desc,sender:bankSenderFieldV7(r),tckn:chk.tc||'',level:chk.level,msg:chk.msg,accountId:w.accountId,accountName:acc?(acc.bank||acc.name||''):'',status:'bekliyor',seenAt:new Date().toISOString()});have.add(id);n++;});
     if(list.length>300)list.length=300;
     return n;
   }
@@ -10386,10 +10412,10 @@ function stockSummaryView(){
   }
   /* Fatura alıcısı: müşteri kartı / kimlik kaydından gelir; taslakta elle düzeltilen alanlar (r.receiver) önceliklidir. */
   function invoiceReceiverV7(r){
-    if(r.kind==='havale')return Object.assign({name:r.customerName||'',tckn:'',vkn:'',address:'',phone:'',email:''},(r.manual||{}).receiver||{});
+    if(r.kind==='havale')return invoiceReceiverBankFillV7(r,Object.assign({name:r.customerName||'',tckn:'',vkn:'',address:'',phone:'',email:''},(r.manual||{}).receiver||{}));
     const sale=state.sales.find(x=>x.id===r.saleId),c=state.customers.find(x=>x.id===r.customerId),kyc=identityById(sale?.masakIdentityId||'');
     const base={name:kyc?.fullName||c?.name||r.customerName||'',tckn:kyc?.tckn||c?.tckn||c?.tc||'',vkn:kyc?.vkn||c?.vkn||c?.taxNo||'',address:kyc?.address||c?.address||'',phone:kyc?.phone||c?.phone||c?.mobile||'',email:kyc?.email||c?.email||''};
-    const o=r.receiver||{};Object.keys(base).forEach(k=>{if(o[k]!=null)base[k]=o[k];});return base;
+    const o=r.receiver||{};Object.keys(base).forEach(k=>{if(o[k]!=null)base[k]=o[k];});return invoiceReceiverBankFillV7(r,base);
   }
   function invoiceReceiverFormV7(rc){
     return `<div class="form-grid" style="margin-bottom:12px"><div class="labelled span-2"><label>Alıcı Adı / Ünvanı</label><input id="irName" class="input" value="${esc(rc.name||'')}"></div><div class="labelled"><label>TCKN</label><input id="irTckn" class="input" inputmode="numeric" maxlength="11" value="${esc(rc.tckn||'')}"></div><div class="labelled"><label>VKN (firma ise)</label><input id="irVkn" class="input" inputmode="numeric" maxlength="10" value="${esc(rc.vkn||'')}"></div><div class="labelled span-2"><label>Adres (Cadde No / İlçe / İl)</label><input id="irAddress" class="input" value="${esc(rc.address||'')}"></div><div class="labelled"><label>Telefon</label><input id="irPhone" class="input" value="${esc(rc.phone||'')}"></div><div class="labelled"><label>E-posta (yazılırsa fatura e-postayla gider)</label><input id="irEmail" class="input" value="${esc(rc.email||'')}"></div></div>`;
@@ -10441,6 +10467,7 @@ function stockSummaryView(){
     const amount=Math.round(Number(m.tlAmount??m.amount??0)*100)/100,c=state.customers.find(x=>x.id===m.customerId)||state.customers.find(x=>x.name&&x.name===m.customer);
     const r={id:uid('INV'),kind:'havale',financeMoveId:m.id,period:state.activePeriod,date:now(),saleDate:m.date,saleDocNo:m.sourceDocNo||'HAVALE',customerId:c?.id||'',customerName:c?.name||m.customer||'',amount,currency:'TL',documentType:state.invoiceSettings.defaultDocumentType||'AUTO',status:'Taslak',createdBy:session.name,
       manual:{karat:'22',gram:'',goldAmount:Math.round(amount*(1-invoiceLabourPctV7()/100)*100)/100,description:m.description||bankIncomingForMoveV7(m)?.description||'',receiver:{name:c?.name||m.customer||'',tckn:c?.tckn||c?.tc||bankIncomingForMoveV7(m)?.tckn||'',vkn:c?.vkn||c?.taxNo||'',address:c?.address||'',phone:c?.phone||c?.mobile||'',email:c?.email||''}}};
+    invoiceReceiverBankFillV7(r,r.manual.receiver);
     state.invoiceRecords.unshift(r);save();invoiceView='records';render();toast('Havale için fatura taslağı oluşturuldu');openInvoiceDraftV7(r.id);
   }
   /* Havale faturası: Perakende → ÖZEL MATRAH (805 altın / 808 gümüş): tek satır, tutar altın + işçilik, KDV yalnız işçilikten.
@@ -10460,6 +10487,7 @@ function stockSummaryView(){
   }
   function openHavaleInvoiceV7(r){
     const editable=['Taslak','Hata'].includes(r.status),m=r.manual=r.manual||{},rc=m.receiver=m.receiver||{};
+    if(editable)invoiceReceiverBankFillV7(r,rc);
     const form=editable?`<div class="form-grid" style="margin-bottom:12px">
       <div class="labelled span-2"><label>Alıcı Adı / Ünvanı</label><input id="hiName" class="input" value="${esc(rc.name||'')}"></div>
       <div class="labelled"><label>TCKN</label><input id="hiTckn" class="input" inputmode="numeric" maxlength="11" value="${esc(rc.tckn||'')}"></div>
@@ -10489,6 +10517,7 @@ function stockSummaryView(){
     const amount=b.amount,c=b.tckn?state.customers.find(x=>String(x.tckn||x.tc||'')===b.tckn):null;
     const r={id:uid('INV'),kind:'havale',bankIncomingId:b.id,period:state.activePeriod,date:now(),saleDate:b.date,saleDocNo:'HAVALE',customerId:c?.id||'',customerName:c?.name||'',amount,currency:'TL',documentType:state.invoiceSettings.defaultDocumentType||'AUTO',status:'Taslak',createdBy:session.name,
       manual:{karat:'22',gram:'',goldAmount:Math.round(amount*(1-invoiceLabourPctV7()/100)*100)/100,description:b.description||'',receiver:{name:c?.name||'',tckn:b.tckn||c?.tckn||c?.tc||'',vkn:c?.vkn||c?.taxNo||'',address:c?.address||'',phone:c?.phone||c?.mobile||'',email:c?.email||''}}};
+    invoiceReceiverBankFillV7(r,r.manual.receiver);
     state.invoiceRecords.unshift(r);save();invoiceView='records';render();toast('Havale için fatura taslağı oluşturuldu');openInvoiceDraftV7(r.id);
   }
   function havaleListHtmlV7(){
