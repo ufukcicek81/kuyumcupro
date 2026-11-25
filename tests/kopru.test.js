@@ -217,6 +217,25 @@ test('İş Bankası bilgileri her sorguda dosyadan yeniden okunur (köprüyü ye
   } finally { global.fetch = realFetch; srv.close(); delete process.env.ASIL_KOPRU_CONFIG; k._isbankReset(); }
 });
 
+test('otomatik havale kontrolü: köprü sonucu 45 sn saklar; elle sorgu sırasını bekler', async () => {
+  const http = require('http');
+  const cfg = { allowedOrigins: [], whatsapp: false, isbankUid: 'U', isbankPwd: 'P' };
+  const srv = http.createServer((q, r) => k.handle(cfg, q, r));
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+  const realFetch = global.fetch;
+  const call = (body) => new Promise((res, rej) => { const q = http.request({ host: '127.0.0.1', port: srv.address().port, method: 'POST', headers: { 'Content-Type': 'application/json' } }, (r) => { let b = ''; r.on('data', (c) => { b += c; }); r.on('end', () => res(JSON.parse(b))); }); q.on('error', rej); q.end(JSON.stringify(body)); });
+  let n = 0;
+  try {
+    k._isbankReset();
+    global.fetch = async () => { n++; return { ok: true, status: 200, text: async () => '<x/>' }; };
+    const a = await call({ action: 'isbankStatement', watch: true });
+    const b = await call({ action: 'isbankStatement', watch: true });
+    assert.equal(a.ok, true); assert.equal(b.cached, true); assert.equal(n, 1, 'ikinci cihaz bankaya tekrar sormamalı');
+    assert.ok(Date.parse(a.to) - Date.parse(a.from) >= 864e5 - 1000, 'son 24 saat sorulmalı');
+    assert.match((await call({ action: 'isbankStatement' })).message, /dakikada en fazla 2/);
+  } finally { global.fetch = realFetch; srv.close(); k._isbankReset(); }
+});
+
 test('İş Bankası cevabı Türkçe Windows kodlamasıyla gelirse harfler doğru okunur', async () => {
   k._isbankReset();
   const realFetch = global.fetch;
