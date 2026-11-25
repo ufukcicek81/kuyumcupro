@@ -73,18 +73,21 @@
   }
   /** 1. satır: seri no + doğru kontrol hanesi; "TUR" sonrası öncelikli. */
   function findLine1(sources){
-    var fallback=null;
+    var fallback=null,withTur=null;
     for(var k=0;k<sources.length;k++){var s=sources[k];
       for(var i=0;i+10<=s.length;i++){
         var doc=fixTurkishDocNo(s.slice(i,i+9)),chk=toDigits(s[i+9]);
         if(!doc||!chk||checkDigit(doc)!==+chk)continue;
-        var r={documentNumber:doc,tckn:findTckn(s.slice(i+10,i+25))};
-        if(i>=3&&toLetters(s.slice(i-3,i))==='TUR')return r;
+        // TD1 1. satır: I<TUR + seri no (9) + kontrol (1) + T.C. kimlik no (11). Önce tam yerinde aranır.
+        var exact=toDigits(s.slice(i+10,i+21)||''),tc=exact&&exact.length===11&&isValidTckn(exact)?exact:findTckn(s.slice(i+10,i+25));
+        var r={documentNumber:doc,tckn:tc};
+        // Satır bölünmüşse T.C. no bir sonraki satırdadır: ardışık satırların birleşiminde de aranır.
+        if(i>=3&&toLetters(s.slice(i-3,i))==='TUR'){if(r.tckn)return r;if(!withTur)withTur=r;continue;}
         // "TUR" ön eki okunamadıysa: yanlış eşleşmeyi önlemek için harf yerleri OCR'da gerçekten harf olmalı.
         if(!fallback&&/[A-Z]/.test(s[i])&&/[A-Z]/.test(s[i+3]))fallback=r;
       }
     }
-    return fallback;
+    return withTur||fallback;
   }
   function findName(lines){
     for(var i=lines.length-1;i>=0;i--){var l=lines[i];
@@ -107,7 +110,9 @@
     var d={documentNumber:'',birthYYMMDD:'',expiryYYMMDD:'',tckn:'',fullName:'',givenNames:'',surname:'',sex:'',nationality:'',raw:lines.join('\n')};
     var l2=findLine2(sources);if(l2){d.birthYYMMDD=l2.birth;d.expiryYYMMDD=l2.expiry;d.sex=l2.sex;d.nationality=l2.nationality}
     var l1=findLine1(sources);if(l1){d.documentNumber=l1.documentNumber;d.tckn=l1.tckn}
-    if(!d.tckn)d.tckn=findTckn(lines.join(''));
+    // Seri no okunamadıysa T.C. no yalnız "TUR" ile başlayan 1. satırda aranır; bütün metinde aramak
+    // doğum / son geçerlilik rakamlarından rastgele "geçerli" bir numara üretebiliyordu.
+    if(!d.tckn)for(var t=0;t<lines.length&&!d.tckn;t++){var at=lines[t].indexOf('TUR');if(at>=0&&at<=4&&!/<<[A-Z]/.test(lines[t]))d.tckn=findTckn(lines[t].slice(at+3,at+3+25))}
     var n=findName(lines);d.fullName=n.fullName;d.givenNames=n.givenNames;d.surname=n.surname;
     d.complete=!!(d.documentNumber&&d.birthYYMMDD&&d.expiryYYMMDD);
     return d;

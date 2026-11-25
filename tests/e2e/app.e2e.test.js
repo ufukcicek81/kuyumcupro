@@ -567,6 +567,16 @@ test('KAMERA İLE KİMLİK OKU: MRZ metni ayrıştırılır, alanlar doldurulur 
   assert.equal(await p.inputValue('#kycName'), 'AHMET CAN YILMAZ');
   const rec = await p.evaluate(() => JSON.parse(localStorage.getItem('asil_kuyumcu_pro_kyc_v2') || '[]')[0]);
   assert.equal(rec.tckn, '10000000146'); assert.equal(rec.mrzCameraRead, true); assert.notEqual(rec.verified, true);
+  // MASAK evrakı yazdırılırken yazıcı sorulur; A4 seçilince tarayıcı yazdırma penceresi açılır, düzenleme penceresi kapanmaz.
+  const pops = []; p.context().on('page', (pg) => pops.push(pg));
+  await p.evaluate(() => document.getElementById('printKycFromEdit').click());
+  await p.waitForSelector('#kycPrintPick [data-kyc-paper="a4"]');
+  assert.match(await p.innerText('#kycPrintPick'), /Fiş yazıcısı \(Aclas\)/);
+  await p.click('#kycPrintPick [data-kyc-paper="a4"]');
+  for (let i = 0; i < 40 && !pops.length; i++) await p.waitForTimeout(100);
+  assert.equal(pops.length, 1, 'A4 seçilince yazdırma penceresi açılmalı');
+  assert.equal(await p.$('#kycPrintPick'), null);
+  assert.ok(await p.$('#kycName'), 'kimlik düzenleme penceresi açık kalmalı');
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
