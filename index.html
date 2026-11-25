@@ -4202,11 +4202,13 @@ function stockSummaryView(){
         <label style="display:flex;gap:6px;align-items:center;margin:6px 0"><input type="checkbox" id="bwOn" ${bankWatchCfgV7().on&&bankWatchCfgV7().accountId===a.acc.id?'checked':''}> Bu hesaba gelen havaleleri her dakika kontrol et ve bildir</label>
         <label class="labelled"><span>Riskli kelimeler (kırmızı uyarı, iade düşünülsün)</span><textarea class="input" id="bwRisk" rows="2">${esc(bankWatchCfgV7().risk)}</textarea></label>
         <label class="labelled"><span>Kabul edilen açıklamalar (en az biri olmalı)</span><textarea class="input" id="bwOk" rows="2">${esc(bankWatchCfgV7().ok)}</textarea></label>
+        <label style="display:flex;gap:6px;align-items:center;margin:6px 0"><input type="checkbox" id="bwName" ${bankWatchCfgV7().needName!==false?'checked':''}> Açıklamada isim soyisim olsun</label>
         <label style="display:flex;gap:6px;align-items:center;margin:6px 0"><input type="checkbox" id="bwTc" ${bankWatchCfgV7().needTc?'checked':''}> Açıklamada TC kimlik numarası olsun</label>
+        <div class="notice" style="margin:6px 0">Müşteriye söylenecek örnek açıklama: <b>AD SOYAD ALTIN ÖDEMESİ ELDEN TESLİM ALDIM TC NUMARASI</b><br>(Banka, müşteri kendi açıklamasını yazınca gönderenin adını göndermiyor; ad açıklamadan okunur.)</div>
         <button class="btn btn-primary btn-sm" type="button" id="bwSave">Bildirim ayarını kaydet</button></details>
       <div id="boResult"></div>`,null,'Kapat');
     document.getElementById('bwSave').onclick=()=>{
-      state.bankWatchV7={on:document.getElementById('bwOn').checked,accountId:a.acc.id,risk:document.getElementById('bwRisk').value.trim()||BANK_RISK_DEF_V7,ok:document.getElementById('bwOk').value.trim()||BANK_OK_DEF_V7,needTc:document.getElementById('bwTc').checked};
+      state.bankWatchV7={on:document.getElementById('bwOn').checked,accountId:a.acc.id,risk:document.getElementById('bwRisk').value.trim()||BANK_RISK_DEF_V7,ok:document.getElementById('bwOk').value.trim()||BANK_OK_DEF_V7,needTc:document.getElementById('bwTc').checked,needName:document.getElementById('bwName').checked};
       save();toast(state.bankWatchV7.on?'Havale bildirimi açıldı: her dakika kontrol edilecek':'Havale bildirimi kapatıldı');if(state.bankWatchV7.on)setTimeout(bankWatchPollV7,500);
     };
     const box=document.getElementById('boResult');
@@ -4221,7 +4223,7 @@ function stockSummaryView(){
         if(!col.date||(!col.amount&&!col.borc&&!col.alacak)){box.innerHTML=`<div class="notice"><b>${recs.length} hareket geldi</b> ama tarih / tutar sütunları tanınamadı. Aşağıdaki ham verinin ekran görüntüsünü gönderin, eşleştirmeyi ona göre ayarlayalım.</div>${raw}`;return;}
         if(bankIncomingStoreV7(recs,col,recs.map(bankRecKeyV7),Object.assign({},bankWatchCfgV7(),{accountId:a.acc.id})))save();
         const r=bankOnlineMatchV7(recs,col,moves),miss=r.bank.filter(b=>!b.m),sum=l=>l.reduce((n,x)=>n+x.amt,0);
-        const row=(b)=>`<tr${b.m?'':' style="background:rgba(192,38,45,.08)"'}><td>${esc(b.day.split('-').reverse().join('.'))}</td><td>${esc(b.desc)}${b.amt>0?' '+bankDescBadgeV7(bankDescCheckV7(b.desc)):''}</td><td class="num">${money(b.amt)}</td><td>${b.m?`✓ ${esc(b.m.f.type||'')} ${esc(b.m.f.sourceDocNo||'')}`:'<b style="color:#c0262d">Programda yok</b>'}</td></tr>`;
+        const row=(b)=>`<tr${b.m?'':' style="background:rgba(192,38,45,.08)"'}><td>${esc(b.day.split('-').reverse().join('.'))}</td><td>${esc(b.desc)}${b.amt>0&&bankIsTransferV7(b.r,b.desc)?' '+bankDescBadgeV7(bankDescCheckV7(b.desc)):''}</td><td class="num">${money(b.amt)}</td><td>${b.m?`✓ ${esc(b.m.f.type||'')} ${esc(b.m.f.sourceDocNo||'')}`:'<b style="color:#c0262d">Programda yok</b>'}</td></tr>`;
         box.innerHTML=`<div class="grid grid-4" style="margin:8px 0">${metric('Bankada',String(r.bank.length),money(sum(r.bank)))}${metric('Eşleşen',String(r.bank.length-miss.length),'')}${metric('Bankada var, programda yok',String(miss.length),money(sum(miss)))}${metric('Programda var, bankada yok',String(r.progOnly.length),money(sum(r.progOnly)))}</div>
           <div class="table-wrap"><table class="table"><thead><tr><th>Tarih</th><th>Banka açıklaması</th><th class="num">Tutar</th><th>Programda</th></tr></thead><tbody>${r.bank.map(row).join('')}</tbody></table></div>
           ${r.progOnly.length?`<h3 style="margin-top:12px">Programda var, bankada yok</h3><div class="table-wrap"><table class="table"><thead><tr><th>Tarih</th><th>İşlem</th><th>Belge</th><th class="num">Tutar</th></tr></thead><tbody>${r.progOnly.map(p=>`<tr style="background:rgba(192,38,45,.08)"><td>${esc(p.day.split('-').reverse().join('.'))}</td><td>${esc(p.f.type||'')}${p.f.description?' · '+esc(p.f.description):''}</td><td>${esc(p.f.sourceDocNo||'')}</td><td class="num">${money(p.amt)}</td></tr>`).join('')}</tbody></table></div>`:''}${raw}`;
@@ -4234,7 +4236,7 @@ function stockSummaryView(){
      kabul edilen açıklama (altın ödemesi, elden teslim aldım…) ve TC kimlik numarası yoksa turuncu "eksik" uyarısı verilir. */
   const BANK_RISK_DEF_V7='BORÇ, ÖDÜNÇ, EMANET, KİRA, FAİZ, KREDİ, YATIRIM, SENET, AVANS, BAĞIŞ, HARÇLIK';
   const BANK_OK_DEF_V7='ALTIN ÖDEMESİ, ALTIN BEDELİ, ALTIN ALIMI, ELDEN TESLİM ALDIM, ZİYNET, ÇEYREK, BİLEZİK, KÜLÇE';
-  function bankWatchCfgV7(){return Object.assign({on:false,accountId:'',risk:BANK_RISK_DEF_V7,ok:BANK_OK_DEF_V7,needTc:true},state.bankWatchV7||{});}
+  function bankWatchCfgV7(){return Object.assign({on:false,accountId:'',risk:BANK_RISK_DEF_V7,ok:BANK_OK_DEF_V7,needTc:true,needName:true},state.bankWatchV7||{});}
   function bankNormV7(s){return String(s||'').toLocaleUpperCase('tr-TR').replace(/[ÇĞİÖŞÜ]/g,ch=>({Ç:'C',Ğ:'G',İ:'I',Ö:'O',Ş:'S',Ü:'U'})[ch]).replace(/[^A-Z0-9]+/g,' ').trim();}
   function bankTcValidV7(t){if(!/^[1-9]\d{10}$/.test(t))return false;const d=t.split('').map(Number),o=d[0]+d[2]+d[4]+d[6]+d[8],e=d[1]+d[3]+d[5]+d[7];return (o*7-e)%10===d[9]&&d.slice(0,10).reduce((a,b)=>a+b,0)%10===d[10];}
   function bankDescCheckV7(desc,cfg){
@@ -4242,7 +4244,7 @@ function stockSummaryView(){
     const has=w=>w.includes(' ')?n.includes(' '+w+' ')||n.includes(' '+w):new RegExp(' '+w).test(n);
     const risk=list(cfg.risk).filter(has),ok=list(cfg.ok).filter(has),tc=(String(desc||'').match(/(?<!\d)\d{11}(?!\d)/g)||[]).find(bankTcValidV7)||'';
     if(risk.length)return {level:'risk',tc,msg:`Riskli açıklama: "${risk.join(', ')}". Müşteriyle görüşüp para iadesi düşünün.`};
-    const miss=[];if(!ok.length)miss.push('altın ödemesi / elden teslim aldım gibi açıklama yok');if(cfg.needTc&&!tc)miss.push('TC kimlik numarası yok');
+    const miss=[];if(!ok.length)miss.push('altın ödemesi / elden teslim aldım gibi açıklama yok');if(cfg.needName!==false&&!bankSenderGuessV7(desc))miss.push('isim soyisim yok');if(cfg.needTc&&!tc)miss.push('TC kimlik numarası yok');
     if(miss.length)return {level:'eksik',tc,msg:'Açıklama eksik: '+miss.join(', ')+'.'};
     return {level:'uygun',tc,msg:'Açıklama uygun'+(tc?' (TC '+tc+')':'')+'.'};
   }
@@ -4255,7 +4257,7 @@ function stockSummaryView(){
     if(!l.length){box?.remove();return;}
     if(!box){box=document.createElement('div');box.id='bankAlertV7';box.style.cssText='position:fixed;right:12px;bottom:12px;z-index:9000;width:min(380px,calc(100vw - 24px));max-height:70vh;overflow:auto;display:flex;flex-direction:column;gap:8px';document.body.appendChild(box);}
     const col={risk:'#c0262d',eksik:'#c26a00',uygun:'#16803c'};
-    box.innerHTML=l.map(a=>`<div style="background:#fff;color:#111;border:3px solid ${col[a.level]};border-radius:10px;padding:10px;box-shadow:0 6px 24px rgba(0,0,0,.25)"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b style="font-size:15px">🏦 Hesabınıza havale geldi</b>${bankDescBadgeV7(a)}</div><div style="font-size:22px;font-weight:800;margin:4px 0">${money(a.amt)}</div><div style="font-size:12px;color:#555">${esc(a.when||'')}${a.bank?' · '+esc(a.bank):''}</div><div style="font-size:13px;margin:4px 0;word-break:break-word">${esc(a.desc||'(açıklama yok)')}</div><div style="font-size:13px;font-weight:700;color:${col[a.level]}">${esc(a.msg)}</div><div style="text-align:right;margin-top:6px"><button class="btn btn-sm" type="button" data-bank-alert-ok="${esc(a.id)}">Tamam</button></div></div>`).join('')+(l.length>1?`<button class="btn btn-outline btn-sm" type="button" data-bank-alert-all style="align-self:flex-end;background:#fff">Hepsini kapat</button>`:'');
+    box.innerHTML=l.map(a=>`<div style="background:#fff;color:#111;border:3px solid ${col[a.level]};border-radius:10px;padding:10px;box-shadow:0 6px 24px rgba(0,0,0,.25)"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b style="font-size:15px">🏦 Hesabınıza havale geldi</b>${bankDescBadgeV7(a)}</div><div style="font-size:22px;font-weight:800;margin:4px 0">${money(a.amt)}</div><div style="font-size:12px;color:#555">${esc(a.when||'')}${a.bank?' · '+esc(a.bank):''}</div>${a.name?`<div style="font-size:14px;font-weight:700">${esc(a.name)}</div>`:''}<div style="font-size:13px;margin:4px 0;word-break:break-word">${esc(a.desc||'(açıklama yok)')}</div><div style="font-size:13px;font-weight:700;color:${col[a.level]}">${esc(a.msg)}</div><div style="text-align:right;margin-top:6px"><button class="btn btn-sm" type="button" data-bank-alert-ok="${esc(a.id)}">Tamam</button></div></div>`).join('')+(l.length>1?`<button class="btn btn-outline btn-sm" type="button" data-bank-alert-all style="align-self:flex-end;background:#fff">Hepsini kapat</button>`:'');
     box.querySelectorAll('[data-bank-alert-ok]').forEach(b=>b.onclick=()=>{bankAlertsSaveV7(bankAlertsV7().filter(x=>x.id!==b.dataset.bankAlertOk));bankAlertRenderV7();});
     box.querySelector('[data-bank-alert-all]')?.addEventListener('click',()=>{bankAlertsSaveV7([]);bankAlertRenderV7();});
   }
@@ -4271,7 +4273,25 @@ function stockSummaryView(){
     let run=[],best=[];words.forEach(w=>{if(w.length>1&&!skip.has(bankNormV7(w))){run.push(w);if(run.length>best.length)best=run.slice();}else run=[];});
     return best.length>=2?best.slice(0,4).join(' ').toLocaleUpperCase('tr-TR'):'';
   }
-  function bankSenderOfV7(b){return b?(b.sender||bankSenderGuessV7(b.description)):'';}
+  /* İş Bankası, müşteri kendi açıklamasını yazınca gönderen adını göndermiyor (yalnız TC ve maskeli IBAN).
+     Ad şu sırayla bulunur: bankanın ad alanı → açıklama (açıklamasız FAST: "AD SOYAD*0067**…*FAST") →
+     aynı TC'li cari / kimlik kaydı / önceki fatura → aynı IBAN'dan gelen önceki havalenin faturası. */
+  function bankBadNameV7(n){n=String(n||'').trim();return !n||/^pe[sş][iİı]n m[uü][sş]ter[iİı]$/i.test(n);}
+  function bankNameByTcV7(tc){
+    tc=String(tc||'').replace(/\D/g,'');if(tc.length!==11)return '';
+    const c=(state.customers||[]).find(x=>String(x.tckn||x.tc||'').replace(/\D/g,'')===tc&&!bankBadNameV7(x.name));if(c)return c.name;
+    const k=(typeof identityRecords!=='undefined'?identityRecords:[]).find(x=>String(x.tckn||x.idNo||'').replace(/\D/g,'')===tc&&!bankBadNameV7(x.fullName));if(k)return k.fullName;
+    for(const r of (state.invoiceRecords||[])){const rc=r.kind==='havale'?(r.manual||{}).receiver||{}:r.receiver||{};if(String(rc.tckn||'').replace(/\D/g,'')===tc&&!bankBadNameV7(rc.name))return rc.name;}
+    return '';
+  }
+  function bankNameByIbanV7(b){
+    if(!b||!b.iban)return '';
+    for(const r of (state.invoiceRecords||[])){if(r.status==='İptal')continue;const o=invoiceBankForRecordV7(r);if(!o||o.id===b.id||o.iban!==b.iban)continue;const rc=r.kind==='havale'?(r.manual||{}).receiver||{}:r.receiver||{};if(!bankBadNameV7(rc.name))return rc.name;}
+    return '';
+  }
+  function bankSenderOfV7(b){return b?(b.sender||bankSenderGuessV7(b.description)||bankNameByTcV7(b.tckn)||bankNameByIbanV7(b)):'';}
+  /* POS'un kredi kartı net satış aktarımı (İşlemTürü CCP, "NET SATIŞ TUTARI") havale değildir. */
+  function bankIsTransferV7(r,desc){const t=Object.keys(r||{}).find(k=>/^islem.?turu$|^i̇şlem.?türü$/i.test(k));if(t&&/^\s*CCP\s*$/i.test(String(r[t]||'')))return false;return !/NET SATI[SŞ] TUTARI/i.test(String(desc||''));}
   function invoiceBankForRecordV7(r){
     const bi=state.bankIncomingV7||[];if(!bi.length||!r)return null;
     if(r.bankIncomingId)return bi.find(b=>b.id===r.bankIncomingId)||null;
@@ -4291,8 +4311,9 @@ function stockSummaryView(){
   function bankIncomingStoreV7(recs,col,keys,w){
     const list=state.bankIncomingV7=Array.isArray(state.bankIncomingV7)?state.bankIncomingV7:[],have=new Set(list.map(x=>x.id)),acc=(state.bankAccounts||[]).find(x=>x.id===w.accountId);let n=0;
     recs.forEach((r,i)=>{const amt=bankOnlineAmountV7(r,col);if(!(amt>0))return;const id='BI-'+bankHashV7(keys[i]);if(have.has(id))return;
-      const desc=col.desc?String(r[col.desc]||''):'',chk=bankDescCheckV7(desc,w);
-      list.unshift({id,date:bankWhenIsoV7(r[col.date]),amount:Math.round(amt*100)/100,description:desc,sender:bankSenderFieldV7(r),tckn:chk.tc||'',level:chk.level,msg:chk.msg,accountId:w.accountId,accountName:acc?(acc.bank||acc.name||''):'',status:'bekliyor',seenAt:new Date().toISOString()});have.add(id);n++;});
+      const desc=col.desc?String(r[col.desc]||''):'',chk=bankDescCheckV7(desc,w);if(!bankIsTransferV7(r,desc))return;
+      const ik=Object.keys(r).find(k=>/iban/i.test(k)),iban=ik?String(r[ik]||'').trim():'';
+      list.unshift({id,date:bankWhenIsoV7(r[col.date]),amount:Math.round(amt*100)/100,description:desc,sender:bankSenderFieldV7(r),iban,tckn:chk.tc||'',level:chk.level,msg:chk.msg,accountId:w.accountId,accountName:acc?(acc.bank||acc.name||''):'',status:'bekliyor',seenAt:new Date().toISOString()});have.add(id);n++;});
     if(list.length>300)list.length=300;
     return n;
   }
@@ -4307,11 +4328,11 @@ function stockSummaryView(){
       const key='asil_bank_seen_v7';let seen=null;try{seen=JSON.parse(localStorage.getItem(key)||'null');}catch(_){}
       const keys=recs.map(bankRecKeyV7),first=!Array.isArray(seen),set=new Set(seen||[]);
       if(bankIncomingStoreV7(recs,col,keys,w))save();
-      const fresh=first?[]:recs.filter((r,i)=>!set.has(keys[i])&&bankOnlineAmountV7(r,col)>0);
+      const fresh=first?[]:recs.filter((r,i)=>!set.has(keys[i])&&bankOnlineAmountV7(r,col)>0&&bankIsTransferV7(r,col.desc?r[col.desc]:''));
       try{localStorage.setItem(key,JSON.stringify([...new Set([...(seen||[]),...keys])].slice(-3000)));}catch(_){}
       if(!fresh.length)return;
       const acc=(state.bankAccounts||[]).find(x=>x.id===w.accountId),now=Date.now();
-      const add=fresh.map((r,i)=>{const desc=col.desc?String(r[col.desc]||''):'',chk=bankDescCheckV7(desc,w);return {id:'ba'+now+'_'+i,amt:bankOnlineAmountV7(r,col),desc,when:String(r[col.date]||''),bank:acc?(acc.bank||acc.name||''):'',level:chk.level,msg:chk.msg,at:new Date(now).toISOString()};});
+      const add=fresh.map((r,i)=>{const desc=col.desc?String(r[col.desc]||''):'',chk=bankDescCheckV7(desc,w);return {id:'ba'+now+'_'+i,amt:bankOnlineAmountV7(r,col),desc,name:bankSenderFieldV7(r)||bankSenderGuessV7(desc)||bankNameByTcV7(chk.tc),when:String(r[col.date]||''),bank:acc?(acc.bank||acc.name||''):'',level:chk.level,msg:chk.msg,at:new Date(now).toISOString()};});
       bankAlertsSaveV7(bankAlertsV7().concat(add));bankAlertRenderV7();bankWatchBeepV7();
       add.filter(a=>a.level==='risk').forEach(a=>audit(`Riskli havale açıklaması: ${money(a.amt)} "${String(a.desc).slice(0,80)}"`,'Banka'));
     }catch(e){bankWatchLogV7({ok:false,err:String(e&&e.message||e)});}finally{bankWatchPollV7.busy=false;}
@@ -10510,7 +10531,7 @@ function stockSummaryView(){
   }
   function bankIncomingMatchMoveV7(b){const day=localDayV7(new Date(b.date));return (state.financeMoves||[]).find(m=>m.direction==='Giriş'&&m.accountKind==='Banka'&&(!b.accountId||m.accountId===b.accountId)&&localDayV7(new Date(m.date))===day&&Math.abs(Number(m.tlAmount??m.amount??0)-b.amount)<0.01)||null;}
   function bankIncomingForMoveV7(m){const day=localDayV7(new Date(m.date)),a=Number(m.tlAmount??m.amount??0);return (state.bankIncomingV7||[]).find(b=>(!b.accountId||m.accountId===b.accountId)&&localDayV7(new Date(b.date))===day&&Math.abs(b.amount-a)<0.01)||null;}
-  function bankIncomingPendingV7(){return (state.bankIncomingV7||[]).filter(b=>b.status==='bekliyor'&&!state.invoiceRecords.some(r=>r.bankIncomingId===b.id&&r.status!=='İptal')&&!bankIncomingMatchMoveV7(b));}
+  function bankIncomingPendingV7(){return (state.bankIncomingV7||[]).filter(b=>b.status==='bekliyor'&&bankIsTransferV7(null,b.description)&&!state.invoiceRecords.some(r=>r.bankIncomingId===b.id&&r.status!=='İptal')&&!bankIncomingMatchMoveV7(b));}
   function createBankIncomingInvoiceDraftV7(id){
     const b=(state.bankIncomingV7||[]).find(x=>x.id===id);if(!b)return toast('Havale bulunamadı','err');
     if(state.invoiceRecords.some(r=>r.bankIncomingId===b.id&&r.status!=='İptal'))return toast('Bu havale için zaten fatura kaydı var','err');
