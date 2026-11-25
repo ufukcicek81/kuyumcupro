@@ -2033,8 +2033,9 @@ test('Banka Hareketleri: İş Bankası online ekstresi listeye düşer, tekrar �
   await p.waitForTimeout(1000);
   const st = fb.db.state;
   const d = new Date(), dd = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  const sn = (hh, mi) => `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}${hh}${mi}29577863`;
   const H = (no, amt, desc, tur) => `<Hareket><Tarih>${dd}</Tarih><HareketSirano>${no}</HareketSirano><Miktar>${amt}</Miktar><Bakiye>1000.00</Bakiye><Aciklama>${desc}</Aciklama><IslemTuru>${tur}</IslemTuru><KarsiHesapVKN>0000000000</KarsiHesapVKN></Hareket>`;
-  const xml = `<?xml version="1.0" encoding="utf-8"?><XMLEXBAT><Tarih>${dd}</Tarih><Hesaplar><Hesap><Tanimlamalar><HesapNo>1</HesapNo><Bakiye>1000.00</Bakiye></Tanimlamalar><Hareketler>${H('S1', '21350.00', 'ALİ VELİ ALTIN ÖDEMESİ ELDEN TESLİM ALDIM 10000000146', 'FST')}${H('S2', '-500.00', 'HAVALE GİDEN', 'EFT')}${H('S3', '31023.45', '0000000000000/NET SATIŞ TUTARI DENEME KUYUM /000', 'CCP')}</Hareketler></Hesap></Hesaplar></XMLEXBAT>`;
+  const xml = `<?xml version="1.0" encoding="utf-8"?><XMLEXBAT><Tarih>${dd}</Tarih><Hesaplar><Hesap><Tanimlamalar><HesapNo>1</HesapNo><Bakiye>1000.00</Bakiye></Tanimlamalar><Hareketler>${H(sn('09', '15'), '21350.00', 'ALİ VELİ ALTIN ÖDEMESİ ELDEN TESLİM ALDIM 10000000146', 'FST')}${H(sn('18', '45'), '-500.00', 'HAVALE GİDEN', 'EFT')}${H(sn('03', '44'), '31023.45', '0000000000000/NET SATIŞ TUTARI DENEME KUYUM /000', 'CCP')}</Hareketler></Hesap></Hesaplar></XMLEXBAT>`;
   global.fetch = async (url, opt) => String(url).includes('posmatik2.isbank.com.tr') ? { ok: true, status: 200, text: async () => xml } : realFetch(url, opt);
   const bridge = http.createServer((q, r) => kopru.handle({ allowedOrigins: [], whatsapp: false, isbankUid: 'U', isbankPwd: 'P' }, q, r));
   await new Promise((r) => bridge.listen(0, '127.0.0.1', r));
@@ -2052,6 +2053,9 @@ test('Banka Hareketleri: İş Bankası online ekstresi listeye düşer, tekrar �
     assert.equal((await p.$$('[data-bankfeed-row]')).length, 3);
     assert.match(t, /ALİ VELİ ALTIN ÖDEMESİ[\s\S]*UYGUN/);
     assert.match(t, /HAVALE GİDEN/); assert.match(t, /Çıkış/);
+    const rows = await p.$$eval('[data-bankfeed-row]', (rs) => rs.map((r) => r.innerText));
+    assert.match(rows[0], /18:45[\s\S]*HAVALE GİDEN/, 'en yeni hareket üstte, işlem saatiyle');
+    assert.match(rows[1], /09:15[\s\S]*ALTIN ÖDEMESİ/); assert.match(rows[2], /03:44[\s\S]*NET SATIŞ/);
     assert.ok(!/NET SATIŞ[^\n]*(UYGUN|EKSİK|RİSKLİ)/.test(t), 'POS aktarımına açıklama kontrolü konmamalı');
     kopru._isbankReset();
     await p.click('#bankFeedOnline'); await p.waitForTimeout(1500);
@@ -2059,6 +2063,36 @@ test('Banka Hareketleri: İş Bankası online ekstresi listeye düşer, tekrar �
     assert.deepEqual(p.errors, []);
     await p.context().close();
   } finally { global.fetch = realFetch; bridge.close(); kopru._isbankReset(); }
+});
+
+test('fatura taslağı: gümüşte (808) KDV yalnız işçilikten; mal adı değiştirilebilir', async () => {
+  const fb = createFakeFirebase();
+  let p = await newDevice(browser, appUrl, fb);
+  await p.waitForTimeout(1500);
+  const st = fb.db.state, now = new Date().toISOString();
+  st.sales = [{ id: 'S-AG', docNo: 'SAT-AG1', status: 'Tamamlandı', period: st.activePeriod, date: now, total: 2400, saleCurrency: 'TL', customerId: '', lines: [{ code: 'GMS', name: '925 AYAR GÜMÜŞ YÜZÜK', karat: '925', unit: 'GR', weight: 10, qty: 10, displayAmount: 10, total: 2400 }], payments: [] }, ...(st.sales || [])];
+  st.invoiceSettings = { ...(st.invoiceSettings || {}), silverGramTl: '60' };
+  fb.db.state = st; await p.context().close();
+  p = await newDevice(browser, appUrl, fb);
+  await p.evaluate(() => document.querySelector('[data-go="invoices"],[data-route="invoices"]').click());
+  await p.waitForTimeout(400);
+  await p.evaluate(() => document.querySelector('[data-invoice-view="sales"]')?.click());
+  await p.waitForSelector('[data-invoice-draft="S-AG"]');
+  await p.evaluate(() => document.querySelector('[data-invoice-draft="S-AG"]').click());
+  await p.waitForSelector('[data-inv-name="0"]');
+  const lines = await p.innerText('#invDraftBox .invoice-lines tbody');
+  // 10 gr × 60 TL = 600 gümüş bedeli; işçilik 1.800 (KDV dahil) → KDV 300, matrah 1.500
+  assert.match(lines, /%20[\s\S]*300,00[\s\S]*2\.100,00[\s\S]*808/, 'KDV yalnız işçilikten hesaplanmalı');
+  await p.fill('[data-inv-name="0"]', 'GÜMÜŞ KOLYE');
+  await p.click('#modalConfirm');
+  for (let i = 0; i < 40 && !((fb.db.state.invoiceRecords || []).find((r) => r.saleId === 'S-AG') || {}).lineNames; i++) await p.waitForTimeout(250);
+  const rec = fb.db.state.invoiceRecords.find((r) => r.saleId === 'S-AG');
+  assert.deepEqual(rec.lineNames, { 0: 'GÜMÜŞ KOLYE' });
+  await p.evaluate((id) => document.querySelector(`[data-invoice-open="${id}"]`).click(), rec.id);
+  await p.waitForSelector('#invDraftBox .invoice-lines');
+  assert.match(await p.innerText('#invDraftBox .invoice-lines tbody'), /GÜMÜŞ KOLYE/);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
 });
 
 test('banka bakiyesi gerçek tutara eşitlenir; kasa değişmez', async () => {
