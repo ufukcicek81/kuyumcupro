@@ -34,13 +34,18 @@
   function mergeMrzV7(a,b){
     if(!a)return {...b};
     const out={...a};['documentNumber','birthYYMMDD','expiryYYMMDD','tckn','fullName','givenNames','surname','sex','nationality'].forEach(k=>{if(!out[k]&&b[k])out[k]=b[k];});
+    if(out.nameUncertain&&b.fullName&&!b.nameUncertain){out.fullName=b.fullName;out.givenNames=b.givenNames;out.surname=b.surname;out.nameUncertain=false;}
     out.complete=!!(out.documentNumber&&out.birthYYMMDD&&out.expiryYYMMDD);return out;
   }
   function voteMrzV7(parses){
     const pick=(k)=>{const c=new Map();parses.forEach(p=>{const v=p[k];if(v)c.set(v,(c.get(v)||0)+1);});let best='',n=0;c.forEach((m,v)=>{if(m>n){best=v;n=m;}});return [best,n];};
     const out={};['documentNumber','birthYYMMDD','expiryYYMMDD','tckn','sex','nationality'].forEach(k=>{out[k]=pick(k)[0];});
-    const [name,nameVotes]=pick('fullName'),src=parses.find(p=>p.fullName===name)||{};
-    Object.assign(out,{fullName:name,givenNames:src.givenNames||'',surname:src.surname||'',nameVotes,complete:!!(out.documentNumber&&out.birthYYMMDD&&out.expiryYYMMDD)});
+    // Ayracı net okunan ("<<") ad, tahminle ayrılan addan önce gelir.
+    const sure=parses.filter(p=>p.fullName&&!p.nameUncertain),pool=sure.length?sure:parses;
+    const cnt=new Map();pool.forEach(p=>{if(p.fullName)cnt.set(p.fullName,(cnt.get(p.fullName)||0)+1);});
+    let name='',nameVotes=0;cnt.forEach((m,v)=>{if(m>nameVotes){name=v;nameVotes=m;}});
+    const src=parses.find(p=>p.fullName===name)||{};
+    Object.assign(out,{fullName:name,givenNames:src.givenNames||'',surname:src.surname||'',nameVotes,nameUncertain:!!src.nameUncertain,complete:!!(out.documentNumber&&out.birthYYMMDD&&out.expiryYYMMDD)});
     return out;
   }
   async function readMrzFromPhotoV7(file,onStatus){
@@ -62,7 +67,7 @@
         const {data}=await worker.recognize(mrzCanvasV7(img,from,opt));
         texts.push(data.text||'');parses.push(AsilMrz.parse(data.text||''));
         const acc=voteMrzV7(parses);
-        if(acc.complete&&acc.tckn&&acc.fullName&&acc.nameVotes>=2)break;
+        if(acc.complete&&acc.tckn&&acc.fullName&&!acc.nameUncertain&&acc.nameVotes>=2)break;
       }
       const acc=voteMrzV7(parses);
       acc.ocrText=texts.join('\n---\n');

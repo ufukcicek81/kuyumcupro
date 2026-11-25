@@ -89,16 +89,25 @@
     }
     return withTur||fallback;
   }
+  /* 3. satır: SOYAD<<AD<IKINCIAD<<<<… (kontrol hanesi yok). OCR, '<' işaretini çoğu zaman K / L / C okur:
+     sondaki dolgu "<<<<" → "<<CCKKLLL", aradaki "<<" → "<K". Önce sondaki dolgu atılır, sonra ayraç aranır. */
   function findName(lines){
-    for(var i=lines.length-1;i>=0;i--){var l=lines[i];
-      if(l.indexOf('<<')<0||l.replace(/[A-Z<]/g,'').length>1)continue;
-      // Dolgu işaretleri (<) OCR'da sıkça K/L okunur: yalnız K/L'den oluşan parçalar isim değildir.
-      var clean=function(t){return t.replace(/</g,' ').split(/\s+/).filter(function(w){return w&&!/^[KL]+$/.test(w)}).join(' ')};
-      var parts=l.split('<<'),surname=clean(parts[0]),given=clean(parts.slice(1).join(' '));
-      var full=(given+' '+surname).trim();
-      if(full.length>=3)return {fullName:full,givenNames:given,surname:surname};
-    }
-    return {fullName:'',givenNames:'',surname:''};
+    var clean=function(t){return t.replace(/</g,' ').split(/\s+/).filter(function(w){return w&&!/^[KL]+$/.test(w)&&!/^[KLC]{2,}$/.test(w)}).join(' ')};
+    var pick=function(single){
+      for(var i=lines.length-1;i>=0;i--){var l=lines[i];
+        if(l.indexOf('<')<0||l.replace(/[A-Z<]/g,'').length>1)continue;
+        var core=l.replace(/<[<KLC]*$/,''),sep=core.indexOf('<<'),surname,given,unsure=false;
+        if(sep>=0){surname=core.slice(0,sep);given=core.slice(sep+2);}
+        else{if(!single)continue;var k=core.indexOf('<');if(k<1)continue;surname=core.slice(0,k);given=core.slice(k+1);unsure=true;
+          // "<<" ayracının ikinci işareti K okunmuş olabilir ("CICEK<KUFUK" → UFUK).
+          if(/^K[A-Z]{2,}/.test(given))given=given.slice(1);}
+        surname=clean(surname);given=clean(given);
+        var full=(given+' '+surname).trim();
+        if(surname&&given&&full.length>=3)return {fullName:full,givenNames:given,surname:surname,nameUncertain:unsure};
+      }
+      return null;
+    };
+    return pick(false)||pick(true)||{fullName:'',givenNames:'',surname:'',nameUncertain:false};
   }
 
   /** Okunabilen alanları döndürür; okunamayan alanlar boş kalır. */
@@ -113,7 +122,7 @@
     // Seri no okunamadıysa T.C. no yalnız "TUR" ile başlayan 1. satırda aranır; bütün metinde aramak
     // doğum / son geçerlilik rakamlarından rastgele "geçerli" bir numara üretebiliyordu.
     if(!d.tckn)for(var t=0;t<lines.length&&!d.tckn;t++){var at=lines[t].indexOf('TUR');if(at>=0&&at<=4&&!/<<[A-Z]/.test(lines[t]))d.tckn=findTckn(lines[t].slice(at+3,at+3+25))}
-    var n=findName(lines);d.fullName=n.fullName;d.givenNames=n.givenNames;d.surname=n.surname;
+    var n=findName(lines);d.fullName=n.fullName;d.givenNames=n.givenNames;d.surname=n.surname;d.nameUncertain=!!n.nameUncertain;
     d.complete=!!(d.documentNumber&&d.birthYYMMDD&&d.expiryYYMMDD);
     return d;
   }

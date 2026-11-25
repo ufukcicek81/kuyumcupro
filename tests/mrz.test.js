@@ -53,3 +53,16 @@ test('kamera denemeleri arasında oylama: ad soyad en çok tekrar eden okumadan 
   const r=V([p('AHMET CAN YILMAX'),p('AHMET CAN YILMAZ'),{fullName:''},p('AHMET CAN YILMAZ')]);
   assert.equal(r.fullName,'AHMET CAN YILMAZ');assert.equal(r.nameVotes,2);assert.ok(r.complete);
 });
+test('isimde "<" işaretlerinin K/L/C okunması: sondaki dolgu atılır, "<K" ayracı düzeltilir',()=>{
+  const a=M.parse([l1,l2,'CICEK<KUFUK<<CCKKCKLLLLLLKLKLK'].join('\n'));
+  assert.equal(a.fullName,'UFUK CICEK');assert.equal(a.nameUncertain,true);
+  const b=M.parse([l1,l2,'CICEK<<UFUK<<CCKKCKLLLLLLKLKLK'].join('\n'));
+  assert.equal(b.fullName,'UFUK CICEK');assert.equal(b.nameUncertain,false);
+  const c=M.parse([l1,l2,'KOC<<KEMAL<ALI<<<<<<<<<<<<<<<<'].join('\n'));
+  assert.equal(c.fullName,'KEMAL ALI KOC','K ile başlayan ad, ayraç net okunduysa korunur');
+});
+test('kamera oylaması: ayracı net okunan ad, tahminle ayrılan ada üstün gelir',()=>{
+  const V=global.AsilMrzCamera.vote,p=(n,u)=>({documentNumber:doc,birthYYMMDD:'900115',expiryYYMMDD:'310520',tckn:tc,fullName:n,nameUncertain:u});
+  const r=V([p('FUK CICEK',true),p('FUK CICEK',true),p('UFUK CICEK',false)]);
+  assert.equal(r.fullName,'UFUK CICEK');assert.equal(r.nameUncertain,false);
+});

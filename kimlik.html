@@ -76,6 +76,7 @@
       $('sex').value=acc.sex==='M'?'Erkek':acc.sex==='F'?'Kadın':$('sex').value;
       $('nationality').value=acc.nationality==='TUR'?'T.C.':(acc.nationality||$('nationality').value||'T.C.');
       $('raw').textContent=fresh.ocrText||'';$('result').hidden=false;
+      var nl=$('fullName').parentNode.firstChild;if(nl&&nl.nodeType===3)nl.textContent=acc.nameUncertain?'Ad Soyad ⚠ kartın ön yüzüyle kontrol edin':'Ad Soyad';
       var missing=[!acc.fullName&&'ad soyad',!acc.tckn&&'T.C. kimlik no',!acc.documentNumber&&'seri no',!acc.birthYYMMDD&&'doğum tarihi',!acc.expiryYYMMDD&&'son geçerlilik'].filter(Boolean);
       status(missing.length?'Okunamayan: '+missing.join(', ')+'. Tekrar fotoğraf çekin (okunanlar korunur) ya da elle yazın.':'Tüm alanlar okundu. Kontrol edip GÖNDER\'e basın.',missing.length?'muted':'ok');
     }).catch(function(err){status('Okunamadı: '+(err&&err.message||err),'err')});
