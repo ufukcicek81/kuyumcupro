@@ -18,7 +18,7 @@ const ENDPOINTS = {
   live: 'https://einvoiceservice.isnet.net.tr'
 };
 const TEST_VKN = '4810173324';
-const VERSION = '1.5';
+const VERSION = '1.6';
 // WhatsApp modülü yoksa (eski güncelleme) köprü yine çalışsın; yalnız WhatsApp kapalı olur.
 let wa;
 try { wa = require('./whatsapp'); } catch (e) {
@@ -90,6 +90,21 @@ function parseXmlRecords(xml) {
   for (const [k, v] of groups) if (!best || v.length > best[1].length || (v.length === best[1].length && Object.keys(v[0]).length > Object.keys(best[1][0]).length)) best = [k, v];
   return best ? { tag: best[0], records: best[1] } : { tag: '', records: [] };
 }
+/* Banka cevabı çoğu zaman UTF-8 değil, Türkçe Windows kodlamasıyla (windows-1254 / ISO-8859-9) gelir:
+   UTF-8 sanılırsa Ö, İ, Ş, Ğ gibi harfler "�" olur. XML başlığındaki / HTTP başlığındaki kodlama kullanılır;
+   belirtilmemişse ve UTF-8 bozuk çıkıyorsa windows-1254 ile okunur. */
+async function isbankDecode(res) {
+  if (typeof res.arrayBuffer !== 'function') return res.text();
+  const buf = Buffer.from(await res.arrayBuffer());
+  const head = buf.subarray(0, 300).toString('latin1');
+  const ct = (res.headers && typeof res.headers.get === 'function' ? res.headers.get('content-type') : '') || '';
+  const declared = ((/encoding\s*=\s*["']([\w.-]+)["']/i.exec(head) || [])[1] || (/charset=([\w.-]+)/i.exec(ct) || [])[1] || '').toLowerCase();
+  const tryDecode = (enc) => { try { return new TextDecoder(enc).decode(buf); } catch (_) { return null; } };
+  if (declared && !/^utf-?8$/.test(declared)) { const t = tryDecode(declared); if (t != null) return t; }
+  const utf = buf.toString('utf8');
+  if (!utf.includes('\uFFFD')) return utf;
+  return tryDecode('windows-1254') || tryDecode('iso-8859-9') || utf;
+}
 async function isbankStatement(cfg, p) {
   if (!cfg.isbankUid || !cfg.isbankPwd) throw new Error('İş Bankası kullanıcı kodu / şifresi köprüde tanımlı değil. C:\\kopru\\asil-kopru.json dosyasına "isbankUid" ve "isbankPwd" yazın.');
   const wait = isbankLast + 31000 - Date.now();
@@ -102,7 +117,7 @@ async function isbankStatement(cfg, p) {
   try { res = await fetch(cfg.isbankUrl || ISBANK_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body, signal: ctl.signal }); }
   catch (e) { throw new Error(e.name === 'AbortError' ? 'İş Bankası 1 dakikada cevap vermedi; tarih aralığını daraltın.' : 'İş Bankası\'na bağlanılamadı: ' + (e.message || e)); }
   finally { clearTimeout(timer); }
-  const text = await res.text();
+  const text = await isbankDecode(res);
   if (!res.ok) throw new Error(`İş Bankası HTTP ${res.status}`);
   if (/<html[\s>]/i.test(text) && !/<\?xml/i.test(text)) throw new Error('İş Bankası XML yerine sayfa döndürdü: kullanıcı kodu / şifre hatalı ya da online ekstre tanımı açık değil.');
   const parsed = parseXmlRecords(text);
