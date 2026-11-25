@@ -253,3 +253,18 @@ test('İş Bankası cevabı Türkçe Windows kodlamasıyla gelirse harfler doğr
     assert.equal((await k.isbankStatement({ isbankUid: 'U', isbankPwd: 'P' }, {})).records[0].Aciklama, 'ALTIN ÖDEMESİ ELDEN TESLİM ALDIM şığüç', 'UTF-8 de doğru okunmalı');
   } finally { global.fetch = realFetch; k._isbankReset(); }
 });
+
+test('e-Fatura etiketi elle verilirse GetTaxPayer sorgulanmadan e-Fatura gönderilir (İşNet test alıcısı)', async () => {
+  const realFetch = global.fetch;
+  try {
+    const calls = fakeFetch(name => name === 'SendInvoice'
+      ? '<r><a:Result>Success</a:Result><a:InvoiceNumber>TST2026000000001</a:InvoiceNumber><a:Ettn>e1</a:Ettn></r>'
+      : '<r><a:Result>Success</a:Result><a:DocumentViewerLink>http://v</a:DocumentViewerLink></r>');
+    const out = await k.createInvoice(cfg, payload({ name: 'Test Firma 05', tckn: '', vkn: '1234567805', inboxTag: 'urn:mail:test05defaultpk@isnet.com' }));
+    assert.strictEqual(out.documentType, 'EFATURA');
+    assert.ok(!calls.some((c) => c.name === 'GetTaxPayer'), 'etiket verilince sorgu yapılmamalı');
+    const send = calls.find((c) => c.name === 'SendInvoice');
+    assert.match(send.body, /urn:mail:test05defaultpk@isnet\.com/);
+    assert.match(send.body, /1234567805/);
+  } finally { global.fetch = realFetch; }
+});

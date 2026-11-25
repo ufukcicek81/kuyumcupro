@@ -18,7 +18,7 @@ const ENDPOINTS = {
   live: 'https://einvoiceservice.isnet.net.tr'
 };
 const TEST_VKN = '4810173324';
-const VERSION = '1.7';
+const VERSION = '1.8';
 // WhatsApp modülü yoksa (eski güncelleme) köprü yine çalışsın; yalnız WhatsApp kapalı olur.
 let wa;
 try { wa = require('./whatsapp'); } catch (e) {
@@ -353,7 +353,11 @@ async function createInvoice(cfg, p) {
   const receiverTax = String(rc.vkn || rc.tckn || '').replace(/\D/g, '');
   let documentType = String(p.documentType || 'AUTO').toUpperCase();
   let inbox = '';
-  if (documentType !== 'EARSIV' && receiverTax) inbox = await taxPayerInbox(cfg, receiverTax);
+  // Alıcının e-Fatura etiketi (posta kutusu) programda elle yazıldıysa sorgulanmadan o kullanılır
+  // (ör. İşNet test alıcısı 1234567805 → urn:mail:test05defaultpk@isnet.com).
+  const givenInbox = String(rc.inboxTag || '').trim();
+  if (documentType !== 'EARSIV' && givenInbox) inbox = givenInbox;
+  else if (documentType !== 'EARSIV' && receiverTax) inbox = await taxPayerInbox(cfg, receiverTax);
   if (documentType === 'AUTO') documentType = inbox ? 'EFATURA' : 'EARSIV';
   if (documentType === 'EFATURA' && !inbox) throw new Error('Alıcı e-Fatura mükellefi değil; e-Arşiv seçin');
 

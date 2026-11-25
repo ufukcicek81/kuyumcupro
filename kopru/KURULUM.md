@@ -42,7 +42,9 @@ Kesilen faturalar http://efatura.isnet.net.tr test portalında görülebilir.
 
 ## 4. Canlıya geçiş
 
-1. Testte başarıyla gönderilen bir faturanın XML dosyasını alın: Fatura Kayıtları → **XML** düğmesi.
+1. Test ortamında bir **e-Fatura** kesin (e-Arşiv değil). İşNet'in test alıcısı: VKN **1234567805**, ünvan
+   **Test Firma 05**, e-Fatura etiketi **urn:mail:test05defaultpk@isnet.com** (taslakta "e-Fatura etiketi" alanına yazılır).
+   Gönderildikten sonra XML dosyasını alın: Fatura Kayıtları → **XML** düğmesi.
 2. Bu XML dosyasını ve dükkânın **sabit IP adresini** efaturadestek@nettefatura.com.tr adresine gönderin.
 3. İşNet canlı tanımı yapıp canlı servis adresini bildirince `asil-kopru.json` dosyasını şöyle değiştirin:
 
