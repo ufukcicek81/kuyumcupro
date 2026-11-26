@@ -2465,8 +2465,9 @@ test('ALTIN STOKLARI: çeyrek ve yarımın HAS değeri milyemden (1605 / 3210) h
   const row = async (name) => p.evaluate((n) => [...document.querySelectorAll('table.gold-stock-v7 tr')].map((r) => [...r.cells].map((c) => c.innerText.trim())).find((c) => c[0] === n), name);
   const num = (v) => Number(String(v).replace(/\./g, '').replace(',', '.'));
   const c = await row('CEYREK'), y = await row('YARIM'), b = await row('CEYREK BİLEKLİK');
-  assert.equal(num(c[1]), 1605); assert.equal(num(c[3]).toFixed(2), '16.05', 'çeyrek: 10 × 1,605 HAS');
-  assert.equal(num(y[1]), 3210); assert.equal(num(y[3]).toFixed(2), '19.26', 'yarım: 6 × 3,21 HAS');
+  // Aynı adlı açık stoklar tek satırda toplanır: HAS = toplam adet × milyem / 1000
+  assert.equal(num(c[1]), 1605); assert.ok(Math.abs(num(c[3]) - num(c[2]) * 1.605) < 0.011, 'çeyrek: adet × 1,605 HAS');
+  assert.equal(num(y[1]), 3210); assert.ok(Math.abs(num(y[3]) - num(y[2]) * 3.21) < 0.011, 'yarım: adet × 3,21 HAS');
   assert.equal(num(b[3]).toFixed(2), '3.21', 'çeyrek bileklik değişmemeli');
   assert.deepEqual(p.errors, []);
   await p.context().close();

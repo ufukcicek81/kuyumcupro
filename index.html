@@ -9057,8 +9057,6 @@ function stockSummaryView(){
     return '';
   }
   function migrateZiynetStdMilyemV8(){
-    (state.stockCardsMaster||[]).forEach(c=>{const k=ziynetStdKeyV8(c);if(!k)return;const d=ziynetStdMapV8()[k];
-      if(Number(c.fixedMilyem||0)!==d.milyem)c.fixedMilyem=d.milyem;if(Math.abs(Number(c.zGram||0)-d.zGram)>1e-9)c.zGram=d.zGram;});
     (state.openStocks||[]).forEach(o=>{if(String(o.unit||'ADET').toUpperCase()!=='ADET')return;const k=ziynetStdKeyV8(o);if(!k)return;const d=ziynetStdMapV8()[k];
       const h=Math.round(Number(o.amount||0)*d.milyem)/1000;
       if(Math.abs(Number(o.hasWeight||0)-h)>1e-9)o.hasWeight=h;
