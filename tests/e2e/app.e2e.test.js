@@ -1245,7 +1245,9 @@ test('banka ekstresi: banka hareketleri görünür, düzeltilir ve silinir; baki
   await p.click('#modalX');
   await p.evaluate(() => document.querySelector('[data-go="banking"],[data-route="banking"]').click());
   await p.waitForTimeout(400);
-  assert.equal(await p.locator('[data-bankfeed-post]').count(), 2, 'silinen hareketin ekstre satırı yeniden kaydedilebilmeli');
+  // Çıkan hareketler "Yeni Hareket Kaydet", gelen havaleler "Faturaya Gönder" (bakiyeye dokunmaz) ile işlenir.
+  assert.equal(await p.locator('[data-bankfeed-post]').count(), 1, 'silinen hareketin ekstre satırı yeniden kaydedilebilmeli');
+  assert.equal(await p.locator('[data-bankfeed-invoice]').count(), 1, 'gelen havale faturaya gönderilebilmeli');
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
@@ -1431,6 +1433,12 @@ test('İşlem Raporu: her satırda hesap, giriş/çıkış tutarı ve birim var;
   assert.match(t, /4\.000,00/, 'TL karşılığı / kasa çıkışı görünmeli');
   const over = await p.evaluate(() => { const w = document.querySelector('#prResult .table-wrap'); return w.scrollWidth - w.clientWidth; });
   assert.ok(over <= 2, 'tablo yana kaymamalı: ' + over);
+  // Raporda arama: yazılan kelimeyi içeren satırlar kalır
+  const total = await p.$$eval('#prResult tbody tr', (r) => r.length);
+  await p.fill('#prResult [data-report-search]', 'tl kasa');
+  const vis = await p.$$eval('#prResult tbody tr', (r) => r.filter((x) => x.style.display !== 'none').map((x) => x.innerText));
+  assert.ok(vis.length >= 1 && vis.length < total, `arama satırları süzmeli (${vis.length}/${total})`);
+  assert.ok(vis.every((x) => /TL Kasa/i.test(x)));
   if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT });
   assert.deepEqual(p.errors, []);
   await p.context().close();
@@ -1841,6 +1849,15 @@ test('kasa sayımı: kasa farkı sisteme işlenir, bakiye sayılan tutara gelir 
   assert.equal(Math.round(tlCash(fb.db.state)), Math.round(cash0 + 500), 'kasa sayılan tutara gelmeli');
   const mv = (fb.db.state.financeMoves || []).find((f) => f.type === 'Kasa Sayım Farkı');
   assert.ok(mv && mv.direction === 'Giriş' && Math.round(mv.accountAmount) === 500, 'fark kasa hareketi olarak görünmeli');
+  // Sayım farkı Kasa / Banka hareketlerinden silinir; kasa eski haline döner
+  const cb = await p.$('.critical-alert button'); if (cb) await cb.click();
+  await p.evaluate(() => { document.querySelector('#modalX')?.click(); document.querySelector('[data-go="finance"],[data-route="finance"]').click(); });
+  await p.waitForSelector(`[data-kasa-diff-del="${mv.id}"]`);
+  await p.evaluate((id) => document.querySelector(`[data-kasa-diff-del="${id}"]`).click(), mv.id);
+  await p.click('#modalConfirm');
+  for (let i = 0; i < 40 && (fb.db.state.financeMoves || []).some((f) => f.id === mv.id); i++) await p.waitForTimeout(250);
+  assert.ok(!(fb.db.state.financeMoves || []).some((f) => f.id === mv.id), 'sayım farkı kaydı silinmeli');
+  assert.equal(Math.round(tlCash(fb.db.state)), Math.round(cash0), 'kasa sayımdan önceki tutara dönmeli');
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
