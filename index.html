@@ -5670,7 +5670,7 @@ function stockSummaryView(){
         const profitHas=saleHas-costHas,costTl=costHas*buyRate,profitTl=saleTl-costTl;
         const amount=Number(l.displayQty??l.displayAmount??l.weight??l.qty??1);
         rows.push({
-          saleId:s.id,lineNo:idx+1,docNo:s.docNo||s.id,date:s.date,customer,salesperson:s.salesperson||'',
+          saleId:s.id,lineNo:idx+1,docNo:s.docNo||s.id,date:s.date,customer,salesperson:s.salesperson||'',stockId:l.stockId||'',
           code:l.code||stock?.pusulaCode||stock?.code||open?.pusulaCode||open?.productCode||'',
           name:l.name||stock?.name||stock?.type||open?.name||'Ürün',
           karat:String(l.karat||stock?.purity||stock?.karat||open?.purity||''),
@@ -5807,28 +5807,53 @@ function stockSummaryView(){
     (state.tradeMoves||[]).filter(t=>/hurda/i.test(String(t.tradeType||''))&&Number(t.profitHas||0)&&explicitRangeInside(t.date,from,to)).forEach(t=>{const ph=Number(t.profitHas||0);r.scrapHas+=ph;r.scrapTl+=ph*Number(t.hasRateAtTrade||historicalHasRate(t.date,'buy')||state.prices.has?.buy||1);r.scrapCount++;});
     return r;
   }
-  /* Personel prim ayarı: kişi başına prim türü (kârdan % / cirodan % / yok) ve oranı. Bulutta saklanır (state.primSettingsV7). */
+  /* Personel primi: kişi başına prim türü (satış kârından % / cirodan %), genel oran ve ürün grubuna göre ayrı oranlar.
+     Grup oranı boşsa o grupta genel oran geçerlidir. Ayarlar bulutta (state.primSettingsV7). */
+  const PRIM_GROUPS_V7=['PIRLANTA','SAAT','24 AYAR','22 AYAR','14 AYAR','ZİYNET','GÜMÜŞ','DİĞER'];
   function primSettingsV7(){return state.primSettingsV7&&typeof state.primSettingsV7==='object'?state.primSettingsV7:{};}
-  function primForV7(name,saleTl,profitTl){const c=primSettingsV7()[name]||{},rate=Number(c.rate||0);if(!(rate>0))return 0;return Math.round((c.type==='ciro'?saleTl:Math.max(0,profitTl))*rate)/100;}
+  function primGroupOfRowV7(r){
+    const st=(state.stocks||[]).find(x=>x.id===r.stockId)||(r.barcode?(state.stocks||[]).find(x=>x.barcode===r.barcode):null);
+    const t=[st?.productType,st?.specialType,st?.type,st?.group,st?.category,st?.name,r.name,r.code].filter(Boolean).join(' ').toLocaleUpperCase('tr-TR');
+    const k=String(r.karat||st?.purity||'').replace(/\D/g,'');
+    if(/PIRLANTA|PIRLANTA|BRİLYANT|BRILYANT|DIAMOND|TEKTAŞ|TEKTAS/.test(t))return 'PIRLANTA';
+    if(/SAAT/.test(t))return 'SAAT';
+    if(/GÜMÜŞ|GUMUS/.test(t)||k==='925')return 'GÜMÜŞ';
+    if(/ZİYNET|ZIYNET|ÇEYREK|CEYREK|YARIM|\bATA\b|REŞAT|RESAT|GREMSE|GREMISE|TAM ALTIN|CUMHURİYET/.test(t))return 'ZİYNET';
+    if(['995','999','24'].includes(k)||/24 AYAR|KÜLÇE|KULCE/.test(t))return '24 AYAR';
+    if(['916','22'].includes(k)||/22 AYAR|22 BİLEZİK|22 BILEZIK/.test(t))return '22 AYAR';
+    if(['585','14'].includes(k)||/14 AYAR|\b14 K\b/.test(t))return '14 AYAR';
+    return 'DİĞER';
+  }
+  function primRateForV7(name,group){const c=primSettingsV7()[name]||{},g=c.groups&&c.groups[group];const v=g!==undefined&&g!==null&&g!==''?Number(g):Number(c.rate||0);return v>0?v:0;}
   function personnelSalesReportV7(rows){
-    const map=new Map();
-    rows.forEach(r=>{const n=r.salesperson||'Belirsiz',x=map.get(n)||{name:n,docs:new Set(),lines:0,saleTl:0,costTl:0,profitTl:0,saleHas:0,profitHas:0};
-      x.docs.add(r.saleId);x.lines++;x.saleTl+=Number(r.saleTl||0);x.costTl+=Number(r.costTl||0);x.profitTl+=Number(r.profitTl||0);x.saleHas+=Number(r.saleHas||0);x.profitHas+=Number(r.profitHas||0);map.set(n,x);});
-    (state.users||[]).filter(u=>u.permissions?.canSell!==false&&u.name&&!map.has(u.name)).forEach(u=>map.set(u.name,{name:u.name,docs:new Set(),lines:0,saleTl:0,costTl:0,profitTl:0,saleHas:0,profitHas:0}));
-    const list=[...map.values()].map(x=>({...x,count:x.docs.size,prim:primForV7(x.name,x.saleTl,x.profitTl)})).sort((a,b)=>b.saleTl-a.saleTl);
-    const tot=k=>list.reduce((a,x)=>a+Number(x[k]||0),0),cfg=primSettingsV7();
+    const cfg=primSettingsV7(),map=new Map();
+    const blank=n=>({name:n,docs:new Set(),lines:0,saleTl:0,costTl:0,profitTl:0,saleHas:0,profitHas:0,groups:{}});
+    rows.forEach(r=>{const n=r.salesperson||'Belirsiz',x=map.get(n)||blank(n),g=primGroupOfRowV7(r),gx=x.groups[g]||(x.groups[g]={saleTl:0,profitTl:0});
+      x.docs.add(r.saleId);x.lines++;x.saleTl+=Number(r.saleTl||0);x.costTl+=Number(r.costTl||0);x.profitTl+=Number(r.profitTl||0);x.saleHas+=Number(r.saleHas||0);x.profitHas+=Number(r.profitHas||0);
+      gx.saleTl+=Number(r.saleTl||0);gx.profitTl+=Number(r.profitTl||0);map.set(n,x);});
+    (state.users||[]).filter(u=>u.permissions?.canSell!==false&&u.name&&!map.has(u.name)).forEach(u=>map.set(u.name,blank(u.name)));
+    const groupPrim=(x,g)=>{const gx=x.groups[g],c=cfg[x.name]||{},rate=primRateForV7(x.name,g);if(!gx||!rate)return {rate,prim:0};return {rate,prim:Math.round((c.type==='ciro'?gx.saleTl:Math.max(0,gx.profitTl))*rate)/100};};
+    const list=[...map.values()].map(x=>({...x,count:x.docs.size,prim:Object.keys(x.groups).reduce((a,g)=>a+groupPrim(x,g).prim,0)})).sort((a,b)=>b.saleTl-a.saleTl);
+    const tot=k=>list.reduce((a,x)=>a+Number(x[k]||0),0);
     const head=['Personel','Fiş','Ürün satırı','Satış TL','Satış HAS','Kâr TL','Kâr HAS','Prim türü','Prim TL'];
-    const typeLabel=n=>{const c=cfg[n]||{};return Number(c.rate||0)>0?(c.type==='ciro'?`Cirodan %${qty(c.rate)}`:`Kârdan %${qty(c.rate)}`):'—';};
+    const typeLabel=n=>{const c=cfg[n]||{},any=Number(c.rate||0)>0||Object.values(c.groups||{}).some(v=>Number(v)>0);return any?(c.type==='ciro'?'Cirodan %':'Kârdan %'):'—';};
     const body=list.map(x=>[`<strong>${esc(x.name)}</strong>`,String(x.count),String(x.lines),money(x.saleTl),qty(x.saleHas),money(x.profitTl),qty(x.profitHas),esc(typeLabel(x.name)),`<strong>${money(x.prim)}</strong>`]);
     body.push(['<strong>TOPLAM</strong>',String(tot('count')),String(tot('lines')),`<strong>${money(tot('saleTl'))}</strong>`,qty(tot('saleHas')),`<strong>${money(tot('profitTl'))}</strong>`,qty(tot('profitHas')),'',`<strong>${money(tot('prim'))}</strong>`]);
-    const setRows=list.filter(x=>x.name!=='Belirsiz').map(x=>{const c=cfg[x.name]||{};return `<tr><td><strong>${esc(x.name)}</strong></td><td><select class="select" data-prim-type="${esc(x.name)}"><option value="kar" ${c.type!=='ciro'?'selected':''}>Satış kârından %</option><option value="ciro" ${c.type==='ciro'?'selected':''}>Satış tutarından (ciro) %</option></select></td><td><input class="input" data-prim-rate="${esc(x.name)}" inputmode="decimal" value="${Number(c.rate||0)?esc(String(c.rate)):''}" placeholder="0" style="max-width:110px"></td></tr>`;}).join('');
-    const settings=`<details style="margin-top:14px"${Object.keys(cfg).length?'':' open'}><summary style="cursor:pointer;font-weight:700">⚙ Prim ayarları</summary><div class="notice" style="margin:8px 0">Her personel için prim türünü ve oranını yazın. <b>Satış kârından %</b>: seçili tarihteki satış kârının yüzdesi (zarar varsa prim 0). <b>Ciro %</b>: satış tutarının yüzdesi. Oran boş/0 ise prim hesaplanmaz.</div><div class="table-wrap"><table class="table"><thead><tr><th>Personel</th><th>Prim türü</th><th>Oran (%)</th></tr></thead><tbody>${setRows||'<tr><td colspan="3">Satış yetkili personel yok.</td></tr>'}</tbody></table></div><button class="btn btn-primary" type="button" id="primSaveV7" style="margin-top:8px">Prim Ayarlarını Kaydet</button></details>`;
-    const csv=[head,...list.map(x=>[x.name,x.count,x.lines,x.saleTl.toFixed(2),x.saleHas.toFixed(3),x.profitTl.toFixed(2),x.profitHas.toFixed(3),typeLabel(x.name),x.prim.toFixed(2)])];
-    return {title:'Personel Satış ve Prim Raporu',html:`<div class="grid grid-3" style="margin-bottom:12px">${metric('Toplam Satış',money(tot('saleTl')),`${tot('count')} fiş`)}${metric('Toplam Kâr',money(tot('profitTl')),qty(tot('profitHas'))+' HAS')}${metric('Toplam Prim',money(tot('prim')),'seçili tarih aralığı')}</div>${v660SimpleTable(head,body)}${settings}`,csv};
+    // Ürün grubuna göre döküm
+    const gHead=['Personel','Ürün grubu','Satış TL','Kâr TL','Oran','Prim TL'],gBody=[],gCsv=[];
+    list.forEach(x=>PRIM_GROUPS_V7.filter(g=>x.groups[g]).forEach(g=>{const gx=x.groups[g],gp=groupPrim(x,g);gBody.push([esc(x.name),esc(g),money(gx.saleTl),money(gx.profitTl),gp.rate?'%'+qty(gp.rate):'—',money(gp.prim)]);gCsv.push([x.name,g,gx.saleTl.toFixed(2),gx.profitTl.toFixed(2),gp.rate,gp.prim.toFixed(2)]);}));
+    const setRows=list.filter(x=>x.name!=='Belirsiz').map(x=>{const c=cfg[x.name]||{},gv=g=>{const v=c.groups&&c.groups[g];return v!==undefined&&v!==null&&v!==''?esc(String(v)):'';};
+      return `<tr><td><strong>${esc(x.name)}</strong></td><td><select class="select" data-prim-type="${esc(x.name)}" style="min-width:120px"><option value="kar" ${c.type!=='ciro'?'selected':''}>Kârdan %</option><option value="ciro" ${c.type==='ciro'?'selected':''}>Cirodan %</option></select></td><td><input class="input" data-prim-rate="${esc(x.name)}" inputmode="decimal" value="${Number(c.rate||0)?esc(String(c.rate)):''}" placeholder="0" style="width:70px"></td>${PRIM_GROUPS_V7.map(g=>`<td><input class="input" data-prim-group="${esc(x.name)}" data-group="${esc(g)}" inputmode="decimal" value="${gv(g)}" placeholder="genel" style="width:70px"></td>`).join('')}</tr>`;}).join('');
+    const settings=`<details style="margin-top:14px" open><summary style="cursor:pointer;font-weight:700">⚙ Prim ayarları</summary><div class="notice" style="margin:8px 0">Her personel için prim türünü, <b>genel oranı</b> ve istediğiniz ürün gruplarında <b>farklı oranı</b> yazın. Grup kutusu boş bırakılırsa o grupta genel oran uygulanır; 0 yazılırsa o gruptan prim verilmez. <b>Kârdan %</b>: grubun satış kârının yüzdesi (zarar varsa prim 0). <b>Cirodan %</b>: satış tutarının yüzdesi.</div><div class="table-wrap"><table class="table"><thead><tr><th>Personel</th><th>Prim türü</th><th>Genel %</th>${PRIM_GROUPS_V7.map(g=>`<th>${esc(g)} %</th>`).join('')}</tr></thead><tbody>${setRows||`<tr><td colspan="${3+PRIM_GROUPS_V7.length}">Satış yetkili personel yok.</td></tr>`}</tbody></table></div><button class="btn btn-primary" type="button" id="primSaveV7" style="margin-top:8px">Prim Ayarlarını Kaydet</button></details>`;
+    const csv=[head,...list.map(x=>[x.name,x.count,x.lines,x.saleTl.toFixed(2),x.saleHas.toFixed(3),x.profitTl.toFixed(2),x.profitHas.toFixed(3),typeLabel(x.name),x.prim.toFixed(2)]),[],gHead,...gCsv];
+    return {title:'Personel Satış ve Prim Raporu',html:`<div class="grid grid-3" style="margin-bottom:12px">${metric('Toplam Satış',money(tot('saleTl')),`${tot('count')} fiş`)}${metric('Toplam Kâr',money(tot('profitTl')),qty(tot('profitHas'))+' HAS')}${metric('Toplam Prim',money(tot('prim')),'seçili tarih aralığı')}</div>${v660SimpleTable(head,body)}<h3 style="margin:14px 0 6px">Ürün grubuna göre prim</h3><div id="primGroupTableV7">${v660SimpleTable(gHead,gBody)}</div>${settings}`,csv};
   }
   document.addEventListener('click',e=>{
     if(!e.target.closest||!e.target.closest('#primSaveV7'))return;
-    const next={};document.querySelectorAll('[data-prim-rate]').forEach(inp=>{const n=inp.dataset.primRate,rate=Number(String(inp.value||'').replace(',','.'))||0,sel=document.querySelector(`[data-prim-type="${CSS.escape(n)}"]`);if(rate<0||rate>100)return;next[n]={type:sel?.value==='ciro'?'ciro':'kar',rate};});
+    const num=v=>{const t=String(v??'').trim().replace(',','.');return t===''?null:Number(t);};
+    const next={};document.querySelectorAll('[data-prim-rate]').forEach(inp=>{const n=inp.dataset.primRate,rate=num(inp.value)||0,sel=document.querySelector(`[data-prim-type="${CSS.escape(n)}"]`);if(rate<0||rate>100)return;
+      const groups={};document.querySelectorAll(`[data-prim-group="${CSS.escape(n)}"]`).forEach(gi=>{const v=num(gi.value);if(v!==null&&Number.isFinite(v)&&v>=0&&v<=100)groups[gi.dataset.group]=v;});
+      next[n]={type:sel?.value==='ciro'?'ciro':'kar',rate,...(Object.keys(groups).length?{groups}:{})};});
     state.primSettingsV7=next;save();audit('Personel prim ayarları güncellendi','Personel');toast('Prim ayarları kaydedildi');document.getElementById('prShow')?.click();
   });
   function v660Report(type,from,to,extra=''){
