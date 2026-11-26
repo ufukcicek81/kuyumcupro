@@ -2183,6 +2183,15 @@ test('personel satış ve prim raporu: personel bazında satış / kâr, prim ay
   assert.ok(Math.abs(num(r[8]) - Math.max(0, num(r[5])) * 0.1) < 0.02, `prim = kârın %10'u (${r[5]} → ${r[8]})`);
   for (let i = 0; i < 40 && !(fb.db.state.primSettingsV7 || {})[person]; i++) await p.waitForTimeout(250);
   assert.deepEqual(fb.db.state.primSettingsV7[person], { type: 'kar', rate: 10 });
+  // Ürün grubuna özel oran: satılan ürünün grubunda %20 → o grubun primi genel orana göre değil %20'ye göre
+  const grp = await p.evaluate(() => [...document.querySelectorAll('#primGroupTableV7 tbody tr')].map((r) => [...r.cells].map((c) => c.innerText.trim()))[0]);
+  assert.ok(grp && grp[0] === person, 'ürün grubu dökümünde satış görünmeli');
+  await p.fill(`[data-prim-group="${person}"][data-group="${grp[1]}"]`, '20');
+  await p.click('#primSaveV7'); await p.waitForTimeout(600);
+  r = await row();
+  assert.ok(Math.abs(num(r[8]) - Math.max(0, num(r[5])) * 0.2) < 0.02, `grup oranı %20 uygulanmalı (${r[5]} → ${r[8]})`);
+  for (let i = 0; i < 40 && !((fb.db.state.primSettingsV7 || {})[person] || {}).groups; i++) await p.waitForTimeout(250);
+  assert.equal(fb.db.state.primSettingsV7[person].groups[grp[1]], 20);
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
