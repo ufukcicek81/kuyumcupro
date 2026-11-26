@@ -6229,6 +6229,7 @@ function stockSummaryView(){
   }
 
   function ziynetPhysicalHasPerUnit(item){
+    const sk=typeof ziynetStdKeyV8==='function'?ziynetStdKeyV8(item):'';if(sk)return ziynetStdMapV8()[sk].milyem/1000;
     if(item?.fromCard&&Number(item.unitHas)>0)return Number(item.unitHas);
     const grams={CEYREK:1.750,YARIM:3.500,ZIYNET:7.000,ATA:7.216,RESAT:7.216};
     const g=Number(grams[String(item?.code||'').toUpperCase()]||0); return g?g*0.916:Number(item?.buyMilyem||0)/1000;
@@ -9046,6 +9047,22 @@ function stockSummaryView(){
   function linkBankFeedCariV7(){
     (state.customerMoves||[]).forEach(m=>{if(m.sourceType!=='bankFeed'||!m.sourceId)return;const f=(state.financeMoves||[]).find(x=>x.id===m.sourceId);if(f&&f.sourceType!=='cariManual'){f.sourceType='cariManual';f.sourceId=m.id;}});
   }
+  /* Çeyrek ve yarım altın: HAS, Pusula'daki gibi sabit milyemden hesaplanır (1 çeyrek = 1,605 · 1 yarım = 3,210 HAS).
+     Açık stoktaki birikmiş HAS (kartta yanlış gram/ayar varken yapılan işlemlerle bozulmuş olabilir) adetten yeniden kurulur;
+     stok kartının sabit milyemi ve Z.Gram'ı da düzeltilir ki sonraki alış/satışlar doğru işlesin. Her açılışta aynı sonucu verir. */
+  function ziynetStdMapV8(){return {CEYREK:{milyem:1605,zGram:1.75},YARIM:{milyem:3210,zGram:3.5}};}
+  function ziynetStdKeyV8(x){
+    const norm=v=>String(v||'').toLocaleUpperCase('tr-TR').replace(/Ç/g,'C').replace(/\s+ALTIN$/,'').trim();
+    for(const v of [x?.pusulaCode,x?.productCode,x?.code,x?.name,x?.productDefinition]){const k=norm(v);if(ziynetStdMapV8()[k])return k;}
+    return '';
+  }
+  function migrateZiynetStdMilyemV8(){
+    (state.openStocks||[]).forEach(o=>{if(String(o.unit||'ADET').toUpperCase()!=='ADET')return;const k=ziynetStdKeyV8(o);if(!k)return;const d=ziynetStdMapV8()[k];
+      const h=Math.round(Number(o.amount||0)*d.milyem)/1000;
+      if(Math.abs(Number(o.hasWeight||0)-h)>1e-9)o.hasWeight=h;
+      if(Number(o.displayAyar||0)!==d.milyem)o.displayAyar=d.milyem;
+      if(Math.abs(Number(o.zGram||0)-d.zGram)>1e-9)o.zGram=d.zGram;});
+  }
   function migratePusulaFixedMilyemV684(){
     state.meta=state.meta||{};
     if(Number(state.meta.pusulaFixedMilyemV684||0)>=1)return;
@@ -9070,7 +9087,7 @@ function stockSummaryView(){
   }
 
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion=APP_VERSION;migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();migratePusulaFixedMilyemV684();migrateZiynetCardHasV7();linkBankFeedCariV7();
+    state.meta=state.meta||{};state.meta.appVersion=APP_VERSION;migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();migratePusulaFixedMilyemV684();migrateZiynetCardHasV7();migrateZiynetStdMilyemV8();linkBankFeedCariV7();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
