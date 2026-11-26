@@ -2143,6 +2143,18 @@ test('Banka Hareketleri: daha önce "Yeni Hareket Kaydet" ile bankaya eklenen ge
   await p.context().close();
 });
 
+test('fatura ayarları: şahıs firmasında Firma VKN alanına 11 haneli TCKN yazılabilir', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  await p.evaluate(() => document.querySelector('[data-go="invoices"],[data-route="invoices"]').click());
+  await p.click('[data-invoice-view="settings"]');
+  await p.fill('#invVkn', '10000000146'); await p.click('#saveInvoiceSettings');
+  for (let i = 0; i < 40 && (fb.db.state.invoiceSettings || {}).companyVkn !== '10000000146'; i++) await p.waitForTimeout(250);
+  assert.equal(fb.db.state.invoiceSettings.companyVkn, '10000000146', '11 hane kesilmeden kaydedilmeli');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
 test('banka bakiyesi gerçek tutara eşitlenir; kasa değişmez', async () => {
   const fb = createFakeFirebase();
   const p = await newDevice(browser, appUrl, fb);
