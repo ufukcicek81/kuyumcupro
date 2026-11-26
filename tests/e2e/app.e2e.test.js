@@ -1849,6 +1849,15 @@ test('kasa sayımı: kasa farkı sisteme işlenir, bakiye sayılan tutara gelir 
   assert.equal(Math.round(tlCash(fb.db.state)), Math.round(cash0 + 500), 'kasa sayılan tutara gelmeli');
   const mv = (fb.db.state.financeMoves || []).find((f) => f.type === 'Kasa Sayım Farkı');
   assert.ok(mv && mv.direction === 'Giriş' && Math.round(mv.accountAmount) === 500, 'fark kasa hareketi olarak görünmeli');
+  // Sayım farkı Kasa / Banka hareketlerinden silinir; kasa eski haline döner
+  const cb = await p.$('.critical-alert button'); if (cb) await cb.click();
+  await p.evaluate(() => { document.querySelector('#modalX')?.click(); document.querySelector('[data-go="finance"],[data-route="finance"]').click(); });
+  await p.waitForSelector(`[data-kasa-diff-del="${mv.id}"]`);
+  await p.evaluate((id) => document.querySelector(`[data-kasa-diff-del="${id}"]`).click(), mv.id);
+  await p.click('#modalConfirm');
+  for (let i = 0; i < 40 && (fb.db.state.financeMoves || []).some((f) => f.id === mv.id); i++) await p.waitForTimeout(250);
+  assert.ok(!(fb.db.state.financeMoves || []).some((f) => f.id === mv.id), 'sayım farkı kaydı silinmeli');
+  assert.equal(Math.round(tlCash(fb.db.state)), Math.round(cash0), 'kasa sayımdan önceki tutara dönmeli');
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
