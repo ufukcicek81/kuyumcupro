@@ -10420,7 +10420,7 @@ function stockSummaryView(){
     finally{if(btn&&btn.isConnected){btn.disabled=false;btn.textContent='🏦 Bankadan Getir';}}
   }
   function pageBankingV620(){
-    ensureMilyemPlusAddons();const bankId=state.bankAccounts[0]?.id||'',waiting=bankFeedMoves.filter(x=>x.status==='Bekliyor').length,matched=bankFeedMoves.filter(x=>x.status==='Eşleşti').length,ignored=bankFeedMoves.filter(x=>x.status==='Yoksay').length;
+    ensureMilyemPlusAddons();bankFeedSyncLinksV7();const bankId=state.bankAccounts[0]?.id||'',waiting=bankFeedMoves.filter(x=>x.status==='Bekliyor').length,matched=bankFeedMoves.filter(x=>x.status==='Eşleşti').length,ignored=bankFeedMoves.filter(x=>x.status==='Yoksay').length;
     return `<div class="page-title"><div><h1>Banka Hareketleri</h1><p>Banka CSV/ekstresini içeri alın, programdaki tahsilat/ödeme ile eşleştirin; eşleşmeyen hareketi onaylayarak finans kaydına dönüştürün.</p></div><div class="addon-actions"><select class="select" id="bankFeedBank">${state.bankAccounts.map(b=>`<option value="${b.id}">${esc(b.bank||b.name)} · ${esc(b.currency||'TL')}</option>`).join('')}</select><input type="file" id="bankCsvInput" accept=".csv,.txt,text/csv" hidden><button class="btn btn-primary" id="bankFeedOnline" title="Son 7 günün hareketlerini İş Bankası online ekstresinden dükkân köprüsüyle alır">🏦 Bankadan Getir</button><button class="btn btn-outline" id="importBankCsv">CSV / Ekstre Al</button></div></div>
       ${(()=>{let at='';try{at=localStorage.getItem('asil_bank_feed_online_at_v7')||'';}catch(_){}const w=bankWatchCfgV7();return `<div class="notice" style="margin-bottom:8px">🏦 <b>İş Bankası online:</b> ${w.on?'otomatik kontrol <b style="color:#16803c">AÇIK</b> — yeni hareketler her dakika bu listeye düşer.':'otomatik kontrol kapalı (Bankadan Getir penceresinden açılır).'}${at?` Son elle çekim: ${esc(trDate(at))}.`:''}</div>`;})()}
       <div class="notice"><strong>Çift kayıt koruması:</strong> Ekstreyi içeri almak banka bakiyesini değiştirmez. Gelen havalede <b>Faturaya Gönder</b> yalnız Fatura → Gelen Havaleler'e gönderir; banka bakiyesini satıştaki havale ödemesi değiştirir. Önce mevcut finans kaydıyla eşleştirin. Sadece <b>Yeni Hareket Kaydet</b> dediğiniz satır banka bakiyesine işlenir.</div>
@@ -10438,7 +10438,15 @@ function stockSummaryView(){
     m.status='Faturada';m.sentToInvoiceAt=now();saveBankFeed();audit(`Banka hareketi faturaya gönderildi: ${money(m.amount)} "${String(m.description||'').slice(0,60)}"`,'Banka');save();render();
     toast('Fatura → Gelen Havaleler listesine gönderildi (banka bakiyesi değişmedi)');
   }
-  function bankFeedPostedMoveV7(m){return m&&m.linkedFinanceMoveId?(state.financeMoves||[]).find(f=>f.id===m.linkedFinanceMoveId&&f.bankFeedId===m.id)||null:null;}
+  function bankFeedPostedMoveV7(m){if(!m)return null;const fm=state.financeMoves||[];return (m.linkedFinanceMoveId&&fm.find(f=>f.id===m.linkedFinanceMoveId&&f.bankFeedId===m.id))||fm.find(f=>f.bankFeedId===m.id)||null;}
+  /* Banka Hareketleri listesi cihazda (yerelde) tutulur; buluttan / yedekten dönen finans kaydıyla durumu eşitlenir:
+     finans kaydı varsa satır "Eşleşti" (Kaydı Geri Al görünür), yoksa ve satır ona bağlıysa "Bekliyor". */
+  function bankFeedSyncLinksV7(){
+    let ch=false;(bankFeedMoves||[]).forEach(m=>{const f=bankFeedPostedMoveV7(m);
+      if(f&&(m.status!=='Eşleşti'||m.linkedFinanceMoveId!==f.id)){m.status='Eşleşti';m.linkedFinanceMoveId=f.id;ch=true;}
+      else if(!f&&m.status==='Eşleşti'&&m.linkedFinanceMoveId&&!(state.financeMoves||[]).some(x=>x.id===m.linkedFinanceMoveId)){m.status='Bekliyor';m.linkedFinanceMoveId='';ch=true;}});
+    if(ch)saveBankFeed();
+  }
   /* "Yeni Hareket Kaydet" ile bankaya eklenmiş gelen havaleyi geri alır: finans kaydı silinir, banka bakiyesi ve varsa cari geri alınır. */
   function bankFeedUndoPostV7(id){
     const m=bankFeedMoves.find(x=>x.id===id),f=bankFeedPostedMoveV7(m);if(!f)return toast('Geri alınacak kayıt bulunamadı','err');

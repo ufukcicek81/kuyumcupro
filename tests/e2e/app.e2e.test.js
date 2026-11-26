@@ -2104,7 +2104,7 @@ test('fatura taslağı: gümüşte (808) KDV yalnız işçilikten; mal adı değ
   await p.context().close();
 });
 
-test('Banka Hareketleri: daha önce "Yeni Hareket Kaydet" ile bankaya eklenen gelen havale geri alınır', async () => {
+test('Banka Hareketleri: daha önce "Yeni Hareket Kaydet" ile bankaya eklenen gelen havale (yedekten dönülse de) geri alınır', async () => {
   const fb = createFakeFirebase();
   let p = await newDevice(browser, appUrl, fb);
   await p.waitForTimeout(1000);
@@ -2113,7 +2113,7 @@ test('Banka Hareketleri: daha önce "Yeni Hareket Kaydet" ile bankaya eklenen ge
   st.financeMoves = [{ id: 'FIN-BNK1', period: st.activePeriod, date: now, direction: 'Giriş', type: 'Havale / EFT Tahsilat', accountKind: 'Banka', accountId: acc.id, accountName: acc.bank || acc.name, amount: 60700, accountAmount: 60700, accountCurrency: 'TL', tlAmount: 60700, sourceCategory: 'Banka Ekstresi', sourceDocNo: 'BNK-2026-619592', bankFeedId: 'BF-X1' }, ...(st.financeMoves || [])];
   fb.db.state = st; await p.context().close();
   p = await newDevice(browser, appUrl, fb);
-  await p.evaluate((a) => localStorage.setItem('asil_kuyumcu_pro_bankfeed_v1', JSON.stringify([{ id: 'BF-X1', bankId: a, date: new Date().toISOString(), direction: 'Giriş', amount: 60700, description: 'levent doran altin odemesi', reference: '', status: 'Eşleşti', linkedFinanceMoveId: 'FIN-BNK1', fingerprint: 'X1', createdAt: new Date().toISOString(), source: 'CSV' }])), acc.id);
+  await p.evaluate((a) => localStorage.setItem('asil_kuyumcu_pro_bankfeed_v1', JSON.stringify([{ id: 'BF-X1', bankId: a, date: new Date().toISOString(), direction: 'Giriş', amount: 60700, description: 'levent doran altin odemesi', reference: '', status: 'Bekliyor', linkedFinanceMoveId: '', fingerprint: 'X1', createdAt: new Date().toISOString(), source: 'CSV' }])), acc.id);
   await p.reload(); await p.waitForTimeout(1500);
   await p.evaluate(() => document.querySelector('[data-go="banking"],[data-route="banking"]').click());
   await p.waitForSelector('[data-bankfeed-undo="BF-X1"]');
