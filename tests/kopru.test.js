@@ -217,7 +217,7 @@ test('İş Bankası bilgileri her sorguda dosyadan yeniden okunur (köprüyü ye
   } finally { global.fetch = realFetch; srv.close(); delete process.env.ASIL_KOPRU_CONFIG; k._isbankReset(); }
 });
 
-test('otomatik havale kontrolü: köprü sonucu 45 sn saklar; elle sorgu sırasını bekler', async () => {
+test('otomatik havale kontrolü: köprü sonucu 25 sn saklar; elle sorgu sırasını bekler', async () => {
   const http = require('http');
   const cfg = { allowedOrigins: [], whatsapp: false, isbankUid: 'U', isbankPwd: 'P' };
   const srv = http.createServer((q, r) => k.handle(cfg, q, r));

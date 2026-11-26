@@ -18,7 +18,7 @@ const ENDPOINTS = {
   live: 'https://einvoiceservice.isnet.net.tr'
 };
 const TEST_VKN = '4810173324';
-const VERSION = '1.8';
+const VERSION = '1.9';
 // WhatsApp modülü yoksa (eski güncelleme) köprü yine çalışsın; yalnız WhatsApp kapalı olur.
 let wa;
 try { wa = require('./whatsapp'); } catch (e) {
@@ -107,9 +107,9 @@ async function isbankDecode(res) {
 }
 async function isbankStatement(cfg, p) {
   if (!cfg.isbankUid || !cfg.isbankPwd) throw new Error('İş Bankası kullanıcı kodu / şifresi köprüde tanımlı değil. C:\\kopru\\asil-kopru.json dosyasına "isbankUid" ve "isbankPwd" yazın.');
-  let wait = isbankLast + 31000 - Date.now();
+  let wait = isbankLast + 30000 - Date.now();
   // Elle sorgu (waitTurn): otomatik kontrol az önce sorduysa hata vermek yerine sırasını bekler.
-  if (wait > 0 && p.waitTurn) { await new Promise((r) => setTimeout(r, wait)); wait = isbankLast + 31000 - Date.now(); }
+  if (wait > 0 && p.waitTurn) { await new Promise((r) => setTimeout(r, wait)); wait = isbankLast + 30000 - Date.now(); }
   if (wait > 0) throw new Error(`Banka dakikada en fazla 2 sorguya izin veriyor; ${Math.ceil(wait / 1000)} sn sonra tekrar deneyin.`);
   isbankLast = Date.now();
   const to = p.to ? new Date(p.to) : new Date(), from = p.from ? new Date(p.from) : new Date(to.getTime() - 7 * 864e5);
@@ -449,11 +449,11 @@ async function handle(cfg, req, res) {
     if (action === 'isbankStatement') {
       // Banka bilgileri her sorguda dosyadan yeniden okunur: asil-kopru.json değişince köprüyü yeniden başlatmak gerekmez.
       const fresh = cfg.file ? loadConfig() : cfg;
-      // Otomatik havale kontrolü (watch): son 24 saat sorulur; birden çok cihaz sorsa da bankaya en fazla 45 sn'de bir gidilir.
+      // Otomatik havale kontrolü (watch): son 24 saat sorulur; birden çok cihaz sorsa da bankaya en fazla 25 sn'de bir gidilir (program 30 sn'de bir sorar; banka sınırı dakikada 2).
       if (p.watch) {
-        if (isbankWatchCache && Date.now() - isbankWatchCache.at < 45000) return send(res, 200, { ...isbankWatchCache.out, cached: true }, cors);
+        if (isbankWatchCache && Date.now() - isbankWatchCache.at < 25000) return send(res, 200, { ...isbankWatchCache.out, cached: true }, cors);
         const now = Date.now();
-        const w = await isbankStatement({ ...cfg, isbankUid: fresh.isbankUid, isbankPwd: fresh.isbankPwd, isbankUrl: fresh.isbankUrl }, { from: new Date(now - 864e5).toISOString(), to: new Date(now).toISOString() });
+        const w = await isbankStatement({ ...cfg, isbankUid: fresh.isbankUid, isbankPwd: fresh.isbankPwd, isbankUrl: fresh.isbankUrl }, { waitTurn: true, from: new Date(now - 864e5).toISOString(), to: new Date(now).toISOString() });
         isbankWatchCache = { at: Date.now(), out: w };
         return send(res, 200, w, cors);
       }
