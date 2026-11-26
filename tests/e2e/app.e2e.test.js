@@ -1245,7 +1245,9 @@ test('banka ekstresi: banka hareketleri görünür, düzeltilir ve silinir; baki
   await p.click('#modalX');
   await p.evaluate(() => document.querySelector('[data-go="banking"],[data-route="banking"]').click());
   await p.waitForTimeout(400);
-  assert.equal(await p.locator('[data-bankfeed-post]').count(), 2, 'silinen hareketin ekstre satırı yeniden kaydedilebilmeli');
+  // Çıkan hareketler "Yeni Hareket Kaydet", gelen havaleler "Faturaya Gönder" (bakiyeye dokunmaz) ile işlenir.
+  assert.equal(await p.locator('[data-bankfeed-post]').count(), 1, 'silinen hareketin ekstre satırı yeniden kaydedilebilmeli');
+  assert.equal(await p.locator('[data-bankfeed-invoice]').count(), 1, 'gelen havale faturaya gönderilebilmeli');
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
