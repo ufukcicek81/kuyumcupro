@@ -2447,6 +2447,31 @@ test('ALTIN STOKLARI: stoğu olmayan açık stok ve hurda kartları listede gör
   await p.context().close();
 });
 
+test('ALTIN STOKLARI: çeyrek ve yarımın HAS değeri milyemden (1605 / 3210) hesaplanır; bozuk birikmiş HAS düzelir', async () => {
+  const fb = createFakeFirebase();
+  let p = await newDevice(browser, appUrl, fb);
+  await p.waitForTimeout(2500);
+  const st = fb.db.state;
+  const o = st.openStocks.find((x) => x.period === st.activePeriod);
+  st.openStocks = st.openStocks.filter((x) => !(x.period === st.activePeriod && /^(CEYREK|YARIM)$/i.test(String(x.pusulaCode || x.productCode || ''))));
+  st.openStocks.push({ ...o, id: 'OPEN-CEY-T', name: 'CEYREK', pusulaCode: 'CEYREK', productCode: 'CEYREK', unit: 'ADET', amount: 10, count: 10, hasWeight: 11.2446, displayAyar: 916, purity: 916, zGram: 1.2276, workmanshipTotalHas: 0 });
+  st.openStocks.push({ ...o, id: 'OPEN-YAR-T', name: 'YARIM', pusulaCode: 'YARIM', productCode: 'YARIM', unit: 'ADET', amount: 6, count: 6, hasWeight: 12.3699, displayAyar: 916, purity: 916, zGram: 2.25, workmanshipTotalHas: 0 });
+  st.openStocks.push({ ...o, id: 'OPEN-CBL-T', name: 'CEYREK BİLEKLİK', pusulaCode: 'CBL', productCode: 'CBL', unit: 'ADET', amount: 2, count: 2, hasWeight: 3.21, displayAyar: 1605, workmanshipTotalHas: 0 });
+  fb.db.state = st;
+  await p.context().close();
+  p = await newDevice(browser, appUrl, fb);
+  await p.keyboard.press('F9');
+  await p.waitForSelector('table.gold-stock-v7');
+  const row = async (name) => p.evaluate((n) => [...document.querySelectorAll('table.gold-stock-v7 tr')].map((r) => [...r.cells].map((c) => c.innerText.trim())).find((c) => c[0] === n), name);
+  const num = (v) => Number(String(v).replace(/\./g, '').replace(',', '.'));
+  const c = await row('CEYREK'), y = await row('YARIM'), b = await row('CEYREK BİLEKLİK');
+  assert.equal(num(c[1]), 1605); assert.equal(num(c[3]).toFixed(2), '16.05', 'çeyrek: 10 × 1,605 HAS');
+  assert.equal(num(y[1]), 3210); assert.equal(num(y[3]).toFixed(2), '19.26', 'yarım: 6 × 3,21 HAS');
+  assert.equal(num(b[3]).toFixed(2), '3.21', 'çeyrek bileklik değişmemeli');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
 test('Altın / Ziynet: yazarken ürün listesi açılır; ok tuşu ve Enter ile seçilir', async () => {
   const p = await newDevice(browser, appUrl, createFakeFirebase());
   await p.click('[data-go="sales"]');
