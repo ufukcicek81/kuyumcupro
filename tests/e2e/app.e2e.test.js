@@ -2155,6 +2155,52 @@ test('fatura ayarları: şahıs firmasında Firma VKN alanına 11 haneli TCKN ya
   await p.context().close();
 });
 
+test('personel satış ve prim raporu: personel bazında satış / kâr, prim ayarı kaydedilir ve hesaplanır', async () => {
+  const fb = createFakeFirebase();
+  const p = await newDevice(browser, appUrl, fb);
+  await p.click('[data-go="sales"]');
+  for (let i = 0; i < 3; i++) {
+    await p.fill('#saleProductSearch', '22'); await p.waitForTimeout(300); await p.press('#saleProductSearch', 'Enter');
+    if (await p.waitForSelector('#saleEntryPrice:not([disabled])', { timeout: 5000 }).catch(() => null)) break;
+  }
+  await p.waitForTimeout(300);
+  await p.fill('#saleEntryPayable', '70000'); await p.click('#saleAddUnified'); await p.waitForTimeout(400);
+  await p.click('[data-pay="Nakit"]'); await p.click('#modalConfirm'); await p.waitForTimeout(300);
+  await p.selectOption('#salePerson', { index: 1 });
+  const person = await p.$eval('#salePerson', (s) => s.value);
+  await p.click('#finalizeSale'); await p.click('#modalConfirm'); await p.waitForTimeout(1500);
+  const cb = await p.$('.critical-alert button'); if (cb) await cb.click();
+  await p.evaluate(() => document.querySelector('[data-route="reports"],[data-go="reports"]').click());
+  await p.click('[data-pusula-report="personnel_sales"]'); await p.waitForSelector('#prResult table');
+  const row = async () => p.evaluate((n) => [...document.querySelectorAll('#prResult tbody tr')].map((r) => [...r.cells].map((c) => c.innerText.trim())).find((c) => c[0] === n), person);
+  const num = (v) => Number(String(v).replace(/[^\d,-]/g, '').replace(',', '.'));
+  let r = await row();
+  assert.ok(r, 'satış yapan personel raporda olmalı'); assert.equal(r[1], '1'); assert.equal(num(r[3]), 70000);
+  assert.equal(num(r[8]), 0, 'prim ayarı yokken prim 0');
+  await p.fill(`[data-prim-rate="${person}"]`, '10');
+  await p.click('#primSaveV7'); await p.waitForTimeout(600);
+  r = await row();
+  assert.ok(Math.abs(num(r[8]) - Math.max(0, num(r[5])) * 0.1) < 0.02, `prim = kârın %10'u (${r[5]} → ${r[8]})`);
+  for (let i = 0; i < 40 && !(fb.db.state.primSettingsV7 || {})[person]; i++) await p.waitForTimeout(250);
+  assert.deepEqual(fb.db.state.primSettingsV7[person], { type: 'kar', rate: 10 });
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
+test('karanlık tema: Raporlar düğmeleri ve seçili menü okunur (siyah üstüne siyah / beyaz üstüne altın yok)', async () => {
+  const p = await newDevice(browser, appUrl, createFakeFirebase());
+  await p.evaluate(() => document.getElementById('darkThemeBtn')?.click());
+  await p.evaluate(() => document.querySelector('[data-route="reports"],[data-go="reports"]').click());
+  await p.waitForSelector('[data-pusula-report]');
+  const lum = (c) => { const [r, g, b] = c.match(/\d+/g).map(Number).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+  const txt = await p.$eval('[data-pusula-report] strong', (e) => getComputedStyle(e).color);
+  assert.ok(lum(txt) > 0.5, 'rapor düğmesi yazısı açık renk olmalı: ' + txt);
+  const act = await p.$eval('.nav button.active', (e) => getComputedStyle(e).color);
+  assert.ok(lum(act) < 0.2, 'altın zemindeki seçili menü yazısı koyu olmalı: ' + act);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
 test('banka bakiyesi gerçek tutara eşitlenir; kasa değişmez', async () => {
   const fb = createFakeFirebase();
   const p = await newDevice(browser, appUrl, fb);

@@ -940,7 +940,9 @@ body[data-ui-mode] .sidebar-brand small{font-size:14px!important}.ui-version{mar
 .simple-account{display:flex;align-items:center;gap:14px;font-size:14px}
 body[data-ui-mode] .nav{display:flex!important;flex-direction:row!important;gap:0;padding:0;overflow:visible!important;border:1px solid var(--line);border-radius:10px 10px 0 0;background:var(--panel-2)}
 body[data-ui-mode] .nav>button,body[data-ui-mode] .more-nav>summary{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:9px;min-height:60px!important;padding:12px!important;font-size:17px!important;font-weight:750;white-space:nowrap;border:0;border-right:1px solid var(--line);border-radius:0;margin:0;background:transparent;color:var(--text);box-shadow:none}
-body[data-ui-mode] .nav button.active{background:var(--gold)!important;color:white!important;box-shadow:none!important}
+body[data-ui-mode] .nav button.active{background:var(--gold)!important;color:#141414!important;box-shadow:none!important}
+/* Kart görünümlü düğmeler (ör. Raporlar menüsü): tarayıcının varsayılan siyah yazısı karanlık temada okunmuyordu */
+button.card{color:var(--text)}
 body[data-ui-mode] .nav .ico{display:inline!important;font-size:23px!important;width:auto!important}
 .more-nav{position:relative;flex:1}.more-nav summary{cursor:pointer;list-style:none}.more-nav summary::-webkit-details-marker{display:none}
 .more-nav-panel{position:absolute;right:0;top:100%;width:310px;max-height:70vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:0 0 12px 12px;box-shadow:var(--shadow);padding:10px;z-index:35}
@@ -5805,8 +5807,33 @@ function stockSummaryView(){
     (state.tradeMoves||[]).filter(t=>/hurda/i.test(String(t.tradeType||''))&&Number(t.profitHas||0)&&explicitRangeInside(t.date,from,to)).forEach(t=>{const ph=Number(t.profitHas||0);r.scrapHas+=ph;r.scrapTl+=ph*Number(t.hasRateAtTrade||historicalHasRate(t.date,'buy')||state.prices.has?.buy||1);r.scrapCount++;});
     return r;
   }
+  /* Personel prim ayarı: kişi başına prim türü (kârdan % / cirodan % / yok) ve oranı. Bulutta saklanır (state.primSettingsV7). */
+  function primSettingsV7(){return state.primSettingsV7&&typeof state.primSettingsV7==='object'?state.primSettingsV7:{};}
+  function primForV7(name,saleTl,profitTl){const c=primSettingsV7()[name]||{},rate=Number(c.rate||0);if(!(rate>0))return 0;return Math.round((c.type==='ciro'?saleTl:Math.max(0,profitTl))*rate)/100;}
+  function personnelSalesReportV7(rows){
+    const map=new Map();
+    rows.forEach(r=>{const n=r.salesperson||'Belirsiz',x=map.get(n)||{name:n,docs:new Set(),lines:0,saleTl:0,costTl:0,profitTl:0,saleHas:0,profitHas:0};
+      x.docs.add(r.saleId);x.lines++;x.saleTl+=Number(r.saleTl||0);x.costTl+=Number(r.costTl||0);x.profitTl+=Number(r.profitTl||0);x.saleHas+=Number(r.saleHas||0);x.profitHas+=Number(r.profitHas||0);map.set(n,x);});
+    (state.users||[]).filter(u=>u.permissions?.canSell!==false&&u.name&&!map.has(u.name)).forEach(u=>map.set(u.name,{name:u.name,docs:new Set(),lines:0,saleTl:0,costTl:0,profitTl:0,saleHas:0,profitHas:0}));
+    const list=[...map.values()].map(x=>({...x,count:x.docs.size,prim:primForV7(x.name,x.saleTl,x.profitTl)})).sort((a,b)=>b.saleTl-a.saleTl);
+    const tot=k=>list.reduce((a,x)=>a+Number(x[k]||0),0),cfg=primSettingsV7();
+    const head=['Personel','Fiş','Ürün satırı','Satış TL','Satış HAS','Kâr TL','Kâr HAS','Prim türü','Prim TL'];
+    const typeLabel=n=>{const c=cfg[n]||{};return Number(c.rate||0)>0?(c.type==='ciro'?`Cirodan %${qty(c.rate)}`:`Kârdan %${qty(c.rate)}`):'—';};
+    const body=list.map(x=>[`<strong>${esc(x.name)}</strong>`,String(x.count),String(x.lines),money(x.saleTl),qty(x.saleHas),money(x.profitTl),qty(x.profitHas),esc(typeLabel(x.name)),`<strong>${money(x.prim)}</strong>`]);
+    body.push(['<strong>TOPLAM</strong>',String(tot('count')),String(tot('lines')),`<strong>${money(tot('saleTl'))}</strong>`,qty(tot('saleHas')),`<strong>${money(tot('profitTl'))}</strong>`,qty(tot('profitHas')),'',`<strong>${money(tot('prim'))}</strong>`]);
+    const setRows=list.filter(x=>x.name!=='Belirsiz').map(x=>{const c=cfg[x.name]||{};return `<tr><td><strong>${esc(x.name)}</strong></td><td><select class="select" data-prim-type="${esc(x.name)}"><option value="kar" ${c.type!=='ciro'?'selected':''}>Satış kârından %</option><option value="ciro" ${c.type==='ciro'?'selected':''}>Satış tutarından (ciro) %</option></select></td><td><input class="input" data-prim-rate="${esc(x.name)}" inputmode="decimal" value="${Number(c.rate||0)?esc(String(c.rate)):''}" placeholder="0" style="max-width:110px"></td></tr>`;}).join('');
+    const settings=`<details style="margin-top:14px"${Object.keys(cfg).length?'':' open'}><summary style="cursor:pointer;font-weight:700">⚙ Prim ayarları</summary><div class="notice" style="margin:8px 0">Her personel için prim türünü ve oranını yazın. <b>Satış kârından %</b>: seçili tarihteki satış kârının yüzdesi (zarar varsa prim 0). <b>Ciro %</b>: satış tutarının yüzdesi. Oran boş/0 ise prim hesaplanmaz.</div><div class="table-wrap"><table class="table"><thead><tr><th>Personel</th><th>Prim türü</th><th>Oran (%)</th></tr></thead><tbody>${setRows||'<tr><td colspan="3">Satış yetkili personel yok.</td></tr>'}</tbody></table></div><button class="btn btn-primary" type="button" id="primSaveV7" style="margin-top:8px">Prim Ayarlarını Kaydet</button></details>`;
+    const csv=[head,...list.map(x=>[x.name,x.count,x.lines,x.saleTl.toFixed(2),x.saleHas.toFixed(3),x.profitTl.toFixed(2),x.profitHas.toFixed(3),typeLabel(x.name),x.prim.toFixed(2)])];
+    return {title:'Personel Satış ve Prim Raporu',html:`<div class="grid grid-3" style="margin-bottom:12px">${metric('Toplam Satış',money(tot('saleTl')),`${tot('count')} fiş`)}${metric('Toplam Kâr',money(tot('profitTl')),qty(tot('profitHas'))+' HAS')}${metric('Toplam Prim',money(tot('prim')),'seçili tarih aralığı')}</div>${v660SimpleTable(head,body)}${settings}`,csv};
+  }
+  document.addEventListener('click',e=>{
+    if(!e.target.closest||!e.target.closest('#primSaveV7'))return;
+    const next={};document.querySelectorAll('[data-prim-rate]').forEach(inp=>{const n=inp.dataset.primRate,rate=Number(String(inp.value||'').replace(',','.'))||0,sel=document.querySelector(`[data-prim-type="${CSS.escape(n)}"]`);if(rate<0||rate>100)return;next[n]={type:sel?.value==='ciro'?'ciro':'kar',rate};});
+    state.primSettingsV7=next;save();audit('Personel prim ayarları güncellendi','Personel');toast('Prim ayarları kaydedildi');document.getElementById('prShow')?.click();
+  });
   function v660Report(type,from,to,extra=''){
     const rows=v660Sales(from,to);
+    if(type==='personnel_sales')return personnelSalesReportV7(rows);
     if(type==='sales_general'||type==='general_sales'||type==='sales_profit'){
       const U=srvU(),byDoc=new Map(); rows.forEach(r=>{const x=byDoc.get(r.saleId)||{date:r.date,doc:r.docNo,customer:r.customer,person:r.salesperson,cost:0,sale:0,profit:0};x.cost+=Number(r[srvF('cost')]||0);x.sale+=Number(r[srvF('sale')]||0);x.profit+=Number(r[srvF('profit')]||0);byDoc.set(r.saleId,x);});
       const a=[...byDoc.values()],sale=a.reduce((s,x)=>s+x.sale,0),cost=a.reduce((s,x)=>s+x.cost,0),profit=sale-cost,head=['Tarih','Fiş','Müşteri','Personel',`Maliyet ${U}`,`Satış ${U}`,`Kâr ${U}`];
@@ -5889,7 +5916,7 @@ function stockSummaryView(){
       ['sales_general','SATIŞ RAPORU GENEL'],['sales_detail','SATIŞ RAPORU DETAY'],['sales_summary','SATIŞ RAPORU ÖZET'],['balance_list','BAKİYE LİSTESİ'],['balance_sheet','BİLANÇO'],['transaction','İŞLEM RAPORU'],
       ['daily_inout','GÜNLÜK GİRİŞ ÇIKIŞ RAPORU'],['product_analysis','ÜRÜN SATIŞ ANALİZİ'],['account_statement','HESAP EKSTRESİ'],['fx','DÖVİZ ALIŞ SATIŞ RAPORU'],['cash','KASA RAPORU'],['sales_karat','SATIŞ RAPORU AYAR'],
       ['expense','GİDER RAPORU'],['cash_inout','NAKİT GİRİŞ ÇIKIŞ RAPORU'],['sales_producer','SATIŞ RAPORU ÜRETİCİYE GÖRE'],['sales_profit','SATIŞ KÂR RAPORU'],['expense_yearly','GİDER RAPORU YILLIK'],
-      ['gold_sales','ALTIN SATIŞ RAPORU'],['sales_day','SATIŞ GÜN RAPORU'],['patron','PATRON RAPORU'],['general_sales','GENEL SATIŞ RAPORU'],['special','PUSULA ÖZEL RAPORLAR'],['open_position','AÇIK POZİSYON']
+      ['gold_sales','ALTIN SATIŞ RAPORU'],['sales_day','SATIŞ GÜN RAPORU'],['patron','PATRON RAPORU'],['general_sales','GENEL SATIŞ RAPORU'],['special','PUSULA ÖZEL RAPORLAR'],['open_position','AÇIK POZİSYON'],['personnel_sales','PERSONEL SATIŞ VE PRİM RAPORU']
     ];
     return `<div class="page-title"><div><h1>Raporlar</h1><p>Pusula düzenindeki raporlar. Taş raporları bu menüye eklenmedi.</p></div></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px">
@@ -9137,7 +9164,7 @@ function stockSummaryView(){
      Bulutun en son görülen hâli (taban) saklanır. Bulutta başka cihazdan değişiklik varsa
      tüm veri ezilmez; taban + cihaz + bulut üç yönlü birleştirilir (js/asil-cloud-merge.js). */
   const CLOUD_LOCAL_ONLY_KEYS_V7=['cloudSync','currentUser','activePeriod'];
-  const CLOUD_NON_ADDITIVE_KEYS_V7=['meta','prices','settings','systemParameters','complianceSettings','definitions','users','bankWatchV7','bankIncomingV7','gpSettingsV7'];
+  const CLOUD_NON_ADDITIVE_KEYS_V7=['meta','prices','settings','systemParameters','complianceSettings','definitions','users','bankWatchV7','bankIncomingV7','gpSettingsV7','primSettingsV7'];
   const CLOUD_BASE_IDB_KEY_V7='cloudBaseV7';
   // Muhasebe kayıtlarında bir cihazdaki silme (iptal) diğer cihazdaki küçük değişikliğe karşı korunur.
   const CLOUD_DELETE_WINS_KEYS_V7=['sales','financeMoves','tradeMoves','customerMoves','purchases','stockMoves','transactions'];
