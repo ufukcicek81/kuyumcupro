@@ -2060,6 +2060,15 @@ test('Banka Hareketleri: İş Bankası online ekstresi listeye düşer, tekrar �
     kopru._isbankReset();
     await p.click('#bankFeedOnline'); await p.waitForTimeout(1500);
     assert.equal((await p.$$('[data-bankfeed-row]')).length, 3, 'aynı hareketler tekrar eklenmemeli');
+    // Gelen havalede yalnız "Faturaya Gönder" var; bankaya / kasaya işlem yapmaz.
+    assert.equal(await p.$$eval('[data-bankfeed-post]', (b) => b.length), 1, 'Yeni Hareket Kaydet yalnız çıkan harekette olmalı');
+    const balBefore = (fb.db.state.bankAccounts.find((b) => b.id === acc.id) || {}).balance, finBefore = (fb.db.state.financeMoves || []).length;
+    await p.evaluate(() => document.querySelectorAll('[data-bankfeed-invoice]')[0].click());
+    for (let i = 0; i < 40 && !(fb.db.state.bankIncomingV7 || []).some((x) => /ALTIN ÖDEMESİ/.test(x.description)); i++) await p.waitForTimeout(250);
+    assert.ok((fb.db.state.bankIncomingV7 || []).some((x) => /ALTIN ÖDEMESİ/.test(x.description)), 'fatura ekranına gitmeli');
+    assert.equal(fb.db.state.bankAccounts.find((b) => b.id === acc.id).balance, balBefore, 'banka bakiyesi değişmemeli');
+    assert.equal((fb.db.state.financeMoves || []).length, finBefore, 'finans kaydı oluşmamalı');
+    assert.match(await p.innerText('#bankFeedTable'), /Faturada/);
     assert.deepEqual(p.errors, []);
     await p.context().close();
   } finally { global.fetch = realFetch; bridge.close(); kopru._isbankReset(); }
@@ -2091,6 +2100,28 @@ test('fatura taslağı: gümüşte (808) KDV yalnız işçilikten; mal adı değ
   await p.evaluate((id) => document.querySelector(`[data-invoice-open="${id}"]`).click(), rec.id);
   await p.waitForSelector('#invDraftBox .invoice-lines');
   assert.match(await p.innerText('#invDraftBox .invoice-lines tbody'), /GÜMÜŞ KOLYE/);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
+test('Banka Hareketleri: daha önce "Yeni Hareket Kaydet" ile bankaya eklenen gelen havale geri alınır', async () => {
+  const fb = createFakeFirebase();
+  let p = await newDevice(browser, appUrl, fb);
+  await p.waitForTimeout(1000);
+  const st = fb.db.state, acc = st.bankAccounts[0], now = new Date().toISOString();
+  acc.balance = 100000;
+  st.financeMoves = [{ id: 'FIN-BNK1', period: st.activePeriod, date: now, direction: 'Giriş', type: 'Havale / EFT Tahsilat', accountKind: 'Banka', accountId: acc.id, accountName: acc.bank || acc.name, amount: 60700, accountAmount: 60700, accountCurrency: 'TL', tlAmount: 60700, sourceCategory: 'Banka Ekstresi', sourceDocNo: 'BNK-2026-619592', bankFeedId: 'BF-X1' }, ...(st.financeMoves || [])];
+  fb.db.state = st; await p.context().close();
+  p = await newDevice(browser, appUrl, fb);
+  await p.evaluate((a) => localStorage.setItem('asil_kuyumcu_pro_bankfeed_v1', JSON.stringify([{ id: 'BF-X1', bankId: a, date: new Date().toISOString(), direction: 'Giriş', amount: 60700, description: 'levent doran altin odemesi', reference: '', status: 'Eşleşti', linkedFinanceMoveId: 'FIN-BNK1', fingerprint: 'X1', createdAt: new Date().toISOString(), source: 'CSV' }])), acc.id);
+  await p.reload(); await p.waitForTimeout(1500);
+  await p.evaluate(() => document.querySelector('[data-go="banking"],[data-route="banking"]').click());
+  await p.waitForSelector('[data-bankfeed-undo="BF-X1"]');
+  await p.click('[data-bankfeed-undo="BF-X1"]');
+  for (let i = 0; i < 40 && (fb.db.state.financeMoves || []).some((f) => f.id === 'FIN-BNK1'); i++) await p.waitForTimeout(250);
+  assert.ok(!(fb.db.state.financeMoves || []).some((f) => f.id === 'FIN-BNK1'), 'BNK kaydı silinmeli');
+  assert.equal(fb.db.state.bankAccounts.find((b) => b.id === acc.id).balance, 100000 - 60700, 'banka bakiyesi geri alınmalı');
+  await p.waitForSelector('[data-bankfeed-invoice="BF-X1"]');
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
