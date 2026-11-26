@@ -1431,6 +1431,12 @@ test('İşlem Raporu: her satırda hesap, giriş/çıkış tutarı ve birim var;
   assert.match(t, /4\.000,00/, 'TL karşılığı / kasa çıkışı görünmeli');
   const over = await p.evaluate(() => { const w = document.querySelector('#prResult .table-wrap'); return w.scrollWidth - w.clientWidth; });
   assert.ok(over <= 2, 'tablo yana kaymamalı: ' + over);
+  // Raporda arama: yazılan kelimeyi içeren satırlar kalır
+  const total = await p.$$eval('#prResult tbody tr', (r) => r.length);
+  await p.fill('#prResult [data-report-search]', 'tl kasa');
+  const vis = await p.$$eval('#prResult tbody tr', (r) => r.filter((x) => x.style.display !== 'none').map((x) => x.innerText));
+  assert.ok(vis.length >= 1 && vis.length < total, `arama satırları süzmeli (${vis.length}/${total})`);
+  assert.ok(vis.every((x) => /TL Kasa/i.test(x)));
   if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT });
   assert.deepEqual(p.errors, []);
   await p.context().close();

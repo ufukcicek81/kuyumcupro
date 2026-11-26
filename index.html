@@ -5775,8 +5775,17 @@ function stockSummaryView(){
     /* Yalnız sayı içeren sütunlar sağa yaslanır (önceden son 3 sütun hep sağa yaslanıyordu: işlem adı/açıklama da) */
     const plain=v=>String(v==null?'':v).replace(/<[^>]*>/g,'').trim(),isNum=v=>/^[-+−]?[\d.,\s]+(?:\s?(?:TL|HAS|GR|ADET|USD|EUR|GBP|%))?$/i.test(v);
     const numCol=head.map((_,i)=>{const vals=rows.map(r=>plain(r[i])).filter(Boolean);return vals.length>0&&vals.every(isNum);});
-    return `<div class="table-wrap"><table class="table"><thead><tr>${head.map((h,i)=>`<th class="${numCol[i]?'num':''}">${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.length?rows.map(r=>`<tr>${r.map((v,i)=>`<td class="${numCol[i]?'num':''}">${v}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${head.length}">Kayıt bulunamadı.</td></tr>`}</tbody></table></div>`;
+    // Rapor tablolarında arama: yazılan kelimeyi içeren satırlar kalır (ör. "BNK", cari adı, tutar).
+    const search=rows.length>2?`<div class="report-search" style="display:flex;gap:8px;align-items:center;margin:0 0 8px"><input class="input" data-report-search placeholder="Raporda ara… (belge no, açıklama, hesap, tutar)" style="max-width:420px"><small class="muted" data-report-search-count>${rows.length} satır</small></div>`:'';
+    return `${search}<div class="table-wrap"><table class="table"><thead><tr>${head.map((h,i)=>`<th class="${numCol[i]?'num':''}">${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.length?rows.map(r=>`<tr>${r.map((v,i)=>`<td class="${numCol[i]?'num':''}">${v}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${head.length}">Kayıt bulunamadı.</td></tr>`}</tbody></table></div>`;
   }
+  document.addEventListener('input',e=>{
+    const inp=e.target&&e.target.closest&&e.target.closest('[data-report-search]');if(!inp)return;
+    const box=inp.closest('.report-search'),wrap=box&&box.nextElementSibling,tb=wrap&&wrap.querySelector('tbody');if(!tb)return;
+    const q=String(inp.value||'').toLocaleLowerCase('tr-TR').trim();let n=0;
+    tb.querySelectorAll('tr').forEach(tr=>{const ok=!q||tr.textContent.toLocaleLowerCase('tr-TR').includes(q);tr.style.display=ok?'':'none';if(ok)n++;});
+    const c=box.querySelector('[data-report-search-count]');if(c)c.textContent=q?`${n} / ${tb.rows.length} satır`:`${tb.rows.length} satır`;
+  });
   /* Satış raporları HAS ya da TL olarak gösterilir (TL: satış = fiş tutarı, maliyet = maliyet HAS × satış günü HAS alış kuru). */
   let salesReportUnitV7=(()=>{try{return localStorage.getItem('asil_sales_report_unit_v7')==='TL'?'TL':'HAS';}catch(_){return 'HAS';}})();
   const srvF=k=>k+(salesReportUnitV7==='TL'?'Tl':'Has'),srvFmt=v=>salesReportUnitV7==='TL'?money(v):qty(v),srvU=()=>salesReportUnitV7;
