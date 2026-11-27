@@ -4171,6 +4171,17 @@ function stockSummaryView(){
   /* İş Bankası online ekstre: dükkân köprüsü bankadan hareketleri alır (kullanıcı kodu / şifre yalnız köprüde),
      program aynı günlerdeki banka hareketleriyle tutara ve güne göre eşleştirir; eksik / fazla kayıtlar ayrı listelenir.
      Bankanın XML alan adları önceden bilinmediğinden tarih / tutar / açıklama sütunları adından ve içeriğinden bulunur. */
+  /* Hesap özeti satırları (hesap açılış tarihi / son hareket tarihi / şube kodu) banka hareketi değildir: eski köprü,
+     aralıkta hareket yokken bunları hareket sanıp 2022 tarihli sahte havale bildirimi üretiyordu. */
+  function bankIsSummaryRecV7(r){return Object.keys(r||{}).some(k=>/acilis.?tarihi|açılış.?tarihi|sonhareket|son.?hareket.?tarihi/i.test(k));}
+  function bankRealRecsV7(d){return ((d&&d.records)||[]).filter(r=>!bankIsSummaryRecV7(r));}
+  /* Bu hatanın daha önce yazdığı sahte kayıtları temizler (bekleyen, açıklamasız, hesap özetinden gelen). */
+  function cleanupBankSummaryRecsV7(){
+    let n=0;
+    if(Array.isArray(state.bankIncomingV7)){const before=state.bankIncomingV7.length;state.bankIncomingV7=state.bankIncomingV7.filter(b=>!(b.status==='bekliyor'&&!String(b.description||'').trim()&&b.date&&b.seenAt&&new Date(b.seenAt)-new Date(b.date)>30*864e5));n+=before-state.bankIncomingV7.length;}
+    try{const k='asil_bank_alerts_v7',l=JSON.parse(localStorage.getItem(k)||'[]')||[],day=w=>{const m=String(w||'').match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);return m?new Date(+m[3],+m[2]-1,+m[1]):null;},ok=l.filter(a=>{const d=day(a.when);return !(d&&!String(a.desc||'').trim()&&new Date(a.at||Date.now())-d>30*864e5);});if(ok.length!==l.length)localStorage.setItem(k,JSON.stringify(ok));}catch(_){}
+    return n;
+  }
   function bankOnlineColsV7(recs){
     const keys=[...new Set(recs.flatMap(r=>Object.keys(r)))],vals=k=>recs.map(r=>String(r[k]??'')).filter(Boolean);
     const isDate=v=>/^\d{1,2}[./-]\d{1,2}[./-]\d{4}/.test(v)||/^\d{4}-\d{2}-\d{2}/.test(v),isNum=v=>/^[-+]?[\d.,]+$/.test(v.replace(/\s/g,''));
@@ -4219,7 +4230,7 @@ function stockSummaryView(){
       const from=document.getElementById('boFrom').value,to=document.getElementById('boTo').value;if(!from||!to||from>to)return toast('Tarih aralığını kontrol edin','err');
       const btn=document.getElementById('boGet');btn.disabled=true;btn.textContent='Bankaya soruluyor…';box.innerHTML='';
       try{
-        const d=await waBridgeCallV7({action:'isbankStatement',waitTurn:true,from:from+'T00:00:00',to:to+'T23:59:59'}),recs=d.records||[],col=bankOnlineColsV7(recs);
+        const d=await waBridgeCallV7({action:'isbankStatement',waitTurn:true,from:from+'T00:00:00',to:to+'T23:59:59'}),recs=bankRealRecsV7(d),col=bankOnlineColsV7(recs);
         const moves=(state.financeMoves||[]).filter(f=>f.accountKind===a.kind&&f.accountId===a.acc.id&&localDayV7(new Date(f.date))>=from&&localDayV7(new Date(f.date))<=to);
         const raw=`<details style="margin-top:8px"><summary>Bankadan gelen ham veri (alan adları: ${esc(col.keys.join(', ')||'—')})</summary><pre style="white-space:pre-wrap;font-size:11px;max-height:240px;overflow:auto">${esc(d.sample||'')}</pre></details>`;
         if(!recs.length){box.innerHTML=`<div class="notice">Bu aralıkta bankadan hareket gelmedi.</div>${raw}`;return;}
@@ -4326,7 +4337,7 @@ function stockSummaryView(){
     const w=bankWatchCfgV7();if(!w.on||bankWatchPollV7.busy||!session||!String(state.invoiceSettings?.proxyUrl||'').trim())return;
     bankWatchPollV7.busy=true;
     try{
-      const d=await waBridgeCallV7({action:'isbankStatement',watch:true}),recs=(d&&d.records)||[],col=bankOnlineColsV7(recs);
+      const d=await waBridgeCallV7({action:'isbankStatement',watch:true}),recs=bankRealRecsV7(d),col=bankOnlineColsV7(recs);
       bankWatchLogV7({ok:true,n:recs.length});
       if(recs.length&&(!col.date||(!col.amount&&!col.borc&&!col.alacak)))return;
       const key='asil_bank_seen_v7';let seen=null;try{seen=JSON.parse(localStorage.getItem(key)||'null');}catch(_){}
@@ -9139,7 +9150,7 @@ function stockSummaryView(){
   }
 
   function ensureV5State(){
-    state.meta=state.meta||{};state.meta.appVersion=APP_VERSION;migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();migratePusulaFixedMilyemV684();migrateZiynetCardHasV7();migrateZiynetStdMilyemV8();linkBankFeedCariV7();
+    state.meta=state.meta||{};state.meta.appVersion=APP_VERSION;migratePusulaSuppliersV51();pruneAutoDerivedStockCardsV518();ensureOpenStockCardsV61();migratePusulaFixedMilyemV684();migrateZiynetCardHasV7();migrateZiynetStdMilyemV8();cleanupBankSummaryRecsV7();linkBankFeedCariV7();
     state.transactions=Array.isArray(state.transactions)?state.transactions:[];
     state.cancelledDocuments=Array.isArray(state.cancelledDocuments)?state.cancelledDocuments:[];
     state.specialProducts=Array.isArray(state.specialProducts)?state.specialProducts:[];
@@ -9847,6 +9858,7 @@ function stockSummaryView(){
       localJsonSet(KYC_LOCAL_KEY,identityRecords);
     }
     bankFeedMoves=localJsonGet(BANK_FEED_LOCAL_KEY,[]);if(!Array.isArray(bankFeedMoves))bankFeedMoves=[];
+    {const n=bankFeedMoves.length;bankFeedMoves=bankFeedMoves.filter(m=>!(m.status==='Bekliyor'&&/acilis.?tarihi|sonhareket/i.test(String(m.fingerprint||''))));if(bankFeedMoves.length!==n)localJsonSet(BANK_FEED_LOCAL_KEY,bankFeedMoves);}
     masakWatchlist=localJsonGet(MASAK_WATCHLIST_LOCAL_KEY,[]);if(!Array.isArray(masakWatchlist))masakWatchlist=[];
   }
   function saveIdentityRecords(){localJsonSet(KYC_LOCAL_KEY,identityRecords);}
@@ -10501,7 +10513,7 @@ function stockSummaryView(){
     const today=localDayV7(),from=localDayV7(new Date(Date.now()-6*864e5));
     if(btn){btn.disabled=true;btn.textContent='Bankaya soruluyor…';}
     try{
-      const d=await waBridgeCallV7({action:'isbankStatement',waitTurn:true,from:from+'T00:00:00',to:today+'T23:59:59'}),recs=d.records||[],col=bankOnlineColsV7(recs);
+      const d=await waBridgeCallV7({action:'isbankStatement',waitTurn:true,from:from+'T00:00:00',to:today+'T23:59:59'}),recs=bankRealRecsV7(d),col=bankOnlineColsV7(recs);
       if(recs.length&&(!col.date||(!col.amount&&!col.borc&&!col.alacak)))return toast('Bankadan gelen verinin sütunları tanınamadı','err');
       const w=Object.assign({},bankWatchCfgV7(),{accountId:bankId});if(bankIncomingStoreV7(recs,col,recs.map(bankRecKeyV7),w))save();
       const r=bankFeedFromOnlineV7(recs,col,bankId);

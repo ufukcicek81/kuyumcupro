@@ -174,6 +174,17 @@ test('İş Bankası online ekstre: XML hareketleri (etiket ya da özellik biçim
   assert.deepEqual([b.tag, b.records.length, b.records[2].tutar], ['h', 3, '30']);
 });
 
+test('İş Bankası XMLEXBAT: hesap özeti (Tanimlamalar) hareket sayılmaz; 0-1 harekette sahte 2022 kaydı çıkmaz', () => {
+  const tan = '<Tanimlamalar><HesapTuru>Mevduat</HesapTuru><HesapNo>1</HesapNo><SubeKodu>4320</SubeKodu><HesapAcilisTarihi>11/02/2022</HesapAcilisTarihi><SonHareketTarihi>23/11/2026</SonHareketTarihi><Bakiye>100.00</Bakiye></Tanimlamalar>';
+  const doc = (h) => `<?xml version="1.0"?><XMLEXBAT><Tarih>27/11/2026</Tarih><Hesaplar><Hesap>${tan}<Hareketler>${h}</Hareketler></Hesap><Hesap>${tan}<Hareketler></Hareketler></Hesap></Hesaplar></XMLEXBAT>`;
+  assert.deepEqual(k.parseXmlRecords(doc('')).records, []);
+  const one = k.parseXmlRecords(doc('<Hareket><Tarih>27/11/2026</Tarih><HareketSirano>261127101500000001</HareketSirano><Miktar>5000.00</Miktar><Aciklama>ALTIN ÖDEMESİ</Aciklama></Hareket>'));
+  assert.equal(one.tag, 'Hareket');
+  assert.deepEqual(one.records.map((r) => [r.Tarih, r.Miktar]), [['27/11/2026', '5000.00']]);
+  const old = k.parseXmlRecords(`<r>${tan}${tan}</r>`);
+  assert.deepEqual(old.records, []);
+});
+
 test('İş Bankası online ekstre: POST ile uid/pwd/tarih gönderilir; şifresiz, sayfa dönerse ve sık sorguda açık hata', async () => {
   k._isbankReset();
   await assert.rejects(k.isbankStatement({}, {}), /isbankUid/);

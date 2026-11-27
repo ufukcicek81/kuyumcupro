@@ -18,7 +18,7 @@ const ENDPOINTS = {
   live: 'https://einvoiceservice.isnet.net.tr'
 };
 const TEST_VKN = '4810173324';
-const VERSION = '1.9';
+const VERSION = '2.0';
 // WhatsApp modülü yoksa (eski güncelleme) köprü yine çalışsın; yalnız WhatsApp kapalı olur.
 let wa;
 try { wa = require('./whatsapp'); } catch (e) {
@@ -86,6 +86,16 @@ function parseXmlRecords(xml) {
     walk(c);
   });
   walk(root);
+  /* İş Bankası (XMLEXBAT): hareketler <Hareketler> altındadır. Hesap özeti (<Tanimlamalar>: hesap açılış tarihi, şube kodu, bakiye)
+     hareket sayılmamalı: aralıkta 0-1 hareket varken en çok tekrar eden öğe o olur ve eski tarihli sahte "havale" çıkar. */
+  const lists = []; const findLists = (n) => n.children.forEach((c) => { if (/^hareketler$/i.test(c.name)) lists.push(c); findLists(c); });
+  findLists(root);
+  if (lists.length) {
+    const recs = []; let tag = 'Hareket';
+    lists.forEach((l) => l.children.forEach((c) => { if (Object.keys(c.attrs).length + c.children.filter((k) => !k.children.length).length >= 3) { tag = c.name; recs.push(flat(c)); } }));
+    return { tag, records: recs };
+  }
+  for (const k of [...groups.keys()]) if (/^(tanimlamalar|hesap|hesaplar)$/i.test(k) || groups.get(k).some((r) => Object.keys(r).some((f) => /acilis.?tarihi|sonhareket/i.test(f)))) groups.delete(k);
   let best = null;
   for (const [k, v] of groups) if (!best || v.length > best[1].length || (v.length === best[1].length && Object.keys(v[0]).length > Object.keys(best[1][0]).length)) best = [k, v];
   return best ? { tag: best[0], records: best[1] } : { tag: '', records: [] };
