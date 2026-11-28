@@ -5839,10 +5839,10 @@ function stockSummaryView(){
   /* Stok kartı milyem kuralı (kart kaydında ve Veri Kontrol raporunda ortak). */
   function stockCardMilyemErrorV8(c){
     const purity=Number(c.purity||0),fm=Number(c.fixedMilyem||0),zg=Number(c.zGram||0);
-    if(purity>1000)return `Ayar / Saflık ${qty(purity)}: 1000'den büyük olamaz (24 ayar 995, 22 ayar 916, 14 ayar 585).`;
+    if(purity>1000&&!(c.ziynet&&zg>0&&purity/1000<=zg+0.0005))return `Ayar / Saflık ${qty(purity)}: 1000'den büyük olamaz (24 ayar 995, 22 ayar 916, 14 ayar 585).`;
     if(fm>1000&&!(c.ziynet&&zg>0))return `Sabit Milyem ${qty(fm)}: 1000'den büyük olamaz (yalnız ziynet kartında adet başı sabit yazılır, ör. çeyrek 1605).`;
     if(fm>1000&&fm/1000>zg+0.0005)return `Sabit Milyem ${qty(fm)}: adet başına ${qty(fm/1000)} HAS, Z. Gram / Adet (${qty(zg)}) değerinden fazla olamaz.`;
-    if(fm>1000&&Math.abs(zg*916-fm)/fm>0.15)return `Sabit Milyem ${qty(fm)} ile Z. Gram / Adet ${qty(zg)} uyuşmuyor (22 ayar için ${qty(zg*916)} beklenir).`;
+    if(fm>1000&&fm/zg<333)return `Sabit Milyem ${qty(fm)} ile Z. Gram / Adet ${qty(zg)} uyuşmuyor (ayar ${qty(fm/zg)} çıkıyor; 22 ayar için ${qty(zg*916)} beklenir).`;
     return '';
   }
   /* VERİ KONTROL: yalnız okur, hiçbir kaydı değiştirmez. Stok kartları, açık stoklar, barkodlu stoklar ve
@@ -5865,7 +5865,7 @@ function stockSummaryView(){
     });
     (state.stocks||[]).filter(x=>!['Satıldı','Silindi'].includes(x.status)).forEach(x=>{
       const g=stockAmount(x),h=stockHas(x),p=Number(x.purity||0);
-      if(p>1000)add('Barkodlu stok','',x.barcode||x.code,x.name,`Ayar ${qty(p)}: 1000'den büyük olamaz.`);
+      if(p>1000&&!x.ziynet)add('Barkodlu stok','',x.barcode||x.code,x.name,`Ayar ${qty(p)}: 1000'den büyük olamaz.`);
       else if(g>0&&h>g+tol)add('Barkodlu stok','',x.barcode||x.code,x.name,`HAS (${qty(h)}) gramdan (${qty(g)}) fazla.`);
     });
     const cust=id=>((state.customers||[]).find(c=>c.id===id)||{}).name||'';
