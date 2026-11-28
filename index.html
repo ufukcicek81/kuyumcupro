@@ -7943,6 +7943,7 @@ function stockSummaryView(){
     if(outAmount<=0)return {ok:false,msg:isAdet?'İade adedini girin':'İade gramını girin'};
     if(isAdet&&zGram<=0)return {ok:false,msg:`${o.name} kartında Z. Gram / Adet tanımlı değil`};
     if(milyem<=0)return {ok:false,msg:'İade milyemini girin'};
+    if(milyem>1000)return {ok:false,msg:`Milyem 1000'den büyük olamaz (${qty(milyem)} yazılmış). Örn. 24 ayar için 995, 22 ayar için 916 yazın.`};
     if(outAmount>beforeAmount+.000001)return {ok:false,msg:`${o.name} stokta ${qty(beforeAmount)} ${isAdet?'ADET':'GR'} var.`};
     const commercialHas=totalGram*milyem/1000;
     const beforePhysical=Number(o.hasWeight||0),beforeWork=Number(o.workmanshipTotalHas||0);
@@ -8007,6 +8008,7 @@ function stockSummaryView(){
       const o=(state.openStocks||[]).find(x=>x.id===document.getElementById('cmReturnStock')?.value),isAdet=String(o?.unit||'').toUpperCase()==='ADET';
       if(isAdet&&Number(document.getElementById('cmReturnCount')?.value||0)<=0)return {ok:false,msg:'İade adedini girin'};
       if(!isAdet&&Number(document.getElementById('cmReturnGram')?.value||0)<=0)return {ok:false,msg:'İade gramını girin'};
+      if(Number(document.getElementById('cmReturnMilyem')?.value||0)>1000)return {ok:false,msg:'Milyem 1000\'den büyük olamaz. Örn. 24 ayar için 995, 22 ayar için 916 yazın.'};
       if(Number(document.getElementById('cmReturnMilyem')?.value||0)<=0)return {ok:false,msg:'İade milyemini girin'};
       return {ok:true,def};
     }
@@ -8019,6 +8021,7 @@ function stockSummaryView(){
     if(cariMoveIsScrap(def)){
       if(!document.getElementById('cmScrapStock')?.value)return {ok:false,msg:'Hurda stoğunu seçin'};
       if(Number(document.getElementById('cmScrapGram')?.value||0)<=0)return {ok:false,msg:'Hurda gramını girin'};
+      if(Number(document.getElementById('cmScrapMilyem')?.value||0)>1000)return {ok:false,msg:'Milyem 1000\'den büyük olamaz. Örn. 24 ayar için 995, 22 ayar için 916 yazın.'};
       if(Number(document.getElementById('cmScrapMilyem')?.value||0)<=0)return {ok:false,msg:'Milyem girin'};
       return {ok:true,def};
     }
@@ -8179,7 +8182,7 @@ function stockSummaryView(){
         <div class="labelled" id="cmReturnCountWrap"><label>Adet</label><input id="cmReturnCount" class="input" type="number" min="0" step="1" value="1"></div>
         <div class="labelled"><label>Toplam Gram</label><input id="cmReturnGram" class="input" type="number" min="0" step="0.001" value="0"></div>
         <div class="labelled" id="cmReturnZGramWrap"><label>Z. Gram / Adet</label><input id="cmReturnZGram" class="input" readonly></div>
-        <div class="labelled"><label>Milyem</label><input id="cmReturnMilyem" class="input" type="number" min="0" step="0.1" placeholder="Örn. 995"></div>
+        <div class="labelled"><label>Milyem</label><input id="cmReturnMilyem" class="input" type="number" min="0" max="1000" step="0.1" placeholder="Örn. 995"></div>
         <div class="labelled"><label>Hesaplanan HAS</label><input id="cmReturnHas" class="input" readonly></div>
         <div class="labelled span-2"><label>Stok Durumu</label><input id="cmReturnAvailable" class="input" readonly></div>
       </div></div>
@@ -8193,7 +8196,7 @@ function stockSummaryView(){
       <div class="span-4" id="cmScrapWrap" style="display:none"><div class="form-grid">
         <div class="labelled span-2"><label>Hurda Stok</label><select id="cmScrapStock" class="select"></select></div>
         <div class="labelled"><label>Miktar (GR)</label><input id="cmScrapGram" class="input" type="number" step="0.001" min="0"></div>
-        <div class="labelled"><label>Milyem</label><input id="cmScrapMilyem" class="input" type="number" step="0.1" min="0" placeholder="Örn. 575"></div>
+        <div class="labelled"><label>Milyem</label><input id="cmScrapMilyem" class="input" type="number" step="0.1" min="0" max="1000" placeholder="Örn. 575"></div>
         <div class="labelled span-2"><label>Hesaplanan HAS</label><input id="cmScrapHas" class="input" readonly></div>
         <div class="labelled span-2"><label>Stok Durumu</label><input id="cmScrapAvailable" class="input" readonly></div>
       </div></div>
