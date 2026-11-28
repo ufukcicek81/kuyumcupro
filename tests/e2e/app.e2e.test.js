@@ -1990,6 +1990,34 @@ test('satıştan açılan fatura taslağına bankadan gelen havalenin TC si ve o
   await p.context().close();
 });
 
+test('veri kontrol raporu: temiz veride hata yok; 1000 üstü milyemli cari iade ve hatalı stok kartı listelenir, veri değişmez', async () => {
+  const fb = createFakeFirebase();
+  let p = await newDevice(browser, appUrl, fb);
+  await p.waitForTimeout(1500);
+  const open = async () => {
+    await p.evaluate(() => document.querySelector('[data-route="reports"],[data-go="reports"]').click());
+    await p.click('[data-pusula-report="data_check"]'); await p.waitForTimeout(500);
+    return p.evaluate(() => document.getElementById('prResult').innerText);
+  };
+  let txt = await open();
+  assert.match(txt, /Hatalı milyem \/ HAS girişi bulunamadı/, txt.slice(0, 400));
+  await p.context().close();
+  const st = fb.db.state, now = new Date().toISOString();
+  st.customers = [...(st.customers || []), { id: 'C-DC', name: 'DENEME CARİ', type: 'Müşteri' }];
+  st.customerMoves = [{ id: 'CM-DC', customerId: 'C-DC', period: st.activePeriod, date: now, code: 'CI', type: 'CI - ÇIKAN İADE', unit: 'HAS', debit: 99.5, credit: 0, sourceType: 'cariReturnOut', sourceDocNo: 'CI-9001', sourceUnit: 'ADET', sourceAmount: 1, sourceRate: 9950, returnOutImpact: { unit: 'ADET', amount: 1, count: 1, gram: 10, zGram: 10, milyem: 9950, commercialHas: 99.5 } }, ...(st.customerMoves || [])];
+  st.stockCardsMaster = [...(st.stockCardsMaster || []), { id: 'SC-DC', productCode: 'DC1', productDefinition: 'HATALI KART', purity: '9160', fixedMilyem: 9160, ziynet: false }];
+  fb.db.state = st;
+  p = await newDevice(browser, appUrl, fb);
+  txt = await open();
+  assert.match(txt, /CI-9001/); assert.match(txt, /99,5 HAS/); assert.match(txt, /DENEME CARİ/);
+  assert.match(txt, /HATALI KART/);
+  await p.waitForTimeout(800);
+  const after = fb.db.state;
+  assert.equal(after.customerMoves.find((m) => m.id === 'CM-DC').debit, 99.5, 'rapor veriyi değiştirmemeli');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
 test('gider pusulası: hurda alışından düzenlenir, numara sırayla gider, iptal numarayı boşaltmaz', async () => {
   const fb = createFakeFirebase();
   let p = await newDevice(browser, appUrl, fb);
@@ -2976,6 +3004,36 @@ test('satış geçmişi: "Maliyeti yeniden hesapla" geçmiş fişin barkodsuz sa
   assert.ok(Math.abs(l2.costHas - want) < 0.001, `satır maliyeti ${l2.costHas} ≈ ${want}`);
   assert.ok(Math.abs(s2.costHas - (oldSale + (want - oldLine))) < 0.001, 'fiş maliyeti güncellenmeli');
   assert.ok(Math.abs(s2.profitHas - (Number(sale.profitHas) - (want - oldLine))) < 0.001, 'kâr düşmeli');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
+test('cari çıkan iade: adetli üründe Pusula gibi adet başı sabit milyem (10 gr külçe 9950 → 9,95 HAS); gramlıda 1000 üstü reddedilir', async () => {
+  const fb = createFakeFirebase();
+  let p = await newDevice(browser, appUrl, fb);
+  await p.waitForTimeout(1500);
+  const st = fb.db.state;
+  st.stockCardsMaster = [...(st.stockCardsMaster || []), { id: 'SC-K10', productCode: 'K10', code: 'K10', productDefinition: 'TEST 24 AYAR 10 GRAM KÜLÇE', name: 'TEST 24 AYAR 10 GRAM KÜLÇE', ziynet: true, zGram: 10, fixedMilyem: 9950, purity: '995', karat: '995', unit12: 'AD' }];
+  st.openStocks = [...(st.openStocks || []), { id: 'OPEN-K10', period: st.activePeriod, stockCardId: 'SC-K10', name: 'TEST 24 AYAR 10 GRAM KÜLÇE', productCode: 'K10', unit: 'ADET', amount: 2, count: 2, zGram: 10, hasWeight: 19.9, purity: 995, displayAyar: 9950, inventoryUnitCostHas: 9.95 }];
+  fb.db.state = st; await p.context().close();
+  p = await newDevice(browser, appUrl, fb);
+  await p.evaluate(() => document.querySelector('[data-route="customers"],[data-go="customers"]').click());
+  await p.waitForTimeout(400);
+  await p.evaluate(() => document.querySelector('[data-cari-move]').click());
+  await p.waitForSelector('#cmType');
+  await p.selectOption('#cmType', 'CI'); await p.waitForTimeout(200);
+  await p.selectOption('#cmReturnStock', 'OPEN-K10'); await p.waitForTimeout(200);
+  await p.fill('#cmReturnCount', '1');
+  await p.$eval('#cmReturnMilyem', (e) => { e.value = '9950'; e.dispatchEvent(new Event('input', { bubbles: true })); });
+  await p.waitForTimeout(200);
+  assert.match(await p.inputValue('#cmReturnHas'), /^9,95/);
+  await p.click('#modalConfirm');
+  await p.waitForSelector('#cariSummarySave');
+  await p.click('#cariSummarySave');
+  const find = () => (fb.db.state.customerMoves || []).find((m) => m.code === 'CI' && m.sourceDocNo);
+  for (let i = 0; i < 60 && !find(); i++) await p.waitForTimeout(250);
+  assert.ok(find(), 'CI hareketi kaydedilmeli');
+  assert.ok(Math.abs(Number(find().debit) - 9.95) < 0.001, 'debit ' + find().debit);
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
