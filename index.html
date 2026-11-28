@@ -5836,6 +5836,59 @@ function stockSummaryView(){
     return 'DİĞER';
   }
   function primRateForV7(name,group){const c=primSettingsV7()[name]||{},g=c.groups&&c.groups[group];const v=g!==undefined&&g!==null&&g!==''?Number(g):Number(c.rate||0);return v>0?v:0;}
+  /* Stok kartı milyem kuralı (kart kaydında ve Veri Kontrol raporunda ortak). */
+  function stockCardMilyemErrorV8(c){
+    const purity=Number(c.purity||0),fm=Number(c.fixedMilyem||0),zg=Number(c.zGram||0);
+    if(purity>1000)return `Ayar / Saflık ${qty(purity)}: 1000'den büyük olamaz (24 ayar 995, 22 ayar 916, 14 ayar 585).`;
+    if(fm>1000&&!(c.ziynet&&zg>0))return `Sabit Milyem ${qty(fm)}: 1000'den büyük olamaz (yalnız ziynet kartında adet başı sabit yazılır, ör. çeyrek 1605).`;
+    if(fm>1000&&fm/1000>zg+0.0005)return `Sabit Milyem ${qty(fm)}: adet başına ${qty(fm/1000)} HAS, Z. Gram / Adet (${qty(zg)}) değerinden fazla olamaz.`;
+    if(fm>1000&&Math.abs(zg*916-fm)/fm>0.15)return `Sabit Milyem ${qty(fm)} ile Z. Gram / Adet ${qty(zg)} uyuşmuyor (22 ayar için ${qty(zg*916)} beklenir).`;
+    return '';
+  }
+  /* VERİ KONTROL: yalnız okur, hiçbir kaydı değiştirmez. Stok kartları, açık stoklar, barkodlu stoklar ve
+     cari altın / hurda / iade hareketlerinde imkânsız ya da şüpheli milyem / HAS değerlerini listeler. */
+  function dataCheckReportV8(){
+    const out=[],add=(kind,date,ref,name,problem)=>out.push({kind,date:date||'',ref:ref||'',name:name||'',problem});
+    const tol=0.0005;
+    (state.stockCardsMaster||[]).forEach(c=>{
+      const err=stockCardMilyemErrorV8({purity:c.purity||c.karat,fixedMilyem:c.fixedMilyem,ziynet:c.ziynet,zGram:c.zGram});
+      if(err)add('Stok kartı','',c.productCode||c.code,c.productDefinition||c.name,err);
+      if(c.ziynet&&!(Number(c.zGram||0)>0))add('Stok kartı','',c.productCode||c.code,c.productDefinition||c.name,'Ziynet kartında Z. Gram / Adet tanımlı değil.');
+    });
+    (state.openStocks||[]).filter(o=>o.period===state.activePeriod).forEach(o=>{
+      const amt=Number(o.amount||0),has=Number(o.hasWeight||0),adet=String(o.unit||'').toUpperCase()==='ADET',zg=Number(o.zGram||0),gram=adet?amt*zg:amt;
+      if(amt<-tol)add('Açık stok','',o.productCode,o.name,`Miktar eksi: ${qty(amt)} ${adet?'ADET':'GR'}.`);
+      if(has<-tol)add('Açık stok','',o.productCode,o.name,`HAS eksi: ${qty(has)}.`);
+      if(!adet&&Number(o.displayAyar||0)>1000)add('Açık stok','',o.productCode,o.name,`Ayar ${qty(o.displayAyar)}: 1000'den büyük olamaz.`);
+      if(gram>0&&has>gram+tol)add('Açık stok','',o.productCode,o.name,`HAS (${qty(has)}) gramdan (${qty(gram)}) fazla: milyem 1000'i geçmiş gibi.`);
+      if(adet&&amt>0&&!(zg>0))add('Açık stok','',o.productCode,o.name,'Adetli stokta Z. Gram / Adet yok.');
+    });
+    (state.stocks||[]).filter(x=>!['Satıldı','Silindi'].includes(x.status)).forEach(x=>{
+      const g=stockAmount(x),h=stockHas(x),p=Number(x.purity||0);
+      if(p>1000)add('Barkodlu stok','',x.barcode||x.code,x.name,`Ayar ${qty(p)}: 1000'den büyük olamaz.`);
+      else if(g>0&&h>g+tol)add('Barkodlu stok','',x.barcode||x.code,x.name,`HAS (${qty(h)}) gramdan (${qty(g)}) fazla.`);
+    });
+    const cust=id=>((state.customers||[]).find(c=>c.id===id)||{}).name||'';
+    (state.customerMoves||[]).forEach(m=>{
+      const imp=m.goldImpact||m.returnOutImpact||m.scrapImpact;if(!imp)return;
+      const gram=Number(imp.gram||0),mil=Number(imp.milyem||m.sourceRate||0),has=Number(m.goldImpact?imp.materialHas:imp.commercialHas)||0;
+      const who=cust(m.customerId),tag=`${m.type||m.code||''}`;
+      if((m.scrapImpact||m.returnOutImpact||(m.goldImpact&&!imp.ziynet))&&mil>1000)add('Cari hareket',m.date,m.sourceDocNo,who,`${tag}: milyem ${qty(mil)} yazılmış (1000'den büyük olamaz). Cariye ${qty(has)} HAS işlenmiş; doğrusu büyük ihtimalle ${qty(has/10)} HAS.`);
+      else if(gram>0&&has>gram+tol)add('Cari hareket',m.date,m.sourceDocNo,who,`${tag}: ${qty(gram)} gram için ${qty(has)} HAS işlenmiş (HAS gramdan fazla olamaz).`);
+    });
+    (state.tradeMoves||[]).forEach(t=>{
+      if(['cariGold','cariReturnOut','cariScrap'].includes(t.sourceType))return;
+      const q=Number(t.quantity||0),h=Number(t.totalHas||0),mil=Number(t.milyem||0);
+      if(String(t.unit||'').toUpperCase()==='GR'&&mil>1000)add('Alış / satış',t.date,t.docNo,t.customer||t.item,`${t.tradeType||''} ${t.item||''}: milyem ${qty(mil)} (1000'den büyük olamaz).`);
+      else if(String(t.unit||'').toUpperCase()==='GR'&&q>0&&h>q+tol)add('Alış / satış',t.date,t.docNo,t.customer||t.item,`${t.tradeType||''} ${t.item||''}: ${qty(q)} gram için ${qty(h)} HAS.`);
+    });
+    out.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+    const head=['Kaynak','Tarih','Belge / Kod','Kart / Cari','Sorun'];
+    const body=out.map(r=>[esc(r.kind),r.date?trDate(r.date):'—',esc(r.ref||'—'),esc(r.name||'—'),`<span style="color:#c0262d;font-weight:600">${esc(r.problem)}</span>`]);
+    const note=`<div class="notice" style="margin-bottom:10px">Bu rapor <b>yalnız okur</b>, hiçbir kaydı değiştirmez. Listelenen kayıtları kontrol edip gerekirse ilgili ekrandan siz düzeltin (cari hareketi: ekstrede satıra tıklayıp sil → doğru değerle yeniden girin; stok kartı: Tanımlamalar → Stok Kartı).</div>`;
+    const ok=`<div class="notice" style="border-color:#16803c;color:#16803c;font-weight:700">✓ Hatalı milyem / HAS girişi bulunamadı. (${(state.stockCardsMaster||[]).length} stok kartı, ${(state.openStocks||[]).filter(o=>o.period===state.activePeriod).length} açık stok, ${(state.customerMoves||[]).length} cari hareket tarandı.)</div>`;
+    return {title:'Veri Kontrol (Hatalı Giriş Taraması)',html:note+(out.length?`<div style="margin-bottom:8px;font-weight:700;color:#c0262d">${out.length} şüpheli kayıt bulundu.</div>${v660SimpleTable(head,body)}`:ok),csv:[head,...out.map(r=>[r.kind,r.date,r.ref,r.name,r.problem])]};
+  }
   function personnelSalesReportV7(rows){
     const cfg=primSettingsV7(),map=new Map();
     const blank=n=>({name:n,docs:new Set(),lines:0,saleTl:0,costTl:0,profitTl:0,saleHas:0,profitHas:0,groups:{}});
@@ -5870,6 +5923,7 @@ function stockSummaryView(){
   function v660Report(type,from,to,extra=''){
     const rows=v660Sales(from,to);
     if(type==='personnel_sales')return personnelSalesReportV7(rows);
+    if(type==='data_check')return dataCheckReportV8();
     if(type==='sales_general'||type==='general_sales'||type==='sales_profit'){
       const U=srvU(),byDoc=new Map(); rows.forEach(r=>{const x=byDoc.get(r.saleId)||{date:r.date,doc:r.docNo,customer:r.customer,person:r.salesperson,cost:0,sale:0,profit:0};x.cost+=Number(r[srvF('cost')]||0);x.sale+=Number(r[srvF('sale')]||0);x.profit+=Number(r[srvF('profit')]||0);byDoc.set(r.saleId,x);});
       const a=[...byDoc.values()],sale=a.reduce((s,x)=>s+x.sale,0),cost=a.reduce((s,x)=>s+x.cost,0),profit=sale-cost,head=['Tarih','Fiş','Müşteri','Personel',`Maliyet ${U}`,`Satış ${U}`,`Kâr ${U}`];
@@ -5952,7 +6006,7 @@ function stockSummaryView(){
       ['sales_general','SATIŞ RAPORU GENEL'],['sales_detail','SATIŞ RAPORU DETAY'],['sales_summary','SATIŞ RAPORU ÖZET'],['balance_list','BAKİYE LİSTESİ'],['balance_sheet','BİLANÇO'],['transaction','İŞLEM RAPORU'],
       ['daily_inout','GÜNLÜK GİRİŞ ÇIKIŞ RAPORU'],['product_analysis','ÜRÜN SATIŞ ANALİZİ'],['account_statement','HESAP EKSTRESİ'],['fx','DÖVİZ ALIŞ SATIŞ RAPORU'],['cash','KASA RAPORU'],['sales_karat','SATIŞ RAPORU AYAR'],
       ['expense','GİDER RAPORU'],['cash_inout','NAKİT GİRİŞ ÇIKIŞ RAPORU'],['sales_producer','SATIŞ RAPORU ÜRETİCİYE GÖRE'],['sales_profit','SATIŞ KÂR RAPORU'],['expense_yearly','GİDER RAPORU YILLIK'],
-      ['gold_sales','ALTIN SATIŞ RAPORU'],['sales_day','SATIŞ GÜN RAPORU'],['patron','PATRON RAPORU'],['general_sales','GENEL SATIŞ RAPORU'],['special','PUSULA ÖZEL RAPORLAR'],['open_position','AÇIK POZİSYON'],['personnel_sales','PERSONEL SATIŞ VE PRİM RAPORU']
+      ['gold_sales','ALTIN SATIŞ RAPORU'],['sales_day','SATIŞ GÜN RAPORU'],['patron','PATRON RAPORU'],['general_sales','GENEL SATIŞ RAPORU'],['special','PUSULA ÖZEL RAPORLAR'],['open_position','AÇIK POZİSYON'],['personnel_sales','PERSONEL SATIŞ VE PRİM RAPORU'],['data_check','VERİ KONTROL (HATALI GİRİŞ TARAMASI)']
     ];
     return `<div class="page-title"><div><h1>Raporlar</h1><p>Pusula düzenindeki raporlar. Taş raporları bu menüye eklenmedi.</p></div></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px">
@@ -7499,6 +7553,7 @@ function stockSummaryView(){
       const g=id=>document.getElementById(id), num=id=>Number(g(id).value||0), bool=id=>g(id).checked;
       const productCode=g('scProductCode').value.trim(), productDefinition=g('scProductDefinition').value.trim(); if(!productCode||!productDefinition)return toast('Ürün kodu ve ürün tanımı zorunlu','err'); const dupCard=(!existing||productCode!==String(existing.productCode||existing.code||'').trim())&&(state.stockCardsMaster||[]).find(x=>x.id!==existing?.id&&[x.productCode,x.pusulaCode,x.code].map(y=>String(y||'').trim()).includes(productCode)); if(dupCard)return toast(`${productCode} kodu zaten "${dupCard.productDefinition||dupCard.name}" kartında kullanılıyor. Önerilen kod: ${nextStockCardCodeV7()}`,'err');
       const productGroup=g('scProductGroup').value, fixedMilyem=num('scFixedMilyem'), purity=num('scPurity')||fixedMilyem;
+      {const err=stockCardMilyemErrorV8({purity,fixedMilyem,ziynet:bool('scZiynet'),zGram:num('scZGram')});if(err)return toast(err,'err');}
       const c=existing||{id:uid('SC')}; Object.assign(c,{productGroup,productCode,productDefinition,stockTrackingUnit:g('scStockUnit').value,workmanshipTrackingUnit:g('scWorkUnit').value,unit12:g('scUnit12').value,fixedMilyem,fixedPrice:num('scFixedPrice'),canChangePurity:bool('scCanChange'),ziynet:bool('scZiynet'),workmanshipIncluded:bool('scWorkIncluded'),countedTracking:bool('scCounted'),hideFromSale:bool('scHideSale'),showGoldPrice:bool('scShowGold'),formula:g('scFormula').value,internetName:g('scInternetName').value,ftWorkmanshipMin:num('scFtMin'),ftWorkmanshipMax:num('scFtMax'),ftDescription:g('scFtDesc').value,zGram:num('scZGram'),minPrice:num('scMinPrice'),maxPrice:num('scMaxPrice'),kHasWorkMin:num('scKHasMin'),kHasWorkMax:num('scKHasMax')});
       c.pusulaCode=productCode; c.code=productCode; c.name=productDefinition; c.productType=productGroup==='ALTIN'?'Altın Mamul':(productGroup==='ZİYNET'?'Ziynet':productGroup.charAt(0)+productGroup.slice(1).toLowerCase()); c.group=productGroup; c.category=productDefinition; c.subCategory=''; c.karat=String(purity); c.purity=String(purity); c.unit=c.unit12==='GR'?'Gram':(c.unit12==='AD'?'Adet':c.unit12); c.workmanshipType=c.workmanshipTrackingUnit;
       if(!existing)state.stockCardsMaster.push(c); audit(`${productDefinition} stok kartı ${existing?'güncellendi':'tanımlandı'}`,'Tanımlamalar'); closeModal(); save(); stockView='cards'; render();
@@ -7782,6 +7837,8 @@ function stockSummaryView(){
     if(amount<=0||milyem<=0)return {ok:false,msg:isZiynet?'Adet ve sabit milyem girin':'Miktar ve milyem girin'};
     // Ziynette milyem normalde ADET başına sabittir (çeyrek 1605). 1000 ve altı yazılırsa (ör. 916) ayar kabul edilir:
     // HAS = adet × Z.gram × ayar / 1000 (3 çeyrek × 1,75 × 916 = 4,809). Önceden 3 × 916 / 1000 = 2,748 çıkıyordu.
+    if(!isZiynet&&milyem>1000)return {ok:false,msg:`Milyem 1000'den büyük olamaz (${qty(milyem)} yazılmış). Örn. 24 ayar için 995, 22 ayar için 916 yazın.`};
+    if(isZiynet&&milyem>1000&&milyem/1000>Number(card.zGram||0)+0.0005)return {ok:false,msg:`Sabit milyem ${qty(milyem)}: adet başına ${qty(milyem/1000)} HAS, ürünün ${qty(card.zGram)} gramından fazla olamaz. Çeyrek için 1605 ya da ayar (916) yazın.`};
     const ayarMode=isZiynet&&milyem<=1000&&Number(card.zGram||0)>1;
     if(ayarMode){const fm=Number(card.fixedMilyem||0),zg=Number(card.zGram||0);if(fm>1000&&Math.abs(zg*916-fm)/fm>0.15)return {ok:false,msg:`${card.productDefinition||card.name} kartında Z. Gram / Adet (${qty(zg)}) sabit milyemle (${fm}) uyuşmuyor. Kartı düzeltin ya da Ayar / Milyem kutusuna ${fm} yazın.`};}
     const materialHas=isZiynet?(ayarMode?amount*milyem/1000:count*milyem/1000):(amount*milyem/1000);

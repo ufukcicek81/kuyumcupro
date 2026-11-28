@@ -1990,6 +1990,34 @@ test('satıştan açılan fatura taslağına bankadan gelen havalenin TC si ve o
   await p.context().close();
 });
 
+test('veri kontrol raporu: temiz veride hata yok; 1000 üstü milyemli cari iade ve hatalı stok kartı listelenir, veri değişmez', async () => {
+  const fb = createFakeFirebase();
+  let p = await newDevice(browser, appUrl, fb);
+  await p.waitForTimeout(1500);
+  const open = async () => {
+    await p.evaluate(() => document.querySelector('[data-route="reports"],[data-go="reports"]').click());
+    await p.click('[data-pusula-report="data_check"]'); await p.waitForTimeout(500);
+    return p.evaluate(() => document.getElementById('prResult').innerText);
+  };
+  let txt = await open();
+  assert.match(txt, /Hatalı milyem \/ HAS girişi bulunamadı/, txt.slice(0, 400));
+  await p.context().close();
+  const st = fb.db.state, now = new Date().toISOString();
+  st.customers = [...(st.customers || []), { id: 'C-DC', name: 'DENEME CARİ', type: 'Müşteri' }];
+  st.customerMoves = [{ id: 'CM-DC', customerId: 'C-DC', period: st.activePeriod, date: now, code: 'CI', type: 'CI - ÇIKAN İADE', unit: 'HAS', debit: 99.5, credit: 0, sourceType: 'cariReturnOut', sourceDocNo: 'CI-9001', sourceUnit: 'ADET', sourceAmount: 1, sourceRate: 9950, returnOutImpact: { unit: 'ADET', amount: 1, count: 1, gram: 10, zGram: 10, milyem: 9950, commercialHas: 99.5 } }, ...(st.customerMoves || [])];
+  st.stockCardsMaster = [...(st.stockCardsMaster || []), { id: 'SC-DC', productCode: 'DC1', productDefinition: 'HATALI KART', purity: '9160', fixedMilyem: 9160, ziynet: false }];
+  fb.db.state = st;
+  p = await newDevice(browser, appUrl, fb);
+  txt = await open();
+  assert.match(txt, /CI-9001/); assert.match(txt, /milyem 9\.950/i); assert.match(txt, /DENEME CARİ/);
+  assert.match(txt, /HATALI KART/);
+  await p.waitForTimeout(800);
+  const after = fb.db.state;
+  assert.equal(after.customerMoves.find((m) => m.id === 'CM-DC').debit, 99.5, 'rapor veriyi değiştirmemeli');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
 test('gider pusulası: hurda alışından düzenlenir, numara sırayla gider, iptal numarayı boşaltmaz', async () => {
   const fb = createFakeFirebase();
   let p = await newDevice(browser, appUrl, fb);
