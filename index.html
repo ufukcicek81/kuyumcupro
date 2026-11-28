@@ -5873,7 +5873,7 @@ function stockSummaryView(){
       const imp=m.goldImpact||m.returnOutImpact||m.scrapImpact;if(!imp)return;
       const gram=Number(imp.gram||0),mil=Number(imp.milyem||m.sourceRate||0),has=Number(m.goldImpact?imp.materialHas:imp.commercialHas)||0;
       const who=cust(m.customerId),tag=`${m.type||m.code||''}`;
-      if((m.scrapImpact||m.returnOutImpact||(m.goldImpact&&!imp.ziynet))&&mil>1000)add('Cari hareket',m.date,m.sourceDocNo,who,`${tag}: milyem ${qty(mil)} yazılmış (1000'den büyük olamaz). Cariye ${qty(has)} HAS işlenmiş; doğrusu büyük ihtimalle ${qty(has/10)} HAS.`);
+      if((m.scrapImpact||(m.returnOutImpact&&String(imp.unit||'').toUpperCase()!=='ADET')||(m.goldImpact&&!imp.ziynet))&&mil>1000)add('Cari hareket',m.date,m.sourceDocNo,who,`${tag}: milyem ${qty(mil)} yazılmış (1000'den büyük olamaz). Cariye ${qty(has)} HAS işlenmiş; doğrusu büyük ihtimalle ${qty(has/10)} HAS.`);
       else if(gram>0&&has>gram+tol)add('Cari hareket',m.date,m.sourceDocNo,who,`${tag}: ${qty(gram)} gram için ${qty(has)} HAS işlenmiş (HAS gramdan fazla olamaz).`);
     });
     (state.tradeMoves||[]).forEach(t=>{
@@ -7989,6 +7989,15 @@ function stockSummaryView(){
     const tx=(state.transactions||[]).find(x=>x.docNo===move.sourceDocNo);if(tx){tx.status='Ters Kayıt';tx.reversedAt=now();tx.reversedBy=session?.name||'Sistem';}
     return 1;
   }
+  /* Çıkan İade milyemi: gramlı üründe ayar (en çok 1000). Adetli üründe Pusula gibi adet başı sabit de yazılabilir
+     (çeyrek 1605, 10 gr külçe 9950 → adet başı 9,95 HAS); 1000 ve altı yazılırsa ayar sayılır (adet × gram × ayar). */
+  function returnOutHasV8(isAdet,count,totalGram,milyem){return isAdet&&milyem>1000?Number(count||0)*milyem/1000:Number(totalGram||0)*milyem/1000;}
+  function returnOutMilyemErrorV8(isAdet,zGram,milyem){
+    if(!(milyem>1000))return '';
+    if(!isAdet)return `Milyem 1000'den büyük olamaz (${qty(milyem)} yazılmış). Örn. 24 ayar için 995, 22 ayar için 916 yazın.`;
+    if(milyem/1000>Number(zGram||0)+0.0005)return `Sabit milyem ${qty(milyem)}: adet başına ${qty(milyem/1000)} HAS, ürünün ${qty(zGram)} gramından fazla olamaz.`;
+    return '';
+  }
   function cariMoveIsReturnOut(def){ return String(def?.code||'')==='CI'; }
   function createCariReturnOutMove({customer,stockId,count,gram,milyem,description,date}){
     const o=(state.openStocks||[]).find(x=>x.id===stockId&&x.period===state.activePeriod);
@@ -8000,9 +8009,9 @@ function stockSummaryView(){
     if(outAmount<=0)return {ok:false,msg:isAdet?'İade adedini girin':'İade gramını girin'};
     if(isAdet&&zGram<=0)return {ok:false,msg:`${o.name} kartında Z. Gram / Adet tanımlı değil`};
     if(milyem<=0)return {ok:false,msg:'İade milyemini girin'};
-    if(milyem>1000)return {ok:false,msg:`Milyem 1000'den büyük olamaz (${qty(milyem)} yazılmış). Örn. 24 ayar için 995, 22 ayar için 916 yazın.`};
+    {const err=returnOutMilyemErrorV8(isAdet,zGram,milyem);if(err)return {ok:false,msg:err};}
     if(outAmount>beforeAmount+.000001)return {ok:false,msg:`${o.name} stokta ${qty(beforeAmount)} ${isAdet?'ADET':'GR'} var.`};
-    const commercialHas=totalGram*milyem/1000;
+    const commercialHas=returnOutHasV8(isAdet,count,totalGram,milyem);
     const beforePhysical=Number(o.hasWeight||0),beforeWork=Number(o.workmanshipTotalHas||0);
     const unitCost=Number(o.inventoryUnitCostHas||o.openingUnitCostHas||(beforeAmount>0?(beforePhysical+beforeWork)/beforeAmount:0));
     const ratio=beforeAmount>0?outAmount/beforeAmount:0;
@@ -8014,8 +8023,8 @@ function stockSummaryView(){
     if(o.amount<=.000001){o.amount=0;if(isAdet)o.count=0;o.hasWeight=0;o.workmanshipTotalHas=0;o.inventoryUnitCostHas=0;o.averageWorkmanship=0;}
     else{o.inventoryUnitCostHas=unitCost;o.averageWorkmanship=Number(o.workmanshipTotalHas||0)/o.amount;}
     const docNo=nextCariDocNo('CI');
-    const qtyText=isAdet?`${qty(count)} ADET × ${qty(zGram)} GR = ${qty(totalGram)} GR`:`${qty(gram)} GR`;
-    const move={id:uid('CM'),customerId:customer.id,period:state.activePeriod,date,code:'CI',type:'CI - ÇIKAN İADE',unit:'HAS',debit:commercialHas,credit:0,description:`${o.name} · ${qtyText} × ${qty(milyem)} / 1000 = ${qty(commercialHas)} HAS${description?' · '+description:''}`,user:session.name,userDescription:description||'',sourceType:'cariReturnOut',sourceDocNo:docNo,sourceUnit:isAdet?'ADET':'GR',sourceAmount:outAmount,sourceRate:milyem,counterEnabled:true,counterUnit:'HAS',counterAmount:commercialHas,counterRate:1,returnOutImpact:{openStockId:o.id,unit:isAdet?'ADET':'GR',amount:outAmount,count:isAdet?count:0,gram:totalGram,zGram,milyem,commercialHas,physicalHas,workmanshipHas,costHas,differenceHas,unitCostBefore:unitCost}};
+    const qtyText=isAdet?`${qty(count)} ADET × ${qty(zGram)} GR = ${qty(totalGram)} GR`:`${qty(gram)} GR`;const perAdet=isAdet&&milyem>1000;
+    const move={id:uid('CM'),customerId:customer.id,period:state.activePeriod,date,code:'CI',type:'CI - ÇIKAN İADE',unit:'HAS',debit:commercialHas,credit:0,description:`${o.name} · ${perAdet?`${qty(count)} ADET × ${qty(milyem)} (adet başı sabit)`:`${qtyText} × ${qty(milyem)}`} / 1000 = ${qty(commercialHas)} HAS${description?' · '+description:''}`,user:session.name,userDescription:description||'',sourceType:'cariReturnOut',sourceDocNo:docNo,sourceUnit:isAdet?'ADET':'GR',sourceAmount:outAmount,sourceRate:milyem,counterEnabled:true,counterUnit:'HAS',counterAmount:commercialHas,counterRate:1,returnOutImpact:{openStockId:o.id,unit:isAdet?'ADET':'GR',amount:outAmount,count:isAdet?count:0,gram:totalGram,zGram,milyem,commercialHas,physicalHas,workmanshipHas,costHas,differenceHas,unitCostBefore:unitCost}};
     applyCariBalance(customer,'HAS',commercialHas,0);state.customerMoves.unshift(move);
     state.stockMoves.unshift({id:uid('SM'),period:state.activePeriod,date,stockId:o.id,code:o.productCode||o.name,type:'CI - ÇIKAN İADE',from:'Açık Stok',to:customer.name,description:move.description,sourceType:'cariReturnOut',sourceId:move.id,sourceDocNo:docNo,user:session.name});
     state.tradeMoves.unshift({id:uid('TRD'),docNo,period:state.activePeriod,date,tradeType:'CI - ÇIKAN İADE',side:'Çıkış',item:o.name,itemCode:o.id,quantity:outAmount,unit:isAdet?'ADET':'GR',milyem,totalHas:commercialHas,costHas,profitHas:differenceHas,customerId:customer.id,customer:customer.name,description:move.description,user:session.name,userDescription:description||'',sourceType:'cariReturnOut',sourceId:move.id});
@@ -8065,7 +8074,7 @@ function stockSummaryView(){
       const o=(state.openStocks||[]).find(x=>x.id===document.getElementById('cmReturnStock')?.value),isAdet=String(o?.unit||'').toUpperCase()==='ADET';
       if(isAdet&&Number(document.getElementById('cmReturnCount')?.value||0)<=0)return {ok:false,msg:'İade adedini girin'};
       if(!isAdet&&Number(document.getElementById('cmReturnGram')?.value||0)<=0)return {ok:false,msg:'İade gramını girin'};
-      if(Number(document.getElementById('cmReturnMilyem')?.value||0)>1000)return {ok:false,msg:'Milyem 1000\'den büyük olamaz. Örn. 24 ayar için 995, 22 ayar için 916 yazın.'};
+      {const err=returnOutMilyemErrorV8(isAdet,Number(o?.zGram||0),Number(document.getElementById('cmReturnMilyem')?.value||0));if(err)return {ok:false,msg:err};}
       if(Number(document.getElementById('cmReturnMilyem')?.value||0)<=0)return {ok:false,msg:'İade milyemini girin'};
       return {ok:true,def};
     }
@@ -8239,7 +8248,7 @@ function stockSummaryView(){
         <div class="labelled" id="cmReturnCountWrap"><label>Adet</label><input id="cmReturnCount" class="input" type="number" min="0" step="1" value="1"></div>
         <div class="labelled"><label>Toplam Gram</label><input id="cmReturnGram" class="input" type="number" min="0" step="0.001" value="0"></div>
         <div class="labelled" id="cmReturnZGramWrap"><label>Z. Gram / Adet</label><input id="cmReturnZGram" class="input" readonly></div>
-        <div class="labelled"><label>Milyem</label><input id="cmReturnMilyem" class="input" type="number" min="0" max="1000" step="0.1" placeholder="Örn. 995"></div>
+        <div class="labelled"><label>Milyem</label><input id="cmReturnMilyem" class="input" type="number" min="0" step="0.1" placeholder="Örn. 995"></div>
         <div class="labelled"><label>Hesaplanan HAS</label><input id="cmReturnHas" class="input" readonly></div>
         <div class="labelled span-2"><label>Stok Durumu</label><input id="cmReturnAvailable" class="input" readonly></div>
       </div></div>
@@ -8405,7 +8414,7 @@ function stockSummaryView(){
       if(resetQty){returnCount.value=isAdet?'1':'0';returnGram.value=isAdet?String(zg||0):'';}
       if(resetMilyem||!Number(returnMilyem.value||0)){const card=getStockCard(o.stockCardId);returnMilyem.value=String(Number(o.purity||card?.purity||card?.karat||0));}
       const n=Math.max(0,Number(returnCount.value||0));if(isAdet)returnGram.value=(n*zg).toFixed(3);
-      const g=Math.max(0,Number(returnGram.value||0)),m=Math.max(0,Number(returnMilyem.value||0)),hh=g*m/1000;
+      const g=Math.max(0,Number(returnGram.value||0)),m=Math.max(0,Number(returnMilyem.value||0)),hh=returnOutHasV8(isAdet,n,g,m);
       returnZGram.value=isAdet?qty(zg):'0';returnHas.value=hh?qty(hh):'0';
       returnAvailable.value=isAdet?`${qty(o.amount||0)} ADET · ${qty(zg)} GR/adet · Saflık ${qty(o.purity||0)}`:`${qty(o.amount||0)} GR · Saflık ${qty(o.purity||0)}`;
       amountEl.value=hh||0;
